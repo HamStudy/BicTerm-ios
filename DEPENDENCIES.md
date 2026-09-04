@@ -1,8 +1,8 @@
 # DEPENDENCIES.md — BicTerm dependency & license inventory
 
-Review date: 2026-09-04 (task T1 bootstrap)
+Review date: 2026-09-03 (task T3 key layer)
 Policy: App Store distribution requires GPL/LGPL-free dependencies.
-All entries below are Apache-2.0 or MIT — **verdict: GO**.
+All entries below use permissive Apache-2.0, MIT, ISC, or BSD-3-Clause licenses — **verdict: GO**.
 
 ## Direct dependencies (pinned exact)
 
@@ -10,6 +10,13 @@ All entries below are Apache-2.0 or MIT — **verdict: GO**.
 |---|---|---|---|---|
 | swift-nio-ssh (NIOSSH) | 0.15.0 (exact) | Apache-2.0 | https://github.com/apple/swift-nio-ssh | SSH transport for BicTermCore; pinned in `BicTermCore/Package.swift` |
 | SwiftTerm | 1.20.0 (exactVersion) | MIT | https://github.com/migueldeicaza/SwiftTerm | Terminal emulation/view; pinned in `project.yml` (app target only, never inside BicTermCore) |
+
+## Vendored source dependencies
+
+| Name | Pinned revision | License | Source | Notes |
+|---|---|---|---|---|
+| OpenSSH portable `bcrypt_pbkdf.c` | `7fe3b24c922b7af2d743737f7cf37df61ea06426` | ISC | https://github.com/openssh/openssh-portable | Adapted to CommonCrypto SHA-512 in `CBcryptPBKDF`; original notice retained |
+| OpenSSH portable `blowfish.c` / `blf.h` | `7fe3b24c922b7af2d743737f7cf37df61ea06426` | BSD-3-Clause | https://github.com/openssh/openssh-portable | bcrypt PBKDF support only; original notices retained |
 
 ## Transitive dependencies (as resolved; see Package.resolved / workspace state)
 
@@ -34,4 +41,4 @@ Notes:
 - SwiftTerm 1.20.0 compiles Metal shaders; Xcode 26 requires the on-demand
   Metal Toolchain (`xcodebuild -downloadComponent MetalToolchain`) — installed 2026-09-04.
 
-**Verdict: GO** — all licenses are Apache-2.0/MIT class, App-Store compatible, GPL-free.
+**Verdict: GO** — all licenses are permissive, App-Store compatible, and GPL/LGPL-free.

@@ -14,8 +14,14 @@ let package = Package(
     ],
     targets: [
         .target(
+            name: "CBcryptPBKDF",
+            exclude: ["LICENSES"],
+            publicHeadersPath: "include"
+        ),
+        .target(
             name: "BicTermCore",
             dependencies: [
+                "CBcryptPBKDF",
                 .product(name: "NIOSSH", package: "swift-nio-ssh"),
             ]
         ),
