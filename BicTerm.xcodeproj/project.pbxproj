@@ -8,9 +8,15 @@
 
 /* Begin PBXBuildFile section */
 		1D87F07EE32D0036A46E49C6 /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = 9B51B5292826A7B97AEC1B8B /* SwiftTerm */; };
+		29B39DB27868EFEB15E191B3 /* AppShellUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C2517EC025088B5225948CC /* AppShellUITests.swift */; };
+		3E38F1AC7F803DAF9D0A0C53 /* ConnectionListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81441524708395D7D99F5371 /* ConnectionListView.swift */; };
 		5899C6839CA64B474A14181E /* BicTermCore in Frameworks */ = {isa = PBXBuildFile; productRef = 5EF7E11A85EA166875A298AB /* BicTermCore */; };
-		70285AB34E8ABA19A7E1A589 /* BicTermUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FA774F6297AB173D64CF645 /* BicTermUITests.swift */; };
-		7CA006CF6092CDD6161BBC60 /* BicTermApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 114BA8B1ECF5161C6115BF08 /* BicTermApp.swift */; };
+		6E19487335AF8C03FEB7C0F4 /* BicTermApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = C289650F4565C1664160B8C7 /* BicTermApp.swift */; };
+		7665AF7E42BB6AFCA3E9D776 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D8D44A83957AC7F36D0CD8C /* SettingsView.swift */; };
+		91B95DF6B15808EED01E416B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = BC36ED99843A2E4B873D0239 /* Assets.xcassets */; };
+		BB0CFD458302CF0425E761CF /* Tokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5E4A32802CDA68657500A4B /* Tokens.swift */; };
+		D9FD5EA5305062DEDFA56CBB /* TerminalPlaceholderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 516FED77F0AEC63003EAED5A /* TerminalPlaceholderView.swift */; };
+		E10EE573D6ED3C15B44076A5 /* SessionID.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C8A861A10E23A356696C807 /* SessionID.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -24,9 +30,15 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		114BA8B1ECF5161C6115BF08 /* BicTermApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BicTermApp.swift; sourceTree = "<group>"; };
+		0C2517EC025088B5225948CC /* AppShellUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppShellUITests.swift; sourceTree = "<group>"; };
+		0D8D44A83957AC7F36D0CD8C /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		516FED77F0AEC63003EAED5A /* TerminalPlaceholderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalPlaceholderView.swift; sourceTree = "<group>"; };
+		5C8A861A10E23A356696C807 /* SessionID.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionID.swift; sourceTree = "<group>"; };
+		81441524708395D7D99F5371 /* ConnectionListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionListView.swift; sourceTree = "<group>"; };
 		8DA7F0E98571945AA93C71E0 /* BicTerm.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = BicTerm.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		8FA774F6297AB173D64CF645 /* BicTermUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BicTermUITests.swift; sourceTree = "<group>"; };
+		A5E4A32802CDA68657500A4B /* Tokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tokens.swift; sourceTree = "<group>"; };
+		BC36ED99843A2E4B873D0239 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		C289650F4565C1664160B8C7 /* BicTermApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BicTermApp.swift; sourceTree = "<group>"; };
 		C574DA19DB7AEC2868E7EB60 /* BicTermUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = BicTermUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		E76A6A24C5E64A49A72CDFDB /* BicTermCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = BicTermCore; path = BicTermCore; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
@@ -44,6 +56,14 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		2026ADCF9F3C53FA28B9BF4D /* Terminal */ = {
+			isa = PBXGroup;
+			children = (
+				516FED77F0AEC63003EAED5A /* TerminalPlaceholderView.swift */,
+			);
+			path = Terminal;
+			sourceTree = "<group>";
+		};
 		3E6FC174D33F85AE7A0D4EFB /* Packages */ = {
 			isa = PBXGroup;
 			children = (
@@ -61,12 +81,41 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		628AFF7D793DB1EC67CB783E /* Design */ = {
+			isa = PBXGroup;
+			children = (
+				A5E4A32802CDA68657500A4B /* Tokens.swift */,
+			);
+			path = Design;
+			sourceTree = "<group>";
+		};
 		7FEB251342F45A74EF79E126 /* BicTerm */ = {
 			isa = PBXGroup;
 			children = (
-				114BA8B1ECF5161C6115BF08 /* BicTermApp.swift */,
+				EE683EA8833F9C31D0ACB853 /* App */,
+				863110E170C5AFE67E11BF86 /* Connections */,
+				628AFF7D793DB1EC67CB783E /* Design */,
+				83E18689D6F64CB706890C03 /* Resources */,
+				C261689BC13A8E654E78BB21 /* Settings */,
+				2026ADCF9F3C53FA28B9BF4D /* Terminal */,
 			);
 			path = BicTerm;
+			sourceTree = "<group>";
+		};
+		83E18689D6F64CB706890C03 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				BC36ED99843A2E4B873D0239 /* Assets.xcassets */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		863110E170C5AFE67E11BF86 /* Connections */ = {
+			isa = PBXGroup;
+			children = (
+				81441524708395D7D99F5371 /* ConnectionListView.swift */,
+			);
+			path = Connections;
 			sourceTree = "<group>";
 		};
 		AD83FDD29212AE3067E4873B = {
@@ -82,9 +131,26 @@
 		BD1AF66489E32986291FA9B0 /* BicTermUITests */ = {
 			isa = PBXGroup;
 			children = (
-				8FA774F6297AB173D64CF645 /* BicTermUITests.swift */,
+				0C2517EC025088B5225948CC /* AppShellUITests.swift */,
 			);
 			path = BicTermUITests;
+			sourceTree = "<group>";
+		};
+		C261689BC13A8E654E78BB21 /* Settings */ = {
+			isa = PBXGroup;
+			children = (
+				0D8D44A83957AC7F36D0CD8C /* SettingsView.swift */,
+			);
+			path = Settings;
+			sourceTree = "<group>";
+		};
+		EE683EA8833F9C31D0ACB853 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				C289650F4565C1664160B8C7 /* BicTermApp.swift */,
+				5C8A861A10E23A356696C807 /* SessionID.swift */,
+			);
+			path = App;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -95,6 +161,7 @@
 			buildConfigurationList = E0C56B4A34B9E4B5D249E6DB /* Build configuration list for PBXNativeTarget "BicTerm" */;
 			buildPhases = (
 				AC94DF80CB79C7D55878D76C /* Sources */,
+				D963864FCE546540C1F30E8B /* Resources */,
 				8FF4D2E3F65C3C62E8D896C8 /* Frameworks */,
 			);
 			buildRules = (
@@ -166,12 +233,28 @@
 		};
 /* End PBXProject section */
 
+/* Begin PBXResourcesBuildPhase section */
+		D963864FCE546540C1F30E8B /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				91B95DF6B15808EED01E416B /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
 		AC94DF80CB79C7D55878D76C /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				7CA006CF6092CDD6161BBC60 /* BicTermApp.swift in Sources */,
+				6E19487335AF8C03FEB7C0F4 /* BicTermApp.swift in Sources */,
+				3E38F1AC7F803DAF9D0A0C53 /* ConnectionListView.swift in Sources */,
+				E10EE573D6ED3C15B44076A5 /* SessionID.swift in Sources */,
+				7665AF7E42BB6AFCA3E9D776 /* SettingsView.swift in Sources */,
+				D9FD5EA5305062DEDFA56CBB /* TerminalPlaceholderView.swift in Sources */,
+				BB0CFD458302CF0425E761CF /* Tokens.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -179,7 +262,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				70285AB34E8ABA19A7E1A589 /* BicTermUITests.swift in Sources */,
+				29B39DB27868EFEB15E191B3 /* AppShellUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -263,6 +346,9 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsMultipleScenes = YES;
+				INFOPLIST_KEY_UILaunchScreen_BackgroundColor = 0x0D1117;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -303,6 +389,9 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsMultipleScenes = YES;
+				INFOPLIST_KEY_UILaunchScreen_BackgroundColor = 0x0D1117;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
