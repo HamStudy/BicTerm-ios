@@ -1,0 +1,3 @@
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHFcpLR7cwsdJb3tgRBocxaGvMmTqB8kO8H9GF+h4EUX bicterm-fixture-ed25519
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIANfEz2hpfIm10JT8FPYm5OiSKwVyGdu622i9UkwyoHk bicterm-fixture-ed25519-passphrase
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFvLJfL4yKdKvndHd+D4NPRc27FeWK9HCOXqJXiizT5M bicterm-fixture-ed25519-hop2-unauthorized

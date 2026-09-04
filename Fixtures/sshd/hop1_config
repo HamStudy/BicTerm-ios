@@ -1,0 +1,35 @@
+# BicTerm fixture sshd — hop-1 (bastion) on 127.0.0.1:12222
+# TEST-ONLY. All paths must be absolute (unprivileged sshd on macOS).
+Port 12222
+ListenAddress 127.0.0.1
+Protocol 2
+
+HostKey /Users/richard/code/BicTerm/Fixtures/sshd/host_keys/hop1_host_ed25519
+PidFile /Users/richard/code/BicTerm/Fixtures/run/hop1.pid
+
+# Key-only auth
+PubkeyAuthentication yes
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PermitRootLogin no
+AuthorizedKeysFile /Users/richard/code/BicTerm/Fixtures/sshd/authorized_keys_hop1
+
+# Capabilities under test (T7/T8/T9)
+AllowTcpForwarding yes
+AllowAgentForwarding yes
+PermitTTY yes
+PermitTunnel no
+X11Forwarding no
+PermitUserEnvironment no
+
+# Fixture dirs lack strict perms
+StrictModes no
+UsePAM no
+AuthorizedKeysCommand none
+IgnoreUserKnownHosts yes
+
+# Provenance assertions (T9) read these DEBUG3 logs
+LogLevel DEBUG3
+
+AcceptEnv BICTERM_*
+PrintMotd no
