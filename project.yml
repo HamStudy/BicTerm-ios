@@ -1,0 +1,63 @@
+name: BicTerm
+options:
+  bundleIdPrefix: com.bicterm
+  createIntermediateGroups: true
+packages:
+  BicTermCore:
+    path: ./BicTermCore
+  SwiftTerm:
+    url: https://github.com/migueldeicaza/SwiftTerm
+    exactVersion: 1.20.0
+targets:
+  BicTerm:
+    type: application
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources:
+      - path: BicTerm
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.bicterm.app
+        TARGETED_DEVICE_FAMILY: "1,2"
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        SWIFT_VERSION: "6.0"
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+    dependencies:
+      - package: BicTermCore
+        product: BicTermCore
+      - package: SwiftTerm
+        product: SwiftTerm
+  BicTermUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources:
+      - path: BicTermUITests
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SWIFT_VERSION: "6.0"
+    dependencies:
+      - target: BicTerm
+schemes:
+  BicTerm:
+    build:
+      targets:
+        BicTerm: all
+        BicTermUITests:
+          - test
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - BicTermUITests
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release

@@ -1,0 +1,457 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		1D87F07EE32D0036A46E49C6 /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = 9B51B5292826A7B97AEC1B8B /* SwiftTerm */; };
+		5899C6839CA64B474A14181E /* BicTermCore in Frameworks */ = {isa = PBXBuildFile; productRef = 5EF7E11A85EA166875A298AB /* BicTermCore */; };
+		70285AB34E8ABA19A7E1A589 /* BicTermUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FA774F6297AB173D64CF645 /* BicTermUITests.swift */; };
+		7CA006CF6092CDD6161BBC60 /* BicTermApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 114BA8B1ECF5161C6115BF08 /* BicTermApp.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		45ED9703D7206650BF598444 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 93055CA7830C9DC92661BB4E /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 17B4C77B34986DDAE79D17D5;
+			remoteInfo = BicTerm;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		114BA8B1ECF5161C6115BF08 /* BicTermApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BicTermApp.swift; sourceTree = "<group>"; };
+		8DA7F0E98571945AA93C71E0 /* BicTerm.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = BicTerm.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		8FA774F6297AB173D64CF645 /* BicTermUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BicTermUITests.swift; sourceTree = "<group>"; };
+		C574DA19DB7AEC2868E7EB60 /* BicTermUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = BicTermUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		E76A6A24C5E64A49A72CDFDB /* BicTermCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = BicTermCore; path = BicTermCore; sourceTree = SOURCE_ROOT; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		8FF4D2E3F65C3C62E8D896C8 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5899C6839CA64B474A14181E /* BicTermCore in Frameworks */,
+				1D87F07EE32D0036A46E49C6 /* SwiftTerm in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		3E6FC174D33F85AE7A0D4EFB /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				E76A6A24C5E64A49A72CDFDB /* BicTermCore */,
+			);
+			name = Packages;
+			sourceTree = "<group>";
+		};
+		4CDA2A66738B7D661C10C3A1 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				8DA7F0E98571945AA93C71E0 /* BicTerm.app */,
+				C574DA19DB7AEC2868E7EB60 /* BicTermUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		7FEB251342F45A74EF79E126 /* BicTerm */ = {
+			isa = PBXGroup;
+			children = (
+				114BA8B1ECF5161C6115BF08 /* BicTermApp.swift */,
+			);
+			path = BicTerm;
+			sourceTree = "<group>";
+		};
+		AD83FDD29212AE3067E4873B = {
+			isa = PBXGroup;
+			children = (
+				7FEB251342F45A74EF79E126 /* BicTerm */,
+				BD1AF66489E32986291FA9B0 /* BicTermUITests */,
+				3E6FC174D33F85AE7A0D4EFB /* Packages */,
+				4CDA2A66738B7D661C10C3A1 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		BD1AF66489E32986291FA9B0 /* BicTermUITests */ = {
+			isa = PBXGroup;
+			children = (
+				8FA774F6297AB173D64CF645 /* BicTermUITests.swift */,
+			);
+			path = BicTermUITests;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		17B4C77B34986DDAE79D17D5 /* BicTerm */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E0C56B4A34B9E4B5D249E6DB /* Build configuration list for PBXNativeTarget "BicTerm" */;
+			buildPhases = (
+				AC94DF80CB79C7D55878D76C /* Sources */,
+				8FF4D2E3F65C3C62E8D896C8 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = BicTerm;
+			packageProductDependencies = (
+				5EF7E11A85EA166875A298AB /* BicTermCore */,
+				9B51B5292826A7B97AEC1B8B /* SwiftTerm */,
+			);
+			productName = BicTerm;
+			productReference = 8DA7F0E98571945AA93C71E0 /* BicTerm.app */;
+			productType = "com.apple.product-type.application";
+		};
+		DCF266F8F178EAB8559DE4C0 /* BicTermUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2F0ACE512DF2BA2D77E056A0 /* Build configuration list for PBXNativeTarget "BicTermUITests" */;
+			buildPhases = (
+				DF742F2C1DFF72E03FCDAC39 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				C6CD54401875C309FEA1F9D7 /* PBXTargetDependency */,
+			);
+			name = BicTermUITests;
+			packageProductDependencies = (
+			);
+			productName = BicTermUITests;
+			productReference = C574DA19DB7AEC2868E7EB60 /* BicTermUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		93055CA7830C9DC92661BB4E /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					DCF266F8F178EAB8559DE4C0 = {
+						TestTargetID = 17B4C77B34986DDAE79D17D5;
+					};
+				};
+			};
+			buildConfigurationList = AEE4764431487797E5BC4924 /* Build configuration list for PBXProject "BicTerm" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = AD83FDD29212AE3067E4873B;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				E7FCE0AE4DF827631EA7E64E /* XCRemoteSwiftPackageReference "SwiftTerm" */,
+				DCA4E8BB9D45A8742E13CA4B /* XCLocalSwiftPackageReference "BicTermCore" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 4CDA2A66738B7D661C10C3A1 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				17B4C77B34986DDAE79D17D5 /* BicTerm */,
+				DCF266F8F178EAB8559DE4C0 /* BicTermUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		AC94DF80CB79C7D55878D76C /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7CA006CF6092CDD6161BBC60 /* BicTermApp.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DF742F2C1DFF72E03FCDAC39 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				70285AB34E8ABA19A7E1A589 /* BicTermUITests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		C6CD54401875C309FEA1F9D7 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 17B4C77B34986DDAE79D17D5 /* BicTerm */;
+			targetProxy = 45ED9703D7206650BF598444 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		1C002763E5127AE48930F488 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		568CCAB655B3277C5EC7547E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.bicterm.app;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		78B0DEECA9778787892578BC /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.bicterm.BicTermUITests;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = BicTerm;
+			};
+			name = Debug;
+		};
+		7F35403058ABD4E65D2154D1 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.bicterm.app;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		A4EA27A98690062F3408B6AF /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.bicterm.BicTermUITests;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = BicTerm;
+			};
+			name = Release;
+		};
+		BC4ECFB9A8C892D7879D7F89 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		2F0ACE512DF2BA2D77E056A0 /* Build configuration list for PBXNativeTarget "BicTermUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				78B0DEECA9778787892578BC /* Debug */,
+				A4EA27A98690062F3408B6AF /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		AEE4764431487797E5BC4924 /* Build configuration list for PBXProject "BicTerm" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1C002763E5127AE48930F488 /* Debug */,
+				BC4ECFB9A8C892D7879D7F89 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		E0C56B4A34B9E4B5D249E6DB /* Build configuration list for PBXNativeTarget "BicTerm" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				568CCAB655B3277C5EC7547E /* Debug */,
+				7F35403058ABD4E65D2154D1 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		DCA4E8BB9D45A8742E13CA4B /* XCLocalSwiftPackageReference "BicTermCore" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = BicTermCore;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		E7FCE0AE4DF827631EA7E64E /* XCRemoteSwiftPackageReference "SwiftTerm" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/migueldeicaza/SwiftTerm";
+			requirement = {
+				kind = exactVersion;
+				version = 1.20.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		5EF7E11A85EA166875A298AB /* BicTermCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = BicTermCore;
+		};
+		9B51B5292826A7B97AEC1B8B /* SwiftTerm */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = E7FCE0AE4DF827631EA7E64E /* XCRemoteSwiftPackageReference "SwiftTerm" */;
+			productName = SwiftTerm;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 93055CA7830C9DC92661BB4E /* Project object */;
+}
