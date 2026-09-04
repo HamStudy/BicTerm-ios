@@ -32,6 +32,20 @@ public actor SSHTransport {
     private var sessionChannel: (any Channel)?
     private var sessionHandler: SessionChannelHandler?
 
+    /// T8 (agent forwarding): optional acceptor for inbound
+    /// `auth-agent@openssh.com` channels. Installed by
+    /// `AgentForwardingBridge.install(on:)` BEFORE connect; captured by value
+    /// into the inbound child channel initializer when the NIOSSHHandler is
+    /// built. Every other server-initiated channel type stays rejected.
+    private var agentChannelInitializer: (@Sendable (any Channel) -> EventLoopFuture<Void>)?
+
+    /// Internal additive hook (T8) — not part of the public API surface.
+    internal func installAgentChannelInitializer(
+        _ initializer: @escaping @Sendable (any Channel) -> EventLoopFuture<Void>
+    ) {
+        agentChannelInitializer = initializer
+    }
+
     public init(
         hostKeyVerifier: HostKeyVerifier,
         authenticationKeyProvider: any SSHAuthenticationKeyProvider = DefaultSSHAuthenticationKeyProvider()
@@ -65,6 +79,7 @@ public actor SSHTransport {
             verifier: hostKeyVerifier
         )
         let userAuth = SingleKeyUserAuthenticationDelegate(username: connection.username, key: privateKey)
+        let agentInitializer = agentChannelInitializer
 
         let bootstrap = ClientBootstrap(group: group)
             .channelOption(ChannelOptions.socket(SocketOptionLevel(IPPROTO_TCP), TCP_NODELAY), value: 1)
@@ -76,7 +91,15 @@ public actor SSHTransport {
                             serverAuthDelegate: serverAuth
                         )),
                         allocator: channel.allocator,
-                        inboundChildChannelInitializer: SSHClientPipelineFactory.rejectAllInboundChildChannels
+                        inboundChildChannelInitializer: { child, channelType in
+                            if channelType == .authAgent, let agentInitializer {
+                                return agentInitializer(child)
+                            }
+                            return SSHClientPipelineFactory.rejectAllInboundChildChannels(
+                                channel: child,
+                                channelType: channelType
+                            )
+                        }
                     ))
                     try channel.pipeline.syncOperations.addHandler(recorder)
                 }
@@ -126,6 +149,18 @@ public actor SSHTransport {
         self.outputContinuation = continuation
         self.sessionChannel = session
         self.sessionHandler = handler
+
+        // T8: request agent forwarding BEFORE pty-req/shell — sshd only puts
+        // SSH_AUTH_SOCK into the spawned shell's environment when the
+        // auth-agent-req arrived first. wantReply: false (OpenSSH parity):
+        // denial is non-fatal and produces no reply event, so this cannot
+        // race the handler's FIFO success/failure tracker below.
+        if agentChannelInitializer != nil {
+            session.triggerUserOutboundEvent(
+                SSHChannelRequestEvent.AgentForwardingRequest(wantReply: false),
+                promise: nil
+            )
+        }
 
         try await handler.sendRequestExpectingSuccess(SSHChannelRequestEvent.PseudoTerminalRequest(
             wantReply: true,

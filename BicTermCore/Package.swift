@@ -10,7 +10,7 @@ let package = Package(
         .library(name: "BicTermCore", targets: ["BicTermCore"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/apple/swift-nio-ssh", exact: "0.15.0"),
+        .package(path: "../Vendor/swift-nio-ssh"),
         .package(url: "https://github.com/apple/swift-nio", exact: "2.102.0"),
     ],
     targets: [

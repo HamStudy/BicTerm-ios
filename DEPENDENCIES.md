@@ -1,6 +1,6 @@
 # DEPENDENCIES.md — BicTerm dependency & license inventory
 
-Review date: 2026-09-03 (task T3 key layer)
+Review date: 2026-09-03 (task T3 key layer); amended 2026-09-04 (task T8 vendored swift-nio-ssh fork)
 Policy: App Store distribution requires GPL/LGPL-free dependencies.
 All entries below use permissive Apache-2.0, MIT, ISC, or BSD-3-Clause licenses — **verdict: GO**.
 
@@ -8,13 +8,21 @@ All entries below use permissive Apache-2.0, MIT, ISC, or BSD-3-Clause licenses 
 
 | Name | Pinned version | License | Source | Notes |
 |---|---|---|---|---|
-| swift-nio-ssh (NIOSSH) | 0.15.0 (exact) | Apache-2.0 | https://github.com/apple/swift-nio-ssh | SSH transport for BicTermCore; pinned in `BicTermCore/Package.swift` |
 | SwiftTerm | 1.20.0 (exactVersion) | MIT | https://github.com/migueldeicaza/SwiftTerm | Terminal emulation/view; pinned in `project.yml` (app target only, never inside BicTermCore) |
+
+Note (2026-09-04, task T8): swift-nio-ssh is NO LONGER a remote pin — BicTermCore
+now depends on the vendored fork below via a local path dependency
+(`Vendor/swift-nio-ssh`). Upstream 0.15.0 cannot express OpenSSH agent
+forwarding (confirmed: outbound `auth-agent-req@openssh.com` →
+`ChannelError.operationUnsupported` at SSHChildChannel.swift:427; inbound
+`auth-agent@openssh.com` channel open → `NIOSSHError.unknownPacketType` at
+SSHMessages.swift:905-906, which kills the connection).
 
 ## Vendored source dependencies
 
 | Name | Pinned revision | License | Source | Notes |
 |---|---|---|---|---|
+| swift-nio-ssh (NIOSSH), BicTerm fork | 0.15.0 (`3ec281496f28a3b6581afd946b759e2642f5cd8d`) + agent-forwarding patch | Apache-2.0 | https://github.com/apple/swift-nio-ssh | Vendored at `Vendor/swift-nio-ssh` (2026-09-04, task T8); 12 additive hunks documented in `Vendor/swift-nio-ssh/BICTERM-PATCH.md` with inline `BICTERM-PATCH` markers; LICENSE.txt retained; upstream PR candidate |
 | OpenSSH portable `bcrypt_pbkdf.c` | `7fe3b24c922b7af2d743737f7cf37df61ea06426` | ISC | https://github.com/openssh/openssh-portable | Adapted to CommonCrypto SHA-512 in `CBcryptPBKDF`; original notice retained |
 | OpenSSH portable `blowfish.c` / `blf.h` | `7fe3b24c922b7af2d743737f7cf37df61ea06426` | BSD-3-Clause | https://github.com/openssh/openssh-portable | bcrypt PBKDF support only; original notices retained |
 
