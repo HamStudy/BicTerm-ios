@@ -289,3 +289,17 @@ public actor SSHTransport {
         }
     }
 }
+
+/// T11: SSH is the reference ``TerminalTransport`` conformer. Every
+/// signature already matches (typed `TransportError` via the
+/// `SSHTransportError` typealias); suspend/resume take the protocol
+/// extension defaults (`.rehandshake`: `suspend()` ≡ `close()`,
+/// `resume()` throws `.resumeUnsupported`).
+///
+/// Capability-gated extension point (agent forwarding): consumers check
+/// `ProtocolDescriptor.ssh.supportsAgentForwarding`, then conditionally
+/// cast to `SSHTransport` (pre-connect `AgentForwardingBridge.install(on:)`)
+/// or to `any SSHSessionTransport` (post-connect `sessionChannelHandle()`).
+/// No NIO type crosses the cast — `SSHChannelHandle`'s channel is
+/// module-internal.
+extension SSHTransport: TerminalTransport {}

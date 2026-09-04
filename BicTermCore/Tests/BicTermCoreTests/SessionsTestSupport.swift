@@ -24,7 +24,9 @@ actor InMemorySnapshotStore: SessionSnapshotStoreProtocol {
 
 /// Scripted in-memory ``SessionTransport``. `close()` finishes the output
 /// stream (mirroring SSHTransport's teardown); `finishOutput()` simulates
-/// a remote drop WITHOUT a close call.
+/// a remote drop WITHOUT a close call. `roaming: true` gives the fake a
+/// `.nativeRoaming` resume strategy: backgrounding suspends WITHOUT
+/// closing, and `resume()` reattaches the same instance.
 actor FakeSessionTransport: SessionTransport {
     enum ConnectBehavior: Sendable {
         case succeed
@@ -35,19 +37,30 @@ actor FakeSessionTransport: SessionTransport {
     private let behavior: ConnectBehavior
     private let continuation: AsyncStream<Data>.Continuation
     nonisolated let outputStream: AsyncStream<Data>
+    private let roaming: Bool
+
+    nonisolated var resumeStrategy: ResumeStrategy {
+        roaming ? .nativeRoaming : .rehandshake
+    }
 
     private(set) var connectCalls = 0
     private(set) var closeCalls = 0
+    private(set) var suspendCalls = 0
+    private(set) var resumeCalls = 0
     private(set) var sent: [Data] = []
     private(set) var resizes: [(cols: Int, rows: Int)] = []
     private(set) var lastConnection: Connection?
     private(set) var lastSize: (cols: Int, rows: Int)?
 
+    private var suspended = false
+    private var isClosed = false
+    private var outputAlive = true
     private var gateReleased = false
     private var connectWaiters: [CheckedContinuation<Void, Never>] = []
 
-    init(behavior: ConnectBehavior = .succeed) {
+    init(behavior: ConnectBehavior = .succeed, roaming: Bool = false) {
         self.behavior = behavior
+        self.roaming = roaming
         let (stream, continuation) = AsyncStream<Data>.makeStream(bufferingPolicy: .bufferingNewest(32))
         self.outputStream = stream
         self.continuation = continuation
@@ -79,8 +92,25 @@ actor FakeSessionTransport: SessionTransport {
         resizes.append((cols: cols, rows: rows))
     }
 
+    func suspend() async {
+        suspendCalls += 1
+        if roaming {
+            suspended = true
+        } else {
+            await close()
+        }
+    }
+
+    func resume() async throws(SessionTransportError) {
+        resumeCalls += 1
+        guard roaming else { throw .resumeUnsupported }
+        guard !isClosed, outputAlive, suspended else { throw .channelDenied }
+        suspended = false
+    }
+
     func close() async {
         closeCalls += 1
+        isClosed = true
         continuation.finish()
     }
 
@@ -98,6 +128,7 @@ actor FakeSessionTransport: SessionTransport {
     }
 
     func finishOutput() {
+        outputAlive = false
         continuation.finish()
     }
 }
@@ -106,14 +137,17 @@ final class FakeSessionTransportFactory: SessionTransportFactory, @unchecked Sen
     private let lock = NSLock()
     private var queuedBehaviors: [FakeSessionTransport.ConnectBehavior]
     private let fallbackBehavior: FakeSessionTransport.ConnectBehavior
+    private let roaming: Bool
     private var created: [FakeSessionTransport] = []
 
     init(
         queued: [FakeSessionTransport.ConnectBehavior] = [],
-        fallback: FakeSessionTransport.ConnectBehavior = .succeed
+        fallback: FakeSessionTransport.ConnectBehavior = .succeed,
+        roaming: Bool = false
     ) {
         self.queuedBehaviors = queued
         self.fallbackBehavior = fallback
+        self.roaming = roaming
     }
 
     var transports: [FakeSessionTransport] {
@@ -128,11 +162,11 @@ final class FakeSessionTransportFactory: SessionTransportFactory, @unchecked Sen
         return created.count
     }
 
-    func makeTransport() -> any SessionTransport {
+    func makeTransport(for connection: Connection) throws(SessionTransportError) -> any SessionTransport {
         lock.lock()
         defer { lock.unlock() }
         let behavior = queuedBehaviors.isEmpty ? fallbackBehavior : queuedBehaviors.removeFirst()
-        let transport = FakeSessionTransport(behavior: behavior)
+        let transport = FakeSessionTransport(behavior: behavior, roaming: roaming)
         created.append(transport)
         return transport
     }

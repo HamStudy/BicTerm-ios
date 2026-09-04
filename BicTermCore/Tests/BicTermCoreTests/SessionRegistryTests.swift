@@ -472,6 +472,65 @@ final class SessionRegistryTests: XCTestCase {
         }
     }
 
+    func testRoamingTransportSuspendsWithoutCloseAndResumesInPlace() async throws {
+        let factory = FakeSessionTransportFactory(roaming: true)
+        let registry = makeRegistry(factory: factory)
+        try await registry.startSession(sceneID: "s1", connection: makeUnitConnection())
+
+        await registry.didEnterBackground(sceneID: "s1")
+
+        let transport = factory.transports[0]
+        let closeCalls = await transport.closeCalls
+        let suspendCalls = await transport.suspendCalls
+        XCTAssertEqual(suspendCalls, 1, "backgrounding a roaming transport suspends it")
+        XCTAssertEqual(closeCalls, 0, "roaming transports survive backgrounding")
+        let suspended = await registry.state(sceneID: "s1")
+        XCTAssertEqual(suspended, .suspended)
+
+        await registry.willEnterForeground(sceneID: "s1")
+
+        let resumeCalls = await transport.resumeCalls
+        XCTAssertEqual(resumeCalls, 1, "foreground resumes the SAME instance without re-auth")
+        XCTAssertEqual(factory.makeCount, 1, "roaming resume must not build a fresh transport")
+        let state = await registry.state(sceneID: "s1")
+        XCTAssertEqual(state, .active)
+
+        // The stable output stream still bridges the resumed transport.
+        guard let output = await registry.output(sceneID: "s1") else {
+            return XCTFail("output stream must exist")
+        }
+        let sink = SSHOutputSink()
+        let collector = Task {
+            for await chunk in output { await sink.append(chunk) }
+        }
+        defer { collector.cancel() }
+        await transport.yield(Data("post-resume".utf8))
+        let sawOutput = await waitForContent(sink: sink, marker: "post-resume")
+        XCTAssertTrue(sawOutput)
+        await registry.closeSession(sceneID: "s1")
+    }
+
+    func testRoamingResumeFailureLandsInFailedState() async throws {
+        // A typed resume failure surfaces through the same failure path as
+        // a failed fresh connect.
+        let factory = FakeSessionTransportFactory(roaming: true)
+        let registry = makeRegistry(factory: factory)
+        try await registry.startSession(sceneID: "s1", connection: makeUnitConnection())
+        await registry.didEnterBackground(sceneID: "s1")
+
+        let transport = factory.transports[0]
+        await transport.close()
+        do {
+            try await registry.reconnect(sceneID: "s1")
+            XCTFail("resume on a closed roaming transport must throw")
+        } catch let error as SessionRegistryError {
+            XCTAssertEqual(error, .transport(.channelDenied))
+        }
+        let state = await registry.state(sceneID: "s1")
+        XCTAssertEqual(state, .failed(.transport(.channelDenied)))
+        await registry.closeSession(sceneID: "s1")
+    }
+
     func testManualReconnectWinsOverPendingAutoReconnect() async throws {
         let factory = FakeSessionTransportFactory()
         let registry = makeRegistry(

@@ -44,7 +44,15 @@ public actor SessionRegistry {
         setState(record, .connecting)
         let generation = nextGeneration(record)
 
-        let transport = transportFactory.makeTransport()
+        let transport: any SessionTransport
+        do {
+            transport = try transportFactory.makeTransport(for: connection)
+        } catch let error {
+            if isCurrent(record, generation: generation) {
+                setState(record, .failed(.transport(error)))
+            }
+            throw .transport(error)
+        }
         do {
             try await transport.connect(to: connection, cols: cols, rows: rows)
         } catch let error {
@@ -134,6 +142,28 @@ public actor SessionRegistry {
         record: SessionRecord,
         generation: UInt64
     ) async throws(SessionRegistryError) {
+        // Roaming transports survive suspension server-side with their
+        // output stream (and its bridge task) intact: resume reattaches
+        // the SAME instance without re-auth instead of building a fresh
+        // transport.
+        if let existing = record.transport, existing.resumeStrategy == .nativeRoaming {
+            do {
+                try await existing.resume()
+            } catch let error {
+                if isCurrent(record, generation: generation) {
+                    setState(record, .failed(.transport(error)))
+                }
+                throw .transport(error)
+            }
+            guard isCurrent(record, generation: generation) else {
+                await existing.close()
+                return
+            }
+            setState(record, .active)
+            try? await snapshotStore.deleteSnapshot(sceneID: record.sceneID)
+            return
+        }
+
         record.bridgeTask?.cancel()
         record.bridgeTask = nil
         if let old = record.transport {
@@ -141,7 +171,15 @@ public actor SessionRegistry {
             await old.close()
         }
 
-        let transport = transportFactory.makeTransport()
+        let transport: any SessionTransport
+        do {
+            transport = try transportFactory.makeTransport(for: record.connection)
+        } catch let error {
+            if isCurrent(record, generation: generation) {
+                setState(record, .failed(.transport(error)))
+            }
+            throw .transport(error)
+        }
         do {
             try await transport.connect(to: record.connection, cols: record.cols, rows: record.rows)
         } catch let error {
@@ -169,7 +207,7 @@ public actor SessionRegistry {
         generation: UInt64
     ) async {
         record.transport = transport
-        startBridge(record, transport: transport, generation: generation)
+        startBridge(record, transport: transport)
         setState(record, .active)
         try? await snapshotStore.deleteSnapshot(sceneID: record.sceneID)
     }
@@ -198,8 +236,11 @@ public actor SessionRegistry {
 
     // MARK: - Scene lifecycle hooks (T14 wires SwiftUI scene phases to these)
 
-    /// Persists a reconnect-required snapshot, then EAGERLY closes the
-    /// transport: socket survival across backgrounding is never assumed.
+    /// Persists a reconnect-required snapshot, then suspends per the
+    /// transport's ``ResumeStrategy``: `.rehandshake` transports are
+    /// EAGERLY closed (socket survival across backgrounding is never
+    /// assumed); `.nativeRoaming` transports are suspended and kept for
+    /// an in-place resume without re-auth.
     public func didEnterBackground(sceneID: String) async {
         guard let record = records[sceneID], record.state != .closed else { return }
         try? await snapshotStore.save(SessionSnapshot(
@@ -211,11 +252,16 @@ public actor SessionRegistry {
         record.autoReconnectTask = nil
         _ = nextGeneration(record)
         setState(record, .suspended)
-        record.bridgeTask?.cancel()
-        record.bridgeTask = nil
-        if let transport = record.transport {
-            record.transport = nil
-            await transport.close()
+        if let transport = record.transport, transport.resumeStrategy == .nativeRoaming {
+            // The bridge task and output stream stay alive across suspend.
+            await transport.suspend()
+        } else {
+            record.bridgeTask?.cancel()
+            record.bridgeTask = nil
+            if let transport = record.transport {
+                record.transport = nil
+                await transport.close()
+            }
         }
     }
 
@@ -309,30 +355,40 @@ public actor SessionRegistry {
 
     // MARK: - Drop detection bridge
 
+    /// Bridges are guarded by TRANSPORT IDENTITY (not generation): a
+    /// cancelled task's AsyncStream iterator does not reliably stop
+    /// consuming, so a superseded bridge could still steal bytes — but a
+    /// roaming transport's bridge legitimately survives suspend/resume.
+    /// Identity distinguishes "still current" from "stale" in both cases.
     private func startBridge(
         _ record: SessionRecord,
-        transport: any SessionTransport,
-        generation: UInt64
+        transport: any SessionTransport
     ) {
         record.bridgeTask = Task { [self] in
             let stream = await transport.output
             for await chunk in stream {
-                await bridgeYield(chunk, for: record, generation: generation)
+                await bridgeYield(chunk, for: record, transport: transport)
             }
-            await bridgeFinished(for: record, generation: generation)
+            await bridgeFinished(for: record, transport: transport)
         }
     }
 
-    private func bridgeYield(_ chunk: Data, for record: SessionRecord, generation: UInt64) {
-        guard record.generation == generation, records[record.sceneID] === record else { return }
+    private func bridgeYield(_ chunk: Data, for record: SessionRecord, transport: any SessionTransport) {
+        guard isCurrentTransport(record, transport: transport) else { return }
         record.outputContinuation.yield(chunk)
     }
 
-    private func bridgeFinished(for record: SessionRecord, generation: UInt64) {
-        guard record.generation == generation, records[record.sceneID] === record else { return }
+    private func bridgeFinished(for record: SessionRecord, transport: any SessionTransport) {
+        guard isCurrentTransport(record, transport: transport) else { return }
         guard record.state == .active else { return }
         setState(record, .disconnected)
         scheduleAutoReconnect(record)
+    }
+
+    private func isCurrentTransport(_ record: SessionRecord, transport: any SessionTransport) -> Bool {
+        records[record.sceneID] === record
+            && record.state != .closed
+            && record.transport === transport
     }
 
     // MARK: - Bounded auto-reconnect
