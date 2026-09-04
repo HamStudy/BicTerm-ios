@@ -28,6 +28,7 @@ final class SSHTransportConformanceTests: XCTestCase {
         let verifier = try await SSHTestFixture.makeVerifier()
         let sink = TransportTestSink()
         return TransportConformanceSuite(
+            descriptor: .ssh,
             expectedResumeStrategy: .rehandshake,
             expectedConnectFailure: .unreachable,
             makeTransport: {
@@ -80,7 +81,10 @@ final class SSHTransportConformanceTests: XCTestCase {
                     keyReference: "fixture-ed25519"
                 )
                 try await transport.connect(to: connection, cols: 80, rows: 24)
-            }
+            },
+            expectedResumeFailure: nil,
+            makeResumeFailingTransport: nil,
+            observeRoamingResume: nil
         )
     }
 
@@ -98,6 +102,10 @@ final class SSHTransportConformanceTests: XCTestCase {
 
     func testSuspendResumeFollowsDeclaredStrategy() async throws {
         try await makeSuite().runSuspendResumeFollowsDeclaredStrategy()
+    }
+
+    func testResumeFailureSurfacesTypedTransportError() async throws {
+        try await makeSuite().runResumeFailureSurfacesTypedTransportError()
     }
 
     func testCloseIsTerminalIdempotentAndFinishesOutput() async throws {

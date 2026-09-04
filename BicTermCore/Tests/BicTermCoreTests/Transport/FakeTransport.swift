@@ -8,30 +8,7 @@ import Foundation
 /// Runs the full ``TransportConformanceSuite`` as the protocol-agnostic
 /// proof of the abstraction.
 actor FakeTransport: TerminalTransport {
-    struct Script: Sendable {
-        var resumeStrategy: ResumeStrategy = .nativeRoaming
-        var connectLatency: Duration = .zero
-        var connectError: TransportError?
-        var resumeError: TransportError?
-        var echoesInput = true
-        var greeting: Data?
-
-        init(
-            resumeStrategy: ResumeStrategy = .nativeRoaming,
-            connectLatency: Duration = .zero,
-            connectError: TransportError? = nil,
-            resumeError: TransportError? = nil,
-            echoesInput: Bool = true,
-            greeting: Data? = nil
-        ) {
-            self.resumeStrategy = resumeStrategy
-            self.connectLatency = connectLatency
-            self.connectError = connectError
-            self.resumeError = resumeError
-            self.echoesInput = echoesInput
-            self.greeting = greeting
-        }
-    }
+    typealias Script = TransportConformanceScript
 
     enum Phase: Sendable {
         case idle, connected, suspended, closed
@@ -46,6 +23,7 @@ actor FakeTransport: TerminalTransport {
 
     private(set) var phase: Phase = .idle
     private(set) var connectCalls = 0
+    private(set) var authenticationCalls = 0
     private(set) var resumeCalls = 0
     private(set) var sentBytes: [Data] = []
     private(set) var resizes: [(cols: Int, rows: Int)] = []
@@ -69,6 +47,7 @@ actor FakeTransport: TerminalTransport {
         }
         if let error = script.connectError { throw error }
         guard phase == .idle else { throw .channelDenied }
+        authenticationCalls += 1
         phase = .connected
         if let greeting = script.greeting {
             continuation.yield(greeting)
@@ -113,5 +92,13 @@ actor FakeTransport: TerminalTransport {
 
     func pushFromServer(_ bytes: Data) {
         continuation.yield(bytes)
+    }
+
+    func roamingResumeObservation() -> RoamingResumeObservation {
+        RoamingResumeObservation(
+            connectAttempts: connectCalls,
+            authenticationAttempts: authenticationCalls,
+            resumeAttempts: resumeCalls
+        )
     }
 }

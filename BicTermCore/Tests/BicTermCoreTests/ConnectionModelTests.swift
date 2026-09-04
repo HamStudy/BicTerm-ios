@@ -14,6 +14,7 @@ final class ConnectionModelTests: XCTestCase {
     func testConnectionTypeRoundTrips() throws {
         XCTAssertEqual(try roundTrip(ConnectionType.ssh), .ssh)
         XCTAssertEqual(try roundTrip(ConnectionType.coder), .coder)
+        XCTAssertEqual(try roundTrip(ConnectionType.uppercaseEcho), .uppercaseEcho)
     }
 
     func testHopRoundTrips() throws {

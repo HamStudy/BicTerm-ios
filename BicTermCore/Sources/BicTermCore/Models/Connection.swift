@@ -3,6 +3,9 @@ import Foundation
 public enum ConnectionType: String, Codable, Equatable, Hashable, Sendable {
     case ssh
     case coder
+    /// Test-backed proof that a non-SSH protocol can traverse persistence and
+    /// registry resolution. No production factory registers this protocol.
+    case uppercaseEcho = "uppercase-echo"
 }
 
 public struct CoderReference: Codable, Equatable, Hashable, Sendable {

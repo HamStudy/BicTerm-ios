@@ -17,7 +17,19 @@ final class FakeTransportConformanceTests: XCTestCase {
 
     private func makeSuite(script: FakeTransport.Script = FakeTransport.Script()) -> TransportConformanceSuite {
         let sink = TransportTestSink()
+        let descriptor = ProtocolDescriptor(
+            id: "fake",
+            displayName: "Fake",
+            supportsAgentForwarding: false,
+            supportsJumpChain: false,
+            supportsRoamingResume: script.resumeStrategy == .nativeRoaming,
+            requiresServerComponent: false,
+            defaultPort: 0,
+            keyAlgorithmsAccepted: [],
+            resumeStrategy: script.resumeStrategy
+        )
         return TransportConformanceSuite(
+            descriptor: descriptor,
             expectedResumeStrategy: script.resumeStrategy,
             expectedConnectFailure: .unreachable,
             makeTransport: {
@@ -50,6 +62,22 @@ final class FakeTransportConformanceTests: XCTestCase {
             },
             connectFailing: { transport in
                 try await transport.connect(to: makeUnitConnection(name: "fake"), cols: 80, rows: 24)
+            },
+            expectedResumeFailure: .unreachable,
+            makeResumeFailingTransport: {
+                var resumeFailing = script
+                resumeFailing.resumeError = .unreachable
+                return FakeTransport(script: resumeFailing)
+            },
+            observeRoamingResume: { transport in
+                guard let fake = transport as? FakeTransport else {
+                    return RoamingResumeObservation(
+                        connectAttempts: -1,
+                        authenticationAttempts: -1,
+                        resumeAttempts: -1
+                    )
+                }
+                return await fake.roamingResumeObservation()
             }
         )
     }
@@ -68,6 +96,10 @@ final class FakeTransportConformanceTests: XCTestCase {
 
     func testSuspendResumeFollowsDeclaredStrategy() async throws {
         try await makeSuite().runSuspendResumeFollowsDeclaredStrategy()
+    }
+
+    func testResumeFailureSurfacesTypedTransportError() async throws {
+        try await makeSuite().runResumeFailureSurfacesTypedTransportError()
     }
 
     func testCloseIsTerminalIdempotentAndFinishesOutput() async throws {
@@ -109,13 +141,4 @@ final class FakeTransportConformanceTests: XCTestCase {
         await slow.close()
     }
 
-    func testRoamingResumeFailureSurfacesTypedError() async throws {
-        let transport = FakeTransport(script: FakeTransport.Script(resumeError: .unreachable))
-        try await transport.connect(to: makeUnitConnection(name: "fake"), cols: 80, rows: 24)
-        await transport.suspend()
-        await assertThrowsTransportError(.unreachable) {
-            try await transport.resume()
-        }
-        await transport.close()
-    }
 }
