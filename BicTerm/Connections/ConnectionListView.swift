@@ -1,58 +1,227 @@
+import BicTermCore
 import SwiftUI
 
 struct ConnectionListView: View {
     @Environment(\.terminalColors) var colors
     @Environment(\.terminalTypography) var typography
     @Environment(\.terminalSpacing) var spacing
+    @State private var model = ConnectionsModel()
+    @State private var editorTarget: EditorTarget?
+    let onConnectRequested: (Connection) -> Void
 
-    private let placeholderConnections = [
-        "Example SSH",
-        "Example Coder"
-    ]
+    init(onConnectRequested: @escaping (Connection) -> Void = { _ in }) {
+        self.onConnectRequested = onConnectRequested
+    }
+
+    struct EditorTarget: Identifiable {
+        let connection: Connection?
+        var id: String { connection?.id.uuidString ?? "new" }
+    }
 
     var body: some View {
-        List {
-            ForEach(placeholderConnections, id: \.self) { name in
-                NavigationLink(value: name) {
-                    HStack(spacing: spacing.sm) {
-                        Circle()
-                            .fill(colors.success)
-                            .frame(width: 8, height: 8)
-                        Text(name)
-                            .font(typography.body)
-                            .foregroundColor(colors.foreground)
-                    }
-                    .padding(.vertical, spacing.xs)
+        NavigationStack {
+            Group {
+                if let loadError = model.loadError {
+                    errorBanner(loadError)
                 }
-                .listRowBackground(colors.background)
+                connectionList
             }
+            .navigationTitle("BicTerm")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        editorTarget = EditorTarget(connection: nil)
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                    .accessibilityLabel("Add Connection")
+                    .accessibilityIdentifier("add-connection")
+                    .foregroundColor(colors.accent)
+                }
+                ToolbarItem(placement: .topBarLeading) {
+                    NavigationLink(destination: SettingsView()) {
+                        Image(systemName: "gear")
+                            .foregroundColor(colors.accent)
+                    }
+                    .accessibilityIdentifier("open-settings")
+                }
+            }
+            .sheet(item: $editorTarget) { target in
+                ConnectionEditorView(existing: target.connection, model: model) { connection in
+                    connect(connection)
+                }
+                .presentationDetents([.large])
+            }
+            .task {
+                await model.bootstrap()
+                presentDebugEditorIfNeeded()
+            }
+        }
+    }
 
-            HStack(spacing: spacing.sm) {
-                Circle()
-                    .fill(colors.dimmed)
-                    .frame(width: 8, height: 8)
-                Text("Add Connection…")
+    private var connectionList: some View {
+        List {
+            if model.connections.isEmpty && model.loadError == nil {
+                Text("No connections yet. Tap + to add one.")
                     .font(typography.body)
                     .foregroundColor(colors.dimmed)
+                    .listRowBackground(colors.background)
             }
-            .padding(.vertical, spacing.xs)
-            .disabled(true)
+            ForEach(model.groupedConnections) { group in
+                Section {
+                    ForEach(group.connections) { connection in
+                        row(for: connection, isAvailable: group.isAvailable)
+                    }
+                    .onDelete { offsets in
+                        let doomed = offsets.map { group.connections[$0] }
+                        Task {
+                            for connection in doomed { await model.delete(connection) }
+                        }
+                    }
+                } header: {
+                    Text(group.title)
+                        .font(typography.caption)
+                        .foregroundColor(colors.dimmed)
+                }
+            }
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
         .background(colors.background)
-        .navigationTitle("BicTerm")
-        .navigationDestination(for: String.self) { connectionName in
-            TerminalPlaceholderView(connectionName: connectionName)
+        .accessibilityIdentifier("connectionList")
+    }
+
+    private func row(for connection: Connection, isAvailable: Bool) -> some View {
+        Button {
+            editorTarget = EditorTarget(connection: connection)
+        } label: {
+            rowLabel(for: connection, isAvailable: isAvailable)
         }
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                NavigationLink(destination: SettingsView()) {
-                    Image(systemName: "gear")
-                        .foregroundColor(colors.accent)
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("connection-\(sanitized(connection.name))")
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            Button(role: .destructive) {
+                Task { await model.delete(connection) }
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
+            .accessibilityIdentifier("delete-\(sanitized(connection.name))")
+
+            Button {
+                Task { await model.duplicate(connection) }
+            } label: {
+                Label("Duplicate", systemImage: "plus.square.on.square")
+            }
+            .tint(colors.selection)
+            .accessibilityIdentifier("duplicate-\(sanitized(connection.name))")
+
+            Button {
+                editorTarget = EditorTarget(connection: connection)
+            } label: {
+                Label("Edit", systemImage: "pencil")
+            }
+            .tint(colors.accent)
+            .accessibilityIdentifier("edit-\(sanitized(connection.name))")
+
+            Button {
+                connect(connection)
+            } label: {
+                Label("Connect", systemImage: "play.fill")
+            }
+            .tint(colors.success)
+            .disabled(!isAvailable)
+            .accessibilityIdentifier("connect-\(sanitized(connection.name))")
+        }
+    }
+
+    private func rowLabel(for connection: Connection, isAvailable: Bool) -> some View {
+        HStack(spacing: spacing.sm) {
+            Circle()
+                .fill(colors.dimmed)
+                .frame(width: 8, height: 8)
+                .accessibilityLabel("Idle")
+
+            VStack(alignment: .leading, spacing: spacing.xxxs) {
+                Text(connection.name)
+                    .font(typography.headline)
+                    .foregroundColor(colors.foreground)
+
+                Text("\(connection.username)@\(connection.host):\(connection.port)")
+                    .font(typography.caption)
+                    .foregroundColor(colors.dimmed)
+            }
+
+            Spacer()
+
+            if !connection.jumpChain.isEmpty {
+                Text("\(connection.jumpChain.count) hops")
+                    .font(typography.caption)
+                    .foregroundColor(colors.accent)
+                    .padding(.horizontal, spacing.xs)
+                    .padding(.vertical, spacing.xxxs)
+                    .background(colors.selection.opacity(0.5), in: Capsule())
+                    .accessibilityIdentifier("hopcount-\(sanitized(connection.name))")
+            }
+
+            VStack(alignment: .trailing, spacing: spacing.xxxs) {
+                ProtocolBadge(protocolID: connection.type.rawValue)
+
+                if !isAvailable {
+                    Label("Unavailable", systemImage: "exclamationmark.triangle.fill")
+                        .font(typography.caption)
+                        .foregroundStyle(colors.error)
+                        .accessibilityIdentifier("unavailable-\(sanitized(connection.name))")
                 }
             }
         }
-        .accessibilityIdentifier("connectionList")
+        .padding(.vertical, spacing.xxs)
+    }
+
+    private func errorBanner(_ message: String) -> some View {
+        Text(message)
+            .font(typography.caption)
+            .foregroundColor(colors.error)
+            .frame(maxWidth: .infinity)
+            .padding(spacing.xs)
+            .background(colors.error.opacity(0.15))
+            .accessibilityIdentifier("connections-error")
+    }
+
+    private func connect(_ connection: Connection) {
+        guard model.isProtocolAvailable(for: connection) else { return }
+        onConnectRequested(connection)
+    }
+
+    private func sanitized(_ name: String) -> String {
+        name.replacingOccurrences(of: " ", with: "-")
+    }
+
+    private func presentDebugEditorIfNeeded() {
+        #if DEBUG
+        guard let name = AppServices.shared.debugAutoOpenEditorForConnectionNamed else { return }
+        AppServices.shared.debugAutoOpenEditorForConnectionNamed = nil
+        if let connection = model.connections.first(where: { $0.name == name }) {
+            editorTarget = EditorTarget(connection: connection)
+        }
+        #endif
+    }
+}
+
+struct ProtocolBadge: View {
+    @Environment(\.terminalColors) var colors
+    @Environment(\.terminalTypography) var typography
+    @Environment(\.terminalSpacing) var spacing
+
+    let protocolID: String
+
+    var body: some View {
+        Text(protocolID)
+            .font(typography.caption)
+            .foregroundColor(colors.accent)
+            .padding(.horizontal, spacing.xs)
+            .padding(.vertical, spacing.xxxs)
+            .background(colors.accent.opacity(0.18), in: Capsule())
+            .overlay(Capsule().stroke(colors.accent.opacity(0.5), lineWidth: 0.5))
+            .accessibilityIdentifier("badge-\(protocolID)")
     }
 }
