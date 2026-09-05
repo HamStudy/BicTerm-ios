@@ -44,18 +44,28 @@ final class ConnectionEditorUITests: XCTestCase {
         app.launchArguments = []
         app.launch()
 
-        XCTAssertTrue(row.waitForExistence(timeout: 10), "connection must survive relaunch")
+        let relaunchedRow = app.buttons["connection-Chain-Two-Hop"]
+        XCTAssertTrue(relaunchedRow.waitForExistence(timeout: 10), "connection must survive relaunch")
         XCTAssertTrue(app.staticTexts["2 hops"].exists)
 
-        row.tap()
-        XCTAssertTrue(app.textFields["field-name"].waitForExistence(timeout: 10))
-        XCTAssertEqual(app.textFields["field-name"].value as? String, "Chain Two Hop")
+        openEditorForConnection(named: "Chain-Two-Hop")
+
+        let nameField = app.textFields["field-name"]
+        scrollToHittable(nameField, swipingUp: false)
+        XCTAssertTrue(nameField.isHittable)
+        XCTAssertEqual(nameField.value as? String, "Chain Two Hop")
         XCTAssertEqual(app.textFields["field-host"].value as? String, "10.0.0.9")
         XCTAssertEqual(app.textFields["field-username"].value as? String, "alice")
-        XCTAssertEqual(app.staticTexts["hop-0-host"].label, "127.0.0.1:12222")
-        XCTAssertEqual(app.staticTexts["hop-1-host"].label, "127.0.0.1:12223")
-        XCTAssertTrue(app.staticTexts["Fixture Ed25519"].waitForExistence(timeout: 5),
+
+        let keySelector = app.buttons["key-selector"]
+        scrollToHittable(keySelector)
+        XCTAssertTrue(keySelector.label.contains("Fixture Ed25519"),
                       "editor must reopen with the same key label")
+
+        let firstHop = app.staticTexts["hop-0-host"]
+        scrollToHittable(firstHop)
+        XCTAssertEqual(firstHop.label, "127.0.0.1:12222")
+        XCTAssertEqual(app.staticTexts["hop-1-host"].label, "127.0.0.1:12223")
 
         app.buttons["cancel-editor"].tap()
     }
@@ -75,17 +85,26 @@ final class ConnectionEditorUITests: XCTestCase {
             addHop(host: "hop\(index).example.com", port: nil, username: "u\(index)", key: "Fixture Ed25519")
         }
 
-        app.buttons["add-hop"].tap()
+        let addHop = app.buttons["add-hop"]
+        scrollToHittable(addHop)
+        XCTAssertTrue(addHop.isHittable)
+        addHop.tap()
         XCTAssertTrue(app.staticTexts["hop-limit-message"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.staticTexts["hop-limit-message"].label, "Maximum 5 hops")
         XCTAssertFalse(app.textFields["hop-field-host"].exists, "6th hop sheet must not open")
 
-        typeInto(app.textFields["field-host"], "hop1.example.com", clearing: "10.1.2.3")
-        XCTAssertTrue(app.staticTexts["cycle-warning"].waitForExistence(timeout: 5))
+        let hostField = app.textFields["field-host"]
+        scrollToHittable(hostField, swipingUp: false)
+        typeInto(hostField, "hop1.example.com", clearing: "10.1.2.3")
+        let cycleWarning = app.staticTexts["cycle-warning"]
+        scrollToHittable(cycleWarning)
+        XCTAssertTrue(cycleWarning.isHittable)
         XCTAssertFalse(app.buttons["save-editor"].isEnabled, "save must be disabled for a cyclic chain")
 
-        typeInto(app.textFields["field-host"], "10.1.2.3", clearing: "hop1.example.com")
-        XCTAssertFalse(app.staticTexts["cycle-warning"].waitForExistence(timeout: 5))
+        scrollToHittable(hostField, swipingUp: false)
+        typeInto(hostField, "10.1.2.3", clearing: "hop1.example.com")
+        scrollToHittable(addHop)
+        XCTAssertFalse(cycleWarning.exists)
         XCTAssertTrue(app.buttons["save-editor"].isEnabled)
 
         app.buttons["cancel-editor"].tap()
@@ -165,12 +184,22 @@ final class ConnectionEditorUITests: XCTestCase {
         XCTAssertTrue(row.exists, "known persisted protocols must not disappear when their descriptor is unavailable")
         XCTAssertTrue(app.staticTexts["unavailable-Future-Protocol"].exists)
 
-        row.tap()
-        XCTAssertTrue(app.staticTexts["This protocol isn't available in this build"].waitForExistence(timeout: 5))
+        openEditorForConnection(named: "Future-Protocol")
+        let unavailableMessage = app.descendants(matching: .any).matching(
+            NSPredicate(format: "label CONTAINS %@", "This protocol isn't available in this build")
+        ).firstMatch
+        XCTAssertTrue(unavailableMessage.waitForExistence(timeout: 5))
+        XCTAssertTrue(unavailableMessage.isHittable)
         XCTAssertFalse(app.buttons["save-editor"].isEnabled)
-        XCTAssertFalse(app.buttons["connect-button"].isEnabled)
         app.buttons["protocol-picker"].tap()
-        XCTAssertTrue(app.buttons["uppercase-echo (Unavailable)"].waitForExistence(timeout: 5))
+        let unavailableChoice = app.buttons["uppercase-echo (Unavailable)"]
+        XCTAssertTrue(unavailableChoice.waitForExistence(timeout: 5))
+        unavailableChoice.tap()
+
+        let connect = app.buttons["connect-button"]
+        scrollToHittable(connect)
+        XCTAssertTrue(connect.isHittable)
+        XCTAssertFalse(connect.isEnabled)
     }
 
     func testFailedPersistenceKeepsEditorOpenAndClearsErrorAfterEditing() {
@@ -187,9 +216,12 @@ final class ConnectionEditorUITests: XCTestCase {
         let error = app.staticTexts["save-error"]
         XCTAssertTrue(error.waitForExistence(timeout: 5))
         XCTAssertTrue(error.label.contains("Check available storage and try again"))
-        XCTAssertTrue(app.textFields["field-name"].exists, "a failed write must keep the editor open")
+        XCTAssertTrue(app.buttons["cancel-editor"].exists, "a failed write must keep the editor open")
 
-        typeInto(app.textFields["field-name"], " Retry", clearing: nil)
+        let nameField = app.textFields["field-name"]
+        scrollToHittable(nameField, swipingUp: false)
+        XCTAssertTrue(nameField.isHittable)
+        typeInto(nameField, " Retry", clearing: nil)
         XCTAssertFalse(error.exists, "editing before a retry must clear the stale save error")
     }
 
@@ -205,6 +237,14 @@ final class ConnectionEditorUITests: XCTestCase {
         XCTAssertTrue(add.waitForExistence(timeout: 15))
         add.tap()
         XCTAssertTrue(app.textFields["field-name"].waitForExistence(timeout: 10))
+    }
+
+    private func openEditorForConnection(named identifier: String) {
+        swipeRow(named: identifier)
+        let edit = app.buttons["edit-\(identifier)"]
+        XCTAssertTrue(edit.waitForExistence(timeout: 5))
+        edit.tap()
+        XCTAssertTrue(app.buttons["cancel-editor"].waitForExistence(timeout: 10))
     }
 
     private func typeInto(_ field: XCUIElement, _ text: String, clearing existing: String? = nil) {
@@ -236,10 +276,18 @@ final class ConnectionEditorUITests: XCTestCase {
         start.press(forDuration: 0.05, thenDragTo: end)
     }
 
-    private func scrollToHittable(_ element: XCUIElement, maxSwipes: Int = 5) {
+    private func scrollToHittable(
+        _ element: XCUIElement,
+        swipingUp: Bool = true,
+        maxSwipes: Int = 5
+    ) {
         var attempts = 0
         while (!element.exists || !element.isHittable) && attempts < maxSwipes {
-            app.swipeUp()
+            if swipingUp {
+                app.swipeUp()
+            } else {
+                app.swipeDown()
+            }
             attempts += 1
         }
     }
@@ -274,7 +322,9 @@ final class ConnectionEditorUITests: XCTestCase {
         let save = app.buttons["save-hop"]
         XCTAssertTrue(save.waitForExistence(timeout: 5))
         save.tap()
-        XCTAssertTrue(app.buttons["add-hop"].waitForExistence(timeout: 10), "hop sheet must close after save")
+        let sheetDismissed = NSPredicate(format: "exists == false")
+        expectation(for: sheetDismissed, evaluatedWith: hostField)
+        waitForExpectations(timeout: 10)
     }
 
     private func swipeRow(named identifier: String) {
