@@ -123,6 +123,53 @@ final class CoderWorkspaceClientTests: XCTestCase {
         XCTAssertEqual(requestCount, 2)
     }
 
+    func testFutureHTTPDateRetryAfterUsesInjectedCurrentDate() async throws {
+        let currentDate = Date(timeIntervalSince1970: 784_111_747)
+        let loader = ScriptedCoderRequestLoader([
+            .success(response(
+                statusCode: 429,
+                headers: ["Retry-After": "Sun, 06 Nov 1994 08:49:37 GMT"]
+            )),
+            .success(response(body: workspaceEnvelope(states: []))),
+        ])
+        let sleeper = RecordingCoderRetrySleeper()
+
+        _ = try await makeClient(
+            loader: loader,
+            sleeper: sleeper,
+            now: { currentDate }
+        ).workspaces(for: server())
+        let delays = await sleeper.recordedDelays()
+        let requestCount = await loader.requestCount()
+
+        XCTAssertEqual(delays, [30])
+        XCTAssertEqual(requestCount, 2)
+    }
+
+    func testPastHTTPDateRetryAfterRetriesImmediatelyWithoutNegativeSleep() async throws {
+        let currentDate = Date(timeIntervalSince1970: 784_111_787)
+        let loader = ScriptedCoderRequestLoader([
+            .success(response(
+                statusCode: 429,
+                headers: ["Retry-After": "Sun, 06 Nov 1994 08:49:37 GMT"]
+            )),
+            .success(response(body: workspaceEnvelope(states: []))),
+        ])
+        let sleeper = RecordingCoderRetrySleeper()
+
+        _ = try await makeClient(
+            loader: loader,
+            sleeper: sleeper,
+            now: { currentDate }
+        ).workspaces(for: server())
+        let delays = await sleeper.recordedDelays()
+        let requestCount = await loader.requestCount()
+
+        XCTAssertEqual(delays, [0])
+        XCTAssertGreaterThanOrEqual(try XCTUnwrap(delays.first), 0)
+        XCTAssertEqual(requestCount, 2)
+    }
+
     func testSecondRateLimitReturnsTypedErrorWithoutAnotherRetry() async throws {
         let loader = ScriptedCoderRequestLoader([
             .success(response(statusCode: 429, headers: ["Retry-After": "3"])),
@@ -295,6 +342,46 @@ final class CoderWorkspaceClientTests: XCTestCase {
         }
     }
 
+    func testCoderProductionSourcesDoNotLogTokenBearingRequestData() throws {
+        let patterns = try forbiddenDiagnosticPatterns()
+        let positiveControls = [
+            "print(request)",
+            "dump(token)",
+            "Logger(label: \"coder\")",
+            "os_log(\"request failed\")",
+            "logger.error(\"token: \\(token)\")",
+        ]
+        for sample in positiveControls {
+            XCTAssertTrue(
+                patterns.contains { $0.expression.firstMatch(in: sample, range: sample.fullNSRange) != nil },
+                "Coder source-audit detector missed a required diagnostic category"
+            )
+        }
+        let safeDiagnostic = #""CoderHTTPResponse(headerCount: \(headers.count))""#
+        XCTAssertFalse(
+            patterns.contains {
+                $0.expression.firstMatch(in: safeDiagnostic, range: safeDiagnostic.fullNSRange) != nil
+            },
+            "Coder source-audit detector must allow non-secret metadata"
+        )
+
+        var violations: [String] = []
+        for file in try coderProductionSourceFiles() {
+            let source = try String(contentsOf: file, encoding: .utf8)
+            for pattern in patterns where pattern.expression.firstMatch(
+                in: source,
+                range: source.fullNSRange
+            ) != nil {
+                violations.append("\(file.lastPathComponent): \(pattern.label)")
+            }
+        }
+
+        XCTAssertTrue(
+            violations.isEmpty,
+            "Production Coder sources must not log requests, headers, or tokens: \(violations.joined(separator: ", "))"
+        )
+    }
+
     func testKeychainTokenStoreUsesCoderServerTokenKeychainTag() async throws {
         let service = "com.bicterm.tests.coder-token.\(UUID().uuidString)"
         let cleanupQuery: [String: Any] = [
@@ -335,14 +422,55 @@ final class CoderWorkspaceClientTests: XCTestCase {
     private func makeClient(
         loader: ScriptedCoderRequestLoader,
         sleeper: RecordingCoderRetrySleeper = RecordingCoderRetrySleeper(),
-        token: String = TestModels.tokenFixture
+        token: String = TestModels.tokenFixture,
+        now: @escaping @Sendable () -> Date = { Date() }
     ) -> CoderClient {
         CoderClient(
             tokenStore: InMemoryCoderTokenStore(tokens: [tokenTag: token]),
             requestLoader: loader,
             retrySleeper: sleeper,
-            pageSize: 20
+            pageSize: 20,
+            now: now
         )
+    }
+
+    private func coderProductionSourceFiles() throws -> [URL] {
+        let packageRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let coderSources = packageRoot.appendingPathComponent("Sources/BicTermCore/Coder")
+        guard let enumerator = FileManager.default.enumerator(
+            at: coderSources,
+            includingPropertiesForKeys: [.isRegularFileKey]
+        ) else {
+            XCTFail("Could not enumerate production Coder sources")
+            return []
+        }
+
+        return enumerator
+            .compactMap { $0 as? URL }
+            .filter { $0.pathExtension == "swift" }
+            .sorted { $0.path < $1.path }
+    }
+
+    private func forbiddenDiagnosticPatterns() throws -> [ForbiddenDiagnosticPattern] {
+        let definitions = [
+            ("print/debugPrint/dump call", #"\b(?:print|debugPrint|dump)\s*\("#),
+            ("Logger use", #"\bLogger\s*(?:\(|\.)"#),
+            ("os_log call", #"\bos_log(?:_[A-Za-z]+)?\s*\("#),
+            ("logger method call", #"\b(?:logger|log)\s*\.\s*(?:trace|debug|info|notice|warning|error|critical|fault)\s*\("#),
+            (
+                "token-bearing diagnostic interpolation",
+                #"(?i)\\\(\s*(?:(?:token|candidate|keychainTag)(?:\b|\.)|(?:request|headers?)(?!\s*\.count\b)(?:\b|\.))"#
+            ),
+        ]
+        return try definitions.map { label, pattern in
+            ForbiddenDiagnosticPattern(
+                label: label,
+                expression: try NSRegularExpression(pattern: pattern)
+            )
+        }
     }
 
     private func assertClientError(
@@ -409,6 +537,17 @@ final class CoderWorkspaceClientTests: XCTestCase {
             throw CoderTokenStoreError.keychain(status)
         }
         SecItemDelete(query as CFDictionary)
+    }
+}
+
+private struct ForbiddenDiagnosticPattern {
+    let label: String
+    let expression: NSRegularExpression
+}
+
+private extension String {
+    var fullNSRange: NSRange {
+        NSRange(startIndex..<endIndex, in: self)
     }
 }
 

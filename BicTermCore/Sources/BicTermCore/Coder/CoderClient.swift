@@ -5,17 +5,20 @@ public struct CoderClient: Sendable {
     private let requestLoader: any CoderRequestLoading
     private let retrySleeper: any CoderRetrySleeping
     private let pageSize: Int
+    private let now: @Sendable () -> Date
 
     public init(
         tokenStore: any CoderTokenStoring = KeychainCoderTokenStore(),
         requestLoader: any CoderRequestLoading = SystemCoderRequestLoader(),
         retrySleeper: any CoderRetrySleeping = SystemCoderRetrySleeper(),
-        pageSize: Int = 100
+        pageSize: Int = 100,
+        now: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.tokenStore = tokenStore
         self.requestLoader = requestLoader
         self.retrySleeper = retrySleeper
         self.pageSize = max(1, pageSize)
+        self.now = now
     }
 
     public func workspaces(for server: CoderServer) async throws(CoderClientError) -> [CoderWorkspace] {
@@ -145,12 +148,23 @@ public struct CoderClient: Sendable {
 
     private func retryAfter(from response: CoderHTTPResponse) -> TimeInterval? {
         guard let rawValue = response.value(forHeaderField: "Retry-After")?
-            .trimmingCharacters(in: .whitespacesAndNewlines),
-              let seconds = Int(rawValue),
-              seconds >= 0 else {
+            .trimmingCharacters(in: .whitespacesAndNewlines) else {
             return nil
         }
-        return TimeInterval(seconds)
+        if let seconds = Int(rawValue), seconds >= 0 {
+            return TimeInterval(seconds)
+        }
+
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss 'GMT'"
+        guard let retryDate = formatter.date(from: rawValue),
+              formatter.string(from: retryDate) == rawValue else {
+            return nil
+        }
+        return max(0, retryDate.timeIntervalSince(now()))
     }
 
     private func decodeEnvelope(_ body: Data) throws(CoderClientError) -> WorkspaceEnvelope {
