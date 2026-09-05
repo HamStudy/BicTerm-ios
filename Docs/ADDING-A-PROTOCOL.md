@@ -223,7 +223,7 @@ derived-data suffix, and evidence filename for another protocol):
 
 ```sh
 DEST_OVERRIDE='platform=iOS Simulator,name=iPhone 17 Pro Max,OS=26.3.1' \
-DERIVED_DATA=/tmp/BicTerm-DD-et-conformance \
+DERIVED_DATA=.build-artifacts/DerivedData/et-conformance \
 ONLY_TESTING=BicTermCoreTests/ETTransportConformanceTests \
 EVIDENCE_LOG=.sisyphus/evidence/et-transport-conformance.log \
 scripts/test-core.sh
@@ -233,7 +233,7 @@ The executable guide proof is itself reproducible exactly:
 
 ```sh
 DEST_OVERRIDE='platform=iOS Simulator,name=iPhone 17 Pro Max,OS=26.3.1' \
-DERIVED_DATA=/tmp/BicTerm-DD-t15-proof \
+DERIVED_DATA=.build-artifacts/DerivedData/t15-proof \
 ONLY_TESTING=BicTermCoreTests/ExtensionGuideProofTests \
 EVIDENCE_LOG=.sisyphus/evidence/task-15-extension-proof.log \
 scripts/test-core.sh

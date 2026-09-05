@@ -2,6 +2,30 @@ import Foundation
 import XCTest
 
 final class ExtensionGuideIntegrityTests: XCTestCase {
+    func testShellExamplesKeepArtifactsInsideRepository() throws {
+        let root = SSHTestFixture.repoRoot
+        let guideURL = root.appendingPathComponent("Docs/ADDING-A-PROTOCOL.md")
+        let guide = try String(contentsOf: guideURL, encoding: .utf8)
+        let shellExamples = fencedCodeBlocks(tagged: "sh", in: guide)
+        XCTAssertFalse(shellExamples.isEmpty, "the guide must contain checked shell examples")
+
+        let forbiddenPaths = [
+            "/tmp",
+            "/private/tmp",
+            "$HOME",
+            "~/",
+            "Downloads/",
+            "Desktop/",
+        ]
+        let violations = forbiddenPaths.filter { forbiddenPath in
+            shellExamples.contains { $0.contains(forbiddenPath) }
+        }
+        XCTAssertTrue(
+            violations.isEmpty,
+            "shell examples must keep controllable artifacts inside the repository: \(violations)"
+        )
+    }
+
     func testEveryBacktickedSymbolAndLocalLinkResolves() throws {
         let root = SSHTestFixture.repoRoot
         let guideURL = root.appendingPathComponent("Docs/ADDING-A-PROTOCOL.md")
@@ -65,6 +89,11 @@ final class ExtensionGuideIntegrityTests: XCTestCase {
                 return insideFence ? nil : line
             }
             .joined(separator: "\n")
+    }
+
+    private func fencedCodeBlocks(tagged tag: String, in markdown: String) -> [String] {
+        let pattern = #"(?ms)^```\#(NSRegularExpression.escapedPattern(for: tag))\s*\n(.*?)^```\s*$"#
+        return matches(pattern: pattern, in: markdown, captureGroup: 1)
     }
 
     private func loadSwiftCorpus(at root: URL) throws -> String {
