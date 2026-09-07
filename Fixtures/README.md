@@ -87,6 +87,35 @@ python3-stdlib HTTP stub on 127.0.0.1:18080. Requests logged to
   `ok` (default), `unauthorized` (401 on all authed endpoints),
   `ratelimited` (429 + `Retry-After: 1` on the NEXT request, then back to ok).
 
+### Native Coder dev server (`Fixtures/coder/template/main.tf`, port 7080)
+
+A REAL Coder v2.36.4 dev deployment for the workspace-SSH protocol lanes
+(T9–T12), run by dedicated scripts (kept out of `fixtures-up.sh` because the
+first run downloads a pinned binary, built-in PostgreSQL, terraform, and
+providers). NO Docker: the server and workspace agent are native host
+processes on loopback.
+
+```sh
+scripts/coder-dev-up.sh    # download+sha256-verify, server on 127.0.0.1:7080,
+                           # first user via POST /api/v2/users/first, token ->
+                           # Fixtures/run/coder-dev.env (0600), pushes the
+                           # bicterm-host template, creates bicterm-host
+                           # (running, host agent connected) + bicterm-stopped
+scripts/coder-dev-down.sh  # kills server+agents by fixture path, verifies
+                           # port 7080 closed, removes Fixtures/run/coder-dev/
+                           # and the env file (keeps the coder-bin cache)
+```
+
+State: `Fixtures/run/coder-dev/` (gitignored) — config/postgres, terraform
+cache, per-workspace agent start scripts + logs under `agents/`, `server.log`,
+pidfiles. Template: committed `Fixtures/coder/template/main.tf` with the
+`coder/coder` provider — a `coder_agent "main"` (darwin/arm64) plus a
+`null_resource` local-exec that writes the agent start script into
+`Fixtures/run/coder-dev/agents/`; the up script materializes a path-rewritten
+runtime copy under `Fixtures/run/coder-dev/template/` (same prefix-sed
+convention as the sshd configs). Credentials never appear on any command
+line (env/stdin only) and are masked from script output.
+
 ## The `ssh -J` wrapper (macOS quirk)
 
 The acceptance two-hop command `ssh -o ... -J user@127.0.0.1:12222 ...`
