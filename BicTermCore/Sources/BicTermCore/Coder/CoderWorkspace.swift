@@ -91,4 +91,16 @@ public struct CoderWorkspace: Decodable, Equatable, Identifiable, Sendable {
         let latestBuild = try container.decodeIfPresent(LatestBuild.self, forKey: .latestBuild)
         state = CoderWorkspaceState(rawValue: latestBuild?.status ?? "")
     }
+
+    public init(
+        stateOnly id: UUID,
+        name: String,
+        ownerName: String,
+        state: CoderWorkspaceState
+    ) {
+        self.id = id
+        self.name = name
+        self.ownerName = ownerName
+        self.state = state
+    }
 }

@@ -1,6 +1,6 @@
 import Foundation
 
-public struct CoderServer: Codable, Equatable, Identifiable, Sendable {
+public struct CoderServer: Codable, Equatable, Hashable, Identifiable, Sendable {
     public let id: UUID
     public let name: String
     public let baseURL: URL

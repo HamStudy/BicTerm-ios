@@ -12,7 +12,13 @@ struct ConnectionEditorView: View {
     let onConnect: (Connection) -> Void
 
     @State private var draft = ConnectionDraft()
+    @State private var coderModel = CoderWorkspaceConnectionModel(
+        coderServerStore: AppServices.shared.coderServerStore,
+        coderTokenStore: AppServices.shared.coderTokenStore,
+        clientFactory: AppServices.shared.coderClientFactory
+    )
     @State private var hopSheetTarget: HopSheetTarget?
+    @State private var coderServerToEdit: CoderServer?
     @State private var hopLimitMessage: String?
     @State private var saveError: String?
     @State private var isSaving = false
@@ -53,16 +59,34 @@ struct ConnectionEditorView: View {
                     Button("Cancel") { dismiss() }
                         .accessibilityIdentifier("cancel-editor")
                 }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Save") { persist(connectAfterSave: false) }
-                        .disabled(!canSubmit)
-                        .accessibilityIdentifier("save-editor")
-                        .fontWeight(.semibold)
-                }
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button("Save") { persist(connectAfterSave: false) }
+                                .disabled(!canSubmit)
+                                .accessibilityIdentifier("save-editor")
+                                .fontWeight(.semibold)
+                        }
+                        if case .unauthorized(let server) = coderModel.loadingState, draft.protocolID == "coder" {
+                            ToolbarItem(placement: .topBarTrailing) {
+                                Button {
+                                    coderServerToEdit = server
+                                } label: {
+                                    Label("Reauthenticate", systemImage: "key.fill")
+                                }
+                                .foregroundColor(colors.error)
+                                .accessibilityIdentifier("coder-reauthenticate")
+                            }
+                        }
             }
-            .onAppear(perform: populateDraft)
+            .onAppear {
+                populateDraft()
+                prepareCoderModel()
+            }
             .onChange(of: draft) {
                 saveError = nil
+            }
+            .task(id: coderModel.selectedServerID) {
+                guard draft.protocolID == "coder" else { return }
+                await coderModel.loadWorkspaces()
             }
             .sheet(item: $hopSheetTarget) { target in
                 HopEditorView(
@@ -77,6 +101,20 @@ struct ConnectionEditorView: View {
                     }
                 }
                 .presentationDetents([.large])
+            }
+            .sheet(item: $coderServerToEdit) { server in
+                NavigationStack {
+                    CoderServerEditorView(
+                        model: CoderServersModel(
+                            store: AppServices.shared.coderServerStore,
+                            connectionStore: AppServices.shared.connectionStore,
+                            makeClient: AppServices.shared.coderClientFactory
+                        ),
+                        existing: server
+                    ) { _ in
+                        coderServerToEdit = nil
+                    }
+                }
             }
         }
         .environment(\.terminalColors, colors)
@@ -154,7 +192,12 @@ struct ConnectionEditorView: View {
     }
 
     private var canSubmit: Bool {
-        draft.isValid && descriptor != nil && !isSaving
+        draft.isValid && descriptor != nil && !isSaving && coderSaveValid
+    }
+
+    private var coderSaveValid: Bool {
+        guard draft.protocolID == "coder" else { return true }
+        return coderModel.canSave
     }
 
     private var authenticationSection: some View {
@@ -318,30 +361,143 @@ struct ConnectionEditorView: View {
 
     private var coderSection: some View {
         Section {
-            HStack {
-                Text("Coder Instance")
-                    .font(typography.body)
-                    .foregroundColor(colors.foreground)
-                Spacer()
-                Text("Select…")
+            if !coderModel.hasServers {
+                Text(coderModel.noServersMessage)
                     .font(typography.caption)
                     .foregroundColor(colors.dimmed)
+                    .accessibilityIdentifier("coder-no-servers")
+            } else {
+                    Menu {
+                    ForEach(coderModel.servers) { server in
+                        Button(server.name) {
+                            coderModel.selectServer(server)
+                            draft.coderServerID = server.id.uuidString
+                            draft.coderServerName = server.name
+                            draft.coderWorkspaceID = ""
+                            draft.coderWorkspaceName = ""
+                        }
+                    }
+                } label: {
+                    HStack {
+                        Text("Coder Server")
+                            .font(typography.body)
+                            .foregroundColor(colors.foreground)
+                        Spacer()
+                        Text(coderModel.selectedServerName.isEmpty ? "Select…" : coderModel.selectedServerName)
+                            .font(typography.caption)
+                            .foregroundColor(coderModel.selectedServerName.isEmpty ? colors.dimmed : colors.accent)
+                    }
+                }
+                .accessibilityIdentifier("coder-server-picker")
+
+                if coderModel.selectedServer != nil {
+                    coderWorkspacePicker
+                }
             }
+        } header: {
+            Text("Coder")
+        } footer: {
+            VStack(alignment: .leading, spacing: spacing.xxs) {
+                if let error = coderLoadingError {
+                    Text(error)
+                        .font(typography.caption)
+                        .foregroundColor(colors.error)
+                        .accessibilityIdentifier("coder-workspace-error")
+                }
+                if let coderValidation = draft.coderValidationError {
+                    Text(coderValidation)
+                        .font(typography.caption)
+                        .foregroundColor(colors.error)
+                        .accessibilityIdentifier("coder-validation-error")
+                }
+            }
+        }
+    }
+
+    private var coderWorkspacePicker: some View {
+        VStack(alignment: .leading, spacing: spacing.xxs) {
             HStack {
                 Text("Workspace")
                     .font(typography.body)
                     .foregroundColor(colors.foreground)
                 Spacer()
-                Text("Select…")
-                    .font(typography.caption)
-                    .foregroundColor(colors.dimmed)
+                if case .loading = coderModel.loadingState {
+                    ProgressView()
+                        .tint(colors.accent)
+                        .accessibilityIdentifier("coder-workspaces-loading")
+                }
             }
-        } header: {
-            Text("Coder")
-        } footer: {
-            Text("Instance and workspace pickers arrive with workspace support.")
-                .font(typography.caption)
-                .foregroundColor(colors.dimmed)
+
+            if let error = networkOnlyError {
+                Text(error)
+                    .font(typography.caption)
+                    .foregroundColor(colors.error)
+                    .accessibilityIdentifier("coder-workspace-network-error")
+            } else {
+                ForEach(currentWorkspaces, id: \.id) { workspace in
+                    Button {
+                        if workspace.isConnectable {
+                            coderModel.selectWorkspace(workspace)
+                            draft.coderWorkspaceID = workspace.id.uuidString
+                            draft.coderWorkspaceName = workspace.name
+                        }
+                    } label: {
+                        HStack {
+                            VStack(alignment: .leading, spacing: spacing.xxxs) {
+                                Text(workspace.name)
+                                    .font(typography.body)
+                                    .foregroundColor(workspace.isConnectable ? colors.foreground : colors.dimmed)
+                                Text(workspace.state.rawValue.capitalized)
+                                    .font(typography.caption)
+                                    .foregroundColor(colors.dimmed)
+                            }
+                            Spacer()
+                            if draft.coderWorkspaceID == workspace.id.uuidString {
+                                Image(systemName: "checkmark")
+                                    .foregroundColor(colors.accent)
+                            } else if !workspace.isConnectable {
+                                Image(systemName: "lock.fill")
+                                    .foregroundColor(colors.dimmed)
+                            }
+                        }
+                    }
+                    .disabled(!workspace.isConnectable)
+                    .accessibilityIdentifier("coder-workspace-\(workspace.name.replacingOccurrences(of: " ", with: "-").replacingOccurrences(of: "/", with: "-"))")
+                    .buttonStyle(.plain)
+                    .opacity(workspace.isConnectable ? 1.0 : 0.8)
+                }
+            }
+        }
+    }
+
+    private var currentWorkspaces: [CoderWorkspace] {
+        switch coderModel.loadingState {
+        case .loaded(let workspaces), .staleRevalidating(let workspaces):
+            return workspaces
+        default:
+            return []
+        }
+    }
+
+    private var coderLoadingError: String? {
+        switch coderModel.loadingState {
+        case .unreachable:
+            return "Cannot reach the Coder server. Check the network or TLS settings."
+        case .serverError(_, let statusCode):
+            return "Coder returned an error (HTTP \(statusCode))."
+        case .networkError, .empty, .idle, .loading, .loaded, .staleRevalidating, .unauthorized:
+            return nil
+        }
+    }
+
+    private var networkOnlyError: String? {
+        switch coderModel.loadingState {
+        case .unreachable:
+            return "Cannot reach the Coder server."
+        case .serverError(_, let statusCode):
+            return "HTTP \(statusCode)"
+        default:
+            return nil
         }
     }
 
@@ -406,6 +562,17 @@ struct ConnectionEditorView: View {
         for index in draft.hops.indices {
             draft.hops[index].keyLabel =
                 model.keyLabel(forReference: existing.jumpChain[index].keyReference) ?? ""
+        }
+    }
+
+    private func prepareCoderModel() {
+        Task {
+            await coderModel.reloadServers()
+            if draft.protocolID == "coder" {
+                let serverID = draft.coderServerID.isEmpty ? nil : UUID(uuidString: draft.coderServerID)
+                let workspaceID = draft.coderWorkspaceID.isEmpty ? nil : UUID(uuidString: draft.coderWorkspaceID)
+                coderModel.prepareForInitialValues(serverID: serverID, workspaceID: workspaceID)
+            }
         }
     }
 

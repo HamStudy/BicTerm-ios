@@ -49,6 +49,10 @@ struct ConnectionDraft: Equatable {
     var keyLabel = ""
     var hops: [HopDraft] = []
     var agentForwarding = false
+    var coderServerID: String = ""
+    var coderWorkspaceID: String = ""
+    var coderWorkspaceName: String = ""
+    var coderServerName: String = ""
 
     init() {}
 
@@ -62,8 +66,20 @@ struct ConnectionDraft: Equatable {
         keyReference = connection.keyReference
         self.keyLabel = keyLabel ?? ""
         hops = connection.jumpChain.map { HopDraft(hop: $0, keyLabel: nil) }
-        agentForwarding = connection.protocolOptions["agentForwarding"] == .bool(true)
+        agentForwarding = connection.protocolOptions["agentForwarding"]?.boolValue == true
+        coderServerID = connection.protocolOptions["coder.serverID"]?.stringValue ?? connection.coderRef?.serverID.uuidString ?? ""
+        coderWorkspaceID = connection.protocolOptions["coder.workspaceID"]?.stringValue ?? connection.coderRef?.workspaceID.uuidString ?? ""
+        coderWorkspaceName = connection.protocolOptions["coder.workspaceName"]?.stringValue ?? ""
+        coderServerName = connection.protocolOptions["coder.serverName"]?.stringValue ?? ""
     }
+
+    var coderValidationError: String? {
+        guard protocolID == "coder" else { return nil }
+        if coderServerID.isEmpty { return "Select a Coder server" }
+        if coderWorkspaceID.isEmpty { return "Select a workspace" }
+        return nil
+    }
+
     var nameError: String? {
         name.trimmingCharacters(in: .whitespaces).isEmpty ? "Name is required" : nil
     }
@@ -136,6 +152,7 @@ struct ConnectionDraft: Equatable {
             && hopErrors.isEmpty
             && !hasCycle
             && hops.count <= Connection.maximumJumpChainLength
+            && coderValidationError == nil
     }
 
     func makeConnection() throws -> Connection {
@@ -147,6 +164,7 @@ struct ConnectionDraft: Equatable {
               portError == nil,
               usernameError == nil,
               keyError == nil,
+              coderValidationError == nil,
               !hasCycle,
               hops.count <= Connection.maximumJumpChainLength
         else {
@@ -162,9 +180,28 @@ struct ConnectionDraft: Equatable {
             }
             jumpChain.append(value)
         }
-        var options = ProtocolOptions()
+        var optionValues: [String: ProtocolOptionValue] = [:]
         if agentForwarding {
-            options = try ProtocolOptions(["agentForwarding": .bool(true)])
+            optionValues["agentForwarding"] = .bool(true)
+        }
+        var coderRef: CoderReference?
+        if protocolID == "coder" {
+            if let serverUUID = UUID(uuidString: coderServerID),
+               let workspaceUUID = UUID(uuidString: coderWorkspaceID) {
+                coderRef = CoderReference(serverID: serverUUID, workspaceID: workspaceUUID)
+            }
+            if !coderServerID.isEmpty {
+                optionValues["coder.serverID"] = .string(coderServerID)
+                optionValues["coder.serverName"] = .string(coderServerName)
+            }
+            if !coderWorkspaceID.isEmpty {
+                optionValues["coder.workspaceID"] = .string(coderWorkspaceID)
+                optionValues["coder.workspaceName"] = .string(coderWorkspaceName)
+            }
+        }
+        var options = ProtocolOptions()
+        if !optionValues.isEmpty {
+            options = try ProtocolOptions(optionValues)
         }
         return try Connection(
             id: id,
@@ -175,7 +212,8 @@ struct ConnectionDraft: Equatable {
             username: username.trimmingCharacters(in: .whitespaces),
             keyReference: keyReference,
             jumpChain: jumpChain,
-            protocolOptions: options
+            protocolOptions: options,
+            coderRef: coderRef
         )
     }
 }
