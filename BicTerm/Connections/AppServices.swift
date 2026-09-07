@@ -21,6 +21,7 @@ final class AppServices {
     let keyRepository = KeychainKeyRepository()
     let coderClientFactory: CoderClientFactory
     let coderTokenStore: any CoderTokenStoring
+    let passwordStore: any PasswordStoring
 
     #if DEBUG
     /// Set by the `--uitest-demo-editor` launch hook: name of a connection
@@ -64,6 +65,7 @@ final class AppServices {
         let tokenStore = KeychainCoderTokenStore()
         self.coderTokenStore = tokenStore
         self.coderClientFactory = Self.makeCoderClientFactory(tokenStore: tokenStore)
+        self.passwordStore = KeychainPasswordStore()
 
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("-uitest-reset-configuration") {
@@ -74,6 +76,7 @@ final class AppServices {
                 )
             }
         }
+        UITestPasswordServerSeam.startIfRequested()
         #endif
     }
 

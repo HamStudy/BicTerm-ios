@@ -43,10 +43,6 @@ struct HopEditorView: View {
         ConnectionFieldValidation.usernameError(draft.username)
     }
 
-    private var keyError: String? {
-        draft.keyReference.isEmpty ? "Select a key" : nil
-    }
-
     var body: some View {
         NavigationStack {
             Form {
@@ -63,25 +59,59 @@ struct HopEditorView: View {
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
 
-                    NavigationLink {
-                        KeyPickerView(
-                            keys: keys,
-                            selectedReference: draft.keyReference
-                        ) { selected in
-                            draft.keyReference = selected.reference
-                            draft.keyLabel = selected.label
-                        }
-                    } label: {
-                        VStack(alignment: .leading, spacing: spacing.xxxs) {
-                            Text("Authentication Key")
-                                .font(typography.body)
-                                .foregroundColor(colors.foreground)
-                            Text(draft.keyReference.isEmpty ? (keyError ?? "Select a key") : draft.keyLabel)
-                                .font(typography.caption)
-                                .foregroundColor(draft.keyReference.isEmpty ? colors.error : colors.accent)
-                        }
+                    Picker("Authentication", selection: Binding(
+                        get: { draft.authMethod },
+                        set: { draft.switchAuthMethod(to: $0) }
+                    )) {
+                        Text("Key").tag(AuthMethod.publickey)
+                        Text("Password").tag(AuthMethod.password)
                     }
-                    .accessibilityIdentifier("hop-key-selector")
+                    .pickerStyle(.segmented)
+                    .accessibilityIdentifier("hop-auth-method-picker")
+
+                    if draft.authMethod == .password {
+                        VStack(alignment: .leading, spacing: spacing.xxxs) {
+                            HStack {
+                                Text("Password")
+                                    .font(typography.body)
+                                    .foregroundColor(colors.foreground)
+                                Spacer()
+                                SecureField("", text: $draft.passwordInput)
+                                    .font(typography.body)
+                                    .foregroundColor(colors.foreground)
+                                    .multilineTextAlignment(.trailing)
+                                    .textInputAutocapitalization(.never)
+                                    .autocorrectionDisabled()
+                                    .accessibilityIdentifier("hop-password-field")
+                            }
+                            if draft.hasSavedPassword, draft.passwordInput.isEmpty {
+                                Text("Saved in Keychain")
+                                    .font(typography.caption)
+                                    .foregroundColor(colors.success)
+                                    .accessibilityIdentifier("hop-password-saved-badge")
+                            }
+                        }
+                    } else {
+                        NavigationLink {
+                            KeyPickerView(
+                                keys: keys,
+                                selectedReference: draft.keyReference
+                            ) { selected in
+                                draft.keyReference = selected.reference
+                                draft.keyLabel = selected.label
+                            }
+                        } label: {
+                            VStack(alignment: .leading, spacing: spacing.xxxs) {
+                                Text("Authentication Key")
+                                    .font(typography.body)
+                                    .foregroundColor(colors.foreground)
+                                Text(draft.keyReference.isEmpty ? "Select a key" : draft.keyLabel)
+                                    .font(typography.caption)
+                                    .foregroundColor(draft.keyReference.isEmpty ? colors.error : colors.accent)
+                            }
+                        }
+                        .accessibilityIdentifier("hop-key-selector")
+                    }
                 }
             }
             .scrollContentBackground(.hidden)

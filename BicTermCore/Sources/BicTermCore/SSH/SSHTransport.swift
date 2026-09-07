@@ -3,11 +3,12 @@ import NIOCore
 import NIOPosix
 import NIOSSH
 
-/// Key-authenticated SSH terminal transport over SwiftNIO SSH.
+/// Key- or password-authenticated SSH terminal transport over SwiftNIO SSH.
 ///
 /// Lifecycle: one `connect` per session — it performs TCP connect, host-key
-/// TOFU verification (via T4's `HostKeyVerifier`), single-shot public-key
-/// auth, session channel open, `pty-req` (xterm-256color) and `shell`
+/// TOFU verification (via T4's `HostKeyVerifier`), single-shot user auth
+/// (public key or password per the connection's `authMethod`), session
+/// channel open, `pty-req` (xterm-256color) and `shell`
 /// (both with reply tracking). `output` is a FRESH stream per connection;
 /// the previous one is finished on reconnect or `close`.
 ///
@@ -24,6 +25,7 @@ public actor SSHTransport {
 
     private let hostKeyVerifier: HostKeyVerifier
     private let authenticationKeyProvider: any SSHAuthenticationKeyProvider
+    private let passwordStore: any PasswordStoring
 
     private var outputContinuation: AsyncStream<Data>.Continuation?
     private var group: MultiThreadedEventLoopGroup?
@@ -48,10 +50,12 @@ public actor SSHTransport {
 
     public init(
         hostKeyVerifier: HostKeyVerifier,
-        authenticationKeyProvider: any SSHAuthenticationKeyProvider = DefaultSSHAuthenticationKeyProvider()
+        authenticationKeyProvider: any SSHAuthenticationKeyProvider = DefaultSSHAuthenticationKeyProvider(),
+        passwordStore: any PasswordStoring = KeychainPasswordStore()
     ) {
         self.hostKeyVerifier = hostKeyVerifier
         self.authenticationKeyProvider = authenticationKeyProvider
+        self.passwordStore = passwordStore
         let (stream, _) = AsyncStream.makeStream(of: Data.self, bufferingPolicy: .bufferingNewest(32))
         self.output = stream
     }
@@ -61,14 +65,29 @@ public actor SSHTransport {
 
         await tearDown()
 
-        let privateKey: NIOSSHPrivateKey
-        do {
-            privateKey = try await authenticationKeyProvider.authenticationPrivateKey(
-                with: connection.keyReference,
-                reason: "Authenticate to \(connection.host)"
+        // The user-auth delegate is chosen strictly by the connection's
+        // declared method — a password-method endpoint never offers keys and
+        // a key-method endpoint never falls back to passwords. A credential
+        // that cannot be resolved is the typed `.authenticationFailed`,
+        // thrown before any TCP dial.
+        let userAuth: any NIOSSHClientUserAuthenticationDelegate
+        switch connection.authMethod {
+        case .publickey:
+            let privateKey: NIOSSHPrivateKey
+            do {
+                privateKey = try await authenticationKeyProvider.authenticationPrivateKey(
+                    with: connection.keyReference,
+                    reason: "Authenticate to \(connection.host)"
+                )
+            } catch {
+                throw .authenticationFailed
+            }
+            userAuth = SingleKeyUserAuthenticationDelegate(username: connection.username, key: privateKey)
+        case .password:
+            userAuth = PasswordUserAuthenticationDelegate(
+                username: connection.username,
+                password: try await resolvedPassword(forTag: connection.keyReference)
             )
-        } catch {
-            throw .authenticationFailed
         }
 
         let group = MultiThreadedEventLoopGroup(numberOfThreads: 1)
@@ -78,7 +97,6 @@ public actor SSHTransport {
             port: connection.port,
             verifier: hostKeyVerifier
         )
-        let userAuth = SingleKeyUserAuthenticationDelegate(username: connection.username, key: privateKey)
         let agentInitializer = agentChannelInitializer
 
         let bootstrap = ClientBootstrap(group: group)
@@ -253,6 +271,20 @@ public actor SSHTransport {
     }
 
     // MARK: - Private
+
+    /// Resolves the stored password for a `.password`-method endpoint. Any
+    /// store failure or a missing entry is the typed `.authenticationFailed`
+    /// — no credential probe ever reaches the network.
+    private func resolvedPassword(forTag tag: String) async throws(SSHTransportError) -> String {
+        let stored: String?
+        do {
+            stored = try await passwordStore.password(for: tag)
+        } catch {
+            throw .authenticationFailed
+        }
+        guard let stored else { throw .authenticationFailed }
+        return stored
+    }
 
     /// `createChannel` must run on the connection's EventLoop; everything
     /// stays inside future closures so the explicitly non-Sendable

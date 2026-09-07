@@ -8,6 +8,18 @@ struct HopDraft: Identifiable, Equatable {
     var username = ""
     var keyReference = ""
     var keyLabel = ""
+    var authMethod: AuthMethod = .publickey
+    /// Keychain tag hosting the hop password (persisted as `Hop.keyReference`
+    /// for password hops). Generated once when the picker switches to
+    /// password mode; reused on later edits so retyping overwrites in place.
+    var passwordTag = ""
+    /// Unsaved editor input — written to the Keychain only at connection-save
+    /// time, never persisted with the model.
+    var passwordInput = ""
+    /// Whether the persisted hop already has a password entry under
+    /// `passwordTag`. Drives the "Saved in Keychain" badge; the SecureField
+    /// itself is never pre-filled.
+    var hasSavedPassword = false
 
     init() {}
 
@@ -15,22 +27,65 @@ struct HopDraft: Identifiable, Equatable {
         host = hop.host
         port = String(hop.port)
         username = hop.username
-        keyReference = hop.keyReference
-        self.keyLabel = keyLabel ?? ""
+        authMethod = hop.authMethod
+        switch hop.authMethod {
+        case .publickey:
+            keyReference = hop.keyReference
+            self.keyLabel = keyLabel ?? ""
+        case .password:
+            passwordTag = hop.keyReference
+            hasSavedPassword = !hop.keyReference.isEmpty
+        }
     }
 
     var portValue: Int? { HopPort.parse(port) }
+
+    /// Entering password mode detaches the key selection (a hop uses exactly
+    /// one credential kind) and mints a tag if this hop never had one.
+    mutating func switchAuthMethod(to method: AuthMethod) {
+        guard authMethod != method else { return }
+        authMethod = method
+        switch method {
+        case .password:
+            keyReference = ""
+            keyLabel = ""
+            if passwordTag.isEmpty {
+                passwordTag = HopDraft.makePasswordTag()
+            }
+        case .publickey:
+            passwordInput = ""
+        }
+    }
+
+    static func makePasswordTag() -> String {
+        "bicterm.pwd.\(UUID().uuidString)"
+    }
+
+    var credentialSatisfied: Bool {
+        switch authMethod {
+        case .publickey:
+            !keyReference.isEmpty
+        case .password:
+            !passwordTag.isEmpty && (hasSavedPassword || !passwordInput.isEmpty)
+        }
+    }
 
     var isComplete: Bool {
         ConnectionFieldValidation.isValidHostname(host)
             && HopPort.isValid(port)
             && ConnectionFieldValidation.isValidUsername(username)
-            && !keyReference.isEmpty
+            && credentialSatisfied
     }
 
     func makeHop() -> Hop? {
         guard let portValue else { return nil }
-        return Hop(host: host.trimmingCharacters(in: .whitespaces), port: portValue, username: username, keyReference: keyReference)
+        return Hop(
+            host: host.trimmingCharacters(in: .whitespaces),
+            port: portValue,
+            username: username,
+            keyReference: authMethod == .password ? passwordTag : keyReference,
+            authMethod: authMethod
+        )
     }
 }
 
@@ -47,6 +102,13 @@ struct ConnectionDraft: Equatable {
     var username = ""
     var keyReference = ""
     var keyLabel = ""
+    var authMethod: AuthMethod = .publickey
+    /// Keychain tag hosting the destination password (persisted as
+    /// `Connection.keyReference` for password connections). See `HopDraft`.
+    var passwordTag = ""
+    /// Unsaved editor input — Keychain-only on save, never persisted.
+    var passwordInput = ""
+    var hasSavedPassword = false
     var hops: [HopDraft] = []
     var agentForwarding = false
     var coderServerID: String = ""
@@ -63,8 +125,15 @@ struct ConnectionDraft: Equatable {
         host = connection.host
         port = String(connection.port)
         username = connection.username
-        keyReference = connection.keyReference
-        self.keyLabel = keyLabel ?? ""
+        authMethod = connection.authMethod
+        switch connection.authMethod {
+        case .publickey:
+            keyReference = connection.keyReference
+            self.keyLabel = keyLabel ?? ""
+        case .password:
+            passwordTag = connection.keyReference
+            hasSavedPassword = !connection.keyReference.isEmpty
+        }
         hops = connection.jumpChain.map { HopDraft(hop: $0, keyLabel: nil) }
         agentForwarding = connection.protocolOptions["agentForwarding"]?.boolValue == true
         coderServerID = connection.protocolOptions["coder.serverID"]?.stringValue ?? connection.coderRef?.serverID.uuidString ?? ""
@@ -97,7 +166,32 @@ struct ConnectionDraft: Equatable {
     }
 
     var keyError: String? {
-        keyReference.isEmpty ? "Select an authentication key" : nil
+        guard authMethod == .publickey else { return nil }
+        return keyReference.isEmpty ? "Select an authentication key" : nil
+    }
+
+    var passwordError: String? {
+        guard authMethod == .password else { return nil }
+        if passwordTag.isEmpty { return "Password storage tag unavailable" }
+        return (hasSavedPassword || !passwordInput.isEmpty) ? nil : "Enter a password"
+    }
+
+    /// Entering password mode detaches the key selection; entering key mode
+    /// drops unsaved password input. Saved Keychain entries are only removed
+    /// by editor save-path cleanup, deletion, or an explicit overwrite.
+    mutating func switchAuthMethod(to method: AuthMethod) {
+        guard authMethod != method else { return }
+        authMethod = method
+        switch method {
+        case .password:
+            keyReference = ""
+            keyLabel = ""
+            if passwordTag.isEmpty {
+                passwordTag = HopDraft.makePasswordTag()
+            }
+        case .publickey:
+            passwordInput = ""
+        }
     }
 
     var hopErrors: [Int: String] {
@@ -111,8 +205,10 @@ struct ConnectionDraft: Equatable {
                 errors[index] = "Invalid hop port"
             } else if !ConnectionFieldValidation.isValidUsername(hop.username) {
                 errors[index] = "Hop username is required"
-            } else if hop.keyReference.isEmpty {
+            } else if hop.authMethod == .publickey && hop.keyReference.isEmpty {
                 errors[index] = "Hop key is required"
+            } else if hop.authMethod == .password && !hop.credentialSatisfied {
+                errors[index] = "Hop password is required"
             }
         }
         return errors
@@ -149,6 +245,7 @@ struct ConnectionDraft: Equatable {
             && portError == nil
             && usernameError == nil
             && keyError == nil
+            && passwordError == nil
             && hopErrors.isEmpty
             && !hasCycle
             && hops.count <= Connection.maximumJumpChainLength
@@ -164,6 +261,7 @@ struct ConnectionDraft: Equatable {
               portError == nil,
               usernameError == nil,
               keyError == nil,
+              passwordError == nil,
               coderValidationError == nil,
               !hasCycle,
               hops.count <= Connection.maximumJumpChainLength
@@ -210,7 +308,8 @@ struct ConnectionDraft: Equatable {
             host: host.trimmingCharacters(in: .whitespaces),
             port: destinationPort,
             username: username.trimmingCharacters(in: .whitespaces),
-            keyReference: keyReference,
+            keyReference: authMethod == .password ? passwordTag : keyReference,
+            authMethod: authMethod,
             jumpChain: jumpChain,
             protocolOptions: options,
             coderRef: coderRef

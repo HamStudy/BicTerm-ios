@@ -8,6 +8,18 @@ public enum ConnectionType: String, Codable, Equatable, Hashable, Sendable {
     case uppercaseEcho = "uppercase-echo"
 }
 
+/// How SSH user authentication proceeds for a connection destination or a
+/// single jump host. The credential bytes are NEVER part of the model: for
+/// `.publickey` the `keyReference` names a private key in the key stores; for
+/// `.password` it carries an opaque Keychain tag resolvable only through the
+/// password store. Servers must allow password authentication; NIOSSH
+/// implements the RFC 4252 `password` method only (no keyboard-interactive),
+/// so sshd needs `PasswordAuthentication yes` (the OpenSSH default).
+public enum AuthMethod: String, Codable, Equatable, Hashable, Sendable {
+    case publickey
+    case password
+}
+
 public struct CoderReference: Codable, Equatable, Hashable, Sendable {
     public let serverID: UUID
     public let workspaceID: UUID
@@ -27,7 +39,11 @@ public struct Connection: Codable, Equatable, Identifiable, Sendable {
     public let host: String
     public let port: Int
     public let username: String
+    /// Credential reference: a key-store reference when `authMethod` is
+    /// `.publickey`, an opaque Keychain password tag when it is `.password`.
+    /// Never credential bytes themselves.
     public let keyReference: String
+    public let authMethod: AuthMethod
     public let jumpChain: [Hop]
     public let protocolOptions: ProtocolOptions
     public let coderRef: CoderReference?
@@ -40,6 +56,7 @@ public struct Connection: Codable, Equatable, Identifiable, Sendable {
         port: Int,
         username: String,
         keyReference: String,
+        authMethod: AuthMethod = .publickey,
         jumpChain: [Hop] = [],
         protocolOptions: ProtocolOptions = ProtocolOptions(),
         coderRef: CoderReference? = nil
@@ -58,6 +75,7 @@ public struct Connection: Codable, Equatable, Identifiable, Sendable {
         self.port = port
         self.username = username
         self.keyReference = keyReference
+        self.authMethod = authMethod
         self.jumpChain = jumpChain
         self.protocolOptions = protocolOptions
         self.coderRef = coderRef
@@ -73,6 +91,9 @@ public struct Connection: Codable, Equatable, Identifiable, Sendable {
             port: container.decode(Int.self, forKey: .port),
             username: container.decode(String.self, forKey: .username),
             keyReference: container.decode(String.self, forKey: .keyReference),
+            // Backward compatibility: payloads written before password
+            // support carry no authMethod and always meant key auth.
+            authMethod: container.decodeIfPresent(AuthMethod.self, forKey: .authMethod) ?? .publickey,
             jumpChain: container.decode([Hop].self, forKey: .jumpChain),
             protocolOptions: container.decode(ProtocolOptions.self, forKey: .protocolOptions),
             coderRef: container.decodeIfPresent(CoderReference.self, forKey: .coderRef)

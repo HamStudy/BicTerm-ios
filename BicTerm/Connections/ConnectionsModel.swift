@@ -245,12 +245,33 @@ final class ConnectionsModel {
     }
 
     func delete(_ connection: Connection) async {
+        let tags = Self.passwordTags(in: connection)
         do {
             try await connectionStore.deleteConnection(id: connection.id)
             connections.removeAll { $0.id == connection.id }
+            let stillReferenced = Set(connections.flatMap(Self.passwordTags(in:)))
+            for tag in tags where !stillReferenced.contains(tag) {
+                try? await services.passwordStore.deletePassword(for: tag)
+            }
         } catch {
             loadError = "Couldn't delete connection: \(error.localizedDescription)"
         }
+    }
+
+    /// Keychain tags of a connection's password credentials (destination and
+    /// hops). The persisted model stores tags only — never password bytes —
+    /// so cleanup is driven entirely from the model.
+    static func passwordTags(in connection: Connection) -> [String] {
+        var tags: [String] = []
+        if connection.authMethod == .password, !connection.keyReference.isEmpty {
+            tags.append(connection.keyReference)
+        }
+        for hop in connection.jumpChain where hop.authMethod == .password {
+            if !hop.keyReference.isEmpty {
+                tags.append(hop.keyReference)
+            }
+        }
+        return tags
     }
 
     func duplicate(_ connection: Connection) async {
@@ -322,6 +343,9 @@ final class ConnectionsModel {
         if let existing = try? await services.connectionStore.loadConnections() {
             for connection in existing {
                 try? await services.connectionStore.deleteConnection(id: connection.id)
+                for tag in Self.passwordTags(in: connection) {
+                    try? await services.passwordStore.deletePassword(for: tag)
+                }
             }
         }
     }

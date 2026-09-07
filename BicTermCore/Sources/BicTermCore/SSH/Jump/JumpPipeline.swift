@@ -12,16 +12,24 @@ struct JumpHopEndpoint: Equatable, Sendable {
     let port: Int
     let username: String
     let keyReference: String
+    let authMethod: AuthMethod
 
     init(hop: Hop) {
-        self.init(host: hop.host, port: hop.port, username: hop.username, keyReference: hop.keyReference)
+        self.init(
+            host: hop.host,
+            port: hop.port,
+            username: hop.username,
+            keyReference: hop.keyReference,
+            authMethod: hop.authMethod
+        )
     }
 
-    init(host: String, port: Int, username: String, keyReference: String) {
+    init(host: String, port: Int, username: String, keyReference: String, authMethod: AuthMethod = .publickey) {
         self.host = host
         self.port = port
         self.username = username
         self.keyReference = keyReference
+        self.authMethod = authMethod
     }
 }
 
@@ -75,13 +83,13 @@ protocol JumpSession: Sendable {
 struct NIOJumpDialer: JumpDialer {
     let hostKeyVerifier: HostKeyVerifier
     let authenticationKeyProvider: any SSHAuthenticationKeyProvider
+    let passwordStore: any PasswordStoring
 
     func connectTCP(to endpoint: JumpHopEndpoint) async throws(SSHTransportError) -> any JumpHopConnection {
-        let privateKey = try await loadKey(for: endpoint)
+        let userAuth = try await makeUserAuthDelegate(for: endpoint)
         let group = MultiThreadedEventLoopGroup(numberOfThreads: 1)
         let recorder = TransportErrorRecorder()
         let serverAuth = VerifyingHostKeyDelegate(host: endpoint.host, port: endpoint.port, verifier: hostKeyVerifier)
-        let userAuth = SingleKeyUserAuthenticationDelegate(username: endpoint.username, key: privateKey)
 
         let bootstrap = ClientBootstrap(group: group)
             .channelOption(ChannelOptions.socket(SocketOptionLevel(IPPROTO_TCP), TCP_NODELAY), value: 1)
@@ -111,10 +119,9 @@ struct NIOJumpDialer: JumpDialer {
 
     func connectNested(over link: any JumpRawLink, to endpoint: JumpHopEndpoint) async throws(SSHTransportError) -> any JumpHopConnection {
         guard let nioLink = link as? NIOJumpRawLink else { throw .channelDenied }
-        let privateKey = try await loadKey(for: endpoint)
+        let userAuth = try await makeUserAuthDelegate(for: endpoint)
         let recorder = TransportErrorRecorder()
         let serverAuth = VerifyingHostKeyDelegate(host: endpoint.host, port: endpoint.port, verifier: hostKeyVerifier)
-        let userAuth = SingleKeyUserAuthenticationDelegate(username: endpoint.username, key: privateKey)
         let channel = nioLink.channel
 
         // The child channel is already active; NIOSSHHandler.handlerAdded
@@ -138,14 +145,29 @@ struct NIOJumpDialer: JumpDialer {
         return NIOJumpHopConnection(channel: channel, group: nil, recorder: recorder)
     }
 
-    private func loadKey(for endpoint: JumpHopEndpoint) async throws(SSHTransportError) -> NIOSSHPrivateKey {
-        do {
-            return try await authenticationKeyProvider.authenticationPrivateKey(
-                with: endpoint.keyReference,
-                reason: "Authenticate to \(endpoint.host)"
-            )
-        } catch {
-            throw .authenticationFailed
+    private func makeUserAuthDelegate(
+        for endpoint: JumpHopEndpoint
+    ) async throws(SSHTransportError) -> any NIOSSHClientUserAuthenticationDelegate {
+        switch endpoint.authMethod {
+        case .publickey:
+            do {
+                let key = try await authenticationKeyProvider.authenticationPrivateKey(
+                    with: endpoint.keyReference,
+                    reason: "Authenticate to \(endpoint.host)"
+                )
+                return SingleKeyUserAuthenticationDelegate(username: endpoint.username, key: key)
+            } catch {
+                throw .authenticationFailed
+            }
+        case .password:
+            let stored: String?
+            do {
+                stored = try await passwordStore.password(for: endpoint.keyReference)
+            } catch {
+                throw .authenticationFailed
+            }
+            guard let password = stored else { throw .authenticationFailed }
+            return PasswordUserAuthenticationDelegate(username: endpoint.username, password: password)
         }
     }
 }

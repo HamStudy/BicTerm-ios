@@ -51,7 +51,7 @@ extension TransportError: LocalizedError {
         case let .requiresTrust(fingerprint, algorithm, _):
             "Host key \(algorithm) \(fingerprint) requires explicit trust."
         case .authenticationFailed:
-            "Public-key authentication failed."
+            "Authentication failed."
         case .unreachable:
             "The host is unreachable."
         case .channelDenied:

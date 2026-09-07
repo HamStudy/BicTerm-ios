@@ -100,7 +100,8 @@ enum SecretAbsenceAssertions {
 
     static func findings(
         in encodedValues: [Data],
-        privateKeyData: Data
+        privateKeyData: Data,
+        passwordSentinels: [String] = []
     ) throws -> [Finding] {
         let privateKeyText = String(decoding: privateKeyData, as: UTF8.self)
         var findings: [Finding] = []
@@ -112,6 +113,7 @@ enum SecretAbsenceAssertions {
                 path: "$[\(index)]",
                 privateKeyData: privateKeyData,
                 privateKeyText: privateKeyText,
+                passwordSentinels: passwordSentinels,
                 findings: &findings
             )
         }
@@ -124,6 +126,7 @@ enum SecretAbsenceAssertions {
         path: String,
         privateKeyData: Data,
         privateKeyText: String,
+        passwordSentinels: [String],
         findings: inout [Finding]
     ) {
         if let dictionary = value as? [String: Any] {
@@ -133,6 +136,7 @@ enum SecretAbsenceAssertions {
                     path: "\(path).\(key)",
                     privateKeyData: privateKeyData,
                     privateKeyText: privateKeyText,
+                    passwordSentinels: passwordSentinels,
                     findings: &findings
                 )
             }
@@ -146,6 +150,7 @@ enum SecretAbsenceAssertions {
                     path: "\(path)[\(index)]",
                     privateKeyData: privateKeyData,
                     privateKeyText: privateKeyText,
+                    passwordSentinels: passwordSentinels,
                     findings: &findings
                 )
             }
@@ -160,6 +165,12 @@ enum SecretAbsenceAssertions {
 
         if let decoded = Data(base64Encoded: string), decoded.range(of: privateKeyData) != nil {
             findings.append(Finding(path: path, reason: "base64 private-key data"))
+        }
+
+        for sentinel in passwordSentinels where !sentinel.isEmpty {
+            if string.contains(sentinel) {
+                findings.append(Finding(path: path, reason: "password text"))
+            }
         }
 
         let tokenPatterns = [

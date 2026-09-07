@@ -202,37 +202,88 @@ struct ConnectionEditorView: View {
 
     private var authenticationSection: some View {
         Section {
-            NavigationLink {
-                KeyPickerView(keys: model.keys) { selected in
-                    draft.keyReference = selected.reference
-                    draft.keyLabel = selected.label
+            if draft.protocolID == ProtocolDescriptor.ssh.id {
+                Picker("Authentication", selection: Binding(
+                    get: { draft.authMethod },
+                    set: { draft.switchAuthMethod(to: $0) }
+                )) {
+                    Text("Key").tag(AuthMethod.publickey)
+                    Text("Password").tag(AuthMethod.password)
                 }
-            } label: {
+                .pickerStyle(.segmented)
+                .accessibilityIdentifier("auth-method-picker")
+            }
+
+            if draft.authMethod == .password, draft.protocolID == ProtocolDescriptor.ssh.id {
                 VStack(alignment: .leading, spacing: spacing.xxxs) {
-                    Text("Authentication Key")
-                        .font(typography.body)
-                        .foregroundColor(colors.foreground)
-                    if draft.keyReference.isEmpty {
-                        Text(draft.keyError ?? "Select a key")
+                    HStack {
+                        Text("Password")
+                            .font(typography.body)
+                            .foregroundColor(colors.foreground)
+                        Spacer()
+                        SecureField("", text: $draft.passwordInput)
+                            .font(typography.body)
+                            .foregroundColor(colors.foreground)
+                            .multilineTextAlignment(.trailing)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .accessibilityIdentifier("password-field")
+                    }
+                    if draft.hasSavedPassword, draft.passwordInput.isEmpty {
+                        Text("Saved in Keychain")
                             .font(typography.caption)
-                            .foregroundColor(draft.keyError == nil ? colors.dimmed : colors.error)
-                    } else {
-                        Text(draft.keyLabel.isEmpty ? draft.keyReference : draft.keyLabel)
+                            .foregroundColor(colors.success)
+                            .accessibilityIdentifier("password-saved-badge")
+                    } else if let error = draft.passwordError {
+                        Text(error)
                             .font(typography.caption)
-                            .foregroundColor(colors.accent)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
+                            .foregroundColor(colors.error)
+                            .accessibilityIdentifier("password-field-error")
                     }
                 }
+            } else {
+                keyPickerRow
             }
-            .accessibilityIdentifier("key-selector")
         } header: {
             Text("Authentication")
         } footer: {
-            Text("Keys are referenced by label and fingerprint. Private key material never leaves the keychain.")
-                .font(typography.caption)
-                .foregroundColor(colors.dimmed)
+            if draft.authMethod == .password, draft.protocolID == ProtocolDescriptor.ssh.id {
+                Text("Passwords are stored in the iOS Keychain on this device only, protected when locked. The connection record holds a Keychain tag, never the password.")
+                    .font(typography.caption)
+                    .foregroundColor(colors.dimmed)
+            } else {
+                Text("Keys are referenced by label and fingerprint. Private key material never leaves the keychain.")
+                    .font(typography.caption)
+                    .foregroundColor(colors.dimmed)
+            }
         }
+    }
+
+    private var keyPickerRow: some View {
+        NavigationLink {
+            KeyPickerView(keys: model.keys) { selected in
+                draft.keyReference = selected.reference
+                draft.keyLabel = selected.label
+            }
+        } label: {
+            VStack(alignment: .leading, spacing: spacing.xxxs) {
+                Text("Authentication Key")
+                    .font(typography.body)
+                    .foregroundColor(colors.foreground)
+                if draft.keyReference.isEmpty {
+                    Text(draft.keyError ?? "Select a key")
+                        .font(typography.caption)
+                        .foregroundColor(draft.keyError == nil ? colors.dimmed : colors.error)
+                } else {
+                    Text(draft.keyLabel.isEmpty ? draft.keyReference : draft.keyLabel)
+                        .font(typography.caption)
+                        .foregroundColor(colors.accent)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+            }
+        }
+        .accessibilityIdentifier("key-selector")
     }
 
     private var jumpChainSection: some View {
@@ -294,11 +345,12 @@ struct ConnectionEditorView: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
                     .accessibilityIdentifier("hop-\(index)-host")
-                Text("\(hop.username) · \(hop.keyLabel.isEmpty ? "no key" : hop.keyLabel)")
+                Text("\(hop.username) · \(hopCredentialSummary(hop))")
                     .font(typography.caption)
                     .foregroundColor(colors.dimmed)
                     .lineLimit(1)
                     .truncationMode(.middle)
+                    .accessibilityIdentifier("hop-\(index)-credential")
             }
 
             Spacer()
@@ -319,8 +371,16 @@ struct ConnectionEditorView: View {
         .buttonStyle(.borderless)
     }
 
-    private func addHopTapped() {
-        guard draft.hops.count < Connection.maximumJumpChainLength else {
+    private func hopCredentialSummary(_ hop: HopDraft) -> String {
+        switch hop.authMethod {
+        case .publickey:
+            hop.keyLabel.isEmpty ? "no key" : hop.keyLabel
+        case .password:
+            "Password"
+        }
+    }
+
+    private func addHopTapped() {        guard draft.hops.count < Connection.maximumJumpChainLength else {
             hopLimitMessage = "Maximum \(Connection.maximumJumpChainLength) hops"
             return
         }
@@ -586,10 +646,16 @@ struct ConnectionEditorView: View {
             }
             isSaving = true
             Task {
+                if let storeError = await storePendingPasswords() {
+                    isSaving = false
+                    saveError = storeError
+                    return
+                }
                 let result = await model.persist(connection)
                 isSaving = false
                 switch result {
                 case .success:
+                    await deleteOrphanedPasswordEntries(replacedBy: connection)
                     if connectAfterSave { onConnect(connection) }
                     dismiss()
                 case let .failure(error):
@@ -598,6 +664,45 @@ struct ConnectionEditorView: View {
             }
         } catch {
             saveError = "Review the connection details before saving. \(error.localizedDescription)"
+        }
+    }
+
+    /// New/changed password inputs for the destination and hops. Saved
+    /// passwords that weren't retyped are simply kept (overwrite would be a
+    /// no-op); only fields carrying fresh input produce a write.
+    private var pendingPasswordWrites: [(tag: String, password: String)] {
+        var writes: [(tag: String, password: String)] = []
+        if draft.authMethod == .password, !draft.passwordInput.isEmpty {
+            writes.append((tag: draft.passwordTag, password: draft.passwordInput))
+        }
+        for hop in draft.hops where hop.authMethod == .password && !hop.passwordInput.isEmpty {
+            writes.append((tag: hop.passwordTag, password: hop.passwordInput))
+        }
+        return writes
+    }
+
+    /// Writes must precede the model persist: a saved password connection
+    /// whose tag has no Keychain entry would be persisted-but-unusable, so a
+    /// store failure aborts here and leaves the model untouched.
+    private func storePendingPasswords() async -> String? {
+        for write in pendingPasswordWrites {
+            do {
+                try await AppServices.shared.passwordStore.save(write.password, for: write.tag)
+            } catch {
+                return "Couldn't store the SSH password in the Keychain. The connection was not saved — try again."
+            }
+        }
+        return nil
+    }
+
+    /// Only tags the persisted model no longer references are deleted; tags
+    /// still in use (including entries shared via connection duplication) are
+    /// retained.
+    private func deleteOrphanedPasswordEntries(replacedBy connection: Connection) async {
+        let oldTags = existing.map(ConnectionsModel.passwordTags(in:)) ?? []
+        let liveTags = ConnectionsModel.passwordTags(in: connection)
+        for tag in oldTags where !liveTags.contains(tag) {
+            try? await AppServices.shared.passwordStore.deletePassword(for: tag)
         }
     }
 }
