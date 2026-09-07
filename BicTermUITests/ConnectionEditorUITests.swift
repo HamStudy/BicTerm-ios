@@ -211,7 +211,9 @@ final class ConnectionEditorUITests: XCTestCase {
         typeInto(app.textFields["field-host"], "failure.example.com")
         typeInto(app.textFields["field-username"], "alice")
         selectAuthenticationKey("Fixture Ed25519")
-        app.buttons["connect-button"].tap()
+        let connectButton = app.buttons["connect-button"]
+        scrollToHittable(connectButton)
+        connectButton.tap()
 
         let error = app.staticTexts["save-error"]
         XCTAssertTrue(error.waitForExistence(timeout: 5))
@@ -249,14 +251,37 @@ final class ConnectionEditorUITests: XCTestCase {
 
     private func typeInto(_ field: XCUIElement, _ text: String, clearing existing: String? = nil) {
         field.tap()
-        if let existing {
-            field.typeText(String(repeating: "\u{8}", count: existing.count + 2))
+        awaitKeyboardFocus(on: field)
+        if existing != nil {
+            selectAllForReplacement(of: field)
         }
-        field.typeText(text)
+        app.typeText(text)
         dismissKeyboard()
     }
 
+    /// isHittable flaps during keyboard/Form relayout; the stable, meaningful
+    /// predicate for text entry is focus ownership itself.
+    private func awaitKeyboardFocus(on field: XCUIElement, timeout: TimeInterval = 5) {
+        let predicate = NSPredicate(format: "hasKeyboardFocus == true")
+        expectation(for: predicate, evaluatedWith: field)
+        waitForExpectations(timeout: timeout)
+    }
+
+    /// Caret/alignment-agnostic clear: select all content through the edit
+    /// menu; the following app-level typeText then replaces the selection
+    /// wholesale regardless of caret position or deleted-keystroke delivery.
+    private func selectAllForReplacement(of field: XCUIElement) {
+        field.press(forDuration: 1.1)
+        let selectAll = app.menuItems["Select All"]
+        if selectAll.waitForExistence(timeout: 2) {
+            selectAll.tap()
+        }
+    }
+
     private func dismissKeyboard() {
+        // An absent keyboard must turn this into a no-op: the drag fallback is
+        // itself a focus-disturbing full-form gesture.
+        guard app.keyboards.count > 0 else { return }
         let toolbarDone = app.toolbars.buttons["Done"]
         let plainDone = app.buttons["Done"]
         if toolbarDone.waitForExistence(timeout: 2) {
@@ -279,10 +304,10 @@ final class ConnectionEditorUITests: XCTestCase {
     private func scrollToHittable(
         _ element: XCUIElement,
         swipingUp: Bool = true,
-        maxSwipes: Int = 5
+        maxSwipes: Int = 8
     ) {
         var attempts = 0
-        while (!element.exists || !element.isHittable) && attempts < maxSwipes {
+        while !isFullyVisibleInWindow(element) && attempts < maxSwipes {
             if swipingUp {
                 app.swipeUp()
             } else {
@@ -290,6 +315,29 @@ final class ConnectionEditorUITests: XCTestCase {
             }
             attempts += 1
         }
+    }
+
+    /// A Form row straddling the window edge still reports `isHittable`, but
+    /// XCUI computes the synthetic tap at the row's centre; when the row is
+    /// clipped below the window the tap lands in the home-indicator band and
+    /// never reaches the control (observed: sixth `add-hop` tap did nothing);
+    /// rows clipped under the navigation bar fail the same way (taps hit the
+    /// bar's backdrop layer — `field-name` never gained focus).
+    private func isFullyVisibleInWindow(_ element: XCUIElement) -> Bool {
+        guard element.exists, element.isHittable else { return false }
+        let window = app.windows.firstMatch.frame
+        let frame = element.frame
+        let inset: CGFloat = 8
+        guard frame.minX >= window.minX + inset,
+              frame.maxX <= window.maxX - inset,
+              frame.minY >= window.minY + inset,
+              frame.maxY <= window.maxY - inset else { return false }
+        let navBars = app.navigationBars
+        for index in 0..<navBars.count {
+            let bar = navBars.element(boundBy: index).frame
+            if !bar.isEmpty, frame.minY < bar.maxY + 4 { return false }
+        }
+        return true
     }
 
     private func selectAuthenticationKey(_ label: String) {
@@ -325,6 +373,15 @@ final class ConnectionEditorUITests: XCTestCase {
         let sheetDismissed = NSPredicate(format: "exists == false")
         expectation(for: sheetDismissed, evaluatedWith: hostField)
         waitForExpectations(timeout: 10)
+
+        // A tap issued against a row while the sheet is still unwinding gets
+        // swallowed by the presentation transition; hop N+1 then observes no
+        // Add Hop sheet at all. Gate on the sheet being fully detached and let
+        // the editor settle before the next hop begins.
+        let noSheets = NSPredicate(format: "count == 0")
+        expectation(for: noSheets, evaluatedWith: app.sheets)
+        waitForExpectations(timeout: 10)
+        Thread.sleep(forTimeInterval: 0.4)
     }
 
     private func swipeRow(named identifier: String) {

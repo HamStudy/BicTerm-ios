@@ -57,7 +57,7 @@ struct HopEditorView: View {
                         .autocorrectionDisabled()
 
                     field("Port", text: $draft.port, identifier: "hop-field-port", error: portError, focus: .port)
-                        .keyboardType(.numberPad)
+                        .keyboardType(.default)
 
                     field("Username", text: $draft.username, identifier: "hop-field-username", error: usernameError, focus: .username)
                         .textInputAutocapitalization(.never)
