@@ -8,9 +8,17 @@ struct ConnectionListView: View {
     @State private var model = ConnectionsModel()
     @State private var editorTarget: EditorTarget?
     let onConnectRequested: (Connection) -> Void
+    var onOpenSessions: (() -> Void)?
+    var onClose: (() -> Void)?
 
-    init(onConnectRequested: @escaping (Connection) -> Void = { _ in }) {
+    init(
+        onConnectRequested: @escaping (Connection) -> Void = { _ in },
+        onOpenSessions: (() -> Void)? = nil,
+        onClose: (() -> Void)? = nil
+    ) {
         self.onConnectRequested = onConnectRequested
+        self.onOpenSessions = onOpenSessions
+        self.onClose = onClose
     }
 
     struct EditorTarget: Identifiable {
@@ -29,6 +37,16 @@ struct ConnectionListView: View {
             .navigationTitle("BicTerm")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
+                    if let onOpenSessions {
+                        Button(action: onOpenSessions) {
+                            Image(systemName: "rectangle.on.rectangle")
+                        }
+                        .accessibilityLabel("Sessions")
+                        .accessibilityIdentifier("open-sessions")
+                        .foregroundColor(colors.accent)
+                    }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         editorTarget = EditorTarget(connection: nil)
                     } label: {
@@ -37,6 +55,13 @@ struct ConnectionListView: View {
                     .accessibilityLabel("Add Connection")
                     .accessibilityIdentifier("add-connection")
                     .foregroundColor(colors.accent)
+                }
+                ToolbarItem(placement: .topBarLeading) {
+                    if let onClose {
+                        Button("Done") { onClose() }
+                            .accessibilityIdentifier("list-done")
+                            .foregroundColor(colors.accent)
+                    }
                 }
                 ToolbarItem(placement: .topBarLeading) {
                     NavigationLink(destination: SettingsView()) {

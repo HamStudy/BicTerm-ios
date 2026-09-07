@@ -1,5 +1,19 @@
 import Foundation
 
+/// Presentation metadata for the session switcher: whether a terminal
+/// surface is attached, and whether a detached session received output the
+/// user has not seen yet. Advisory only — no transport, lifecycle, or
+/// reconnection behavior may depend on it.
+public struct SessionPresentationState: Sendable, Equatable {
+    public let isAttached: Bool
+    public let hasUnseenOutput: Bool
+
+    public init(isAttached: Bool, hasUnseenOutput: Bool) {
+        self.isAttached = isAttached
+        self.hasUnseenOutput = hasUnseenOutput
+    }
+}
+
 /// Global actor owning every live terminal session. Single mutation
 /// authority: scenes/UI read state and streams, never touch transports.
 ///
@@ -318,6 +332,31 @@ public actor SessionRegistry {
         }
     }
 
+    // MARK: - Presentation state (session switcher)
+
+    /// Marks the session as having a live terminal surface; clears any
+    /// unseen-output flag. No-op for unknown sessions.
+    public func attached(sceneID: String) async {
+        guard let record = records[sceneID] else { return }
+        record.isAttached = true
+        record.hasUnseenOutput = false
+    }
+
+    /// Marks the session's surface as gone (window closed, cover
+    /// dismissed, user switched to another session). The session itself
+    /// keeps running. No-op for unknown sessions.
+    public func detached(sceneID: String) async {
+        records[sceneID]?.isAttached = false
+    }
+
+    public func presentationState(sceneID: String) -> SessionPresentationState? {
+        guard let record = records[sceneID] else { return nil }
+        return SessionPresentationState(
+            isAttached: record.isAttached,
+            hasUnseenOutput: record.hasUnseenOutput
+        )
+    }
+
     // MARK: - Observation
 
     public func state(sceneID: String) -> SessionState? {
@@ -376,6 +415,9 @@ public actor SessionRegistry {
     private func bridgeYield(_ chunk: Data, for record: SessionRecord, transport: any SessionTransport) {
         guard isCurrentTransport(record, transport: transport) else { return }
         record.outputContinuation.yield(chunk)
+        if !record.isAttached {
+            record.hasUnseenOutput = true
+        }
     }
 
     private func bridgeFinished(for record: SessionRecord, transport: any SessionTransport) {
@@ -486,6 +528,9 @@ final class SessionRecord: @unchecked Sendable {
 
     var reconnectInFlight = false
     var reconnectWaiters: [CheckedContinuation<Result<Void, SessionRegistryError>, Never>] = []
+
+    var isAttached = false
+    var hasUnseenOutput = false
 
     let outputStream: AsyncStream<Data>
     let outputContinuation: AsyncStream<Data>.Continuation

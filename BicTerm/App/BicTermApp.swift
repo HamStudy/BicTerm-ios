@@ -21,6 +21,64 @@ private struct RestoredTerminalWindowHost: View {
     }
 }
 
+/// Content of one terminal window: the session its window value names,
+/// OR any other live session the user picked from the switcher (in-window
+/// switching — the picked session's cached surface moves into THIS window
+/// and the previously shown one keeps running detached).
+@MainActor
+private struct TerminalWindowRoot: View {
+    let store: SessionStore
+    let windowSessionID: UUID?
+
+    @State private var switchedSessionID: UUID?
+    @State private var listPresented = false
+
+    var body: some View {
+        Group {
+            if let shown = switchedSessionID ?? windowSessionID,
+               let descriptor = store.descriptor(id: shown),
+               let model = store.sceneModel(for: descriptor.id) {
+                sceneView(model: model)
+            } else if let windowSessionID {
+                RestoredTerminalWindowHost(store: store, sessionID: SessionID(value: windowSessionID))
+            } else {
+                TerminalPlaceholderView(connectionName: "Terminal Session")
+            }
+        }
+        .terminalStyle()
+        .sheet(isPresented: $listPresented) {
+            ConnectionListView(
+                onConnectRequested: { connection in
+                    listPresented = false
+                    let descriptor = store.openSession(for: connection)
+                    switchedSessionID = descriptor.id
+                },
+                onClose: { listPresented = false }
+            )
+            .terminalStyle()
+        }
+    }
+
+    private func sceneView(model: SessionSceneModel) -> some View {
+        SessionSceneView(
+            model: model,
+            store: store,
+            actions: SessionSceneActions(
+                onPickSession: { pickedID in
+                    switchedSessionID = pickedID
+                },
+                onNewConnection: { listPresented = true },
+                onSessionClosed: {
+                    switchedSessionID = nil
+                }
+            )
+        )
+        // In-window switches must REBUILD the scene — see the matching
+        // comment in ConnectionListContainer.
+        .id(model.id)
+    }
+}
+
 @main
 struct BicTermApp: App {
     @State private var sessionStore = SessionStore()
@@ -42,20 +100,7 @@ struct BicTermApp: App {
         }
 
         WindowGroup("Terminal", id: "terminal", for: SessionID.self) { $sessionID in
-            if let sessionID,
-               let descriptor = sessionStore.descriptor(id: sessionID.value),
-               let model = sessionStore.sceneModel(for: descriptor.id) {
-                SessionSceneView(
-                    model: model,
-                    agentPresenter: sessionStore.agentPresenter
-                )
-                .terminalStyle()
-            } else if let sessionID {
-                RestoredTerminalWindowHost(store: sessionStore, sessionID: sessionID)
-            } else {
-                TerminalPlaceholderView(connectionName: "Terminal Session")
-                    .terminalStyle()
-            }
+            TerminalWindowRoot(store: sessionStore, windowSessionID: sessionID?.value)
         }
     }
 }

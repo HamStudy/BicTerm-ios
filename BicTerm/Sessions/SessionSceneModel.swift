@@ -28,13 +28,16 @@ final class SessionSceneModel: Identifiable {
     private(set) var tail = ""
     private(set) var pendingTrustChallenge: SessionStore.HostTrustChallenge?
     private(set) var trustErrorMessage: String?
+    /// True after the session's cached terminal surface was evicted and a
+    /// re-attach built a fresh one — the scene shows the one-line
+    /// "scrollback released" notice until the user dismisses it.
+    private(set) var scrollbackReleased = false
 
     let viewOutput: AsyncStream<Data>
-    private let viewOutputContinuation: AsyncStream<Data>.Continuation
+    private var viewOutputContinuation: AsyncStream<Data>.Continuation
 
     private var stateTask: Task<Void, Never>?
     private var pumpTask: Task<Void, Never>?
-    private var disappearCloseTask: Task<Void, Never>?
     nonisolated(unsafe) private var lifecycleObservers: [NSObjectProtocol] = []
     private var started = false
     private var didUserConnect = false
@@ -59,6 +62,22 @@ final class SessionSceneModel: Identifiable {
         let (stream, continuation) = AsyncStream<Data>.makeStream(bufferingPolicy: .bufferingNewest(256))
         self.viewOutput = stream
         self.viewOutputContinuation = continuation
+
+        let (commands, commandContinuation) = AsyncStream<SurfacePresentation>.makeStream(
+            bufferingPolicy: .bufferingNewest(16)
+        )
+        self.presentationCommands = commandContinuation
+        Task { [weak self] in
+            for await command in commands {
+                guard let self else { return }
+                switch command {
+                case .attached:
+                    await self.registry.attached(sceneID: self.sceneID)
+                case .detached:
+                    await self.registry.detached(sceneID: self.sceneID)
+                }
+            }
+        }
 
         // Suspend/resume follows APPLICATION-level lifecycle, not per-scene
         // scenePhase: on iPad a window merely COVERED by a sibling window
@@ -290,6 +309,48 @@ final class SessionSceneModel: Identifiable {
         Task { await registry.resize(sceneID: sceneID, cols: cols, rows: rows) }
     }
 
+    /// Replaces the view-facing output stream (the previous consumer was
+    /// cancelled with an evicted surface) and returns the fresh stream for
+    /// the new surface's feed task. The pump task yields into whichever
+    /// continuation is current.
+    func beginOutputStream() -> AsyncStream<Data> {
+        let (stream, continuation) = AsyncStream<Data>.makeStream(bufferingPolicy: .bufferingNewest(256))
+        viewOutputContinuation = continuation
+        return stream
+    }
+
+    // MARK: - Surface attach/detach (presentation state)
+
+    private enum SurfacePresentation: Sendable {
+        case attached
+        case detached
+    }
+
+    private let presentationCommands: AsyncStream<SurfacePresentation>.Continuation
+
+    /// Attach/detach MUST reach the registry in the order the surfaces
+    /// actually came and went — fire-and-forget Tasks can start out of
+    /// order under load, and a late "attached" would swallow the unread
+    /// marking for a detached session. A serial stream drain guarantees
+    /// FIFO per session.
+    func surfaceAttached() {
+        guard !isClosed else { return }
+        presentationCommands.yield(.attached)
+    }
+
+    func surfaceDetached() {
+        guard !isClosed else { return }
+        presentationCommands.yield(.detached)
+    }
+
+    func markScrollbackReleased() {
+        scrollbackReleased = true
+    }
+
+    func clearScrollbackReleasedNotice() {
+        scrollbackReleased = false
+    }
+
     // MARK: - Closing
 
     func requestClose() {
@@ -313,32 +374,14 @@ final class SessionSceneModel: Identifiable {
     func closeNow() async {
         guard !isClosed else { return }
         isClosed = true
-        disappearCloseTask?.cancel()
-        disappearCloseTask = nil
         stateTask?.cancel()
         stateTask = nil
         pumpTask?.cancel()
         pumpTask = nil
         viewOutputContinuation.finish()
+        presentationCommands.finish()
         await onClose(id)
         state = .closed
-    }
-
-    /// View-level teardown (window destroyed, cover replaced). Delayed so a
-    /// transient SwiftUI unmount can cancel it by reappearing.
-    func sceneViewDisappeared() {
-        guard !isClosed else { return }
-        disappearCloseTask?.cancel()
-        disappearCloseTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(1.5))
-            guard !Task.isCancelled, let self, !self.isClosed else { return }
-            await self.closeNow()
-        }
-    }
-
-    func sceneViewAppeared() {
-        disappearCloseTask?.cancel()
-        disappearCloseTask = nil
     }
 }
 

@@ -1,33 +1,45 @@
 import BicTermCore
 import SwiftUI
 
+/// Context-dependent actions a session surface triggers: picking another
+/// session attaches it in the SAME presentation context (window swap,
+/// cover swap, or window open), "New connection…" routes to the connection
+/// list, and onSessionClosed fires when this scene's session terminates.
+struct SessionSceneActions {
+    var onPickSession: (UUID) -> Void
+    var onNewConnection: () -> Void
+    var onSessionClosed: () -> Void
+}
+
 /// One terminal session scene: chrome (connection name, protocol badge,
-/// status), the terminal surface, status/reconnect banner with typed error,
-/// close confirmation, and the agent approval sheet for THIS scene's
-/// pending request.
+/// status, Sessions switcher, close), the terminal surface, status/reconnect
+/// banner with typed error, close confirmation, and the agent approval sheet
+/// for THIS scene's pending request.
 struct SessionSceneView: View {
     @Environment(\.terminalColors) private var colors
     @Environment(\.terminalTypography) private var typography
     @Environment(\.terminalSpacing) private var spacing
 
     let model: SessionSceneModel
-    let agentPresenter: AgentApprovalPresenter
-    var onSessionClosed: (() -> Void)?
+    let store: SessionStore
+    var actions: SessionSceneActions?
+
+    @State private var switcherPresented = false
+
+    private var agentPresenter: AgentApprovalPresenter { store.agentPresenter }
 
     var body: some View {
         VStack(spacing: 0) {
             chrome
+            if model.scrollbackReleased {
+                scrollbackReleasedNotice
+            }
             if model.state != .active || model.launchErrorMessage != nil {
                 statusBanner
             }
             if model.isTerminalVisible {
-                TerminalRepresentable(
-                    output: model.viewOutput,
-                    send: { model.send($0) },
-                    onResize: { cols, rows in model.resize(cols: cols, rows: rows) },
-                    cursorStyle: .steadyBlock
-                )
-                .background(colors.background)
+                SessionTerminalRepresentable(cache: store.viewCache, model: model)
+                    .background(colors.background)
             } else {
                 closedPlaceholder
             }
@@ -37,10 +49,22 @@ struct SessionSceneView: View {
         }
         .background(colors.background.ignoresSafeArea())
         .task { await model.start() }
-        .onAppear { model.sceneViewAppeared() }
-        .onDisappear { model.sceneViewDisappeared() }
         .onChange(of: model.isClosed) { _, closed in
-            if closed { onSessionClosed?() }
+            if closed { actions?.onSessionClosed() }
+        }
+        .sheet(isPresented: $switcherPresented) {
+            SessionSwitcherView(
+                store: store,
+                currentSessionID: model.id,
+                onPick: { pickedID in
+                    switcherPresented = false
+                    actions?.onPickSession(pickedID)
+                },
+                onNewConnection: {
+                    switcherPresented = false
+                    actions?.onNewConnection()
+                }
+            )
         }
         .confirmationDialog(
             "Disconnect from \(model.connectionName)?",
@@ -98,6 +122,16 @@ struct SessionSceneView: View {
             Spacer()
 
             Button {
+                switcherPresented = true
+            } label: {
+                Image(systemName: "rectangle.on.rectangle")
+                    .font(.title3)
+            }
+            .accessibilityLabel("Sessions")
+            .accessibilityIdentifier("scene-sessions")
+            .foregroundColor(colors.dimmed)
+
+            Button {
                 model.requestClose()
             } label: {
                 Image(systemName: "xmark.circle.fill")
@@ -110,6 +144,30 @@ struct SessionSceneView: View {
         .padding(.horizontal, spacing.sm)
         .padding(.vertical, spacing.xs)
         .background(colors.background)
+    }
+
+    private var scrollbackReleasedNotice: some View {
+        HStack(spacing: spacing.xs) {
+            Image(systemName: "clock.arrow.circlepath")
+                .foregroundColor(colors.dimmed)
+            Text("Scrollback released — earlier output was discarded.")
+                .font(typography.caption)
+                .foregroundColor(colors.dimmed)
+                .accessibilityIdentifier("scene-scrollback-released-\(sanitized)")
+            Spacer()
+            Button {
+                model.clearScrollbackReleasedNotice()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.caption)
+            }
+            .accessibilityLabel("Dismiss notice")
+            .accessibilityIdentifier("scene-scrollback-released-dismiss")
+            .foregroundColor(colors.dimmed)
+        }
+        .padding(.horizontal, spacing.sm)
+        .padding(.vertical, spacing.xxxs)
+        .background(colors.selection.opacity(0.4))
     }
 
     private var statusChip: some View {

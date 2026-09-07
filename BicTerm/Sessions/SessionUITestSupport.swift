@@ -9,6 +9,7 @@ import SwiftUI
 ///   --uitest-sessions                      enable scene seams + driver below
 ///   --uitest-expect-restore                keep snapshots at launch (restore test relaunch)
 ///   --uitest-open-session <name>           connect the named connection at bootstrap (repeatable)
+///   --uitest-open-session-detached <name>  open + start WITHOUT presenting (switcher tests; repeatable)
 ///   --uitest-open-session-after <n>:<sec>  open a second-wave session after a delay
 ///   --uitest-session-command <cmd>         send cmd to each opened session once active ({NAME} substituted)
 enum TerminalSceneUITest {
@@ -61,6 +62,10 @@ enum SessionUITestDriver {
             await openAndCommand(store: store, name: name, command: command, present: present)
         }
 
+        for name in TerminalSceneUITest.values(after: "--uitest-open-session-detached") {
+            await openDetachedAndCommand(store: store, name: name, command: command)
+        }
+
         if let later = TerminalSceneUITest.value(after: "--uitest-open-session-after") {
             let parts = later.split(separator: ":").map(String.init)
             guard parts.count == 2, let delay = Double(parts[1]) else { return }
@@ -79,6 +84,29 @@ enum SessionUITestDriver {
         guard let connection = await connection(named: name) else { return }
         let descriptor = store.openSession(for: connection)
         present(descriptor)
+        guard await store.waitUntilActive(descriptor.id, timeout: 45) else { return }
+        if let command {
+            let resolved = command.replacingOccurrences(of: "{NAME}", with: name)
+            try? await store.registry.send(
+                sceneID: descriptor.registrySceneID,
+                Data((resolved + "\n").utf8)
+            )
+        }
+    }
+
+    /// Detached open: no presentation — the session runs with no surface so
+    /// switcher tests can attach it on demand. The scene model is started
+    /// directly (no view will fire `.task { model.start() }` for it yet).
+    @MainActor
+    private static func openDetachedAndCommand(
+        store: SessionStore,
+        name: String,
+        command: String?
+    ) async {
+        guard let connection = await connection(named: name) else { return }
+        let descriptor = store.openSession(for: connection)
+        guard let model = store.sceneModel(for: descriptor.id) else { return }
+        await model.start()
         guard await store.waitUntilActive(descriptor.id, timeout: 45) else { return }
         if let command {
             let resolved = command.replacingOccurrences(of: "{NAME}", with: name)

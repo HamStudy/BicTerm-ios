@@ -56,13 +56,22 @@ final class SessionStore {
     let agentPresenter: AgentApprovalPresenter
     let agentBook: AgentSessionBook
     let hostKeyVerifier: HostKeyVerifier?
+    /// Live terminal surfaces for every attached-or-detached session —
+    /// the buffer-preservation layer behind the session switcher.
+    let viewCache = TerminalViewCache()
 
     private let hostKeyStore: (any HostKeyStoreProtocol)?
     private let connectionLookup: ConnectionLookup
     private let snapshotStore: (any SessionSnapshotStoreProtocol)?
     private var connectionNameCache: [UUID: String] = [:]
     private(set) var descriptors: [UUID: SessionDescriptor] = [:]
+    private var orderedIDs: [UUID] = []
     private var sceneModels: [UUID: SessionSceneModel] = [:]
+
+    /// Live sessions in opening order — the switcher's stable listing.
+    var orderedDescriptors: [SessionDescriptor] {
+        orderedIDs.compactMap { descriptors[$0] }
+    }
 
     /// Production wiring: real SSH factory (agent-forwarding enabled) and
     /// the SwiftData session-snapshot store. Tests inject a fake transport
@@ -165,6 +174,7 @@ final class SessionStore {
             initiatesReconnect: false
         )
         descriptors[descriptor.id] = descriptor
+        orderedIDs.append(descriptor.id)
         connectionNameCache[connection.id] = connection.name
         return descriptor
     }
@@ -187,12 +197,26 @@ final class SessionStore {
             initiatesReconnect: initiatesReconnect
         )
         descriptors[descriptor.id] = descriptor
+        orderedIDs.append(descriptor.id)
         connectionNameCache[connection.id] = connection.name
         return descriptor
     }
 
     func descriptor(id: UUID) -> SessionDescriptor? {
         descriptors[id]
+    }
+
+    /// Read-only model lookup (no side effects) — safe inside view bodies.
+    func existingModel(for descriptorID: UUID) -> SessionSceneModel? {
+        sceneModels[descriptorID]
+    }
+
+    /// Creates scene models for every live descriptor so the switcher's
+    /// rows can render detached sessions that never had a view.
+    func warmSceneModelsForSwitcher() {
+        for id in orderedIDs where sceneModels[id] == nil {
+            _ = sceneModel(for: id)
+        }
     }
 
     func sceneModel(for descriptorID: UUID) -> SessionSceneModel? {
@@ -214,11 +238,13 @@ final class SessionStore {
 
     func closeScene(_ descriptorID: UUID) async {
         agentPresenter.denyPendingIfTargeting(scene: descriptorID)
+        viewCache.removeSurface(for: descriptorID)
         if let descriptor = descriptors[descriptorID] {
             await registry.closeSession(sceneID: descriptor.registrySceneID)
         }
         descriptors[descriptorID] = nil
         sceneModels[descriptorID] = nil
+        orderedIDs.removeAll { $0 == descriptorID }
     }
 
     // MARK: - Restoration listing

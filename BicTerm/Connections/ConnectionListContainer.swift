@@ -12,6 +12,7 @@ struct ConnectionListContainer: View {
     @State private var coderTunnelAlertConnection: Connection?
     @State private var coverDescriptor: SessionStore.SessionDescriptor?
     @State private var restorableSessions: [SessionStore.RestorableSession] = []
+    @State private var switcherPresented = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -21,7 +22,10 @@ struct ConnectionListContainer: View {
                 }
             }
 
-            ConnectionListView(onConnectRequested: handleConnect)
+            ConnectionListView(
+                onConnectRequested: handleConnect,
+                onOpenSessions: { switcherPresented = true }
+            )
                 .sheet(item: $reauthenticationTarget) { target in
                     NavigationStack {
                         CoderReauthenticationView(serverID: target.serverID)
@@ -50,13 +54,44 @@ struct ConnectionListContainer: View {
                 if let model = store.sceneModel(for: descriptor.id) {
                     SessionSceneView(
                         model: model,
-                        agentPresenter: store.agentPresenter,
-                        onSessionClosed: { coverDescriptor = nil }
+                        store: store,
+                        actions: SessionSceneActions(
+                            onPickSession: { pickedID in
+                                if let picked = store.descriptor(id: pickedID) {
+                                    coverDescriptor = picked
+                                }
+                            },
+                            onNewConnection: { coverDescriptor = nil },
+                            onSessionClosed: {
+                                if coverDescriptor?.id == descriptor.id {
+                                    coverDescriptor = nil
+                                }
+                            }
+                        )
                     )
+                    // Session switches must REBUILD the scene (fresh
+                    // representable identity) — otherwise SwiftUI updates
+                    // the old placement in place and the terminal surface
+                    // never swaps to the newly attached session.
+                    .id(model.id)
                 } else {
                     TerminalPlaceholderView(connectionName: descriptor.connection.name)
                 }
             }
+            .terminalStyle()
+        }
+        .sheet(isPresented: $switcherPresented) {
+            SessionSwitcherView(
+                store: store,
+                currentSessionID: coverDescriptor?.id,
+                onPick: { pickedID in
+                    switcherPresented = false
+                    if let picked = store.descriptor(id: pickedID) {
+                        present(picked)
+                    }
+                },
+                onNewConnection: { switcherPresented = false }
+            )
             .terminalStyle()
         }
         .sheet(isPresented: mainWindowAgentSheetBinding) {
