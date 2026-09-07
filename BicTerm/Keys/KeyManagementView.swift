@@ -1,0 +1,162 @@
+import BicTermCore
+import SwiftUI
+
+struct KeyManagementView: View {
+    @State private var keyStore = KeyStore()
+    @State private var showingGenerate = false
+    @State private var showingImport = false
+
+    var body: some View {
+        NavigationStack {
+            KeyListView(
+                keyStore: keyStore,
+                showingGenerate: $showingGenerate,
+                showingImport: $showingImport
+            )
+        }
+        .onAppear {
+            #if DEBUG
+            UITestSupport.activate()
+            #endif
+            keyStore.refresh()
+            #if DEBUG
+            UITestSupport.seedConnectionIfNeeded()
+            #endif
+        }
+        .sheet(isPresented: $showingGenerate, onDismiss: { keyStore.refresh() }) {
+            GenerateKeySheet(keyStore: keyStore)
+        }
+        .sheet(isPresented: $showingImport, onDismiss: { keyStore.refresh() }) {
+            ImportKeySheet(keyStore: keyStore)
+        }
+    }
+}
+
+struct KeyListView: View {
+    @Environment(\.terminalColors) var colors
+    @Environment(\.terminalTypography) var typography
+    @Environment(\.terminalSpacing) var spacing
+    @Environment(\.dismiss) var dismiss
+
+    let keyStore: KeyStore
+    @Binding var showingGenerate: Bool
+    @Binding var showingImport: Bool
+
+    var body: some View {
+        Group {
+            if keyStore.keys.isEmpty {
+                ContentUnavailableView {
+                    Label("No Keys Yet", systemImage: "key")
+                } description: {
+                    Text("Generate an ed25519 key or import an existing one to authenticate your SSH connections.")
+                }
+                .accessibilityIdentifier("key-empty-state")
+            } else {
+                List {
+                    ForEach(keyStore.keys) { item in
+                        NavigationLink {
+                            KeyDetailView(keyStore: keyStore, item: item)
+                        } label: {
+                            KeyRowView(item: item)
+                        }
+                        .buttonStyle(.plain)
+                        .listRowBackground(colors.background)
+                        .accessibilityIdentifier("key-row-\(item.metadata.label)")
+                    }
+                }
+                .listStyle(.insetGrouped)
+                .scrollContentBackground(.hidden)
+            }
+        }
+        .background(colors.background)
+        .navigationTitle("SSH Keys")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button("Done") { dismiss() }
+                    .foregroundColor(colors.accent)
+                    .accessibilityIdentifier("keys-done")
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Button {
+                        showingGenerate = true
+                    } label: {
+                        Label("Generate Key", systemImage: "plus")
+                    }
+                    .accessibilityIdentifier("menu-generate")
+                    Button {
+                        showingImport = true
+                    } label: {
+                        Label("Import Key", systemImage: "square.and.arrow.down")
+                    }
+                    .accessibilityIdentifier("menu-import")
+                } label: {
+                    Image(systemName: "plus")
+                        .foregroundColor(colors.accent)
+                }
+                .accessibilityIdentifier("keys-add-menu")
+            }
+        }
+    }
+}
+
+struct KeyRowView: View {
+    @Environment(\.terminalColors) var colors
+    @Environment(\.terminalTypography) var typography
+    @Environment(\.terminalSpacing) var spacing
+
+    let item: KeyListItem
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: spacing.xxs) {
+            HStack(spacing: spacing.xs) {
+                Text(item.metadata.label)
+                    .font(typography.headline)
+                    .foregroundColor(colors.foreground)
+                KeyTypeBadge(item: item)
+                if item.metadata.requiresBiometry {
+                    Image(systemName: "faceid")
+                        .font(typography.caption)
+                        .foregroundColor(colors.accent)
+                        .accessibilityLabel("Biometric gate")
+                        .accessibilityIdentifier("key-biometric-badge")
+                }
+                Spacer()
+            }
+            Text(item.metadata.fingerprint)
+                .font(typography.caption)
+                .foregroundColor(colors.dimmed)
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
+                .accessibilityIdentifier("key-fingerprint")
+            if let created = item.createdDate {
+                Text("Created \(created.formatted(date: .abbreviated, time: .omitted))")
+                    .font(typography.caption)
+                    .foregroundColor(colors.dimmed)
+                    .accessibilityIdentifier("key-created")
+            }
+        }
+        .padding(.vertical, spacing.xxs)
+    }
+}
+
+struct KeyTypeBadge: View {
+    @Environment(\.terminalColors) var colors
+    @Environment(\.terminalTypography) var typography
+
+    let item: KeyListItem
+
+    var body: some View {
+        Text(item.typeBadge)
+            .font(typography.caption)
+            .foregroundColor(item.isSecureEnclave ? colors.success : colors.accent)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(
+                (item.isSecureEnclave ? colors.success : colors.accent).opacity(0.18),
+                in: RoundedRectangle(cornerRadius: 4)
+            )
+            .accessibilityIdentifier("key-type-badge")
+    }
+}

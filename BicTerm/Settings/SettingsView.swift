@@ -43,6 +43,34 @@ struct SettingsView: View {
                 }
                 .listRowBackground(colors.background)
             }
+
+            Section("Security") {
+                NavigationLink {
+                    KeyManagementView()
+                } label: {
+                    Text("SSH Keys")
+                        .font(typography.body)
+                        .foregroundColor(colors.foreground)
+                }
+                .listRowBackground(colors.background)
+                .accessibilityIdentifier("settings-ssh-keys")
+
+                NavigationLink {
+                    CoderServersListView(
+                        model: CoderServersModel(
+                            store: AppServices.shared.coderServerStore,
+                            connectionStore: AppServices.shared.connectionStore,
+                            makeClient: AppServices.shared.coderClientFactory
+                        )
+                    )
+                } label: {
+                    Text("Coder Servers")
+                        .font(typography.body)
+                        .foregroundColor(colors.foreground)
+                }
+                .listRowBackground(colors.background)
+                .accessibilityIdentifier("settings-coder-servers")
+            }
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
