@@ -8,7 +8,7 @@ All entries below use permissive Apache-2.0, MIT, ISC, or BSD-3-Clause licenses 
 
 | Name | Pinned version | License | Source | Notes |
 |---|---|---|---|---|
-| SwiftTerm | 1.20.0 (exactVersion) | MIT | https://github.com/migueldeicaza/SwiftTerm | Terminal emulation/view; pinned in `project.yml` (app target only, never inside BicTermCore) |
+| SwiftTerm | 1.20.0 (`v1.20.0`, commit `5d14406844143538cd8f8851d2d8a67c1fe443e5`) | MIT | https://github.com/migueldeicaza/SwiftTerm | Terminal emulation/view; consumed via the vendored fork below (app target only, never inside BicTermCore). Removed from `project.yml`'s remote `packages:` section; local `Vendor/SwiftTerm` path is used. |
 
 Note (2026-09-04, task T8): swift-nio-ssh is NO LONGER a remote pin — BicTermCore
 now depends on the vendored fork below via a local path dependency
@@ -23,6 +23,7 @@ SSHMessages.swift:905-906, which kills the connection).
 | Name | Pinned revision | License | Source | Notes |
 |---|---|---|---|---|
 | swift-nio-ssh (NIOSSH), BicTerm fork | 0.15.0 (`3ec281496f28a3b6581afd946b759e2642f5cd8d`) + agent-forwarding patch | Apache-2.0 | https://github.com/apple/swift-nio-ssh | Vendored at `Vendor/swift-nio-ssh` (2026-09-04, task T8); 12 additive hunks documented in `Vendor/swift-nio-ssh/BICTERM-PATCH.md` with inline `BICTERM-PATCH` markers; LICENSE.txt retained; upstream PR candidate |
+| SwiftTerm, BicTerm fork | 1.20.0 (`v1.20.0`, commit `5d14406844143538cd8f8851d2d8a67c1fe443e5`) + auto-repeat access-widening | MIT | https://github.com/migueldeicaza/SwiftTerm | Vendored at `Vendor/SwiftTerm` (2026-09-06, task T12); 2 minimal additive hunks documented in `Vendor/SwiftTerm/BICTERM-PATCH.md` with inline `BICTERM-PATCH` markers; LICENSE preserved verbatim; the access-modifier widening exposes the `keyRepeat` Timer and the `pressesEnded` override so a cross-module subclass can chase-invalidate the auto-repeat Timer when UIKit/SwiftTerm's real press lifecycle is absent (XCUI's synthesized key events); production hardware-key paths are unchanged; upstream PR candidate |
 | OpenSSH portable `bcrypt_pbkdf.c` | `7fe3b24c922b7af2d743737f7cf37df61ea06426` | ISC | https://github.com/openssh/openssh-portable | Adapted to CommonCrypto SHA-512 in `CBcryptPBKDF`; original notice retained |
 | OpenSSH portable `blowfish.c` / `blf.h` | `7fe3b24c922b7af2d743737f7cf37df61ea06426` | BSD-3-Clause | https://github.com/openssh/openssh-portable | bcrypt PBKDF support only; original notices retained |
 

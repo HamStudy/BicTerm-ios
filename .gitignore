@@ -1,6 +1,15 @@
 .sisyphus/
+.omo/
+.agents/
+.opencode/
+.build-artifacts/
+.scratch/
+.build/
+*.bak
+Vendor/SwiftTerm/Tools/BidiHarness/Scripts/__pycache__/
 xcuserdata/
 DerivedData/
 *.xcresult
 .DS_Store
 Fixtures/run/
+tmp/

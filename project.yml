@@ -6,8 +6,7 @@ packages:
   BicTermCore:
     path: ./BicTermCore
   SwiftTerm:
-    url: https://github.com/migueldeicaza/SwiftTerm
-    exactVersion: 1.20.0
+    path: ./Vendor/SwiftTerm
 targets:
   BicTerm:
     type: application
@@ -46,6 +45,19 @@ targets:
         SWIFT_VERSION: "6.0"
     dependencies:
       - target: BicTerm
+  BicTermTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources:
+      - path: BicTermTests
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SWIFT_VERSION: "6.0"
+    dependencies:
+      - target: BicTerm
 schemes:
   BicTerm:
     build:
@@ -53,12 +65,15 @@ schemes:
         BicTerm: all
         BicTermUITests:
           - test
+        BicTermTests:
+          - test
     run:
       config: Debug
     test:
       config: Debug
       targets:
         - BicTermUITests
+        - BicTermTests
     profile:
       config: Release
     analyze:

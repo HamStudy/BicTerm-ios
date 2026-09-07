@@ -41,6 +41,8 @@ gen_key "$KEYS/bicterm-fixture-ed25519_hop2_unauthorized" ed25519 -N ""        "
 gen_key "$KEYS/bicterm-fixture-rsa3072"                  rsa -b 3072 -N ""     "bicterm-fixture-rsa3072"
 chmod 600 "$KEYS"/bicterm-fixture-* 2>/dev/null
 chmod 644 "$KEYS"/*.pub 2>/dev/null
+chmod 600 "$KEYS"/host_keys/*_host_* 2>/dev/null
+chmod 600 "$KEYS"/host_key_alt/*_host_* 2>/dev/null
 
 # ---- 3. authorized_keys -----------------------------------------------------
 cat "$KEYS/bicterm-fixture-ed25519.pub" \

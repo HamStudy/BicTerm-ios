@@ -29,6 +29,20 @@
             buildForAnalyzing = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
+               BlueprintIdentifier = "51301E61EA749742E05C9A9B"
+               BuildableName = "BicTermTests.xctest"
+               BlueprintName = "BicTermTests"
+               ReferencedContainer = "container:BicTerm.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "NO"
+            buildForProfiling = "NO"
+            buildForArchiving = "NO"
+            buildForAnalyzing = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
                BlueprintIdentifier = "DCF266F8F178EAB8559DE4C0"
                BuildableName = "BicTermUITests.xctest"
                BlueprintName = "BicTermUITests"
@@ -61,6 +75,17 @@
                BlueprintIdentifier = "DCF266F8F178EAB8559DE4C0"
                BuildableName = "BicTermUITests.xctest"
                BlueprintName = "BicTermUITests"
+               ReferencedContainer = "container:BicTerm.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "51301E61EA749742E05C9A9B"
+               BuildableName = "BicTermTests.xctest"
+               BlueprintName = "BicTermTests"
                ReferencedContainer = "container:BicTerm.xcodeproj">
             </BuildableReference>
          </TestableReference>
