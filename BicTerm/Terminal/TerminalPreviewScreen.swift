@@ -19,6 +19,7 @@ struct TerminalPreviewScreen: View {
                 cursorStyle: .steadyBlock
             )
             .background(colors.background)
+            .background(InterposerControllerHost())
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("state:\(controller.phase.description)")

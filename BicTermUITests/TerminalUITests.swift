@@ -40,13 +40,16 @@ final class TerminalUITests: XCTestCase {
 
     // MARK: - Harness
 
-    private func launchPreview(command: String?) {
+    private func launchPreview(command: String?, hwkeys: String? = nil) {
         var arguments = [
             "-uitest-terminal-preview",
             "-uitest-session-id", String(sessionID),
         ]
         if let command {
             arguments += ["-uitest-command", command]
+        }
+        if let hwkeys {
+            arguments += ["--uitest-hwkeys", hwkeys]
         }
         app.launchArguments = arguments
         app.launch()
@@ -133,39 +136,44 @@ final class TerminalUITests: XCTestCase {
     }
 
     func testHardwareKeyboardControlAndMetaKeys() {
-        launchPreview(command: "stty -isig -icanon -echo; printf '__GO__\\n'; cat -v")
+        // XCUIApplication.typeKey cannot synthesize this probe set on the
+        // simulator: Escape/Home/End/PageUp/PageDown never reach the app's
+        // pressesBegan and the first Control modifier is dropped (T12
+        // runtime discrimination, .sisyphus/journal/t12/debug-journal.md).
+        // The DEBUG-only --uitest-hwkeys seam has the app itself synthesize
+        // real UIKey/UIPress instances and deliver them through the SAME
+        // pressesBegan -> SwiftTerm encoder -> SSH transport path, so the
+        // byte assertions below remain the acceptance criteria.
+        //
+        // The command flips the terminal into application-cursor mode
+        // (DECCKM, ESC[?1h) 2 s into the session: SwiftTerm (like xterm)
+        // treats unmodified PageUp/PageDown as LOCAL scrollback while
+        // applicationCursor == false, so CSI 5~/6~ are only encodable once
+        // the remote has enabled the mode. The injector splits around an
+        // explicit await:decckm marker step; arrows/Home/End are injected
+        // first (normal mode) and the page keys last (application mode).
+        // The launch-argument marshalling strips quotes, so the command is
+        // quote-free and expresses ESC as \033 and [ as \133 — a literal [
+        // would trip zsh's globbing ("bad pattern") on this fixture shell.
+        launchPreview(
+            command: "unsetopt nomatch 2>/dev/null; stty -isig -icanon -echo; printf __GO__\\\\n; (sleep 2; printf \\\\033\\\\133?1h) & cat -v",
+            hwkeys: "ctrl+c,ctrl+d,esc,tab,meta+b,home,end,down,left,right,up,up,up,up,await:decckm,pageup,pagedown"
+        )
         waitForTail("__GO__")
 
-        app.typeKey("c", modifierFlags: .control)
-        app.typeKey("d", modifierFlags: .control)
-        app.typeKey(.escape, modifierFlags: [])
-        app.typeKey(.tab, modifierFlags: [])
-        app.typeKey("b", modifierFlags: .option)
-        app.typeKey(.home, modifierFlags: [])
-        app.typeKey(.end, modifierFlags: [])
-        app.typeKey(.pageUp, modifierFlags: [])
-        app.typeKey(.pageDown, modifierFlags: [])
-        app.typeKey(.downArrow, modifierFlags: [])
-        app.typeKey(.leftArrow, modifierFlags: [])
-        app.typeKey(.rightArrow, modifierFlags: [])
-        // Repeat delivery: four further Up presses must EACH reach the
-        // remote (system key auto-repeat feeds the same pressesBegan
-        // path; every repeat event must survive to the pty).
-        for _ in 0..<4 {
-            app.typeKey(.upArrow, modifierFlags: [])
-        }
-
         waitForTail("^C^D", timeout: 10)
-        waitForTail("^[[5~", timeout: 10)
+        waitForTail("^[[5~", timeout: 15)
         let echoed = tail
         print("T12 keyboard probe tail: \(echoed.suffix(300))")
         XCTAssertTrue(echoed.contains("^C"), "Ctrl-C must reach the remote as 0x03")
         XCTAssertTrue(echoed.contains("^D"), "Ctrl-D must reach the remote as 0x04")
         XCTAssertTrue(echoed.contains("^["), "Esc must reach the remote as 0x1b")
-        XCTAssertTrue(echoed.contains("^I"), "Tab must reach the remote as 0x09")
+        // `cat -v` renders most control bytes as caret notation but keeps
+        // TAB and LF raw, so Tab delivery is asserted as the literal 0x09.
+        XCTAssertTrue(echoed.contains("\t"), "Tab must reach the remote as 0x09")
         XCTAssertTrue(echoed.contains("^[b"), "Option-b (optionAsMetaKey) must arrive as ESC b")
         let upCount = echoed.components(separatedBy: "^[[A").count - 1
-        XCTAssertEqual(upCount, 5, "every repeated Up press must be delivered (got \(upCount) of 5; tail: \(echoed.suffix(300)))")
+        XCTAssertEqual(upCount, 4, "every repeated Up press must be delivered (got \(upCount) of 4; tail: \(echoed.suffix(300)))")
         XCTAssertTrue(echoed.contains("^[[B"), "Down arrow must arrive as ESC [ B")
         XCTAssertTrue(echoed.contains("^[[D"), "Left arrow must arrive as ESC [ D")
         XCTAssertTrue(echoed.contains("^[[C"), "Right arrow must arrive as ESC [ C")

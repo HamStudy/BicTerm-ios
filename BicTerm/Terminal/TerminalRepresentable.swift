@@ -70,6 +70,17 @@ struct TerminalRepresentable: UIViewRepresentable {
         // contract. (SwiftTerm defaults this to true; set explicitly.)
         view.optionAsMetaKey = true
 
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("-uitest-terminal-preview") {
+            // UITEST: never install the software keyboard for this surface
+            // (SwiftTerm fork hunks 4/5 — hidden blocker input view, no
+            // .causesPageTurn trait). UIKit's remote-keyboard window churn
+            // around a focused text-input responder is one of the two
+            // drivers of XCTest's 60-second per-interaction idle wait.
+            view.installsSoftwareKeyboard = false
+        }
+        #endif
+
         view.nativeBackgroundColor = UIColor(red: 0x0D / 255, green: 0x11 / 255, blue: 0x17 / 255, alpha: 1)
         view.nativeForegroundColor = UIColor(red: 0xE6 / 255, green: 0xED / 255, blue: 0xF3 / 255, alpha: 1)
 

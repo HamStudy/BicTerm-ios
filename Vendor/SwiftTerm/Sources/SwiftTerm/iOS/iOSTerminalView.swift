@@ -372,7 +372,17 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
     private func completeInit()
     {
         isAccessibilityElement = true
-        accessibilityTraits.formUnion([.staticText, .causesPageTurn])
+        // BICTERM-PATCH hunk 5: advertise .causesPageTurn only while the
+        // software keyboard is installed. UIKit consults that trait when
+        // deciding whether to create the remote-keyboard / text-effects
+        // windows for a first responder; XCTest polls those windows'
+        // accessibility state on every interaction. The follow-up in
+        // didMoveToWindow below repeats the subtraction, because completeInit
+        // runs before an embedder can assign installsSoftwareKeyboard.
+        accessibilityTraits.formUnion([.staticText])
+        if installsSoftwareKeyboard {
+            accessibilityTraits.formUnion(.causesPageTurn)
+        }
         accessibilityTextualContext = .sourceCode
         setup()
     }
@@ -395,6 +405,19 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
 
     open override func didMoveToWindow() {
         super.didMoveToWindow()
+        // BICTERM-PATCH hunk 4: with the software keyboard opted out,
+        // install a hidden 1x1 blocker as the input view. UIKit treats a
+        // responder with a non-nil inputView as already served and never
+        // materializes the system keyboard scene for it.
+        // BICTERM-PATCH hunk 5 follow-up: repeat the .causesPageTurn
+        // subtraction here — completeInit ran before the embedder could flip
+        // installsSoftwareKeyboard, so the trait was already unioned.
+        if !installsSoftwareKeyboard {
+            let blocker = UIView(frame: CGRect(x: 0, y: 0, width: 1, height: 1))
+            blocker.isHidden = true
+            _inputView = blocker
+            accessibilityTraits = accessibilityTraits.subtracting(.causesPageTurn)
+        }
         updateTextBlinkLifecycle()
 #if canImport(MetalKit)
         if isMetalRendererEligibleForRetry {
@@ -2838,10 +2861,21 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
         }
         return code
     }
-    // BICTERM-PATCH: expose the existing repeat timer so the DEBUG UI-test
-    // preview can cancel it after XCTest omits a matching pressesEnded event.
-    // Timer creation and physical-key lifecycle remain unchanged here.
+    // BICTERM-PATCH hunk 1: expose the existing repeat timer so the DEBUG
+    // UI-test preview can cancel it after XCTest omits a matching
+    // pressesEnded event. Timer creation and physical-key lifecycle remain
+    // unchanged here.
     public var keyRepeat: Timer?
+
+    // BICTERM-PATCH hunk 3: opt-out flag for software-keyboard installation.
+    // Production keeps the default (true); nothing in the input stack
+    // changes. A DEBUG UI-test surface sets this to false so hunks 4/5
+    // substitute a hidden blocker input view and drop the .causesPageTurn
+    // trait — XCTest's per-interaction "wait for app idle" otherwise hangs
+    // for 60 s while UIKit spins up UIRemoteKeyboardWindow /
+    // UITextEffectsWindow around a responder whose XCUIApplication.typeKey
+    // press has no paired pressesEnded.
+    public var installsSoftwareKeyboard: Bool = true
 
     private struct PendingKittyKeyEvent {
         let key: UIKey
@@ -3162,7 +3196,11 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
         }
     }
     
-    public override func pressesEnded(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+    // BICTERM-PATCH hunk 2: widen to `open` so a cross-module subclass can
+    // override the release half of the physical-key lifecycle (the DEBUG
+    // harness also invokes it directly to mirror real hardware after a
+    // synthesized press). The body is byte-identical to upstream.
+    open override func pressesEnded(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
         keyRepeat?.invalidate()
         keyRepeat = nil
         let wasCommandActive = commandActive
