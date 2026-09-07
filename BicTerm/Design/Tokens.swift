@@ -116,10 +116,17 @@ extension Color {
 // MARK: - View Extension for Easy Token Access
 
 extension View {
+    /// Injects terminal design tokens and pins the subtree to the dark color
+    /// scheme: dark-palette token text over SwiftUI's appearance-driven
+    /// materials is legible only while the scheme is dark.
     func terminalStyle() -> some View {
         self
             .environment(\.terminalColors, TerminalColors())
             .environment(\.terminalTypography, TerminalTypography())
             .environment(\.terminalSpacing, TerminalSpacing())
+            .preferredColorScheme(.dark)
+            #if DEBUG
+            .modifier(UITestKeyManagementOverlay())
+            #endif
     }
 }
