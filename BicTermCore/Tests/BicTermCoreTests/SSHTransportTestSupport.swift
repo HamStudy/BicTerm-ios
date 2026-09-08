@@ -389,32 +389,89 @@ final class UDSPeerRelay: ChannelInboundHandler, @unchecked Sendable {
     }
 }
 
+/// Records WindowChangeRequest dimensions delivered at the server side so
+/// conformance suites can prove a resize traversed the whole transport.
+final class WindowChangeRecorder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var recorded: [(cols: Int, rows: Int)] = []
+
+    func add(cols: Int, rows: Int) {
+        lock.lock()
+        recorded.append((cols: cols, rows: rows))
+        lock.unlock()
+    }
+
+    var sizes: [(cols: Int, rows: Int)] {
+        lock.lock()
+        defer { lock.unlock() }
+        return recorded
+    }
+}
+
 /// In-process NoClientAuth SSH server bound to a unix domain socket — the
 /// Coder agent posture (spec §11.2): accepts the RFC 4252 `none` method
 /// unconditionally, presents an ephemeral ed25519 host key each launch, and
 /// echoes session data back after granting pty/shell.
 final class LoopbackNoAuthSSHUDSServer: @unchecked Sendable {
     // @unchecked Sendable: start/stop serialized by async tests; NIO handler
-    // state lives on the server's own EventLoop.
+    // state lives on the server's own EventLoop; the child registry is
+    // guarded by sync NSLock helpers that never straddle an await.
     static let greeting = "noauth-uds-server ready\r\n"
 
     let path: String
+    let windowChanges = WindowChangeRecorder()
+    /// When true, the server ends every session's child channel right after
+    /// the greeting — the deterministic shape of the SSH stream dying while
+    /// the client considers itself connected (marker for native-roaming
+    /// resume-redial paths). The default keeps sessions open until stopped.
+    let closesChannelAfterGreeting: Bool
     private let hostKey = NIOSSHPrivateKey(ed25519Key: Curve25519.Signing.PrivateKey())
+    private let lock = NSLock()
+    private var children: [ObjectIdentifier: any Channel] = [:]
     private var group: MultiThreadedEventLoopGroup?
     private var serverChannel: (any Channel)?
 
-    init(path: String) {
+    init(path: String, closesChannelAfterGreeting: Bool = false) {
         self.path = path
+        self.closesChannelAfterGreeting = closesChannelAfterGreeting
     }
 
     var hostKeyOpenSSH: String {
         String(openSSHPublicKey: hostKey.publicKey)
     }
 
+    private func noteChild(_ channel: any Channel) {
+        lock.lock()
+        children[ObjectIdentifier(channel)] = channel
+        lock.unlock()
+    }
+
+    private func dropChild(_ channel: any Channel) {
+        lock.lock()
+        children.removeValue(forKey: ObjectIdentifier(channel))
+        lock.unlock()
+    }
+
+    private func childSnapshot() -> [any Channel] {
+        lock.lock()
+        defer { lock.unlock() }
+        return Array(children.values)
+    }
+
+    /// Force-closes every accepted session connection — the hermetic
+    /// stand-in for the virtual-TCP stream dying under a suspended session.
+    func closeChildren() async {
+        for child in childSnapshot() {
+            try? await child.close().get()
+        }
+    }
+
     func start() async throws {
         removeIfExists(path)
         let group = MultiThreadedEventLoopGroup(numberOfThreads: 1)
         let hostKey = self.hostKey
+        let recorder = windowChanges
+        let closesAfterGreeting = closesChannelAfterGreeting
         let bootstrap = ServerBootstrap(group: group)
             .childChannelInitializer { channel in
                 channel.eventLoop.makeCompletedFuture {
@@ -424,12 +481,17 @@ final class LoopbackNoAuthSSHUDSServer: @unchecked Sendable {
                             userAuthDelegate: NoClientAuthAcceptingServerDelegate()
                         )),
                         allocator: channel.allocator,
-                        inboundChildChannelInitializer: { child, channelType in
+                        inboundChildChannelInitializer: { [self] child, channelType in
                             guard channelType == .session else {
                                 return child.eventLoop.makeFailedFuture(TransportError.channelDenied)
                             }
+                            noteChild(channel)
                             return child.eventLoop.makeCompletedFuture {
-                                try child.pipeline.syncOperations.addHandler(EchoSessionHandler())
+                                try child.pipeline.syncOperations.addHandler(EchoSessionHandler(
+                                    windowChanges: recorder,
+                                    closesAfterGreeting: closesAfterGreeting,
+                                    onChannelInactive: { [weak self] ended in self?.dropChild(ended) }
+                                ))
                             }
                         }
                     ))
@@ -450,6 +512,7 @@ final class LoopbackNoAuthSSHUDSServer: @unchecked Sendable {
             self.serverChannel = nil
             try? await serverChannel.close().get()
         }
+        await closeChildren()
         if let group {
             self.group = nil
             try? await group.shutdownGracefully()
@@ -476,11 +539,31 @@ final class NoClientAuthAcceptingServerDelegate: NIOSSHServerUserAuthenticationD
 }
 
 /// Same behavior contract as the debug loopback password server: grant
-/// pty/shell, greet once, echo input.
+/// pty/shell, greet once, echo input. Optionally records window changes and
+/// reports connection teardown to its owning server.
 final class EchoSessionHandler: ChannelDuplexHandler, @unchecked Sendable {
     typealias InboundIn = SSHChannelData
     typealias OutboundIn = SSHChannelData
     typealias OutboundOut = SSHChannelData
+
+    private let windowChanges: WindowChangeRecorder?
+    private let closesAfterGreeting: Bool
+    private let onChannelInactive: (@Sendable (any Channel) -> Void)?
+
+    init(
+        windowChanges: WindowChangeRecorder? = nil,
+        closesAfterGreeting: Bool = false,
+        onChannelInactive: (@Sendable (any Channel) -> Void)? = nil
+    ) {
+        self.windowChanges = windowChanges
+        self.closesAfterGreeting = closesAfterGreeting
+        self.onChannelInactive = onChannelInactive
+    }
+
+    func channelInactive(context: ChannelHandlerContext) {
+        onChannelInactive?(context.channel)
+        context.fireChannelInactive()
+    }
 
     func userInboundEventTriggered(context: ChannelHandlerContext, event: Any) {
         switch event {
@@ -495,6 +578,14 @@ final class EchoSessionHandler: ChannelDuplexHandler, @unchecked Sendable {
             var buffer = context.channel.allocator.buffer(capacity: LoopbackNoAuthSSHUDSServer.greeting.utf8.count)
             buffer.writeString(LoopbackNoAuthSSHUDSServer.greeting)
             context.writeAndFlush(wrapOutboundOut(SSHChannelData(type: .channel, data: .byteBuffer(buffer))), promise: nil)
+            if closesAfterGreeting {
+                context.close(promise: nil)
+            }
+        case let window as SSHChannelRequestEvent.WindowChangeRequest:
+            windowChanges?.add(
+                cols: Int(window.terminalCharacterWidth),
+                rows: Int(window.terminalRowHeight)
+            )
         default:
             context.fireUserInboundEventTriggered(event)
         }

@@ -10,7 +10,9 @@ import XCTest
 final class CoderTunnelDescriptorTests: XCTestCase {
     /// Given: the app built WITH the tunnel (default Debug/Release flavor)
     /// When: the coder descriptor is created for that flavor
-    /// Then: it reports tailnet-tunnel support with the v1 Coder surface
+    /// Then: it reports tailnet-tunnel support, and — since the tailnet
+    ///       coordination outlives a backgrounded SSH stream — the roaming
+    ///       capability ``CoderTransport`` actually implements.
     func testCoderDescriptorReportsTunnelSupportWhenFlavorShipsTunnel() {
         let descriptor = ProtocolDescriptor.coder(supportsTailnetTunnel: true)
         XCTAssertTrue(descriptor.supportsTailnetTunnel)
@@ -19,10 +21,10 @@ final class CoderTunnelDescriptorTests: XCTestCase {
         XCTAssertTrue(descriptor.requiresServerComponent)
         XCTAssertFalse(descriptor.supportsAgentForwarding)
         XCTAssertFalse(descriptor.supportsJumpChain)
-        XCTAssertFalse(descriptor.supportsRoamingResume)
+        XCTAssertTrue(descriptor.supportsRoamingResume)
         XCTAssertEqual(descriptor.defaultPort, 443)
         XCTAssertEqual(descriptor.keyAlgorithmsAccepted, ["ssh-ed25519"])
-        XCTAssertEqual(descriptor.resumeStrategy, .rehandshake)
+        XCTAssertEqual(descriptor.resumeStrategy, .nativeRoaming)
     }
 
     /// Given: the AppStore flavor, which excludes the AGPL Go core entirely

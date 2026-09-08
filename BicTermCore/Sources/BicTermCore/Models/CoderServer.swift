@@ -12,7 +12,12 @@ public struct CoderServer: Codable, Equatable, Hashable, Identifiable, Sendable 
         baseURL: URL,
         tokenKeychainTag: String
     ) throws(CoderServerValidationError) {
-        guard baseURL.scheme?.lowercased() == "https" else {
+        let scheme = baseURL.scheme?.lowercased()
+        // Plain http is confined to loopback: TLS adds nothing when the peer
+        // is the same machine (the native dev fixture binds 127.0.0.1), and
+        // it never widens to names that merely contain a loopback word.
+        let httpLoopback = scheme == "http" && Self.isLoopbackHost(baseURL.host)
+        guard scheme == "https" || httpLoopback else {
             throw .httpsRequired
         }
         guard baseURL.host != nil else {
@@ -26,6 +31,16 @@ public struct CoderServer: Codable, Equatable, Hashable, Identifiable, Sendable 
         self.name = name
         self.baseURL = baseURL
         self.tokenKeychainTag = tokenKeychainTag
+    }
+
+    private static func isLoopbackHost(_ host: String?) -> Bool {
+        guard let host else { return false }
+        switch host.lowercased() {
+        case "localhost", "127.0.0.1", "[::1]", "::1":
+            return true
+        default:
+            return false
+        }
     }
 
     public init(from decoder: any Decoder) throws {

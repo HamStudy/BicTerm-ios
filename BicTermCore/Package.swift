@@ -19,6 +19,15 @@ let package = Package(
             exclude: ["LICENSES"],
             publicHeadersPath: "include"
         ),
+        // The Go tailnet core. Test-target-only: production code reaches it
+        // through the CoderTunneling protocol (dependency inversion), and the
+        // sole production linkage stays the CoderTunnel framework target's
+        // (xcodegen-controlled, excluded from AppStore flavors). The path is
+        // produced by scripts/build-coder-net.sh; test-core.sh preflights it.
+        .binaryTarget(
+            name: "CoderNet",
+            path: "../.build-artifacts/coder-net/CoderNet.xcframework"
+        ),
         .target(
             name: "BicTermCore",
             dependencies: [
@@ -32,10 +41,15 @@ let package = Package(
             name: "BicTermCoreTests",
             dependencies: [
                 "BicTermCore",
+                "CoderNet",
                 .product(name: "NIOSSH", package: "swift-nio-ssh"),
                 .product(name: "NIOCore", package: "swift-nio"),
                 .product(name: "NIOPosix", package: "swift-nio"),
                 .product(name: "NIOEmbedded", package: "swift-nio"),
+            ],
+            linkerSettings: [
+                // Go c-archive DNS resolver symbols (_res_9_ninit/_res_9_nclose).
+                .linkedLibrary("resolv"),
             ]
         ),
     ]

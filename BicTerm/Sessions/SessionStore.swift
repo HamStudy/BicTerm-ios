@@ -1,4 +1,10 @@
 import BicTermCore
+#if CODER_TUNNEL
+// Default flavors compile with CODER_TUNNEL=1 and link the CoderTunnel
+// framework; AppStore-* configurations exclude both, and the coder protocol
+// then keeps the registry's typed protocolUnavailable — never a fallback.
+import CoderTunnel
+#endif
 import Foundation
 import SwiftUI
 import UIKit
@@ -359,9 +365,24 @@ final class SessionStore {
         book: AgentSessionBook,
         verifier: HostKeyVerifier
     ) -> any TerminalTransportFactory {
-        let base = SSHSessionTransportFactory(hostKeyVerifier: verifier)
+        var registry = TransportRegistry()
+        registry.register(.ssh, factory: SSHSessionTransportFactory(hostKeyVerifier: verifier))
+        #if CODER_TUNNEL
+        let services = AppServices.shared
+        let resolver = CoderWorkspaceResolver(
+            serverStore: services.coderServerStore,
+            tokenStore: services.coderTokenStore
+        )
+        registry.register(
+            .coder(supportsTailnetTunnel: true),
+            factory: CoderTransportFactory(
+                resolver: resolver,
+                socketBaseDirectory: NSTemporaryDirectory()
+            ) { CoderNetTunnel() }
+        )
+        #endif
         return AgentForwardingTransportFactory(
-            base: base,
+            base: registry,
             keyProvider: DefaultAgentKeyProvider(),
             authorizer: authorizer,
             book: book,

@@ -104,6 +104,44 @@ final class ConnectionModelTests: XCTestCase {
         }
     }
 
+    /// Loopback http is the dev-fixture exception (scripts/coder-dev-up.sh):
+    /// TLS adds nothing on the loopback interface, so only 127.0.0.1,
+    /// localhost, and [::1] may skip the https requirement.
+    func testCoderServerAllowsLoopbackHTTPForDevFixtures() throws {
+        for raw in [
+            "http://127.0.0.1:7080",
+            "http://localhost:7080",
+            "http://[::1]:7080",
+        ] {
+            let server = try CoderServer(
+                name: "Dev fixture",
+                baseURL: URL(string: raw)!,
+                tokenKeychainTag: "keychain://coder/dev-fixture"
+            )
+            XCTAssertEqual(server.baseURL.absoluteString, raw)
+        }
+    }
+
+    /// The loopback exception never widens: ordinary http endpoints stay
+    /// rejected, including loopback-looking names that are not loopback.
+    func testCoderServerRejectsNonLoopbackHTTP() {
+        for raw in [
+            "http://coder.example.com",
+            "http://192.168.1.5:8080",
+            "http://localhost.evil.example.com",
+        ] {
+            XCTAssertThrowsError(
+                try CoderServer(
+                    name: "Insecure",
+                    baseURL: URL(string: raw)!,
+                    tokenKeychainTag: "keychain://coder/insecure"
+                )
+            ) { error in
+                XCTAssertEqual(error as? CoderServerValidationError, .httpsRequired, raw)
+            }
+        }
+    }
+
     func testCoderServerRejectsEmbeddedCredentials() {
         XCTAssertThrowsError(
             try CoderServer(

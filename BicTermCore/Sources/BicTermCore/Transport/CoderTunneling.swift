@@ -5,7 +5,7 @@ import Foundation
 /// onto its `0` handle sentinel; the boundary maps that sentinel here. Finer
 /// diagnostics travel over the bridge's log channel, not this error.
 public enum CoderTunnelError: Error, Equatable, Sendable {
-    /// `CoderNetStart` returned the rejection sentinel `0` — the config JSON
+    /// The start call returned the rejection sentinel `0` — the config JSON
     /// was rejected at the boundary. No session was allocated.
     case startRejected
 }
@@ -35,9 +35,8 @@ public enum CoderTunnelError: Error, Equatable, Sendable {
 /// the real conformer blocks on synchronous FFI into the Go runtime and MUST
 /// NOT run on the main actor.
 public protocol CoderTunneling: Sendable {
-    /// Bridge version banner, e.g. `CoderNet-BicTerm/0.1`. Mirrors
-    /// `CoderNetVersion()`; never throws, an empty string means the bridge
-    /// could not produce one.
+    /// Bridge version banner, e.g. `CoderNet-BicTerm/0.1`. Never throws; an
+    /// empty string means the bridge could not produce one.
     func version() -> String
 
     /// Parse-retain one tunnel session from a JSON config of the shape
@@ -47,10 +46,15 @@ public protocol CoderTunneling: Sendable {
     func start(configJSON: String) async throws(CoderTunnelError) -> Int
 
     /// Open the workspace-agent SSH channel for a started handle and return
-    /// its stream metadata (T5 stub: empty string until T9 types the channel).
+    /// the per-session unix-socket path to dial (see the UDS endpoint
+    /// contract in Docs/SECURITY.md). An empty string means the bridge
+    /// refused the dial (agent unreachable, coordination down); treated as
+    /// transient reachability by transports.
     func dialSSH(handle: Int) async throws(CoderTunnelError) -> String
 
     /// Rebind a live session's network path (interface change / roaming).
+    /// Fire-and-forget: the transport's `resume()` verifies stream liveness
+    /// itself once the re-anchor has been requested.
     func rebind(handle: Int)
 
     /// Release a session handle. Terminal and idempotent.

@@ -51,6 +51,14 @@ else
     LOG="$LOG_DEFAULT"
 fi
 
+# The Core test target links the Go tailnet core (binaryTarget) for the live
+# CoderTransport conformance run; build it when absent instead of failing the
+# SwiftPM resolve on a fresh checkout.
+if [ ! -d "$REPO_ROOT/.build-artifacts/coder-net/CoderNet.xcframework" ]; then
+    echo "preflight: CoderNet.xcframework missing — building (scripts/build-coder-net.sh)"
+    "$REPO_ROOT/scripts/build-coder-net.sh"
+fi
+
 # Build xcodebuild args as an array so conditionals compose cleanly.
 XB_ARGS=(
     test

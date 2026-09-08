@@ -174,9 +174,9 @@ public struct JumpChainBuilder: Sendable {
         targetIndex: Int
     ) -> Int {
         switch error {
-        case .requiresTrust, .hostKeyChanged, .authenticationFailed:
+        case .requiresTrust, .hostKeyChanged, .authenticationFailed, .authRequired:
             ownerIndex
-        case .unreachable, .channelDenied, .protocolUnavailable, .resumeUnsupported:
+        case .unreachable, .channelDenied, .protocolUnavailable, .resumeUnsupported, .reconnectRequired:
             targetIndex
         }
     }

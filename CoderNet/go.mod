@@ -6,10 +6,14 @@ module github.com/bicterm/coder-net
 // repo-local GOMODCACHE via GOTOOLCHAIN=auto (default).
 go 1.26.5
 
-require github.com/coder/coder/v2 v2.36.4
+require (
+	cdr.dev/slog/v3 v3.1.0
+	github.com/coder/coder/v2 v2.36.4
+	github.com/google/uuid v1.6.0
+	golang.org/x/crypto v0.54.0
+)
 
 require (
-	cdr.dev/slog/v3 v3.1.0 // indirect
 	filippo.io/edwards25519 v1.1.1 // indirect
 	github.com/DataDog/datadog-agent/comp/core/tagger/origindetection v0.77.0 // indirect
 	github.com/DataDog/datadog-agent/pkg/obfuscate v0.77.0 // indirect
@@ -90,7 +94,6 @@ require (
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/nftables v0.2.0 // indirect
 	github.com/google/pprof v0.0.0-20250607225305-033d6d78b36a // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/css v1.0.1 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.29.0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
@@ -205,7 +208,6 @@ require (
 	go.yaml.in/yaml/v4 v4.0.0-rc.3 // indirect
 	go4.org/mem v0.0.0-20220726221520-4f986261bf13 // indirect
 	go4.org/netipx v0.0.0-20230728180743-ad4cb58a6516 // indirect
-	golang.org/x/crypto v0.54.0 // indirect
 	golang.org/x/exp v0.0.0-20260410095643-746e56fc9e2f // indirect
 	golang.org/x/mod v0.38.0 // indirect
 	golang.org/x/net v0.57.0 // indirect

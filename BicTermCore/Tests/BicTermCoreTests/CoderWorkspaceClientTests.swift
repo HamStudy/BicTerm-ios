@@ -106,6 +106,76 @@ final class CoderWorkspaceClientTests: XCTestCase {
         XCTAssertFalse(workspace.isConnectable)
     }
 
+    /// Spec §5.1/§5.2: agent identity for the tunnel dial comes from the
+    /// latest build's resources, not from a template preview.
+    func testWorkspaceAgentsDecodeFromLatestBuildResources() async throws {
+        let body = """
+        {"workspaces":[{
+          "id":"11111111-1111-4111-8111-111111111111",
+          "name":"dev",
+          "owner_name":"alice",
+          "latest_build":{
+            "status":"running",
+            "resources":[{
+              "agents":[{
+                "id":"44444444-4444-4444-8444-444444444444",
+                "name":"main",
+                "status":"connected",
+                "lifecycle_state":"ready"
+              }]
+            }]
+          }
+        }],"count":1}
+        """
+        let loader = ScriptedCoderRequestLoader([.success(response(body: body))])
+
+        let workspaces = try await makeClient(loader: loader).workspaces(for: server())
+        let workspace = try XCTUnwrap(workspaces.first)
+
+        XCTAssertEqual(workspace.state, .running)
+        let agent = try XCTUnwrap(workspace.agents.first)
+        XCTAssertEqual(workspace.agents.count, 1)
+        XCTAssertEqual(agent.id, UUID(uuidString: "44444444-4444-4444-8444-444444444444"))
+        XCTAssertEqual(agent.name, "main")
+        XCTAssertTrue(agent.isConnected)
+    }
+
+    /// A workspace response that predates per-resource agents (or a build
+    /// that has none yet) decodes with an empty agent list, never crashes.
+    func testWorkspaceWithoutResourcesDecodesWithNoAgents() async throws {
+        let loader = ScriptedCoderRequestLoader([
+            .success(response(body: workspaceEnvelope(states: ["running"]))),
+        ])
+
+        let workspaces = try await makeClient(loader: loader).workspaces(for: server())
+        let workspace = try XCTUnwrap(workspaces.first)
+
+        XCTAssertEqual(workspace.agents, [])
+    }
+
+    func testNonConnectedAgentIsNotEligible() async throws {
+        let body = """
+        {"workspaces":[{
+          "id":"11111111-1111-4111-8111-111111111111",
+          "name":"dev",
+          "owner_name":"alice",
+          "latest_build":{
+            "status":"starting",
+            "resources":[{
+              "agents":[{"id":"44444444-4444-4444-8444-444444444444","name":"main","status":"connecting"}]
+            }]
+          }
+        }],"count":1}
+        """
+        let loader = ScriptedCoderRequestLoader([.success(response(body: body))])
+
+        let workspaces = try await makeClient(loader: loader).workspaces(for: server())
+        let workspace = try XCTUnwrap(workspaces.first)
+
+        XCTAssertEqual(workspace.agents.count, 1)
+        XCTAssertFalse(workspace.agents[0].isConnected)
+    }
+
     func testRateLimitRetriesOnceAfterRetryAfterDelay() async throws {
         let loader = ScriptedCoderRequestLoader([
             .success(response(statusCode: 429, headers: ["Retry-After": "1"])),

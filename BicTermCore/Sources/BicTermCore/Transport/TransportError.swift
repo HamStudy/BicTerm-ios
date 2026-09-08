@@ -41,6 +41,17 @@ public enum TransportError: Error, Equatable, Sendable {
     /// transport from the factory (full handshake + auth), which the
     /// session layer drives — the instance itself cannot resume.
     case resumeUnsupported
+
+    /// The protocol's control plane rejected the credential before any
+    /// transport bytes flowed (Coder: REST/coordination HTTP 401 or a missing
+    /// stored token). Unlike ``authenticationFailed`` — an SSH-layer offer
+    /// rejection — this case is for reauthentication UX, not a fresh key.
+    case authRequired
+
+    /// The session's backing identity no longer resolves (workspace deleted
+    /// or not running, agent gone or ambiguous, server configuration
+    /// removed); the connection record is stale.
+    case reconnectRequired
 }
 
 extension TransportError: LocalizedError {
@@ -60,6 +71,10 @@ extension TransportError: LocalizedError {
             "Protocol \"\(protocolID)\" is not available in this build."
         case .resumeUnsupported:
             "This transport cannot resume in place; reconnect with a fresh handshake."
+        case .authRequired:
+            "The server rejected the stored credential. Reauthenticate to continue."
+        case .reconnectRequired:
+            "The remote workspace or agent is no longer available. Reconnect to resolve it again."
         }
     }
 }

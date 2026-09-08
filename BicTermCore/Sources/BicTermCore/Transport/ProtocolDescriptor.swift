@@ -73,18 +73,22 @@ extension ProtocolDescriptor {
     /// Coder workspaces via the REST API + agent connection. The tunnel
     /// capability is a parameter, not a constant: default (open-source)
     /// builds pass `true`, AppStore builds pass `false` and fall back to
-    /// direct SSH against the workspace's routable address.
+    /// direct SSH against the workspace's routable address. Roaming is real
+    /// only when ``CoderTransport`` backs the protocol: the tailnet
+    /// coordination outlives a backgrounded SSH stream, so the descriptor
+    /// declares `.nativeRoaming` either way — a flavor without the tunnel
+    /// can never reach the connect stage at all.
     public static func coder(supportsTailnetTunnel: Bool) -> ProtocolDescriptor {
         ProtocolDescriptor(
             id: "coder",
             displayName: "Coder",
             supportsAgentForwarding: false,
             supportsJumpChain: false,
-            supportsRoamingResume: false,
+            supportsRoamingResume: true,
             requiresServerComponent: true,
             defaultPort: 443,
             keyAlgorithmsAccepted: ["ssh-ed25519"],
-            resumeStrategy: .rehandshake,
+            resumeStrategy: .nativeRoaming,
             supportsTailnetTunnel: supportsTailnetTunnel
         )
     }

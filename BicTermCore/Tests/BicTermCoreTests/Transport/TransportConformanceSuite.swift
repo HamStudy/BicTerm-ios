@@ -311,3 +311,17 @@ func assertThrowsTransportError(
         XCTFail("expected \(expected), got \(error)", file: file, line: line)
     }
 }
+
+extension CoderTransport {
+    /// Assembles the suite's observation from the conformer's counters —
+    /// kept test-side so the production type carries no suite vocabulary.
+    var roamingObservation: RoamingResumeObservation {
+        get async {
+            RoamingResumeObservation(
+                connectAttempts: await sessionEstablishments,
+                authenticationAttempts: await tunnelSessionStarts,
+                resumeAttempts: await resumeCallCount
+            )
+        }
+    }
+}

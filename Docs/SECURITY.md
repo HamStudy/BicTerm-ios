@@ -62,6 +62,24 @@ policy"):
   selected for ordinary SSH profiles, never applied to the Coder HTTPS/REST
   connection, and never applied under a `Host *`-style wildcard rule.
 
+### The SSH translation hop inside the bridge
+
+Coder's agent SSH server presents a hardcoded RSA host key
+(`agentssh.CoderSigner` — deterministic RSA-2048, no configuration), which
+NIOSSH cannot negotiate: its host-key set never includes the RSA family. The
+Go bridge therefore runs an in-process SSH relay as its UDS handler:
+downstream toward the app it serves SSH with a per-session ephemeral ed25519
+host key and `none` auth; upstream toward the agent it opens the SSH session
+with the reference client's posture (`InsecureIgnoreHostKey`, none auth).
+Channel requests (`pty-req`, `shell`, `window-change`, `exit-status`) relay
+opaquely, so terminal semantics traverse both legs unchanged.
+
+Security accounting: the bridge already transported the session's plaintext
+bytes; this hop terminates and originates SSH inside the same process and
+trust domain without changing who can reach the bytes. What the app's trust
+policy accepts is still the session delivered by the authenticated tailnet
+authorization boundary — never a claim about the RSA host anyway.
+
 ## Per-session UDS endpoint contract
 
 The bridge that fronts a coder session (Go bridge in production; the test
