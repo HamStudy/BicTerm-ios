@@ -222,6 +222,9 @@ public actor SessionRegistry {
     ) async {
         record.transport = transport
         startBridge(record, transport: transport)
+        if let attachable = transport as? any SessionSceneAttachable {
+            await attachable.sessionAttachedToScene(record.sceneID)
+        }
         setState(record, .active)
         try? await snapshotStore.deleteSnapshot(sceneID: record.sceneID)
     }
@@ -284,6 +287,21 @@ public actor SessionRegistry {
     public func willEnterForeground(sceneID: String) async {
         guard let record = records[sceneID], record.state == .suspended else { return }
         try? await reconnect(sceneID: sceneID)
+    }
+
+    /// T10 (spec §14.4, reconnect the right layer): an out-of-band control
+    /// event reported the SSH-level session ended while its backing
+    /// coordination stays alive. Park the session at `.suspended` — the
+    /// registry's reconnect-required state — keeping the roaming transport
+    /// and output stream: a later `reconnect` resumes the same coordination
+    /// and redials only the dead stream. Never replays a command, and only
+    /// `.active` sessions transition (other states belong to their owners).
+    public func markReconnectRequired(sceneID: String) async {
+        guard let record = records[sceneID], record.state == .active else { return }
+        setState(record, .suspended)
+        if let transport = record.transport, transport.resumeStrategy == .nativeRoaming {
+            await transport.suspend()
+        }
     }
 
     /// Persists snapshots for all live sessions, then closes everything.
@@ -457,21 +475,38 @@ public actor SessionRegistry {
                 return
             } catch let SessionRegistryError.transport(error) {
                 lastError = error
+                if error == .authRequired {
+                    // Spec §15: a genuine credential failure is terminal for
+                    // the retry loop — retrying re-presents the same dead
+                    // token. Park at `.failed` for the reauth flow instead.
+                    failRetries(record, failure: .transport(error))
+                    return
+                }
             } catch {
                 // noSession / sessionClosed / invalidTransition: another
                 // path owns the session now — stop retrying.
                 return
             }
         }
+        failRetries(record, failure: .reconnectAttemptsExhausted(
+            attempts: reconnectPolicy.maxAttempts,
+            lastError: lastError ?? .unreachable
+        ))
+    }
+
+    /// A retry loop that gave up (or hit an unretryable error) parks the
+    /// session at `.failed` — unless another path already moved it out of
+    /// retryable territory or the identical failure is already the state
+    /// (performReconnect publishes `.failed` before rethrowing, so a second
+    /// publication would duplicate stream events and history).
+    private func failRetries(_ record: SessionRecord, failure: SessionFailure) {
         guard records[record.sceneID] === record else { return }
+        guard record.state != .failed(failure) else { return }
         switch record.state {
         case .active, .suspended, .closed:
             return
-        default:
-            setState(record, .failed(.reconnectAttemptsExhausted(
-                attempts: reconnectPolicy.maxAttempts,
-                lastError: lastError ?? .unreachable
-            )))
+        case .connecting, .reconnecting, .disconnected, .failed:
+            setState(record, .failed(failure))
         }
     }
 

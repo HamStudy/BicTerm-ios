@@ -62,6 +62,10 @@ final class SessionStore {
     let agentPresenter: AgentApprovalPresenter
     let agentBook: AgentSessionBook
     let hostKeyVerifier: HostKeyVerifier?
+    /// T10: coder session lifecycle — credential generations, classified Go
+    /// core events, and heartbeat stops. Present in the live default flavor
+    /// (CODER_TUNNEL); nil under injected factories and the AppStore flavor.
+    let coderLifecycle: CoderLifecycleCoordinator?
     /// Live terminal surfaces for every attached-or-detached session —
     /// the buffer-preservation layer behind the session switcher.
     let viewCache = TerminalViewCache()
@@ -110,6 +114,7 @@ final class SessionStore {
         }
 
         let factory: any TerminalTransportFactory
+        var lifecycleCoordinator: CoderLifecycleCoordinator?
         if let transportFactory {
             // Tests route prompts through the same book/presenter path.
             factory = AgentForwardingTransportFactory(
@@ -120,19 +125,30 @@ final class SessionStore {
                 agentForwardingApplies: { _ in true }
             )
         } else {
-            factory = Self.makeLiveFactory(
+            let built = Self.makeLiveFactory(
                 authorizer: authorizer,
                 book: book,
                 verifier: verifier
             )
+            factory = built.factory
+            lifecycleCoordinator = built.coderLifecycle
         }
 
         self.registry = SessionRegistry(transportFactory: factory, snapshotStore: snapshots)
+        self.coderLifecycle = lifecycleCoordinator
         self.agentPresenter = presenter
         self.agentBook = book
         self.hostKeyVerifier = verifier
         self.hostKeyStore = injectedHostKeyStore ?? keyStore
         self.snapshotStore = snapshotStore
+
+        if let lifecycleCoordinator {
+            let registry = self.registry
+            Task {
+                await lifecycleCoordinator.attach(registry: registry)
+                await lifecycleCoordinator.start()
+            }
+        }
 
         if let connectionLookup {
             self.connectionLookup = connectionLookup
@@ -364,30 +380,49 @@ final class SessionStore {
         authorizer: AgentAuthorizationService,
         book: AgentSessionBook,
         verifier: HostKeyVerifier
-    ) -> any TerminalTransportFactory {
+    ) -> (factory: any TerminalTransportFactory, coderLifecycle: CoderLifecycleCoordinator?) {
         var registry = TransportRegistry()
         registry.register(.ssh, factory: SSHSessionTransportFactory(hostKeyVerifier: verifier))
+        var coordinator: CoderLifecycleCoordinator?
         #if CODER_TUNNEL
         let services = AppServices.shared
         let resolver = CoderWorkspaceResolver(
             serverStore: services.coderServerStore,
             tokenStore: services.coderTokenStore
         )
+        let lifecycleCoordinator = CoderLifecycleCoordinator(
+            onAuthLoss: { serverID in
+                // T19's Reauthenticate flow consumes this notification.
+                await MainActor.run {
+                    NotificationCenter.default.post(
+                        name: .coderReauthenticationRequested,
+                        object: nil,
+                        userInfo: ["serverID": serverID]
+                    )
+                }
+            }
+        )
+        coordinator = lifecycleCoordinator
         registry.register(
             .coder(supportsTailnetTunnel: true),
             factory: CoderTransportFactory(
                 resolver: resolver,
-                socketBaseDirectory: NSTemporaryDirectory()
+                socketBaseDirectory: NSTemporaryDirectory(),
+                lifecycle: CoderSessionLifecycleDependencies(
+                    reporting: lifecycleCoordinator,
+                    generations: lifecycleCoordinator.generations
+                )
             ) { CoderNetTunnel() }
         )
         #endif
-        return AgentForwardingTransportFactory(
+        let forwarding = AgentForwardingTransportFactory(
             base: registry,
             keyProvider: DefaultAgentKeyProvider(),
             authorizer: authorizer,
             book: book,
             agentForwardingApplies: { $0.type == .ssh }
         )
+        return (forwarding, coordinator)
     }
 
     private static func defaultHostKeyStoreForLiveUse() -> any HostKeyStoreProtocol {

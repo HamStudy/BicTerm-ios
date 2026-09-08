@@ -175,3 +175,44 @@ Logs: `.sisyphus/evidence/phase2-g7-appstore-audit.log` and
   archive extraction keeps those members dormant so each module resolves
   exactly once; the app's metatype reference to `CoderNetTunnel.self`
   provides the demand edge.
+
+## Coder credential generations and authentication loss
+
+Reference: `CODER_WORKSPACE_SSH_PROTOCOL_SPEC.md` §4.3, §14.5, §15 — phase 2,
+task 10 (`CoderLifecycleCoordinator`, `CoderCredentialGenerations`).
+
+Every Coder dial carries a **credential generation number** per server
+(minted 1 at first contact; stamped into the tunnel start config as
+`credential_generation` for observability — the Go core tolerates the extra
+field).
+
+**Classification before action.** Auth-requirement decisions follow spec §15:
+an HTTP 401 whose error `validations` names `resume_token` is a resume-token
+rejection — the Go core discards the token and retries without it, and the
+event taxonomy (§8.7) surfaces it ONLY as `resumeRefreshed`/`transientError`.
+The Swift classifier (`CoderEventClassifier`) additionally quarantines any
+resume-token-validated event bound Swift-side: it can never surface as
+`authRequired`. Only a genuine primary 401 (REST or coordination, without the
+marker) marks the generation — a dedicated usage heart‑beat 401 explicitly
+never does (§14.3: a failed optional usage call is not proof of auth loss).
+
+**On confirmed auth loss:**
+
+1. The current generation is marked `AuthRequired` exactly once (duplicates
+   collapse), and the app is notified to run the Reauthenticate flow.
+2. NEW dials with the generation are refused before any network or tunnel
+   work (no REST call, no Go handle).
+3. Established sessions continue until their natural end. This is the
+   explicit client policy (§14.5): we do **not** claim that token expiry
+   tears down an already-established data-plane connection at the expiry
+   instant, and we do not force-close the user's live shell.
+4. The replacement credential is validated by the Reauthenticate flow through
+   a FRESH client (identity check included), persisted atomically, and only
+   then is a new generation installed. Subsequent connections allocate a
+   FRESH Go handle per dial — an old handle is never reused, and no active
+   network client's token provider is ever mutated in place.
+5. A stale handle's late `authRequired` event cannot condemn the replacement
+   generation (registrations carry their generation id; mismatches drop).
+6. Bounded auto-reconnect treats `authRequired` as terminal rather than
+   retrying with the same dead token; usage heartbeats stop when the
+   generation is marked, never on transient errors.

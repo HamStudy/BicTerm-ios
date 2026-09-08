@@ -35,11 +35,17 @@ public actor CoderTransport: TerminalTransport {
     private let socketBaseDirectory: String
     private let outputContinuation: AsyncStream<Data>.Continuation
 
+    private let lifecycle: CoderSessionLifecycleDependencies?
+    private let usageReporter: (any CoderUsageReporting)?
+
     private var phase: Phase = .idle
     private var tunnelHandle: Int?
     private var sshTransport: SSHTransport?
     private var lastCols = 0
     private var lastRows = 0
+    private var serverID: UUID?
+    private var usageScope: CoderUsageScope?
+    private var credentialGenerationID: UInt64 = 0
 
     private var bridgeTask: Task<Void, Never>?
     private var bridgeGeneration: UInt64 = 0
@@ -60,11 +66,14 @@ public actor CoderTransport: TerminalTransport {
     public init(
         resolver: CoderWorkspaceResolver,
         tunnel: any CoderTunneling,
-        socketBaseDirectory: String
+        socketBaseDirectory: String,
+        lifecycle: CoderSessionLifecycleDependencies? = nil
     ) {
         self.resolver = resolver
         self.tunnel = tunnel
         self.socketBaseDirectory = socketBaseDirectory
+        self.lifecycle = lifecycle
+        self.usageReporter = lifecycle?.makeUsageReporter()
         let (stream, continuation) = AsyncStream.makeStream(
             of: Data.self,
             bufferingPolicy: .bufferingNewest(32)
@@ -88,17 +97,36 @@ public actor CoderTransport: TerminalTransport {
         defer {
             if phase == .connecting { phase = .idle }
         }
+        serverID = reference.serverID
+
+        // Spec §4.3/§14.5: a generation marked authRequired refuses NEW
+        // dials outright — already-established sessions are unaffected.
+        if let generations = lifecycle?.generations {
+            let generation = await generations.generation(for: reference.serverID)
+            guard generation.state == .active else { throw .authRequired }
+            credentialGenerationID = generation.id
+        }
 
         let endpoint: CoderAgentEndpoint
         do {
             endpoint = try await resolver.resolve(reference)
         } catch let error as CoderResolutionError {
-            throw Self.transportError(error)
+            let mapped = Self.transportError(error)
+            if mapped == .authRequired {
+                // A genuine primary REST 401 confirms the loss (spec §15 row
+                // 2): mark the generation before surfacing the typed error.
+                await lifecycle?.generations?.markAuthRequired(for: reference.serverID)
+            }
+            throw mapped
         }
 
         let handle: Int
         do {
-            handle = try await tunnel.start(configJSON: startConfigJSON(for: endpoint))
+            handle = try await tunnel.start(configJSON: CoderTunnelStartConfig.json(
+                endpoint: endpoint,
+                socketDir: socketBaseDirectory,
+                credentialGeneration: credentialGenerationID
+            ))
         } catch is CoderTunnelError {
             throw .unreachable
         }
@@ -121,6 +149,16 @@ public actor CoderTransport: TerminalTransport {
         lastRows = rows
         startBridge(over: ssh)
         phase = .connected
+
+        // Spec §14.3: the heartbeat attaches with the real session.
+        let scope = CoderUsageScope(
+            serverURL: endpoint.serverURL,
+            sessionToken: endpoint.sessionToken,
+            workspaceID: reference.workspaceID,
+            agentID: endpoint.agentID
+        )
+        usageScope = scope
+        await usageReporter?.begin(scope)
     }
 
     public func send(_ bytes: Data) async throws(TransportError) {
@@ -147,6 +185,8 @@ public actor CoderTransport: TerminalTransport {
     public func suspend() async {
         guard phase == .connected else { return }
         phase = .suspended
+        // Detach stops usage posting; the session itself roams on.
+        await usageReporter?.end()
     }
 
     public func resume() async throws(TransportError) {
@@ -159,6 +199,7 @@ public actor CoderTransport: TerminalTransport {
         let channelAlive = (try? await sshTransport.sessionChannelHandle())?.isActive ?? false
         if channelAlive, !sessionDied {
             phase = .connected
+            if let usageScope { await usageReporter?.begin(usageScope) }
             return
         }
 
@@ -175,11 +216,13 @@ public actor CoderTransport: TerminalTransport {
         sessionDied = false
         startBridge(over: sshTransport)
         phase = .connected
+        if let usageScope { await usageReporter?.begin(usageScope) }
     }
 
     public func close() async {
         guard phase != .closed else { return }
         phase = .closed
+        await usageReporter?.end()
         bridgeTask?.cancel()
         bridgeTask = nil
         if let sshTransport {
@@ -189,11 +232,25 @@ public actor CoderTransport: TerminalTransport {
         if let handle = tunnelHandle {
             tunnelHandle = nil
             tunnel.close(handle: handle)
+            await lifecycle?.reporting?.unregister(handle: handle)
         }
         outputContinuation.finish()
     }
 
     // MARK: - Private
+
+    /// The `SessionSceneAttachable` seam: ships the live handle's
+    /// registration to the lifecycle coordinator. No-op pre-connect.
+    func registerWithLifecycle(sceneID: String) async {
+        guard let handle = tunnelHandle, let serverID else { return }
+        await lifecycle?.reporting?.register(CoderSessionRegistration(
+            handle: handle,
+            sceneID: sceneID,
+            serverID: serverID,
+            credentialGenerationID: credentialGenerationID,
+            usageReporter: usageReporter
+        ))
+    }
 
     /// A refused/empty dial MUST NOT leak the allocated Go-side session
     /// handle: start-acquired resources unwind in reverse order.
@@ -255,33 +312,6 @@ public actor CoderTransport: TerminalTransport {
         }
     }
 
-    private func startConfigJSON(for endpoint: CoderAgentEndpoint) -> String {
-        struct StartConfig: Encodable {
-            let serverURL: String
-            let sessionToken: String
-            let agentID: String
-            let relayOnly: Bool
-            let socketDir: String
-
-            enum CodingKeys: String, CodingKey {
-                case serverURL = "server_url"
-                case sessionToken = "session_token"
-                case agentID = "agent_id"
-                case relayOnly = "relay_only"
-                case socketDir = "socket_dir"
-            }
-        }
-        let config = StartConfig(
-            serverURL: endpoint.serverURL.absoluteString,
-            sessionToken: endpoint.sessionToken,
-            agentID: endpoint.agentID.uuidString.lowercased(),
-            relayOnly: false,
-            socketDir: socketBaseDirectory
-        )
-        // The type has no fallible members; encoding cannot fail.
-        return String(decoding: (try? JSONEncoder().encode(config)) ?? Data(), as: UTF8.self)
-    }
-
     private static func transportError(_ error: CoderResolutionError) -> TransportError {
         switch error {
         case .tokenMissing, .unauthorized:
@@ -291,36 +321,5 @@ public actor CoderTransport: TerminalTransport {
         case .serverUnknown, .workspaceMissing, .workspaceNotRunning, .agentUnavailable:
             .reconnectRequired
         }
-    }
-}
-
-/// Produces fresh ``CoderTransport`` instances for coder-typed connections.
-/// The tunnel conformer arrives via closure so this module never names the
-/// CoderTunnel framework; AppStore flavors simply never register the factory
-/// and keep the registry's typed ``TransportError/protocolUnavailable``.
-public struct CoderTransportFactory: TerminalTransportFactory {
-    private let resolver: CoderWorkspaceResolver
-    private let socketBaseDirectory: String
-    private let makeTunnel: @Sendable () -> any CoderTunneling
-
-    public init(
-        resolver: CoderWorkspaceResolver,
-        socketBaseDirectory: String,
-        tunnelFactory: @escaping @Sendable () -> any CoderTunneling
-    ) {
-        self.resolver = resolver
-        self.socketBaseDirectory = socketBaseDirectory
-        self.makeTunnel = tunnelFactory
-    }
-
-    public func makeTransport(for connection: Connection) throws(TransportError) -> any TerminalTransport {
-        guard connection.type == .coder else {
-            throw .protocolUnavailable(protocolID: connection.type.rawValue)
-        }
-        return CoderTransport(
-            resolver: resolver,
-            tunnel: makeTunnel(),
-            socketBaseDirectory: socketBaseDirectory
-        )
     }
 }

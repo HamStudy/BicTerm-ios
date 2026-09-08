@@ -7,6 +7,15 @@ public typealias SessionTransportError = TransportError
 public typealias SessionTransport = TerminalTransport
 public typealias SessionTransportFactory = TerminalTransportFactory
 
+/// Capability notice for adopted transports that keep an OUT-OF-BAND session
+/// identity (the Coder tunnel's Go handle): the registry tells them which
+/// scene anchors them so control-plane events tagged with that identity can
+/// be routed back to this scene. Conformers receive exactly one call per
+/// adoption, after the transport's connect has fully completed.
+public protocol SessionSceneAttachable: Sendable {
+    func sessionAttachedToScene(_ sceneID: String) async
+}
+
 /// Bounded reconnect policy for drop-triggered automatic reconnects.
 /// Delays grow geometrically: attempt N waits
 /// `initialDelay * backoffMultiplier^(N-1)` before connecting.
