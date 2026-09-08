@@ -2,14 +2,29 @@ import BicTermCore
 import CoderNet
 import Foundation
 
+private let coderNetEventChannel = AsyncStream<CoderNetEvent>.makeStream()
+
+private func coderNetLogCallback(_: Int32, _ message: UnsafePointer<CChar>?) {
+    guard let message,
+          let event = CoderNetEvent.parse(bridgeLine: String(cString: message)) else { return }
+    coderNetEventChannel.continuation.yield(event)
+}
+
 /// Production ``CoderTunneling`` conformer: the ONLY Swift file that links
 /// the CoderNet Go core (AGPL-3.0, coder/coder v2 + fork graph). It lives in
 /// the `CoderTunnel` framework target so the AppStore build configuration —
 /// which excludes this target — ships zero AGPL-derived symbols.
 ///
-/// Stateless by construction: session state lives behind the Go bridge's
-/// handle table; this type only adapts types across the FFI boundary.
+/// Session state lives behind the Go bridge's handle table; this type adapts
+/// both tunnel calls and the bridge's process-wide event callback.
 public struct CoderNetTunnel: CoderTunneling {
+    /// The sole Swift event stream fed by the Go bridge's existing callback.
+    /// ``CoderLifecycleCoordinator`` remains its only production consumer.
+    public static let events: AsyncStream<CoderNetEvent> = {
+        CoderNetSetLogCallback(coderNetLogCallback)
+        return coderNetEventChannel.stream
+    }()
+
     public init() {}
 
     public func version() -> String {

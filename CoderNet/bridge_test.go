@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"io"
 	"net"
 	"os"
@@ -13,6 +14,31 @@ import (
 
 	"github.com/coder/coder/v2/tailnet"
 )
+
+func TestNetworkPathEventLineUsesSwiftEnvelope(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		direct bool
+		path   string
+	}{
+		{name: "direct", direct: true, path: "direct"},
+		{name: "relayed", direct: false, path: "relayed"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			line, err := networkPathEventLine(17, test.direct)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var envelope bridgeEventEnvelope
+			if err := json.Unmarshal([]byte(line), &envelope); err != nil {
+				t.Fatal(err)
+			}
+			if envelope.Event.Type != "networkPathChanged" || envelope.Event.Source != "coord" || envelope.Event.Handle != 17 || envelope.Event.Path != test.path {
+				t.Fatalf("event = %+v", envelope.Event)
+			}
+		})
+	}
+}
 
 // TestAgentServiceAddressSpecVector pins spec §9: the agent virtual IPv6
 // address is its UUID with the first six bytes replaced by the

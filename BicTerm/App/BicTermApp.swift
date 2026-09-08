@@ -39,6 +39,8 @@ private struct TerminalWindowRoot: View {
                let descriptor = store.descriptor(id: shown),
                let model = store.sceneModel(for: descriptor.id) {
                 sceneView(model: model)
+            } else if forcesConnectionListForUITests {
+                ConnectionListContainer(store: store)
             } else if let windowSessionID {
                 RestoredTerminalWindowHost(store: store, sessionID: SessionID(value: windowSessionID))
             } else {
@@ -57,6 +59,14 @@ private struct TerminalWindowRoot: View {
             )
             .terminalStyle()
         }
+    }
+
+    private var forcesConnectionListForUITests: Bool {
+        #if DEBUG
+        ProcessInfo.processInfo.arguments.contains("--uitest-force-connection-list")
+        #else
+        false
+        #endif
     }
 
     private func sceneView(model: SessionSceneModel) -> some View {

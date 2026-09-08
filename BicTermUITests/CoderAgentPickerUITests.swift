@@ -24,13 +24,18 @@ final class CoderAgentPickerUITests: XCTestCase {
             "--uitest-coder-workspaces",
             "--uitest-reset-keys",
             "--uitest-seed-keys",
+            "--uitest-force-connection-list",
         ] + flags
         app.launch()
     }
 
     private func relaunch(flags: [String]) {
         app.terminate()
-        app.launchArguments = ["--uitest-coder-fake-validation", "--uitest-coder-workspaces"] + flags
+        app.launchArguments = [
+            "--uitest-coder-fake-validation",
+            "--uitest-coder-workspaces",
+            "--uitest-force-connection-list",
+        ] + flags
         app.launch()
     }
 
@@ -73,6 +78,7 @@ final class CoderAgentPickerUITests: XCTestCase {
         enterText("coder.example.com", in: app.textFields["field-host"])
         enterText("user", in: app.textFields["field-username"])
 
+        dismissKeyboard()
         let serverPicker = app.buttons["coder-server-picker"]
         scrollToHittable(serverPicker)
         serverPicker.tap()
@@ -187,6 +193,7 @@ final class CoderAgentPickerUITests: XCTestCase {
             app.keyboards.buttons[keyLabel].tap()
             return
         }
+        guard app.keyboards.firstMatch.exists else { return }
         let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.35))
         let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.12))
         start.press(forDuration: 0.05, thenDragTo: end)
@@ -201,6 +208,7 @@ final class CoderAgentPickerUITests: XCTestCase {
 
     private func selectAuthenticationKey(_ label: String) {
         dismissKeyboard()
+        app.swipeDown()
         let keySelector = app.buttons["key-selector"]
         scrollToHittable(keySelector)
         keySelector.tap()
@@ -253,6 +261,7 @@ final class CoderAgentPickerUITests: XCTestCase {
         enterText("coder.example.com", in: app.textFields["field-host"])
         enterText("user", in: app.textFields["field-username"])
 
+        dismissKeyboard()
         let serverPicker = app.buttons["coder-server-picker"]
         scrollToHittable(serverPicker)
         serverPicker.tap()

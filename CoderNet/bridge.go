@@ -103,6 +103,34 @@ func (emitSink) Sync() {}
 
 var bridgeLogger = slog.Make(emitSink{})
 
+type bridgeEvent struct {
+	Type   string `json:"type"`
+	Source string `json:"source"`
+	Handle int    `json:"handle"`
+	Path   string `json:"path"`
+}
+
+type bridgeEventEnvelope struct {
+	Event bridgeEvent `json:"codernet_event"`
+}
+
+func networkPathEventLine(handle int, direct bool) (string, error) {
+	path := "relayed"
+	if direct {
+		path = "direct"
+	}
+	line, err := json.Marshal(bridgeEventEnvelope{Event: bridgeEvent{
+		Type:   "networkPathChanged",
+		Source: "coord",
+		Handle: handle,
+		Path:   path,
+	}})
+	if err != nil {
+		return "", err
+	}
+	return string(line), nil
+}
+
 //export CoderNetSetLogCallback
 func CoderNetSetLogCallback(cb C.CoderNetLogCallback) {
 	mu.Lock()
@@ -208,6 +236,18 @@ func CoderNetDialSSH(handle C.int) *C.char {
 		s.conn = conn
 		s.mu.Unlock()
 		emit(logInfo, "dial: tailnet coordination established agent_ipv6="+tailnet.TailscaleServicePrefix.AddrFromUUID(agentUUID).String())
+		go func() {
+			pathCtx, pathCancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer pathCancel()
+			_, direct, _, pingErr := conn.Ping(pathCtx)
+			if pingErr != nil {
+				return
+			}
+			line, encodeErr := networkPathEventLine(int(handle), direct)
+			if encodeErr == nil {
+				emit(logInfo, line)
+			}
+		}()
 	}
 
 	s.mu.Lock()

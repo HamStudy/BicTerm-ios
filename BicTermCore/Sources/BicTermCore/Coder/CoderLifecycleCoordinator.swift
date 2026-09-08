@@ -59,6 +59,7 @@ public actor CoderLifecycleCoordinator: CoderSessionReporting {
     public nonisolated let generations: CoderCredentialGenerations
 
     private let events: AsyncStream<CoderNetEvent>?
+    private let onSessionEvent: @Sendable (CoderNetEvent, CoderSessionRegistration) async -> Void
     private let onAuthLoss: @Sendable (UUID) async -> Void
 
     private var registry: SessionRegistry?
@@ -72,11 +73,13 @@ public actor CoderLifecycleCoordinator: CoderSessionReporting {
     public init(
         generations: CoderCredentialGenerations = CoderCredentialGenerations(),
         events: AsyncStream<CoderNetEvent>? = nil,
-        onAuthLoss: @escaping @Sendable (UUID) async -> Void = { _ in }
+        onAuthLoss: @escaping @Sendable (UUID) async -> Void = { _ in },
+        onSessionEvent: @escaping @Sendable (CoderNetEvent, CoderSessionRegistration) async -> Void = { _, _ in }
     ) {
         self.generations = generations
         self.events = events
         self.onAuthLoss = onAuthLoss
+        self.onSessionEvent = onSessionEvent
     }
 
     /// Cycle-breaker for the composition root (registry → factory →
@@ -118,21 +121,19 @@ public actor CoderLifecycleCoordinator: CoderSessionReporting {
     // MARK: - Routing
 
     private func route(_ event: CoderNetEvent) async {
+        guard let handle = event.handle, let route = routes[handle] else { return }
+        let current = await generations.generation(for: route.serverID)
+        guard current.id == route.credentialGenerationID else { return }
+        await onSessionEvent(event, route)
+
         switch CoderEventClassifier.disposition(of: event) {
         case .consumeInternally:
             // §8.7/§15: coord recovery, path changes, resume refreshes and
             // transient errors move no session or credential state.
             return
         case .authRequired:
-            guard let handle = event.handle, let route = routes[handle] else { return }
-            // A generation marked after this session registered means the
-            // credential was already replaced: an OLD handle's late auth
-            // event must not condemn the replacement generation.
-            let current = await generations.generation(for: route.serverID)
-            guard current.id == route.credentialGenerationID else { return }
             await generations.markAuthRequired(for: route.serverID)
         case .sessionReconnectRequired:
-            guard let handle = event.handle, let route = routes[handle] else { return }
             await registry?.markReconnectRequired(sceneID: route.sceneID)
         }
     }

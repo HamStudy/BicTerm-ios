@@ -68,7 +68,7 @@ final class SessionStore {
     let coderLifecycle: CoderLifecycleCoordinator?
     /// T11: coder connection diagnostics surfaced by the session info sheet
     /// (network path from the Go event taxonomy, cached server versions).
-    let coderDiagnostics = CoderSessionDiagnostics()
+    let coderDiagnostics: CoderSessionDiagnostics
     /// Live terminal surfaces for every attached-or-detached session —
     /// the buffer-preservation layer behind the session switcher.
     let viewCache = TerminalViewCache()
@@ -97,6 +97,7 @@ final class SessionStore {
         hostKeyStore injectedHostKeyStore: (any HostKeyStoreProtocol)? = nil
     ) {
         let snapshots = snapshotStore ?? Self.defaultSnapshotStore()
+        let diagnostics = CoderSessionDiagnostics()
         let book = AgentSessionBook()
         let presenter = AgentApprovalPresenter(resolveRouting: { _ in
             AgentPromptRouting(target: .mainWindow, sessionDisplayName: "Session")
@@ -131,7 +132,8 @@ final class SessionStore {
             let built = Self.makeLiveFactory(
                 authorizer: authorizer,
                 book: book,
-                verifier: verifier
+                verifier: verifier,
+                diagnostics: diagnostics
             )
             factory = built.factory
             lifecycleCoordinator = built.coderLifecycle
@@ -139,6 +141,7 @@ final class SessionStore {
 
         self.registry = SessionRegistry(transportFactory: factory, snapshotStore: snapshots)
         self.coderLifecycle = lifecycleCoordinator
+        self.coderDiagnostics = diagnostics
         self.agentPresenter = presenter
         self.agentBook = book
         self.hostKeyVerifier = verifier
@@ -382,7 +385,8 @@ final class SessionStore {
     private static func makeLiveFactory(
         authorizer: AgentAuthorizationService,
         book: AgentSessionBook,
-        verifier: HostKeyVerifier
+        verifier: HostKeyVerifier,
+        diagnostics: CoderSessionDiagnostics
     ) -> (factory: any TerminalTransportFactory, coderLifecycle: CoderLifecycleCoordinator?) {
         var registry = TransportRegistry()
         registry.register(.ssh, factory: SSHSessionTransportFactory(hostKeyVerifier: verifier))
@@ -394,6 +398,7 @@ final class SessionStore {
             tokenStore: services.coderTokenStore
         )
         let lifecycleCoordinator = CoderLifecycleCoordinator(
+            events: CoderNetTunnel.events,
             onAuthLoss: { serverID in
                 // T19's Reauthenticate flow consumes this notification.
                 await MainActor.run {
@@ -402,6 +407,11 @@ final class SessionStore {
                         object: nil,
                         userInfo: ["serverID": serverID]
                     )
+                }
+            },
+            onSessionEvent: { event, registration in
+                await MainActor.run {
+                    diagnostics.apply(event, sceneID: registration.sceneID)
                 }
             }
         )
