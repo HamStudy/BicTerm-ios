@@ -69,7 +69,7 @@ struct CoderStartFlowView: View {
         case progress
         case notice(String)
         case notConnectable(state: String)
-        case actionRequired(title: String, message: String)
+        case actionRequired(title: String, message: String, candidates: [CoderWorkspaceAgent])
         case failed(CoderStartFailure)
     }
 
@@ -122,8 +122,8 @@ struct CoderStartFlowView: View {
             noticeScreen(message)
         case .notConnectable(let state):
             notConnectableScreen(state)
-        case .actionRequired(let title, let message):
-            actionRequiredScreen(title: title, message: message)
+        case .actionRequired(let title, let message, let candidates):
+            actionRequiredScreen(title: title, message: message, candidates: candidates)
         case .failed(let failure):
             failureScreen(failure)
         }
@@ -244,13 +244,37 @@ struct CoderStartFlowView: View {
         }
     }
 
-    private func actionRequiredScreen(title: String, message: String) -> some View {
+    private func actionRequiredScreen(
+        title: String,
+        message: String,
+        candidates: [CoderWorkspaceAgent]
+    ) -> some View {
         VStack(alignment: .leading, spacing: spacing.md) {
             header(icon: "exclamationmark.triangle.fill", title: title, tint: colors.error)
             Text(message)
                 .font(typography.body)
                 .foregroundColor(colors.foreground)
                 .accessibilityIdentifier("coder-action-required-message")
+            if !candidates.isEmpty {
+                VStack(alignment: .leading, spacing: spacing.xs) {
+                    Text("Connected agents")
+                        .font(typography.caption)
+                        .foregroundColor(colors.dimmed)
+                    ForEach(candidates) { agent in
+                        VStack(alignment: .leading, spacing: spacing.xxxs) {
+                            Text(agent.name)
+                                .font(typography.body)
+                                .foregroundColor(colors.foreground)
+                            Text(agent.id.uuidString)
+                                .font(typography.caption)
+                                .foregroundColor(colors.dimmed)
+                        }
+                        .accessibilityElement(children: .combine)
+                        .accessibilityIdentifier("coder-agent-candidate-\(agent.id.uuidString)")
+                    }
+                }
+                .accessibilityIdentifier("coder-agent-candidates")
+            }
             Text("BicTerm never changes workspace lifecycle state, answers template parameters, or reactivates dormant workspaces on its own.")
                 .font(typography.caption)
                 .foregroundColor(colors.dimmed)
@@ -352,7 +376,8 @@ struct CoderStartFlowView: View {
         guard let reference = connection.coderRef else {
             screen = .actionRequired(
                 title: "Incomplete Coder connection",
-                message: "This connection has no server/workspace reference. Re-select them in the connection editor."
+                message: "This connection has no server/workspace reference. Re-select them in the connection editor.",
+                candidates: []
             )
             return
         }
@@ -364,7 +389,8 @@ struct CoderStartFlowView: View {
             let suffix = knownServers.isEmpty ? "store empty" : "store has [\(knownList)]"
             screen = .actionRequired(
                 title: "Coder server removed",
-                message: "The server this connection was created against is no longer configured (\(suffix)). Re-add it or edit the connection."
+                message: "The server this connection was created against is no longer configured (\(suffix)). Re-add it or edit the connection.",
+                candidates: []
             )
             return
         }
@@ -372,7 +398,8 @@ struct CoderStartFlowView: View {
               !token.isEmpty else {
             screen = .actionRequired(
                 title: "Authentication required",
-                message: "No Coder session token is stored for this server. Reauthenticate it in Settings."
+                message: "No Coder session token is stored for this server. Reauthenticate it in Settings.",
+                candidates: []
             )
             return
         }
@@ -392,7 +419,8 @@ struct CoderStartFlowView: View {
         if detail.isDormant {
             screen = .actionRequired(
                 title: "Workspace is dormant",
-                message: "The server marked “\(detail.name)” dormant. Reactivate it in the Coder dashboard, then connect again."
+                message: "The server marked “\(detail.name)” dormant. Reactivate it in the Coder dashboard, then connect again.",
+                candidates: []
             )
             return
         }
@@ -405,8 +433,8 @@ struct CoderStartFlowView: View {
                 } else {
                     onComplete()
                 }
-            case .actionRequired(let title, let message):
-                screen = .actionRequired(title: title, message: message)
+            case .actionRequired(let title, let message, let candidates):
+                screen = .actionRequired(title: title, message: message, candidates: candidates)
             }
             return
         }
@@ -424,7 +452,7 @@ struct CoderStartFlowView: View {
             agentID: connection.protocolOptions["coder.agentID"]?.stringValue.flatMap(UUID.init(uuidString:))
         ) {
             if failure == .parameterMismatch {
-                screen = .actionRequired(title: failure.title, message: failure.message)
+                screen = .actionRequired(title: failure.title, message: failure.message, candidates: [])
             } else {
                 screen = .failed(failure)
             }
@@ -442,17 +470,17 @@ struct CoderStartFlowView: View {
                 } else {
                     onComplete()
                 }
-            case .actionRequired(let title, let message):
-                screen = .actionRequired(title: title, message: message)
+            case .actionRequired(let title, let message, let candidates):
+                screen = .actionRequired(title: title, message: message, candidates: candidates)
             }
         } else {
             onComplete()
         }
     }
 
-    private enum AgentReResolution {
+    enum AgentReResolution {
         case proceed(notice: String?)
-        case actionRequired(title: String, message: String)
+        case actionRequired(title: String, message: String, candidates: [CoderWorkspaceAgent])
     }
 
     /// Spec §5.2 stale-build rule at connect time: a saved explicit agent
@@ -460,17 +488,26 @@ struct CoderStartFlowView: View {
     /// Continuing with a different UUID would leave the immutable persisted
     /// connection pointing at the stale agent.
     private func agentReResolution(detail: CoderWorkspaceDetail) -> AgentReResolution {
-        guard let savedIDString = connection.protocolOptions["coder.agentID"]?.stringValue,
-              let savedID = UUID(uuidString: savedIDString) else {
+        let connected = detail.latestBuild.agents.filter(\.isConnected)
+        let savedID = connection.protocolOptions["coder.agentID"]?.stringValue.flatMap(UUID.init(uuidString:))
+        return Self.agentReResolution(savedAgentID: savedID, connectedAgents: connected)
+    }
+
+    static func agentReResolution(
+        savedAgentID: UUID?,
+        connectedAgents: [CoderWorkspaceAgent]
+    ) -> AgentReResolution {
+        if let savedAgentID,
+           connectedAgents.contains(where: { $0.id == savedAgentID }) {
             return .proceed(notice: nil)
         }
-        let connected = detail.latestBuild.agents.filter(\.isConnected)
-        if connected.contains(where: { $0.id == savedID }) {
+        guard savedAgentID != nil || connectedAgents.count > 1 else {
             return .proceed(notice: nil)
         }
         return .actionRequired(
             title: "Agent selection required",
-            message: "The workspace's build changed and the saved agent is gone. Open this connection in the editor and pick an agent from the current build."
+            message: "Open this connection in the editor and explicitly pick an agent from the current build.",
+            candidates: connectedAgents
         )
     }
 }

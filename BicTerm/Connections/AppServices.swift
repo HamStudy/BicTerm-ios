@@ -163,7 +163,7 @@ final class UITestCoderFixtureState: @unchecked Sendable {
         startPosts += 1
         startedWorkspaceIDs.insert(workspaceID.lowercased())
         if ProcessInfo.processInfo.arguments.contains("--uitest-coder-start-pending-once") {
-            pendingStartFetches += 2
+            pendingStartFetches += 6
         }
     }
 
@@ -173,9 +173,9 @@ final class UITestCoderFixtureState: @unchecked Sendable {
         return startedWorkspaceIDs.contains(workspaceID.lowercased())
     }
 
-    /// With `--uitest-coder-start-pending-once`: the first two detail reads
+    /// With `--uitest-coder-start-pending-once`: the first six detail reads
     /// after a start POST report a provisioning build, keeping the layered
-    /// progress screen observable across XCUI's one-second polling cadence.
+    /// progress screen settled while XCUI captures it before readiness.
     func consumePendingStartFetch() -> Bool {
         lock.lock()
         defer { lock.unlock() }

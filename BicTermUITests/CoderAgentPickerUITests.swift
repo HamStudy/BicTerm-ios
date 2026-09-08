@@ -237,6 +237,13 @@ final class CoderAgentPickerUITests: XCTestCase {
         app.descendants(matching: .any).matching(identifier: "terminalView").firstMatch
     }
 
+    private func captureState(_ name: String) {
+        let attachment = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
     private func startPostCount() -> Int {
         let label = app.staticTexts["coder-start-post-count"]
         XCTAssertTrue(label.waitForExistence(timeout: 5), "fixture start-post counter must be visible")
@@ -281,7 +288,15 @@ final class CoderAgentPickerUITests: XCTestCase {
         scrollToHittable(connectDisabled)
         XCTAssertFalse(connectDisabled.isEnabled, "ambiguity must block saving until an agent is picked")
 
-        pickAgent("main")
+        if agentRow.staticTexts.firstMatch.exists {
+            agentRow.staticTexts.firstMatch.tap()
+        } else {
+            agentRow.tap()
+        }
+        let mainAgent = app.buttons["coder-agent-main"]
+        XCTAssertTrue(mainAgent.waitForExistence(timeout: 5))
+        captureState("multi-agent-picker")
+        mainAgent.tap()
 
         let persisted = app.buttons["coder-agent-row"]
         scrollToHittable(persisted)
@@ -310,6 +325,15 @@ final class CoderAgentPickerUITests: XCTestCase {
         scrollToHittable(agentRowAgain)
         XCTAssertTrue(agentRowAgain.waitForExistence(timeout: 5), "persisted agent pick must rehydrate the agent row")
         XCTAssertTrue(agentRowAgain.label.contains("main"), "persisted agent name must survive save/edit round-trip")
+        if agentRowAgain.staticTexts.firstMatch.exists {
+            agentRowAgain.staticTexts.firstMatch.tap()
+        } else {
+            agentRowAgain.tap()
+        }
+        let selectedAgent = app.buttons["coder-agent-main"]
+        XCTAssertTrue(selectedAgent.waitForExistence(timeout: 5))
+        XCTAssertTrue(selectedAgent.isSelected, "the saved agent row must expose its selected accessibility state")
+        app.buttons["coder-agent-picker-cancel"].tap()
     }
 
     // MARK: - Flow 2: stopped workspace with policy OFF never starts
@@ -326,6 +350,7 @@ final class CoderAgentPickerUITests: XCTestCase {
         XCTAssertTrue(message.waitForExistence(timeout: 10), "stopped workspace with policy off must show the not-connectable screen")
         XCTAssertTrue(message.label.contains("start policy is off"), "error must explain the policy, got: \(message.label)")
         XCTAssertEqual(startPostCount(), 0, "policy OFF must send no start POST")
+        captureState("policy-off-not-connectable")
 
         tap(app.buttons["coder-not-connectable-close"])
     }
@@ -347,6 +372,7 @@ final class CoderAgentPickerUITests: XCTestCase {
         XCTAssertTrue(buildLayer.waitForExistence(timeout: 10), "policy ON must show the layered start progress")
         XCTAssertTrue(app.staticTexts["coder-start-layer-agent-lifecycle"].waitForExistence(timeout: 5))
         XCTAssertEqual(startPostCount(), 1, "exactly one start POST must be sent")
+        captureState("policy-layered-progress")
 
         let terminal = terminalSurface()
         XCTAssertTrue(terminal.waitForExistence(timeout: 30), "connection must open the session after the workspace is ready")
@@ -366,6 +392,7 @@ final class CoderAgentPickerUITests: XCTestCase {
         XCTAssertTrue(message.waitForExistence(timeout: 10), "dormant workspace must show the action-required screen")
         XCTAssertTrue(message.label.contains("dormant"), "message must name dormancy, got: \(message.label)")
         XCTAssertEqual(startPostCount(), 0, "dormant workspace must not be mutated or started")
+        captureState("dormant-action-required")
 
         tap(app.buttons["coder-action-required-close"])
     }
@@ -387,6 +414,7 @@ final class CoderAgentPickerUITests: XCTestCase {
         XCTAssertTrue(message.waitForExistence(timeout: 10), "parameter mismatch must show the action-required screen")
         XCTAssertTrue(message.label.contains("parameter"), "message must name the parameter requirement, got: \(message.label)")
         XCTAssertEqual(startPostCount(), 0, "parameter mismatch must not produce a start POST")
+        captureState("parameter-mismatch")
 
         tap(app.buttons["coder-action-required-close"])
     }
@@ -417,7 +445,12 @@ final class CoderAgentPickerUITests: XCTestCase {
         XCTAssertTrue(server.label.contains("v2.36.4-uitest"), "server version must come from buildinfo, got: \(server.label)")
 
         XCTAssertTrue(app.staticTexts["coder-info-workspace"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["coder-info-agent"].waitForExistence(timeout: 5))
+        let agent = app.staticTexts["coder-info-agent"]
+        XCTAssertTrue(agent.waitForExistence(timeout: 5))
+        let sheetHandle = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.48))
+        let largeDetent = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.25))
+        sheetHandle.press(forDuration: 0.05, thenDragTo: largeDetent)
+        captureState("session-diagnostics")
     }
 }
 

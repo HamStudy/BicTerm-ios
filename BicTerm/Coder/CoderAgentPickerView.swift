@@ -26,6 +26,7 @@ struct CoderAgentPickerView: View {
         List {
             Section {
                 ForEach(sortedAgents) { agent in
+                    let isSelected = agent.id == selectedAgentID
                     Button {
                         onSelect(agent)
                         dismiss()
@@ -34,6 +35,7 @@ struct CoderAgentPickerView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("coder-agent-\(sanitized(agent.name))")
+                    .accessibilityAddTraits(isSelected ? .isSelected : [])
                 }
             } header: {
                 Text("Connected agents in \(workspaceName)")
@@ -69,6 +71,7 @@ struct CoderAgentPickerView: View {
             if agent.id == selectedAgentID {
                 Image(systemName: "checkmark")
                     .foregroundColor(colors.accent)
+                    .accessibilityHidden(true)
             }
         }
         .padding(.vertical, spacing.xxs)
