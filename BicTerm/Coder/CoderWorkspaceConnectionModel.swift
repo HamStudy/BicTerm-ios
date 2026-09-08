@@ -32,6 +32,7 @@ final class CoderWorkspaceConnectionModel {
     private(set) var servers: [CoderServer] = []
     private(set) var selectedServerID: UUID?
     private(set) var selectedWorkspaceID: UUID?
+    private(set) var selectedAgentID: UUID?
     private(set) var loadingState: LoadingState = .idle
     private var selectedWorkspaceSnapshot: CoderWorkspace?
     private var displayedWorkspaceSnapshot: CoderWorkspace?
@@ -68,8 +69,28 @@ final class CoderWorkspaceConnectionModel {
         !servers.isEmpty
     }
 
+    /// Connected agents of the latest build of the selected workspace
+    /// (spec §5.1 — agent identities come from build resources).
+    var selectedWorkspaceConnectedAgents: [CoderWorkspaceAgent] {
+        guard let selectedWorkspace else { return [] }
+        return selectedWorkspace.agents.filter(\.isConnected)
+    }
+
+    /// Spec §5.2: ambiguity is never auto-picked — with more than one
+    /// eligible agent the user must choose explicitly before saving.
+    var requiresExplicitAgent: Bool {
+        selectedWorkspaceConnectedAgents.count > 1
+    }
+
+    var selectedAgent: CoderWorkspaceAgent? {
+        guard let selectedAgentID else { return nil }
+        return selectedWorkspaceConnectedAgents.first { $0.id == selectedAgentID }
+    }
+
     var canSave: Bool {
-        selectedServer != nil && selectedWorkspace?.isConnectable == true
+        selectedServer != nil
+            && selectedWorkspace?.isConnectable == true
+            && (!requiresExplicitAgent || selectedAgent != nil)
     }
 
     var noServersMessage: String {
@@ -78,12 +99,18 @@ final class CoderWorkspaceConnectionModel {
 
     func prepareForInitialValues(
         serverID: UUID?,
-        workspaceID: UUID?
+        workspaceID: UUID?,
+        agentID: UUID? = nil
     ) {
         self.selectedServerID = serverID
         self.selectedWorkspaceID = workspaceID
         if selectedWorkspaceSnapshot == nil, let workspaceID {
             selectedWorkspaceSnapshot = selectedWorkspaceSnapshotBackfill(id: workspaceID)
+        }
+        if let agentID, selectedWorkspaceConnectedAgents.contains(where: { $0.id == agentID }) {
+            selectedAgentID = agentID
+        } else {
+            selectedAgentID = nil
         }
     }
 
@@ -116,6 +143,7 @@ final class CoderWorkspaceConnectionModel {
     }
 
     func selectWorkspace(_ workspace: CoderWorkspace?) {
+        selectedAgentID = nil
         guard let workspace else {
             selectedWorkspaceID = nil
             selectedWorkspaceSnapshot = nil
@@ -123,6 +151,23 @@ final class CoderWorkspaceConnectionModel {
         }
         selectedWorkspaceID = workspace.id
         selectedWorkspaceSnapshot = workspace
+    }
+
+    func selectAgent(_ agent: CoderWorkspaceAgent?) {
+        selectedAgentID = agent?.id
+    }
+
+    /// Stale-build reconciliation for an explicitly picked agent: returns
+    /// false when the fresh build no longer contains the pick, clearing it
+    /// so the editor must ask again (spec §5.2 — never silently re-pick).
+    func reconcileAgentSelection(id: UUID?) -> Bool {
+        guard let id else { return true }
+        if selectedWorkspaceConnectedAgents.contains(where: { $0.id == id }) {
+            selectedAgentID = id
+            return true
+        }
+        selectedAgentID = nil
+        return false
     }
 
     func loadWorkspaces() async {
@@ -196,6 +241,7 @@ final class CoderWorkspaceConnectionModel {
         selectedWorkspaceSnapshot = nil
         displayedWorkspaceSnapshot = nil
         lastLoadedWorkspaces = nil
+        selectedAgentID = nil
         if reason == .serverRemoved || reason == .manual {
             selectedServerID = nil
         }

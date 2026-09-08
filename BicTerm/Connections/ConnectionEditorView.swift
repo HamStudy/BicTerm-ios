@@ -19,6 +19,8 @@ struct ConnectionEditorView: View {
     )
     @State private var hopSheetTarget: HopSheetTarget?
     @State private var coderServerToEdit: CoderServer?
+    @State private var coderAgentPickerShown = false
+    @State private var coderAgentReResolveNotice: String?
     @State private var hopLimitMessage: String?
     @State private var saveError: String?
     @State private var isSaving = false
@@ -77,12 +79,15 @@ struct ConnectionEditorView: View {
                             }
                         }
             }
-            .onAppear {
-                populateDraft()
-                prepareCoderModel()
-            }
+        .onAppear {
+            populateDraft()
+            prepareCoderModel()
+        }
             .onChange(of: draft) {
                 saveError = nil
+            }
+            .onChange(of: coderModel.loadingState) { _, state in
+                reconcileAgentAfterRevalidation(state)
             }
             .task(id: coderModel.selectedServerID) {
                 guard draft.protocolID == "coder" else { return }
@@ -435,6 +440,9 @@ struct ConnectionEditorView: View {
                             draft.coderServerName = server.name
                             draft.coderWorkspaceID = ""
                             draft.coderWorkspaceName = ""
+                            draft.coderAgentID = ""
+                            draft.coderAgentName = ""
+                            coderAgentReResolveNotice = nil
                         }
                     }
                 } label: {
@@ -452,6 +460,10 @@ struct ConnectionEditorView: View {
 
                 if coderModel.selectedServer != nil {
                     coderWorkspacePicker
+                    if coderAgentSelectionRequired || !draft.coderAgentID.isEmpty {
+                        coderAgentRow
+                    }
+                    CoderStartPolicyRow(isOn: $draft.coderStartPolicy)
                 }
             }
         } header: {
@@ -470,8 +482,65 @@ struct ConnectionEditorView: View {
                         .foregroundColor(colors.error)
                         .accessibilityIdentifier("coder-validation-error")
                 }
+                if coderModel.requiresExplicitAgent, draft.coderAgentID.isEmpty {
+                    Text("This workspace exposes multiple agents — pick one before saving")
+                        .font(typography.caption)
+                        .foregroundColor(colors.error)
+                        .accessibilityIdentifier("coder-agent-error")
+                }
+                if let notice = coderAgentReResolveNotice {
+                    Text(notice)
+                        .font(typography.caption)
+                        .foregroundColor(colors.accent)
+                        .accessibilityIdentifier("coder-agent-reresolved-notice")
+                }
             }
         }
+    }
+
+    private var coderAgentSelectionRequired: Bool {
+        coderModel.requiresExplicitAgent
+    }
+
+    private var coderAgentRow: some View {
+        Button {
+            coderAgentPickerShown = true
+        } label: {
+            HStack {
+                VStack(alignment: .leading, spacing: spacing.xxxs) {
+                    Text("Agent")
+                        .font(typography.body)
+                        .foregroundColor(colors.foreground)
+                    if draft.coderAgentID.isEmpty {
+                        Text(coderModel.requiresExplicitAgent ? "Multiple agents — pick one" : "Choose an agent")
+                            .font(typography.caption)
+                            .foregroundColor(coderModel.requiresExplicitAgent ? colors.error : colors.dimmed)
+                    } else {
+                        Text(draft.coderAgentName)
+                            .font(typography.caption)
+                            .foregroundColor(colors.accent)
+                    }
+                }
+                Spacer()
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("coder-agent-row")
+        .navigationDestination(isPresented: $coderAgentPickerShown) {
+            CoderAgentPickerView(
+                workspaceName: coderModel.selectedWorkspaceName,
+                agents: coderModel.selectedWorkspaceConnectedAgents,
+                selectedAgentID: UUID(uuidString: draft.coderAgentID)
+            ) { agent in
+                applyAgentPick(agent)
+            }
+        }
+    }
+
+    private func applyAgentPick(_ agent: CoderWorkspaceAgent) {
+        coderModel.selectAgent(agent)
+        draft.coderAgentID = agent.id.uuidString
+        draft.coderAgentName = agent.name
     }
 
     private var coderWorkspacePicker: some View {
@@ -500,6 +569,9 @@ struct ConnectionEditorView: View {
                             coderModel.selectWorkspace(workspace)
                             draft.coderWorkspaceID = workspace.id.uuidString
                             draft.coderWorkspaceName = workspace.name
+                            draft.coderAgentID = ""
+                            draft.coderAgentName = ""
+                            coderAgentReResolveNotice = nil
                         }
                     } label: {
                         HStack {
@@ -631,8 +703,33 @@ struct ConnectionEditorView: View {
             if draft.protocolID == "coder" {
                 let serverID = draft.coderServerID.isEmpty ? nil : UUID(uuidString: draft.coderServerID)
                 let workspaceID = draft.coderWorkspaceID.isEmpty ? nil : UUID(uuidString: draft.coderWorkspaceID)
-                coderModel.prepareForInitialValues(serverID: serverID, workspaceID: workspaceID)
+                let agentID = draft.coderAgentID.isEmpty ? nil : UUID(uuidString: draft.coderAgentID)
+                coderModel.prepareForInitialValues(
+                    serverID: serverID,
+                    workspaceID: workspaceID,
+                    agentID: agentID
+                )
             }
+        }
+    }
+
+    /// Spec §5.2 at editor level: after a workspace revalidation, an
+    /// explicit agent pick that no longer belongs to the latest build is
+    /// cleared (never silently re-picked) and the user is told why.
+    private func reconcileAgentAfterRevalidation(_ state: CoderWorkspaceConnectionModel.LoadingState) {
+        guard draft.protocolID == "coder",
+              !draft.coderAgentID.isEmpty,
+              let picked = UUID(uuidString: draft.coderAgentID)
+        else { return }
+        switch state {
+        case .loaded, .staleRevalidating:
+            if !coderModel.reconcileAgentSelection(id: picked) {
+                draft.coderAgentID = ""
+                draft.coderAgentName = ""
+                coderAgentReResolveNotice = "The workspace's latest build no longer lists the saved agent. Pick an agent again before saving."
+            }
+        case .idle, .loading, .empty, .unauthorized, .unreachable, .serverError, .networkError:
+            break
         }
     }
 

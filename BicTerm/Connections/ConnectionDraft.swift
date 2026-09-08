@@ -115,6 +115,15 @@ struct ConnectionDraft: Equatable {
     var coderWorkspaceID: String = ""
     var coderWorkspaceName: String = ""
     var coderServerName: String = ""
+    /// Explicit agent pick (spec §5.2): set only through the agent picker
+    /// when the workspace exposes multiple agents. Persisted alongside the
+    /// workspace identity so edits and diagnostics can name the agent.
+    var coderAgentID: String = ""
+    var coderAgentName: String = ""
+    /// Start-stopped policy (spec §6.1): OFF by default — starting a
+    /// workspace can incur cost, so it must be an explicit per-connection
+    /// decision confirmed through the policy dialog.
+    var coderStartPolicy = false
 
     init() {}
 
@@ -140,6 +149,9 @@ struct ConnectionDraft: Equatable {
         coderWorkspaceID = connection.protocolOptions["coder.workspaceID"]?.stringValue ?? connection.coderRef?.workspaceID.uuidString ?? ""
         coderWorkspaceName = connection.protocolOptions["coder.workspaceName"]?.stringValue ?? ""
         coderServerName = connection.protocolOptions["coder.serverName"]?.stringValue ?? ""
+        coderAgentID = connection.protocolOptions["coder.agentID"]?.stringValue ?? ""
+        coderAgentName = connection.protocolOptions["coder.agentName"]?.stringValue ?? ""
+        coderStartPolicy = connection.protocolOptions["coder.startPolicy"]?.boolValue == true
     }
 
     var coderValidationError: String? {
@@ -295,6 +307,13 @@ struct ConnectionDraft: Equatable {
             if !coderWorkspaceID.isEmpty {
                 optionValues["coder.workspaceID"] = .string(coderWorkspaceID)
                 optionValues["coder.workspaceName"] = .string(coderWorkspaceName)
+            }
+            if !coderAgentID.isEmpty {
+                optionValues["coder.agentID"] = .string(coderAgentID)
+                optionValues["coder.agentName"] = .string(coderAgentName)
+            }
+            if coderStartPolicy {
+                optionValues["coder.startPolicy"] = .bool(true)
             }
         }
         var options = ProtocolOptions()

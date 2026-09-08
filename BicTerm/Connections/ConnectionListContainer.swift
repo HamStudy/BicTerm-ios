@@ -10,6 +10,7 @@ struct ConnectionListContainer: View {
 
     @State private var reauthenticationTarget: CoderServerEditorTarget?
     @State private var coderTunnelAlertConnection: Connection?
+    @State private var coderConnectTarget: Connection?
     @State private var coverDescriptor: SessionStore.SessionDescriptor?
     @State private var restorableSessions: [SessionStore.RestorableSession] = []
     @State private var switcherPresented = false
@@ -80,6 +81,25 @@ struct ConnectionListContainer: View {
             }
             .terminalStyle()
         }
+        #if CODER_TUNNEL
+        .sheet(item: $coderConnectTarget) { connection in
+            CoderStartFlowView(
+                connection: connection,
+                onComplete: {
+                    coderConnectTarget = nil
+                    // Let the flow sheet finish dismissing before presenting
+                    // the terminal cover from the same presenter.
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .milliseconds(400))
+                        present(store.openSession(for: connection))
+                    }
+                },
+                onCancel: { coderConnectTarget = nil }
+            )
+            .presentationDetents([.medium, .large])
+            .terminalStyle()
+        }
+        #endif
         .sheet(isPresented: $switcherPresented) {
             SessionSwitcherView(
                 store: store,
@@ -121,7 +141,11 @@ struct ConnectionListContainer: View {
             present(store.openSession(for: connection))
             return
         }
+        #if CODER_TUNNEL
+        coderConnectTarget = connection
+        #else
         coderTunnelAlertConnection = connection
+        #endif
     }
 
     private func reconnectRestorable(_ entry: SessionStore.RestorableSession) {

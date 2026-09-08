@@ -21,6 +21,7 @@ final class AppServices {
     let keyRepository = KeychainKeyRepository()
     let coderClientFactory: CoderClientFactory
     let coderTokenStore: any CoderTokenStoring
+    let coderRequestLoader: any CoderRequestLoading
     let passwordStore: any PasswordStoring
 
     #if DEBUG
@@ -57,6 +58,7 @@ final class AppServices {
         let tokenStore = KeychainCoderTokenStore()
         self.coderTokenStore = tokenStore
         self.coderClientFactory = Self.makeCoderClientFactory(tokenStore: tokenStore)
+        self.coderRequestLoader = Self.makeCoderRequestLoader()
         self.passwordStore = KeychainPasswordStore()
 
         #if DEBUG
@@ -120,32 +122,178 @@ final class AppServices {
         return { CoderClient(tokenStore: $0) }
     }
 
+    private static func makeCoderRequestLoader() -> any CoderRequestLoading {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--uitest-coder-fake-validation") {
+            return UITestCoderRequestLoader()
+        }
+        #endif
+        return SystemCoderRequestLoader()
+    }
+
     func descriptor(forProtocolID id: String) -> ProtocolDescriptor? {
         registry.descriptor(forProtocolID: id)
     }
 }
 
 #if DEBUG
+
+/// Stateful backing store for ``UITestCoderRequestLoader``: counts accepted
+/// start-build POSTs and flips started workspaces to a running build so UI
+/// tests can assert exactly-once start semantics and the absence of silent
+/// workspace mutation (spec §6.1). State is process-lifetime by design —
+/// a relaunched UI test process starts from zero.
+final class UITestCoderFixtureState: @unchecked Sendable {
+    static let shared = UITestCoderFixtureState()
+
+    private let lock = NSLock()
+    private var startedWorkspaceIDs: Set<String> = []
+    private var startPosts = 0
+    private var pendingStartFetches = 0
+
+    var startPostCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return startPosts
+    }
+
+    func acceptStartPost(workspaceID: String) {
+        lock.lock()
+        defer { lock.unlock() }
+        startPosts += 1
+        startedWorkspaceIDs.insert(workspaceID.lowercased())
+        if ProcessInfo.processInfo.arguments.contains("--uitest-coder-start-pending-once") {
+            pendingStartFetches += 2
+        }
+    }
+
+    func hasStarted(workspaceID: String) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return startedWorkspaceIDs.contains(workspaceID.lowercased())
+    }
+
+    /// With `--uitest-coder-start-pending-once`: the first two detail reads
+    /// after a start POST report a provisioning build, keeping the layered
+    /// progress screen observable across XCUI's one-second polling cadence.
+    func consumePendingStartFetch() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard pendingStartFetches > 0 else { return false }
+        pendingStartFetches -= 1
+        return true
+    }
+}
+
 private struct UITestCoderRequestLoader: CoderRequestLoading {
     func load(_ request: URLRequest) async throws(CoderRequestLoadingError) -> CoderHTTPResponse {
-        guard request.url?.scheme?.lowercased() == "https",
-              request.url?.path == "/api/v2/workspaces" else {
+        guard let url = request.url,
+              url.scheme?.lowercased() == "https",
+              url.path.hasPrefix("/api/v2/") else {
             throw .invalidURL
         }
         let arguments = ProcessInfo.processInfo.arguments
-        if arguments.contains("--uitest-coder-unauthorized") {
+        let path = url.path
+
+        if path == "/api/v2/buildinfo" {
+            let body = Data(#"{"version":"v2.36.4-uitest","external_url":""}"#.utf8)
+            return CoderHTTPResponse(statusCode: 200, body: body)
+        }
+
+        guard path == "/api/v2/workspaces" || path.hasPrefix("/api/v2/workspaces/") else {
+            throw .invalidURL
+        }
+        let segments = path.split(separator: "/").map(String.init)
+
+        guard arguments.contains("--uitest-coder-workspaces") else {
+            if arguments.contains("--uitest-coder-unauthorized") {
+                return CoderHTTPResponse(statusCode: 401, body: Data())
+            }
+            if path == "/api/v2/workspaces",
+               request.value(forHTTPHeaderField: "Coder-Session-Token") == "fixture-token" {
+                let body = Data(#"{"workspaces":[],"count":0}"#.utf8)
+                return CoderHTTPResponse(statusCode: 200, body: body)
+            }
             return CoderHTTPResponse(statusCode: 401, body: Data())
         }
-        if arguments.contains("--uitest-coder-workspaces") {
-            let body = Data(#"{"workspaces":[{"id":"11111111-1111-1111-1111-111111111111","name":"Running Dev","owner_name":"me","latest_build":{"status":"running"}},{"id":"22222222-2222-2222-2222-222222222222","name":"Stopped Old","owner_name":"me","latest_build":{"status":"stopped"}}],"count":2}"#.utf8)
+
+        // "/api/v2/workspaces" (list) = 3 segments; detail/build paths carry
+        // the workspace UUID at index 3 and a sub-resource at index 4.
+        guard segments.count >= 4 else {
+            let body = Data(#"{"workspaces":[\#(Self.workspaceJSON(id: Self.runningDevID)),\#(Self.workspaceJSON(id: Self.stoppedOldID))],"count":2}"#.utf8)
             return CoderHTTPResponse(statusCode: 200, body: body)
         }
-        let token = request.value(forHTTPHeaderField: "Coder-Session-Token")
-        if token == "fixture-token" {
-            let body = Data(#"{"workspaces":[],"count":0}"#.utf8)
+        let id = segments[3]
+
+        if segments.count == 5, segments[4] == "builds", request.httpMethod == "POST" {
+            guard id == Self.runningDevID || id == Self.stoppedOldID else {
+                return CoderHTTPResponse(statusCode: 404, body: Data())
+            }
+            UITestCoderFixtureState.shared.acceptStartPost(workspaceID: id)
+            let body = Data(#"{"id":"33333333-3333-4333-8333-333333333333","status":"pending","transition":"start","reason":"ssh_connection"}"#.utf8)
+            return CoderHTTPResponse(statusCode: 201, body: body)
+        }
+
+        if segments.count == 5, segments[4] == "resolve-autostart", request.httpMethod == "GET" {
+            let mismatch = arguments.contains("--uitest-coder-param-mismatch")
+            let body = Data(#"{"parameter_mismatch":\#(mismatch ? "true" : "false")}"#.utf8)
             return CoderHTTPResponse(statusCode: 200, body: body)
         }
-        return CoderHTTPResponse(statusCode: 401, body: Data())
+
+        guard id == Self.runningDevID || id == Self.stoppedOldID else {
+            return CoderHTTPResponse(statusCode: 404, body: Data())
+        }
+        if UITestCoderFixtureState.shared.hasStarted(workspaceID: id),
+           UITestCoderFixtureState.shared.consumePendingStartFetch() {
+            let body = Data(Self.startingJSON(id: id).utf8)
+            return CoderHTTPResponse(statusCode: 200, body: body)
+        }
+        let body = Data(Self.workspaceJSON(id: id).utf8)
+        return CoderHTTPResponse(statusCode: 200, body: body)
+    }
+
+    private static let runningDevID = "11111111-1111-1111-1111-111111111111"
+    private static let stoppedOldID = "22222222-2222-2222-2222-222222222222"
+
+    private static func workspaceJSON(id: String) -> String {
+        let arguments = ProcessInfo.processInfo.arguments
+        let name = id == runningDevID ? "Running Dev" : "Stopped Old"
+        let multi = arguments.contains("--uitest-coder-multi-agent")
+        if UITestCoderFixtureState.shared.hasStarted(workspaceID: id) {
+            return runningJSON(id: id, name: name, agents: agentSet(multi: multi && id == runningDevID))
+        }
+        if id == runningDevID {
+            if arguments.contains("--uitest-coder-dormant") {
+                return stateJSON(id: id, name: name, dormant: true)
+            }
+            if arguments.contains("--uitest-coder-workspace-stopped") {
+                return stateJSON(id: id, name: name, dormant: false)
+            }
+        }
+        if id == runningDevID {
+            return runningJSON(id: id, name: name, agents: agentSet(multi: multi))
+        }
+        return stateJSON(id: id, name: name, dormant: false)
+    }
+
+    private static func agentSet(multi: Bool) -> String {
+        multi
+            ? #"{"id":"44444444-4444-4444-8444-444444444444","name":"main","status":"connected"},{"id":"55555555-5555-4555-8555-555555555555","name":"sidecar","status":"connected"}"#
+            : #"{"id":"44444444-4444-4444-8444-444444444444","name":"main","status":"connected"}"#
+    }
+
+    private static func runningJSON(id: String, name: String, agents: String) -> String {
+        #"{"id":"\#(id)","name":"\#(name)","owner_name":"me","dormant_at":null,"latest_build":{"status":"running","transition":"start","resources":[{"agents":[\#(agents)]}]}}"#
+    }
+
+    private static func startingJSON(id: String) -> String {
+        let name = id == runningDevID ? "Running Dev" : "Stopped Old"
+        return #"{"id":"\#(id)","name":"\#(name)","owner_name":"me","dormant_at":null,"latest_build":{"status":"starting","transition":"start","resources":[{"agents":[{"id":"44444444-4444-4444-8444-444444444444","name":"main","status":"connecting"}]}]}}"#
+    }
+
+    private static func stateJSON(id: String, name: String, dormant: Bool) -> String {
+        let dormantAt = dormant ? "\"2026-01-01T00:00:00Z\"" : "null"
+        return #"{"id":"\#(id)","name":"\#(name)","owner_name":"me","dormant_at":\#(dormantAt),"latest_build":{"status":"stopped","transition":"stop","resources":[{"agents":[{"id":"44444444-4444-4444-8444-444444444444","name":"main","status":"disconnected"}]}]}}"#
     }
 }
 

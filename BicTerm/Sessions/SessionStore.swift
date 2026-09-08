@@ -66,6 +66,9 @@ final class SessionStore {
     /// core events, and heartbeat stops. Present in the live default flavor
     /// (CODER_TUNNEL); nil under injected factories and the AppStore flavor.
     let coderLifecycle: CoderLifecycleCoordinator?
+    /// T11: coder connection diagnostics surfaced by the session info sheet
+    /// (network path from the Go event taxonomy, cached server versions).
+    let coderDiagnostics = CoderSessionDiagnostics()
     /// Live terminal surfaces for every attached-or-detached session —
     /// the buffer-preservation layer behind the session switcher.
     let viewCache = TerminalViewCache()
