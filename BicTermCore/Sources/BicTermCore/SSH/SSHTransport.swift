@@ -12,6 +12,10 @@ import NIOSSH
 /// (both with reply tracking). `output` is a FRESH stream per connection;
 /// the previous one is finished on reconnect or `close`.
 ///
+/// Unix-domain-socket dialing (fixture conformance and Coder NoClientAuth
+/// sessions) lives in SSHTransport+UDS.swift and shares the session-establish
+/// tail through `openSessionAndActivate`.
+///
 /// Output buffering policy: the stream holds at most 32 chunks of at most
 /// 32 KiB (≈1 MiB). On overflow the OLDEST queued chunks are dropped
 /// (`.bufferingNewest`) — a slow consumer loses scrollback, never blocks
@@ -23,13 +27,14 @@ import NIOSSH
 public actor SSHTransport {
     public private(set) var output: AsyncStream<Data>
 
-    private let hostKeyVerifier: HostKeyVerifier
+    // Internal (not private) so the UDS entry points in SSHTransport+UDS.swift
+    // can reach them — Swift `private` is file-scoped.
+    let hostKeyVerifier: HostKeyVerifier
     private let authenticationKeyProvider: any SSHAuthenticationKeyProvider
     private let passwordStore: any PasswordStoring
-
     private var outputContinuation: AsyncStream<Data>.Continuation?
     private var group: MultiThreadedEventLoopGroup?
-    private var connectionChannel: (any Channel)?
+    var connectionChannel: (any Channel)?
     private var errorRecorder: TransportErrorRecorder?
     private var sessionChannel: (any Channel)?
     private var sessionHandler: SessionChannelHandler?
@@ -62,15 +67,30 @@ public actor SSHTransport {
 
     public func connect(to connection: Connection, cols: Int, rows: Int) async throws(SSHTransportError) {
         guard cols > 0, rows > 0 else { throw .channelDenied }
-
         await tearDown()
+        let userAuth = try await userAuthDelegate(for: connection)
+        let serverAuth = VerifyingHostKeyDelegate(
+            host: connection.host,
+            port: connection.port,
+            verifier: hostKeyVerifier
+        )
+        try await openSessionAndActivate(
+            SessionSetup(cols: cols, rows: rows, userAuth: userAuth, serverAuth: serverAuth)
+        ) { bootstrap in
+            try await bootstrap
+                .channelOption(ChannelOptions.socket(SocketOptionLevel(IPPROTO_TCP), TCP_NODELAY), value: 1)
+                .connect(host: connection.host, port: connection.port)
+                .get()
+        }
+    }
 
-        // The user-auth delegate is chosen strictly by the connection's
-        // declared method — a password-method endpoint never offers keys and
-        // a key-method endpoint never falls back to passwords. A credential
-        // that cannot be resolved is the typed `.authenticationFailed`,
-        // thrown before any TCP dial.
-        let userAuth: any NIOSSHClientUserAuthenticationDelegate
+    /// Resolves the user-auth delegate strictly from the connection's
+    /// declared method — a password endpoint never offers keys and a key
+    /// endpoint never falls back to passwords. A credential that cannot be
+    /// resolved is the typed `.authenticationFailed`, thrown before any dial.
+    func userAuthDelegate(
+        for connection: Connection
+    ) async throws(SSHTransportError) -> any NIOSSHClientUserAuthenticationDelegate {
         switch connection.authMethod {
         case .publickey:
             let privateKey: NIOSSHPrivateKey
@@ -82,25 +102,45 @@ public actor SSHTransport {
             } catch {
                 throw .authenticationFailed
             }
-            userAuth = SingleKeyUserAuthenticationDelegate(username: connection.username, key: privateKey)
+            return SingleKeyUserAuthenticationDelegate(username: connection.username, key: privateKey)
         case .password:
-            userAuth = PasswordUserAuthenticationDelegate(
+            return PasswordUserAuthenticationDelegate(
                 username: connection.username,
                 password: try await resolvedPassword(forTag: connection.keyReference)
             )
         }
+    }
 
+    /// Inputs for one session-establish run: PTY dimensions plus the resolved
+    /// auth delegates (key/password/none user auth + host-key policy) chosen
+    /// by the public entry point.
+    struct SessionSetup {
+        let cols: Int
+        let rows: Int
+        let userAuth: any NIOSSHClientUserAuthenticationDelegate
+        let serverAuth: any NIOSSHClientServerAuthenticationDelegate
+    }
+
+    /// Dial → SSH handshake → session channel → pty-req → shell. Entry points
+    /// have already validated dimensions, torn down prior state, and resolved
+    /// auth; the `dial` closure owns socket creation (TCP with TCP_NODELAY,
+    /// or UDS) and its errors collapse to the typed `.unreachable` after the
+    /// group is shut down. Everything downstream of the dial — recorder
+    /// wiring, channel-open, agent-forward request, pty/shell replies — is
+    /// shared by every entry point so the paths cannot drift.
+    func openSessionAndActivate(
+        _ setup: SessionSetup,
+        dial: (ClientBootstrap) async throws -> any Channel
+    ) async throws(SSHTransportError) {
+        let cols = setup.cols
+        let rows = setup.rows
+        let userAuth = setup.userAuth
+        let serverAuth = setup.serverAuth
         let group = MultiThreadedEventLoopGroup(numberOfThreads: 1)
         let recorder = TransportErrorRecorder()
-        let serverAuth = VerifyingHostKeyDelegate(
-            host: connection.host,
-            port: connection.port,
-            verifier: hostKeyVerifier
-        )
         let agentInitializer = agentChannelInitializer
 
         let bootstrap = ClientBootstrap(group: group)
-            .channelOption(ChannelOptions.socket(SocketOptionLevel(IPPROTO_TCP), TCP_NODELAY), value: 1)
             .channelInitializer { channel in
                 channel.eventLoop.makeCompletedFuture {
                     try channel.pipeline.syncOperations.addHandler(NIOSSHHandler(
@@ -125,7 +165,7 @@ public actor SSHTransport {
 
         let channel: any Channel
         do {
-            channel = try await bootstrap.connect(host: connection.host, port: connection.port).get()
+            channel = try await dial(bootstrap)
         } catch {
             try? await group.shutdownGracefully()
             throw .unreachable
@@ -173,7 +213,7 @@ public actor SSHTransport {
         // auth-agent-req arrived first. wantReply: false (OpenSSH parity):
         // denial is non-fatal and produces no reply event, so this cannot
         // race the handler's FIFO success/failure tracker below.
-        if agentChannelInitializer != nil {
+        if agentInitializer != nil {
             session.triggerUserOutboundEvent(
                 SSHChannelRequestEvent.AgentForwardingRequest(wantReply: false),
                 promise: nil
@@ -231,45 +271,6 @@ public actor SSHTransport {
         return SSHChannelHandle(channel: channel)
     }
 
-    /// Opens a `direct-tcpip` channel (T9 ProxyJump). The returned channel
-    /// already carries the `SSHChannelData`↔`ByteBuffer` adapter, so a
-    /// nested `NIOSSHHandler` can handshake over it directly.
-    public func openDirectTCPIPChannel(
-        toHost host: String,
-        port: Int
-    ) async throws(SSHTransportError) -> SSHChannelHandle {
-        guard let parent = connectionChannel, parent.isActive else { throw .channelDenied }
-        guard port > 0, port <= Int(UInt16.max) else { throw .channelDenied }
-
-        let originator: SocketAddress
-        do {
-            originator = try SocketAddress(ipAddress: "127.0.0.1", port: 0)
-        } catch {
-            throw .channelDenied
-        }
-        let target = SSHChannelType.DirectTCPIP(
-            targetHost: host,
-            targetPort: port,
-            originatorAddress: originator
-        )
-
-        do {
-            let child = try await openChildChannel(on: parent, type: .directTCPIP(target)) { channel, channelType in
-                guard case .directTCPIP = channelType else {
-                    return channel.eventLoop.makeFailedFuture(SSHTransportError.channelDenied)
-                }
-                return channel.eventLoop.makeCompletedFuture {
-                    try channel.pipeline.syncOperations.addHandler(SSHChannelDataByteBufferWrapper())
-                }
-            }
-            return SSHChannelHandle(channel: child)
-        } catch let error as SSHTransportError {
-            throw error
-        } catch {
-            throw .channelDenied
-        }
-    }
-
     // MARK: - Private
 
     /// Resolves the stored password for a `.password`-method endpoint. Any
@@ -288,8 +289,10 @@ public actor SSHTransport {
 
     /// `createChannel` must run on the connection's EventLoop; everything
     /// stays inside future closures so the explicitly non-Sendable
-    /// `NIOSSHHandler` never crosses an isolation boundary.
-    private func openChildChannel(
+    /// `NIOSSHHandler` never crosses an isolation boundary. Internal (not
+    /// private) so SSHTransport+DirectTCPIP.swift can open `direct-tcpip`
+    /// child channels — Swift `private` is file-scoped.
+    func openChildChannel(
         on parent: any Channel,
         type: SSHChannelType,
         initializer: @escaping @Sendable (any Channel, SSHChannelType) -> EventLoopFuture<Void>
@@ -301,7 +304,7 @@ public actor SSHTransport {
         }.get()
     }
 
-    private func tearDown() async {
+    func tearDown() async {
         outputContinuation?.finish()
         outputContinuation = nil
         sessionHandler = nil

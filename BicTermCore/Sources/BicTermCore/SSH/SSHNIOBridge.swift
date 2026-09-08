@@ -165,6 +165,41 @@ final class PasswordUserAuthenticationDelegate: NIOSSHClientUserAuthenticationDe
     }
 }
 
+/// Coder workspace sessions (spec §11.2): the agent's built-in SSH server is
+/// configured `NoClientAuth: true` — the authenticated tailnet transport is
+/// the authorization boundary, so the client offers the RFC 4252 `none`
+/// method exactly once. The vendored NIOSSH 0.15 fork supports
+/// `NIOSSHUserAuthenticationOffer.Offer.none`, so no dummy-password fallback
+/// is needed. A server that rejects `none` re-invokes the delegate; the
+/// second call fails typed ``SSHTransportError/authenticationFailed`` — coder
+/// sessions NEVER present credentials, so there is nothing to fall back to.
+final class NoClientUserAuthenticationDelegate: NIOSSHClientUserAuthenticationDelegate, @unchecked Sendable {
+    // @unchecked Sendable: invoked only on the connection's EventLoop;
+    // `didOffer` is exclusively mutated there.
+    private let username: String
+    private var didOffer = false
+
+    init(username: String) {
+        self.username = username
+    }
+
+    func nextAuthenticationType(
+        availableMethods: NIOSSHAvailableUserAuthenticationMethods,
+        nextChallengePromise: EventLoopPromise<NIOSSHUserAuthenticationOffer?>
+    ) {
+        guard !didOffer else {
+            nextChallengePromise.fail(SSHTransportError.authenticationFailed)
+            return
+        }
+        didOffer = true
+        nextChallengePromise.succeed(NIOSSHUserAuthenticationOffer(
+            username: username,
+            serviceName: "ssh-connection",
+            offer: .none
+        ))
+    }
+}
+
 // MARK: - Error recorder
 
 /// Terminal handler on the parent connection channel. Records the FIRST

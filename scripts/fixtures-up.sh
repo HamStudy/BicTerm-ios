@@ -95,11 +95,27 @@ else
   disown 2>/dev/null || true
 fi
 
+# UDS forwarder: bridges sshd-uds.sock -> hop1 (127.0.0.1:12222) so T8 UDS
+# dial tests can reach the fixture sshd with key auth. Bridge unlinks a stale
+# socket path before binding and removes it on exit.
+UDS_PIDFILE="$RUN/uds_forward.pid"
+UDS_SOCK="$RUN/sshd-uds.sock"
+if [ -f "$UDS_PIDFILE" ] && kill -0 "$(cat "$UDS_PIDFILE")" 2>/dev/null; then
+  : # already running
+else
+  rm -f "$UDS_PIDFILE"
+  nohup python3 "$FIX/bin/uds-forward.py" --socket "$UDS_SOCK" --target 127.0.0.1:12222 \
+    </dev/null >>"$RUN/uds_forward.log" 2>&1 &
+  echo $! > "$UDS_PIDFILE"
+  disown 2>/dev/null || true
+fi
+
 # pids manifest (for fixtures-down.sh)
 {
   cat "$RUN/hop1.pid" 2>/dev/null
   cat "$RUN/hop2.pid" 2>/dev/null
   cat "$STUB_PIDFILE" 2>/dev/null
+  cat "$UDS_PIDFILE" 2>/dev/null
 } > "$RUN/pids"
 
 # ---- 5. Wait for ports -------------------------------------------------------
@@ -115,6 +131,23 @@ wait_port() { # wait_port <port> <name>
 wait_port 12222 hop1
 wait_port 12223 hop2
 wait_port 18080 coder-stub
+
+# Wait for the UDS forwarder to accept connections on its socket path.
+UDS_SOCK="$RUN/sshd-uds.sock"
+uds_ready=0
+for _ in $(seq 1 150); do
+  if python3 -c 'import socket, sys
+s = socket.socket(socket.AF_UNIX)
+s.settimeout(1)
+s.connect(sys.argv[1])' "$UDS_SOCK" 2>/dev/null; then
+    uds_ready=1; break
+  fi
+  sleep 0.1
+done
+if [ "$uds_ready" != "1" ]; then
+  echo "FAIL: UDS forwarder did not accept on $UDS_SOCK within 15s"
+  exit 1
+fi
 
 # ---- 6. ssh -J wrapper (macOS quirk; see Fixtures/README.md) -----------------
 mkdir -p "$RUN/bin"
@@ -163,6 +196,15 @@ check "hop1 direct ssh prints bicterm-ok" "bicterm-ok" "$out"
 out=$(PATH="$RUN/bin:$PATH" ssh $SSH_OPTS -J "$WHO@127.0.0.1:12222" \
   -i "$KEYS/bicterm-fixture-ed25519" -p 12223 "$WHO@127.0.0.1" 'printf hop-ok' </dev/null 2>/dev/null)
 check "two-hop ssh -J prints hop-ok" "hop-ok" "$out"
+
+# The UDS forwarder must carry a full SSH session from socket entry to hop1.
+out=$(/usr/bin/ssh $SSH_OPTS -o BatchMode=yes -i "$KEYS/bicterm-fixture-ed25519" \
+  -p 22 -o "ProxyCommand=/usr/bin/nc -U $UDS_SOCK" "$WHO@coder-uds.invalid" \
+  'printf bicterm-uds-ok' </dev/null 2>/dev/null)
+check "UDS-bridged ssh prints bicterm-uds-ok" "bicterm-uds-ok" "$out"
+
+perms=$(stat -f %Lp "$UDS_SOCK" 2>/dev/null)
+check "UDS socket permissions are 600" "600" "$perms"
 
 code=$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:18080/api/v2/workspaces?q=owner:me")
 check "coder stub rejects missing token (401)" "401" "$code"

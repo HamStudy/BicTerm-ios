@@ -20,6 +20,8 @@ kill_pidfile() { # kill_pidfile <pidfile> <name>
 kill_pidfile "$RUN/hop1.pid" hop1
 kill_pidfile "$RUN/hop2.pid" hop2
 kill_pidfile "$RUN/coder_stub.pid" coder-stub
+kill_pidfile "$RUN/uds_forward.pid" uds-forwarder
+rm -f "$RUN/sshd-uds.sock"
 
 # Belt-and-suspenders: kill anything still bound to fixture ports.
 for port in 12222 12223 18080; do
