@@ -68,7 +68,11 @@ BicTerm (iOS app)
 # Prerequisites: Xcode 26+, iOS 26.3 simulator runtime
 xcodegen generate
 open BicTerm.xcodeproj
-# Build with scheme BicTerm, destination iPhone 17 Pro or iPad Pro 13-inch (M5)
+# Default (open-source) flavor: scheme BicTerm, destination iPhone 17 Pro
+# or iPad Pro 13-inch (M5). Requires the tunnel core:
+scripts/build-coder-net.sh   # builds .build-artifacts/coder-net/CoderNet.xcframework (AGPL)
+# AppStore flavor (no AGPL code, no tunnel): script wrapper, scheme BicTerm-AppStore
+scripts/build-appstore.sh    # AppStore-Release by default; pass AppStore-Debug to debug
 ```
 
 ## Testing
@@ -97,6 +101,19 @@ See [DEPENDENCIES.md](DEPENDENCIES.md) for the full license inventory.
 ## License
 
 TBD — not yet licensed. All rights reserved until decided.
+
+**Dual-build licensing note (phase 2, task 7):** BicTerm ships in two build flavors.
+
+- The **default flavor** (scheme `BicTerm`, configurations `Debug`/`Release`) links the
+  Coder tailnet-tunnel Go core (`CoderNet.xcframework`, built from `CoderNet/` on top of
+  coder/coder v2.36.4). Because that core is AGPL-3.0, default-flavor binaries are
+  AGPL-3.0 binaries — fine for open-source distribution.
+- The **AppStore flavor** (scheme `BicTerm-AppStore`, configurations
+  `AppStore-Debug`/`AppStore-Release`, built via `scripts/build-appstore.sh`) contains
+  **no AGPL code at all**: the `CoderTunnel` framework target and the `CODER_TUNNEL`
+  compilation flag are excluded, coder connections use the direct-SSH path, and a
+  three-layer audit (build-system / bundle+`otool` / `strings` symbol sweep) proves the
+  exclusion each release. See `CoderNet/LICENSE-AGPL-NOTICE.md` and `Docs/SECURITY.md`.
 
 ## Disclaimer
 

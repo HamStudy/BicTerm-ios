@@ -42,16 +42,8 @@ final class AppServices {
         let deferredSSH = DeferredTransportFactory(protocolID: ProtocolDescriptor.ssh.id)
         registry.register(ProtocolDescriptor.ssh, factory: deferredSSH)
 
-        let coder = ProtocolDescriptor(
-            id: "coder",
-            displayName: "Coder",
-            supportsAgentForwarding: false,
-            supportsJumpChain: false,
-            supportsRoamingResume: false,
-            requiresServerComponent: true,
-            defaultPort: 443,
-            keyAlgorithmsAccepted: ["ssh-ed25519"],
-            resumeStrategy: .rehandshake
+        let coder = ProtocolDescriptor.coder(
+            supportsTailnetTunnel: BuildFlavor.coderTailnetTunnelSupported
         )
         registry.register(coder, factory: DeferredTransportFactory(protocolID: coder.id))
 

@@ -20,6 +20,14 @@ public struct ProtocolDescriptor: Equatable, Sendable {
     public let keyAlgorithmsAccepted: [String]
     public let resumeStrategy: ResumeStrategy
 
+    /// Whether this build ships the AGPL CoderNet tailnet tunnel core.
+    /// Injected from the build flavor (`CODER_TUNNEL` compilation condition)
+    /// at registration time — never hardcoded here: AppStore configurations
+    /// exclude the Go core from the binary and MUST report `false` so coder
+    /// connections fall back to the direct-SSH path. Defaults to `false` so
+    /// a call site that forgets the flag cannot silently claim support.
+    public let supportsTailnetTunnel: Bool
+
     public init(
         id: String,
         displayName: String,
@@ -29,7 +37,8 @@ public struct ProtocolDescriptor: Equatable, Sendable {
         requiresServerComponent: Bool,
         defaultPort: Int,
         keyAlgorithmsAccepted: [String],
-        resumeStrategy: ResumeStrategy
+        resumeStrategy: ResumeStrategy,
+        supportsTailnetTunnel: Bool = false
     ) {
         self.id = id
         self.displayName = displayName
@@ -40,6 +49,7 @@ public struct ProtocolDescriptor: Equatable, Sendable {
         self.defaultPort = defaultPort
         self.keyAlgorithmsAccepted = keyAlgorithmsAccepted
         self.resumeStrategy = resumeStrategy
+        self.supportsTailnetTunnel = supportsTailnetTunnel
     }
 }
 
@@ -56,6 +66,26 @@ extension ProtocolDescriptor {
         requiresServerComponent: false,
         defaultPort: 22,
         keyAlgorithmsAccepted: ["ssh-ed25519", "ecdsa-sha2-nistp256"],
-        resumeStrategy: .rehandshake
+        resumeStrategy: .rehandshake,
+        supportsTailnetTunnel: false
     )
+
+    /// Coder workspaces via the REST API + agent connection. The tunnel
+    /// capability is a parameter, not a constant: default (open-source)
+    /// builds pass `true`, AppStore builds pass `false` and fall back to
+    /// direct SSH against the workspace's routable address.
+    public static func coder(supportsTailnetTunnel: Bool) -> ProtocolDescriptor {
+        ProtocolDescriptor(
+            id: "coder",
+            displayName: "Coder",
+            supportsAgentForwarding: false,
+            supportsJumpChain: false,
+            supportsRoamingResume: false,
+            requiresServerComponent: true,
+            defaultPort: 443,
+            keyAlgorithmsAccepted: ["ssh-ed25519"],
+            resumeStrategy: .rehandshake,
+            supportsTailnetTunnel: supportsTailnetTunnel
+        )
+    }
 }

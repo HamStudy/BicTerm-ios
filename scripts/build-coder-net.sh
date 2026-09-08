@@ -19,6 +19,8 @@ go build -buildmode=c-archive -o "$OUT/device/CoderNet.a" .
 
 # c-archive emits its header next to the archive; xcframework wants a headers dir.
 cp "$OUT/device/CoderNet.h" "$OUT/device/include/"
+# Clang module map so Swift can `import CoderNet` (G7/T7 isolation layer).
+printf 'module CoderNet {\n    header "CoderNet.h"\n    export *\n}\n' > "$OUT/device/include/module.modulemap"
 
 # Simulator slice
 CC=$(xcrun --sdk iphonesimulator --find clang) \
@@ -29,8 +31,10 @@ CGO_LDFLAGS="-isysroot $SIM_SDK -arch arm64 -mios-simulator-version-min=18.0" \
 go build -buildmode=c-archive -o "$OUT/simulator/CoderNet.a" .
 
 cp "$OUT/simulator/CoderNet.h" "$OUT/simulator/include/"
+printf 'module CoderNet {\n    header "CoderNet.h"\n    export *\n}\n' > "$OUT/simulator/include/module.modulemap"
 
-# Assemble XCFramework
+# Assemble XCFramework (xcodebuild -create-xcframework refuses to overwrite).
+rm -rf "$OUT/CoderNet.xcframework"
 xcodebuild -create-xcframework \
   -library "$OUT/device/CoderNet.a" -headers "$OUT/device/include" \
   -library "$OUT/simulator/CoderNet.a" -headers "$OUT/simulator/include" \

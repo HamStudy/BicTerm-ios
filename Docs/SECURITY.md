@@ -95,3 +95,65 @@ sandbox-tmp literal.
 - All agent-controlled outputs — DerivedData, evidence logs, socket files,
   scratch — stay repo-local (`.build-artifacts/`, `.sisyphus/evidence/`,
   `Fixtures/run/`).
+
+## Build isolation: AGPL tunnel core vs App Store flavor
+
+Phase 2, task 7 (2026-09-07). BicTerm builds in two flavors from one Xcode
+project (`project.yml`, xcodegen):
+
+| | Default flavor | AppStore flavor |
+|---|---|---|
+| Scheme | `BicTerm` | `BicTerm-AppStore` |
+| Configurations | `Debug`, `Release` | `AppStore-Debug`, `AppStore-Release` |
+| `CODER_TUNNEL` Swift flag | set on app + test targets | absent everywhere |
+| `CoderTunnel` target | built and statically linked | never built (not in the scheme) |
+| Coder tailnet tunnel | shipped (AGPL-3.0 Go core) | absent; coder connections use direct SSH |
+
+### Why a framework target and not a library import
+
+`CoderNet.xcframework` statically fuses AGPL-3.0-licensed code
+(coder/coder v2.36.4 `codersdk`/`workspacesdk` plus the coder fork graph).
+The boundary for that code is exactly one framework target:
+
+- `CoderTunnel` (Xcode target, `MACH_O_TYPE=staticlib`) — contains
+  `CoderNetTunnel: CoderTunneling`, the only Swift code that imports the
+  `CoderNet` Clang module. It links the xcframework's per-slice
+  `CoderNet.a` and nothing else foreign.
+- `BicTermCore` — defines `CoderTunneling` (pure Swift, no imports beyond
+  Foundation) and carries `ProtocolDescriptor.supportsTailnetTunnel`,
+  injected at registration from the build flavor. BicTermCore itself stays
+  permissive-license clean and builds identically in both flavors.
+- The app links `CoderTunnel` only when compiled for `Debug`/`Release`
+  (per-config `-framework CoderTunnel` + `-lresolv`) and reads the flavor
+  through `BuildFlavor.coderTailnetTunnelSupported` (`#if CODER_TUNNEL`).
+
+### Three-layer audit (run per release, both flavors)
+
+Symbol stripping could hide a leak, so all three layers are mandatory:
+
+1. **Build-system proof** — the AppStore scheme's build action never lists
+   `CoderTunnel` (`xcodebuild -list` scheme matrix + the AppStore build log
+   contains zero `CoderTunnel` task lines).
+2. **Bundle proof** — the AppStore `.app` tree contains no
+   `CoderTunnel`/`CoderNet` framework or dylib, and `otool -L` on the app
+   binary shows no CoderTunnel load command.
+3. **Symbol sweep** — `strings` over every Mach-O file in the AppStore
+   bundle finds zero `CoderNet`/`workspacesdk` matches; the default-flavor
+   build shows positive matches (proving the sweep detects the code when
+   present).
+
+Logs: `.sisyphus/evidence/phase2-g7-appstore-audit.log` and
+`.sisyphus/evidence/phase2-g7-default-audit.log`.
+
+### Invariants that keep the flavors honest
+
+- No runtime download of the tunnel: it is build-time linked or absent.
+- No user-facing tunnel claim in the AppStore flavor: the capability is
+  compile-gated, not UI-hidden (`BuildFlavorTests` asserts both directions
+  against the `AppServices` registered descriptor).
+- `-force_load` is deliberately NOT used on the merged static archive: Xcode
+  merges the SwiftPM product objects into `CoderTunnel.a` for a staticlib
+  framework, and wholesale extraction double-defines them. On-demand
+  archive extraction keeps those members dormant so each module resolves
+  exactly once; the app's metatype reference to `CoderNetTunnel.self`
+  provides the demand edge.

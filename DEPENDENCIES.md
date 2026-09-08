@@ -1,8 +1,13 @@
 # DEPENDENCIES.md — BicTerm dependency & license inventory
 
-Review date: 2026-09-03 (task T3 key layer); amended 2026-09-04 (task T8 vendored swift-nio-ssh fork)
-Policy: App Store distribution requires GPL/LGPL-free dependencies.
-All entries below use permissive Apache-2.0, MIT, ISC, or BSD-3-Clause licenses — **verdict: GO**.
+Review date: 2026-09-03 (task T3 key layer); amended 2026-09-04 (task T8 vendored swift-nio-ssh fork); amended 2026-09-07 (phase-2 task 7 dual-build isolation)
+Policy: App Store distribution requires GPL/LGPL-free dependencies. Two build flavors now exist (phase-2 task 7):
+- **Default flavor** (schemes/configs `BicTerm` + `Debug`/`Release`): everything below INCLUDING the
+  copyleft section. Distributed as AGPL-3.0 binaries.
+- **AppStore flavor** (scheme `BicTerm-AppStore`, configs `AppStore-Debug`/`AppStore-Release`):
+  everything below EXCLUDING the copyleft section. All remaining entries use permissive
+  Apache-2.0, MIT, ISC, or BSD-3-Clause licenses — **AppStore-flavor verdict: GO**; three-layer
+  binary audit per build in `.sisyphus/evidence/phase2-g7-*-audit.log` proves the exclusion.
 
 ## Direct dependencies (pinned exact)
 
@@ -27,6 +32,19 @@ SSHMessages.swift:905-906, which kills the connection).
 | OpenSSH portable `bcrypt_pbkdf.c` | `7fe3b24c922b7af2d743737f7cf37df61ea06426` | ISC | https://github.com/openssh/openssh-portable | Adapted to CommonCrypto SHA-512 in `CBcryptPBKDF`; original notice retained |
 | OpenSSH portable `blowfish.c` / `blf.h` | `7fe3b24c922b7af2d743737f7cf37df61ea06426` | BSD-3-Clause | https://github.com/openssh/openssh-portable | bcrypt PBKDF support only; original notices retained |
 
+## Copyleft section — EXCLUDED from the AppStore flavor at build time
+
+These dependencies build into `.build-artifacts/coder-net/CoderNet.xcframework` via
+`scripts/build-coder-net.sh` (gitignored artifact; the build script is the pinned source of
+truth). The `CoderTunnel` framework target wraps the archive; `project.yml` links it only for
+`Debug`/`Release` configs under `CODER_TUNNEL=1`, and the target is absent from the
+`BicTerm-AppStore` scheme entirely. See `CoderNet/LICENSE-AGPL-NOTICE.md` and `Docs/SECURITY.md`.
+
+| Name | Pinned version | License | Source | Notes |
+|---|---|---|---|---|
+| coder/coder v2 (`codersdk`, `codersdk/workspacesdk`) | v2.36.4 (module `github.com/coder/coder/v2`) | AGPL-3.0 | https://github.com/coder/coder | Drives the workspace-agent tailnet tunnel. Statically fused into CoderNet.a — any binary containing it is AGPL-3.0-governed, hence AppStore exclusion. |
+| coder/coder fork graph (`coder/tailscale`, `coder/wireguard-go`, `coder/gvisor`, `coder/kcp-go`, `coder/ssh`, `coder/pq`, `coder/glog`, `coder/anthropic-sdk-go`, `coder/trivy`, `coder/openai-go/v3`, `coder/fantasy`, `coder/bubbletea`, `coder/terraform-config-inspect`, `coder/go-scim`, `coder/go-httpstat`, plus `kylecarbs/*` and `dannykopping/*` fork pins) | per `CoderNet/go.mod` `replace` block (verbatim from coder/coder v2.36.4 go.mod) | BSD-3-Clause / ISC / Apache-2.0 upstreams; shipped fused with the AGPL module | see `CoderNet/go.mod` | Forks retain upstream licenses but are inseparable from the AGPL binary artifact — excluded from the AppStore flavor together. Module list kept inline by reference to `go.mod` to avoid drift. |
+
 ## Transitive dependencies (as resolved; see Package.resolved / workspace state)
 
 | Name | Resolved version | License | Source |
@@ -50,4 +68,7 @@ Notes:
 - SwiftTerm 1.20.0 compiles Metal shaders; Xcode 26 requires the on-demand
   Metal Toolchain (`xcodebuild -downloadComponent MetalToolchain`) — installed 2026-09-04.
 
-**Verdict: GO** — all licenses are permissive, App-Store compatible, and GPL/LGPL-free.
+**Verdict: dual-GO** — the AppStore flavor (scheme `BicTerm-AppStore`) is permissive-only and
+App-Store compatible (GO); the default flavor (scheme `BicTerm`) additionally contains the
+copyleft section and is distributed as an AGPL-3.0 binary (GO for open source, NOT for App
+Store). GPL/LGPL/LGPL-style weak-copyleft: zero occurrences in either flavor.
