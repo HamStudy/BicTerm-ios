@@ -777,7 +777,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 0.1.0;
-				OTHER_LDFLAGS = "$(inherited) -framework CoderTunnel -lresolv";
+				OTHER_LDFLAGS = "$(inherited) -framework CoderTunnel -lresolv -u _CoderNetVersion";
 				PRODUCT_BUNDLE_IDENTIFIER = com.bicterm.app;
 				SDKROOT = iphoneos;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) CODER_TUNNEL";
@@ -950,7 +950,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 0.1.0;
-				OTHER_LDFLAGS = "$(inherited) -framework CoderTunnel -lresolv";
+				OTHER_LDFLAGS = "$(inherited) -framework CoderTunnel -lresolv -u _CoderNetVersion";
 				PRODUCT_BUNDLE_IDENTIFIER = com.bicterm.app;
 				SDKROOT = iphoneos;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) CODER_TUNNEL";

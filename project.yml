@@ -59,14 +59,17 @@ targets:
       configs:
         Debug:
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) CODER_TUNNEL"
-          # -lresolv: Go cgo DNS resolver (_res_9_ninit/_res_9_nclose). No
-          # force_load: on-demand archive extraction keeps the merged SPM
-          # members dormant, so BicTermCore/NIO symbols resolve exactly once.
-          OTHER_LDFLAGS: "$(inherited) -framework CoderTunnel -lresolv"
+          # -lresolv: Go cgo DNS resolver (_res_9_ninit/_res_9_nclose).
+          # -u _CoderNetVersion: forces the archiver to extract the Go bridge
+          # object into the final link regardless of Swift-side DCE of the
+          # CoderNetTunnel metatype touch. NOT -force_load/-all_load: Xcode
+          # merges the SwiftPM product objects into CoderTunnel.a, and
+          # wholesale extraction double-defines BicTermCore/NIO symbols.
+          OTHER_LDFLAGS: "$(inherited) -framework CoderTunnel -lresolv -u _CoderNetVersion"
           FRAMEWORK_SEARCH_PATHS: "$(inherited) $(BUILT_PRODUCTS_DIR)"
         Release:
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) CODER_TUNNEL"
-          OTHER_LDFLAGS: "$(inherited) -framework CoderTunnel -lresolv"
+          OTHER_LDFLAGS: "$(inherited) -framework CoderTunnel -lresolv -u _CoderNetVersion"
           FRAMEWORK_SEARCH_PATHS: "$(inherited) $(BUILT_PRODUCTS_DIR)"
     dependencies:
       - package: BicTermCore
