@@ -93,6 +93,7 @@ enum CoderStartFailure: Error, Equatable {
     case unauthorized
     case serverUnreachable
     case workspaceMissing
+    case workspaceDormant
     case startRejected(statusCode: Int)
     case parameterMismatch
     case buildFailed(status: String)
@@ -106,6 +107,7 @@ enum CoderStartFailure: Error, Equatable {
         case .unauthorized: "Authentication required"
         case .serverUnreachable: "Coder server unreachable"
         case .workspaceMissing: "Workspace not found"
+        case .workspaceDormant: "Workspace is dormant"
         case .startRejected: "Start request rejected"
         case .parameterMismatch: "Startup parameters required"
         case .buildFailed: "Workspace build failed"
@@ -124,6 +126,8 @@ enum CoderStartFailure: Error, Equatable {
             "The Coder server could not be reached. Check the network and try again."
         case .workspaceMissing:
             "This workspace no longer exists on the server. Edit or delete the connection."
+        case .workspaceDormant:
+            "Reactivate this workspace in the Coder dashboard, then connect again. BicTerm did not send a start request."
         case .startRejected(let statusCode):
             "The server rejected the start request (HTTP \(statusCode)). No build was created."
         case .parameterMismatch:
@@ -240,6 +244,16 @@ final class CoderWorkspaceStarter {
         agentID: UUID?
     ) async -> CoderStartFailure? {
         reset()
+        do {
+            let detail = try await fetchWorkspace(server: server, token: token, workspaceID: workspaceID)
+            if detail.isDormant {
+                phase = .failed(.workspaceDormant)
+                return .workspaceDormant
+            }
+        } catch let failure {
+            phase = .failed(failure)
+            return failure
+        }
         appendLog("checking startup parameters")
         phase = .checkingParameters
         if await autostartBlocked(server: server, token: token, workspaceID: workspaceID) {
