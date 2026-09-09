@@ -28,6 +28,7 @@
 		3E38F1AC7F803DAF9D0A0C53 /* ConnectionListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81441524708395D7D99F5371 /* ConnectionListView.swift */; };
 		4A45D7D97DCA09FAAF2B2948 /* AppearanceRegressionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65A141C1EDE720FBAB0B6BE1 /* AppearanceRegressionTests.swift */; };
 		51E792A786CB5200490020E0 /* CoderEditorFocusUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6ACEEB6913BB0CF5ABB6205 /* CoderEditorFocusUITests.swift */; };
+		526F62FB7075A9FB26CA6730 /* CoderNativeStartAcceptanceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D715A7DFEB3038DD0CD44AF0 /* CoderNativeStartAcceptanceTests.swift */; };
 		534658093132B1393471C151 /* CoderServersListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55C4A32486AD36AF87D26E95 /* CoderServersListView.swift */; };
 		5672839E124E656D01A53B13 /* SessionScenesUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CDBD24515C3D13084296F43 /* SessionScenesUITests.swift */; };
 		5899C6839CA64B474A14181E /* BicTermCore in Frameworks */ = {isa = PBXBuildFile; productRef = 5EF7E11A85EA166875A298AB /* BicTermCore */; };
@@ -175,6 +176,7 @@
 		D1E6A7AFDAEAA36EA41A9CA4 /* ConnectionListContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionListContainer.swift; sourceTree = "<group>"; };
 		D33C2C2243BFF07FBCBAE9B4 /* CoderWorkspaceConnectionModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoderWorkspaceConnectionModel.swift; sourceTree = "<group>"; };
 		D54E86DC16E786DEBA885A18 /* CoderAgentPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoderAgentPickerView.swift; sourceTree = "<group>"; };
+		D715A7DFEB3038DD0CD44AF0 /* CoderNativeStartAcceptanceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoderNativeStartAcceptanceTests.swift; sourceTree = "<group>"; };
 		DA5CD19F0365C45C630C3747 /* AgentApprovalPresenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentApprovalPresenter.swift; sourceTree = "<group>"; };
 		DBD8FFB5DA9FCC86FC262784 /* WindowRelaunchUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowRelaunchUITests.swift; sourceTree = "<group>"; };
 		E20F350306A27C4DDBF8F31F /* CoderNet.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = CoderNet.xcframework; path = ".build-artifacts/coder-net/CoderNet.xcframework"; sourceTree = "<group>"; };
@@ -376,6 +378,7 @@
 				0746BFF2E488F243F50E0AAA /* AgentApprovalFlowTests.swift */,
 				65A141C1EDE720FBAB0B6BE1 /* AppearanceRegressionTests.swift */,
 				2CA12AC5326AC0D61660DFA8 /* BuildFlavorTests.swift */,
+				D715A7DFEB3038DD0CD44AF0 /* CoderNativeStartAcceptanceTests.swift */,
 				2021A3E870796F577B2977B9 /* CoderServerDraftTests.swift */,
 				4D5FC5927F4134FE3ED24B6E /* CoderServersModelTests.swift */,
 				C96EDEAE2B81A1208C5D6987 /* CoderStartPolicyTests.swift */,
@@ -573,6 +576,7 @@
 				AE1EF5FE88AF38169C4DD554 /* AgentApprovalFlowTests.swift in Sources */,
 				4A45D7D97DCA09FAAF2B2948 /* AppearanceRegressionTests.swift in Sources */,
 				BC6DA94E2FF97089695962DA /* BuildFlavorTests.swift in Sources */,
+				526F62FB7075A9FB26CA6730 /* CoderNativeStartAcceptanceTests.swift in Sources */,
 				6B407211A6E7D8DC950253D8 /* CoderServerDraftTests.swift in Sources */,
 				F0C1BB372E98C6C60F78E20B /* CoderServersModelTests.swift in Sources */,
 				9ADA2273199A30AF8983F9DC /* CoderStartPolicyTests.swift in Sources */,

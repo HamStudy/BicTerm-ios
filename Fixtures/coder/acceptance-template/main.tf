@@ -58,8 +58,9 @@ locals {
       printf 'export CODER_AGENT_TOKEN=%q\n' "$G12_TOKEN"
       printf 'export HOME=%q ZDOTDIR=%q TMPDIR=%q\n' "$G12_BASE/home" "$G12_BASE/home" "$G12_BASE/tmp"
       printf 'exec /Users/richard/code/BicTerm/Fixtures/run/coder-bin/coder agent\n'
-    } > "$G12_BASE/$G12_NAME.sh"
-    chmod 700 "$G12_BASE/$G12_NAME.sh"
+    } > "$G12_BASE/$G12_NAME.sh.tmp"
+    chmod 700 "$G12_BASE/$G12_NAME.sh.tmp"
+    mv "$G12_BASE/$G12_NAME.sh.tmp" "$G12_BASE/$G12_NAME.sh"
   EOT
 }
 

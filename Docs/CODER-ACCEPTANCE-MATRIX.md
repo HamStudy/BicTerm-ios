@@ -4,8 +4,8 @@ Gate: INCOMPLETE. FAIL includes unverified requirements.
 
 Latest evidence: `.sisyphus/evidence/phase2-g12-final-progress-brief.md` records
 green full UI regressions and additional native protocol execution. There are
-19 PASS, 3 NOT-LOCAL and 12 FAIL rows. Native authentication, permission and
-current-build agent selection are verified; remaining rows still block approval.
+22 PASS, 3 NOT-LOCAL and 9 FAIL rows. Native authentication, selection and
+start/recheck behavior are verified; remaining rows still block approval.
 
 This is a blocked-gate inventory, not a compatibility declaration. The 34
 normative rows below are generated directly from the read-only spec section
@@ -97,11 +97,11 @@ and task 12, line 465. They are not optional live-deployment work.
 |---|---|
 | Stopped workspace, start disabled | No start POST occurs. |
 
-- Status: FAIL
-- Command: `ruby scripts/verify-coder-matrix.rb --gate`
-- Evidence: `.sisyphus/evidence/phase2-g12-gate-brief.md`
+- Status: PASS
+- Command: `DEST_OVERRIDE='platform=iOS Simulator,id=732CE8E1-F9EF-4020-BF93-5BA1AA365B0E' DERIVED_DATA="$PWD/.build-artifacts/DerivedData/g12-core" ONLY_TESTING='BicTermCoreTests/CoderNativeStartPolicyAcceptanceTests' EVIDENCE_LOG='.sisyphus/evidence/phase2-g12-b-start-disabled.log' scripts/test-core.sh`
+- Evidence: `.sisyphus/evidence/phase2-g12-b-start-disabled.log`
 - Reason: -
-- Detail: Coder agent-selection UI start-policy coverage passed with DEBUG fixtures. No T6 request ledger proving zero start POSTs was captured in this session.
+- Detail: The native bicterm-stopped workspace is confirmed stopped. Connecting with coder.startPolicy=false returns reconnectRequired, and the real HTTP ledger contains only GET requests (zero mutations/start POSTs). The already-verified UI policy guard remains unchanged.
 
 ### A08
 
@@ -109,11 +109,11 @@ and task 12, line 465. They are not optional live-deployment work.
 |---|---|
 | Stopped workspace, start explicitly enabled | One accepted start; build followed to the correct current agent. |
 
-- Status: FAIL
-- Command: `ruby scripts/verify-coder-matrix.rb --gate`
-- Evidence: `.sisyphus/evidence/phase2-g12-gate-brief.md`
+- Status: PASS
+- Command: `bash scripts/test-coder-start.sh`
+- Evidence: `.sisyphus/evidence/phase2-g12-b-start-native.log`
 - Reason: -
-- Detail: DEBUG fixture start-policy coverage passed; one accepted real start followed to its current agent was not executed and counted against T6.
+- Detail: CoderWorkspaceStarter starts a real stopped acceptance workspace. Its request ledger asserts exactly one POST returning 201, follows the build and agent to ready, and verifies the connected agent ID differs from the prior stopped generation. A repository-local watcher launches the regenerated native agent script without issuing another build mutation.
 
 ### A09
 
@@ -121,11 +121,11 @@ and task 12, line 465. They are not optional live-deployment work.
 |---|---|
 | Start POST response lost | State rechecked before retry; no duplicate blind mutation. |
 
-- Status: FAIL
-- Command: `ruby scripts/verify-coder-matrix.rb --gate`
-- Evidence: `.sisyphus/evidence/phase2-g12-gate-brief.md`
+- Status: PASS
+- Command: `bash scripts/test-coder-start.sh`
+- Evidence: `.sisyphus/evidence/phase2-g12-b-start-native.log`
 - Reason: -
-- Detail: Start-response-loss injection and subsequent authoritative-state recheck were not executed. A successful normal start is not evidence for this outcome.
+- Detail: The loader forwards the real native start POST, observes acceptance (201), then injects response loss at the network boundary. The next request must be an authoritative GET of that workspace. The complete ledger asserts exactly one POST, zero duplicate mutations, and successful readiness of the new agent.
 
 ### A10
 

@@ -1,0 +1,4 @@
+WATCHER_READY
+AGENT_STARTED g12-start-explicit/main.sh
+AGENT_STARTED g12-start-lost/main.sh
+WATCHER_STOPPED

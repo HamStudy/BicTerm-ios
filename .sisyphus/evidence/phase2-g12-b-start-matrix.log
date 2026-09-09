@@ -1,0 +1,10 @@
+Matrix structure verified: 34 verbatim rows; PASS=22, FAIL=9, NOT-LOCAL=3. Evidence existence is not proof of acceptance.
+Run options: --seed 1
+
+# Running:
+
+.........
+
+Finished in 0.475169s, 18.9406 runs/s, 21.0451 assertions/s.
+
+9 runs, 10 assertions, 0 failures, 0 errors, 0 skips
