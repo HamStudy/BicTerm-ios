@@ -1,0 +1,3 @@
+COORDINATOR resume_present=false injected=false status=101
+CONTROL_RESET closed coordinator sockets only
+COORDINATOR resume_present=true injected=false status=101
