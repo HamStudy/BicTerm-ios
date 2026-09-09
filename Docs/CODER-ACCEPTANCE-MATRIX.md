@@ -4,8 +4,8 @@ Gate: INCOMPLETE. FAIL includes unverified requirements.
 
 Latest evidence: `.sisyphus/evidence/phase2-g12-final-progress-brief.md` records
 green full UI regressions and additional native protocol execution. There are
-24 PASS, 3 NOT-LOCAL and 7 FAIL rows. Native startup policy and script
-failure/timeout handling are verified; remaining rows still block approval.
+26 PASS, 3 NOT-LOCAL and 5 FAIL rows. Native lifecycle gates, startup policy,
+script failures, and concurrent user isolation are verified; remaining rows block approval.
 
 This is a blocked-gate inventory, not a compatibility declaration. The 34
 normative rows below are generated directly from the read-only spec section
@@ -133,11 +133,11 @@ and task 12, line 465. They are not optional live-deployment work.
 |---|---|
 | Dormant workspace or parameter mismatch | Explicit lifecycle/parameter action required; no silent changes. |
 
-- Status: FAIL
-- Command: `ruby scripts/verify-coder-matrix.rb --gate`
-- Evidence: `.sisyphus/evidence/phase2-g12-gate-brief.md`
+- Status: PASS
+- Command: `bash scripts/test-coder-actions.sh`
+- Evidence: `.sisyphus/evidence/phase2-g12-b-actions-green.log`
 - Reason: -
-- Detail: Neither a dormant native workspace nor a template-parameter mismatch was exercised. These remain locally runnable acceptance gaps, not NOT-LOCAL items.
+- Detail: Real dormant and required-parameter-mismatch workspaces both return explicit action instructions with GET-only ledgers, zero start POSTs, and unchanged workspace detail. The native red run proved an unguarded start POST clears dormancy; the starter now refuses after a fresh workspace read. See phase2-g12-b-actions-brief.md for fixture setup, red/green evidence, and passing start/recheck regressions. Existing UI views remain unchanged.
 
 ### A11
 
@@ -397,11 +397,11 @@ and task 12, line 465. They are not optional live-deployment work.
 |---|---|
 | Concurrent distinct profiles/users | No credential or peer-connection cross-contamination. |
 
-- Status: FAIL
-- Command: `ruby scripts/verify-coder-matrix.rb --gate`
-- Evidence: `.sisyphus/evidence/phase2-g12-gate-brief.md`
+- Status: PASS
+- Command: `bash scripts/test-coder-profiles.sh`
+- Evidence: `.sisyphus/evidence/phase2-g12-b-profile-native.log`
 - Reason: -
-- Detail: Generation-isolation unit tests passed. Concurrent live profiles belonging to distinct users were not created; cross-user peer isolation remains unverified.
+- Detail: Two distinct non-administrator users each have native access to their own agent and receive 404 for the other user's agent. Two CoderTransport instances connect concurrently through the production C bridge in one process, return only their own agent-provided workspace values, and closing the first leaves the second usable. See phase2-g12-b-profiles-brief.md and phase2-g12-b-profile-tests.log. No production transport change was required.
 
 ### A33
 

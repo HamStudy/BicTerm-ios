@@ -1,7 +1,7 @@
 # T12 protocol acceptance checkpoint — INCOMPLETE
 
-Latest status: **PASS=24, FAIL=7, NOT-LOCAL=3**. Batch A closed A31;
-Batch B has closed A02-A09 and A11-A12. The checkpoint narrative below
+Latest status: **PASS=26, FAIL=5, NOT-LOCAL=3**. Batch A closed A31;
+Batch B has closed A02-A12 and A32. The checkpoint narrative below
 preserves the earlier 13/18/3 state. A31 evidence is in
 `phase2-g12-a31-investigation.md`; native authentication/permission evidence
 is in `phase2-g12-b-auth-native-green.log`, `phase2-g12-b-auth-audit.log`,
@@ -28,7 +28,19 @@ held-script policies through explicit app-side starts. Evidence:
 `phase2-g12-b-startup-tests.log`, `phase2-g12-b-auto-final.log`, with red runs
 in `...-startup-red.log` and `...-auto-red.log`.
 
-Remaining: A10, A19-A22, A32, A34.
+Lifecycle-action slice: `bash scripts/test-coder-actions.sh` exercises real
+dormancy and required-parameter mismatch. Both attempts issue GETs only,
+return action instructions, and preserve workspace detail. The native red run
+proved that a start POST clears dormancy; a fresh service-side preflight now
+refuses it. Evidence and regression results: `phase2-g12-b-actions-brief.md`.
+
+Profile-isolation slice: `bash scripts/test-coder-profiles.sh` prepares two
+non-administrator users with mutually denied cross-agent access, then connects
+both concurrently in one Swift process. Each stream returns its own remote
+workspace value, and the second survives closing the first. Evidence:
+`phase2-g12-b-profiles-brief.md` and `phase2-g12-b-profile-native.log`.
+
+Remaining: A19-A22, A34.
 
 This checkpoints executed native evidence, not phase approval. Matrix:
 **PASS=13, FAIL=18, NOT-LOCAL=3**. Structural validation passes; `--gate`
