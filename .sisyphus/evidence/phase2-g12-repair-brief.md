@@ -137,8 +137,12 @@ Visual QA remains NEEDS WORK: functional failures remain, and successful
 tests' recording exports supplied no retained attachments. No independent
 visual-approval claim is made.
 
-LSP reported no errors for all seven changed Swift files. Matrix structural
-validation and its 9 tests / 10 assertions passed. `--gate` still rejects the
+Initial LSP checks reported no errors for all seven changed Swift files.
+A final standalone recheck of ConnectionEditorUITests reported `No such
+module 'XCTest'`; authoritative xcodebuild compiled that same file and ran
+its tests. This is retained as a SourceKit configuration limitation, not a
+clean final LSP claim. Matrix structural validation and its 9 tests / 10
+assertions passed. `--gate` still rejects the
 29 FAIL rows, correctly. `git diff --check` passed.
 
 ## Still required before approval
