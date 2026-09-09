@@ -4,8 +4,8 @@ Gate: INCOMPLETE. FAIL includes unverified requirements.
 
 Latest evidence: `.sisyphus/evidence/phase2-g12-final-progress-brief.md` records
 green full UI regressions and additional native protocol execution. There are
-14 PASS, 3 NOT-LOCAL and 17 FAIL rows. A31 is now verified with both direct
-and relay-only native runs; remaining rows still prevent phase-gate approval.
+16 PASS, 3 NOT-LOCAL and 15 FAIL rows. Native authentication and permission
+denials are now verified; remaining rows still prevent phase-gate approval.
 
 This is a blocked-gate inventory, not a compatibility declaration. The 34
 normative rows below are generated directly from the read-only spec section
@@ -37,11 +37,11 @@ and task 12, line 465. They are not optional live-deployment work.
 |---|---|
 | Invalid/expired user token | Actionable authentication-required error, no endless retry and no token on stdout. |
 
-- Status: FAIL
-- Command: `ruby scripts/verify-coder-matrix.rb --gate`
-- Evidence: `.sisyphus/evidence/phase2-g12-gate-brief.md`
+- Status: PASS
+- Command: `DEST_OVERRIDE='platform=iOS Simulator,id=732CE8E1-F9EF-4020-BF93-5BA1AA365B0E' DERIVED_DATA="$PWD/.build-artifacts/DerivedData/g12-core" ONLY_TESTING='BicTermCoreTests/CoderNativeAuthAcceptanceTests' EVIDENCE_LOG='.sisyphus/evidence/phase2-g12-b-auth-native-green.log' scripts/test-core.sh`
+- Evidence: `.sisyphus/evidence/phase2-g12-b-auth-native-green.log`
 - Reason: -
-- Detail: Core authentication classification tests passed, but this session did not execute the invalid-token scenario against T6 and audit stdout for that run. No full-row PASS claimed.
+- Detail: The real native server returns HTTP 401 to the Swift transport using an invalid user-token sentinel. The request ledger asserts exactly one response, the transport throws authRequired before any tunnel allocation/dial, and credentials/server metadata are not mutated. The executed log was checked for absence of the token sentinel; see phase2-g12-b-auth-audit.log.
 
 ### A03
 
@@ -49,11 +49,11 @@ and task 12, line 465. They are not optional live-deployment work.
 |---|---|
 | Valid user but no SSH permission | Respect denial, including authorization-hidden 404 behavior. |
 
-- Status: FAIL
-- Command: `ruby scripts/verify-coder-matrix.rb --gate`
-- Evidence: `.sisyphus/evidence/phase2-g12-gate-brief.md`
+- Status: PASS
+- Command: `ruby scripts/test-coder-permission.rb`
+- Evidence: `.sisyphus/evidence/phase2-g12-b-permission.log`
 - Reason: -
-- Detail: Authorization-hidden 404 was not exercised against a valid user lacking SSH permission. Generic forbidden and missing-workspace unit tests are insufficient substitutes.
+- Detail: A newly created distinct user authenticates successfully (users/me 200) but receives 404 for the owner's existing agent connection endpoint. The owner receives 200 before and after. The production bridge refuses the outsider dial with no socket and retains the 404 diagnosis without leaking the credential. The temporary user is deleted after the test.
 
 ### A04
 

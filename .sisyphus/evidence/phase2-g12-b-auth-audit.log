@@ -1,0 +1,1 @@
+PASS native 401 test succeeded; invalid-user-token sentinel absent from stdout transcript

@@ -1,0 +1,10 @@
+HTTP GET /api/v2/users/me status=200
+HTTP GET /api/v2/workspaces?q=owner:me status=200
+HTTP GET /api/v2/workspaceagents/fd0387b9-be73-4c8a-889f-64a6fc865f55/connection status=200
+HTTP POST /api/v2/users status=201
+HTTP POST /api/v2/users/login status=201
+HTTP GET /api/v2/users/me status=200
+HTTP GET /api/v2/workspaceagents/fd0387b9-be73-4c8a-889f-64a6fc865f55/connection status=404
+HTTP GET /api/v2/workspaceagents/fd0387b9-be73-4c8a-889f-64a6fc865f55/connection status=200
+PASS A03 authenticated outsider receives hidden 404; production bridge refuses dial; owner remains authorized
+HTTP DELETE /api/v2/users/ea4590a7-79ba-4ad1-924a-972e22d8465b status=200

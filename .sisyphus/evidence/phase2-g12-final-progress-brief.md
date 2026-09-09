@@ -1,9 +1,11 @@
 # T12 protocol acceptance checkpoint — INCOMPLETE
 
-Latest Batch A status: **PASS=14, FAIL=17, NOT-LOCAL=3**. A31 now passes
-direct and relay-only native runs. The checkpoint narrative below preserves
-the earlier 13/18/3 state; the full A31 evidence is in
-`phase2-g12-a31-investigation.md`.
+Latest status: **PASS=16, FAIL=15, NOT-LOCAL=3**. Batch A closed A31;
+Batch B's first slice closed A02 and A03. The checkpoint narrative below
+preserves the earlier 13/18/3 state. A31 evidence is in
+`phase2-g12-a31-investigation.md`; native authentication/permission evidence
+is in `phase2-g12-b-auth-native-green.log`, `phase2-g12-b-auth-audit.log`,
+and `phase2-g12-b-permission.log`.
 
 This checkpoints executed native evidence, not phase approval. Matrix:
 **PASS=13, FAIL=18, NOT-LOCAL=3**. Structural validation passes; `--gate`
