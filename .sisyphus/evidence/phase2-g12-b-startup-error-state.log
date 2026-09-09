@@ -1,0 +1,21 @@
+{
+  "workspace_id": "b546af71-b9cd-4d7e-a779-d308f8f66438",
+  "build_id": "b2e1fe40-3fe8-49ba-83c1-1340188fc6c2",
+  "status": "running",
+  "agents": [
+    {
+      "resource": "main_script",
+      "id": "f636d5b9-21da-4b49-81c5-4988b9e43cbd",
+      "name": "main",
+      "status": "connected",
+      "lifecycle": "created",
+      "scripts": [
+        {
+          "display_name": "Acceptance startup",
+          "start_blocks_login": true,
+          "run_on_start": true
+        }
+      ]
+    }
+  ]
+}

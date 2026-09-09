@@ -1,0 +1,353 @@
+Command line invocation:
+    /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild test -scheme BicTermCore -destination "platform=iOS Simulator,id=732CE8E1-F9EF-4020-BF93-5BA1AA365B0E" -derivedDataPath /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core "-only-testing:BicTermCoreTests/CoderTransportTests"
+
+Resolve Package Graph
+2026-09-09 16:45:03.581 xcodebuild[91930:32318352] [MT] IDERunDestination: Supported platforms for the buildables in the current scheme is empty.
+
+
+Resolved source packages:
+  swift-system: https://github.com/apple/swift-system.git @ 1.8.1
+  swift-collections: https://github.com/apple/swift-collections.git @ 1.6.0
+  swift-nio-ssh: /Users/richard/code/BicTerm/Vendor/swift-nio-ssh @ local
+  swift-nio: https://github.com/apple/swift-nio.git @ 2.102.0
+  swift-crypto: https://github.com/apple/swift-crypto.git @ 4.5.2
+  BicTermCore: /Users/richard/code/BicTerm/BicTermCore
+  swift-atomics: https://github.com/apple/swift-atomics.git @ 1.3.1
+  swift-asn1: https://github.com/apple/swift-asn1.git @ 1.7.2
+
+ComputePackagePrebuildTargetDependencyGraph
+
+Prepare packages
+
+CreateBuildRequest
+
+SendProjectDescription
+
+CreateBuildOperation
+
+ComputeTargetDependencyGraph
+note: Building targets in dependency order
+note: Target dependency graph (39 targets)
+    Target 'BicTermCore' in project 'BicTermCore'
+        ➜ Explicit dependency on target 'BicTermCore' in project 'BicTermCore'
+        ➜ Explicit dependency on target 'CBcryptPBKDF' in project 'BicTermCore'
+        ➜ Explicit dependency on target 'NIOSSH' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOPosix' in project 'swift-nio'
+    Target 'BicTermCoreTests' in project 'BicTermCore'
+        ➜ Explicit dependency on target 'CBcryptPBKDF' in project 'BicTermCore'
+        ➜ Explicit dependency on target 'BicTermCore' in project 'BicTermCore'
+        ➜ Explicit dependency on target 'NIOSSH' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOEmbedded' in project 'swift-nio'
+    Target 'NIOEmbedded' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOEmbedded' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics' in project 'swift-atomics'
+    Target 'BicTermCore' in project 'BicTermCore'
+        ➜ Explicit dependency on target 'CBcryptPBKDF' in project 'BicTermCore'
+        ➜ Explicit dependency on target 'NIOSSH' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOPosix' in project 'swift-nio'
+    Target 'NIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'swift-nio_NIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics' in project 'swift-atomics'
+    Target 'NIOSSH' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOSSH' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOFoundationCompat' in project 'swift-nio'
+        ➜ Explicit dependency on target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'Atomics' in project 'swift-atomics'
+    Target 'NIOSSH' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOFoundationCompat' in project 'swift-nio'
+        ➜ Explicit dependency on target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'Atomics' in project 'swift-atomics'
+    Target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'swift-crypto_Crypto' in project 'swift-crypto'
+    Target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'swift-crypto_Crypto' in project 'swift-crypto'
+    Target 'swift-crypto_Crypto' in project 'swift-crypto' (no dependencies)
+    Target 'NIOFoundationCompat' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOFoundationCompat' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOEmbedded' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIO' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOFoundationEssentialsCompat' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics' in project 'swift-atomics'
+    Target 'NIOFoundationCompat' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOEmbedded' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIO' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOFoundationEssentialsCompat' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics' in project 'swift-atomics'
+    Target 'NIOFoundationEssentialsCompat' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics' in project 'swift-atomics'
+    Target 'NIO' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOEmbedded' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics' in project 'swift-atomics'
+    Target 'NIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'swift-nio_NIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics' in project 'swift-atomics'
+    Target 'swift-nio_NIOPosix' in project 'swift-nio' (no dependencies)
+    Target 'CNIOPosix' in project 'swift-nio' (no dependencies)
+    Target 'NIOEmbedded' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics' in project 'swift-atomics'
+    Target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+    Target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics' in project 'swift-atomics'
+    Target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics' in project 'swift-atomics'
+    Target 'Atomics' in project 'swift-atomics'
+        ➜ Explicit dependency on target 'Atomics' in project 'swift-atomics'
+        ➜ Explicit dependency on target '_AtomicsShims' in project 'swift-atomics'
+    Target 'Atomics' in project 'swift-atomics'
+        ➜ Explicit dependency on target '_AtomicsShims' in project 'swift-atomics'
+    Target '_AtomicsShims' in project 'swift-atomics' (no dependencies)
+    Target 'DequeModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'DequeModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'InternalCollectionsUtilities' in project 'swift-collections'
+        ➜ Explicit dependency on target 'ContainersPreview' in project 'swift-collections'
+    Target 'DequeModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'InternalCollectionsUtilities' in project 'swift-collections'
+        ➜ Explicit dependency on target 'ContainersPreview' in project 'swift-collections'
+    Target 'ContainersPreview' in project 'swift-collections'
+        ➜ Explicit dependency on target 'InternalCollectionsUtilities' in project 'swift-collections'
+    Target 'InternalCollectionsUtilities' in project 'swift-collections' (no dependencies)
+    Target '_NIODataStructures' in project 'swift-nio' (no dependencies)
+    Target 'CNIOWASI' in project 'swift-nio' (no dependencies)
+    Target 'CNIOWindows' in project 'swift-nio' (no dependencies)
+    Target 'CNIOLinux' in project 'swift-nio' (no dependencies)
+    Target 'CNIODarwin' in project 'swift-nio' (no dependencies)
+    Target 'CNIOFreeBSD' in project 'swift-nio' (no dependencies)
+    Target 'CNIOOpenBSD' in project 'swift-nio' (no dependencies)
+    Target '_NIOBase64' in project 'swift-nio' (no dependencies)
+    Target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+    Target 'CNIOAtomics' in project 'swift-nio' (no dependencies)
+    Target 'CBcryptPBKDF' in project 'BicTermCore' (no dependencies)
+
+GatherProvisioningInputs
+
+CreateBuildDescription
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -v -E -dM -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -x c -c /dev/null
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc --version
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -v -E -dM -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -x c -c /dev/null
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld -version_details
+
+ReadFileContents /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/share/docc/features.json
+
+Build description signature: f57a9da9c3959d4582167bce973b9387
+Build description path: /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/XCBuildData/f57a9da9c3959d4582167bce973b9387.xcbuilddata
+ClangStatCache /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang-stat-cache /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/SDKStatCaches.noindex/iphonesimulator26.5-23F81a-688ef53f1462e2c8f657fdc38a81448f6cfe768891a92b912361537c460fe42b.sdkstatcache
+    cd /Users/richard/code/BicTerm/BicTermCore/.swiftpm/xcode
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang-stat-cache /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -o /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/SDKStatCaches.noindex/iphonesimulator26.5-23F81a-688ef53f1462e2c8f657fdc38a81448f6cfe768891a92b912361537c460fe42b.sdkstatcache
+
+ProcessInfoPlistFile /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/swift-nio_NIOPosix.bundle/Info.plist /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/swift-nio.build/Debug-iphonesimulator/swift-nio_NIOPosix.build/empty-swift-nio_NIOPosix.plist (in target 'swift-nio_NIOPosix' from project 'swift-nio')
+    cd /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/SourcePackages/checkouts/swift-nio
+    builtin-infoPlistUtility /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/swift-nio.build/Debug-iphonesimulator/swift-nio_NIOPosix.build/empty-swift-nio_NIOPosix.plist -producttype com.apple.product-type.bundle -expandbuildsettings -format binary -platform iphonesimulator -o /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/swift-nio_NIOPosix.bundle/Info.plist
+
+ProcessInfoPlistFile /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/swift-crypto_Crypto.bundle/Info.plist /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/swift-crypto.build/Debug-iphonesimulator/swift-crypto_Crypto.build/empty-swift-crypto_Crypto.plist (in target 'swift-crypto_Crypto' from project 'swift-crypto')
+    cd /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/SourcePackages/checkouts/swift-crypto
+    builtin-infoPlistUtility /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/swift-crypto.build/Debug-iphonesimulator/swift-crypto_Crypto.build/empty-swift-crypto_Crypto.plist -producttype com.apple.product-type.bundle -expandbuildsettings -format binary -platform iphonesimulator -o /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/swift-crypto_Crypto.bundle/Info.plist
+
+ProcessInfoPlistFile /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/BicTermCoreTests.xctest/Info.plist /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/BicTermCore.build/Debug-iphonesimulator/BicTermCoreTests.build/empty-BicTermCoreTests.plist (in target 'BicTermCoreTests' from project 'BicTermCore')
+    cd /Users/richard/code/BicTerm/BicTermCore
+    builtin-infoPlistUtility /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/BicTermCore.build/Debug-iphonesimulator/BicTermCoreTests.build/empty-BicTermCoreTests.plist -producttype com.apple.product-type.bundle.unit-test -expandbuildsettings -format binary -platform iphonesimulator -scanforprivacyfile /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/BicTermCoreTests.xctest/swift-crypto_Crypto.bundle -scanforprivacyfile /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/BicTermCoreTests.xctest/swift-nio_NIOPosix.bundle -o /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/BicTermCoreTests.xctest/Info.plist
+
+CopySwiftLibs /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/BicTermCoreTests.xctest (in target 'BicTermCoreTests' from project 'BicTermCore')
+    cd /Users/richard/code/BicTerm/BicTermCore
+    builtin-swiftStdLibTool --copy --verbose --sign - --scan-executable /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/BicTermCoreTests.xctest/BicTermCoreTests --scan-folder /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/BicTermCoreTests.xctest/Frameworks --scan-folder /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/BicTermCoreTests.xctest/PlugIns --scan-folder /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/BicTermCoreTests.xctest/SystemExtensions --scan-folder /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/BicTermCoreTests.xctest/Extensions --platform iphonesimulator --toolchain /var/run/com.apple.security.cryptexd/mnt/com.apple.MobileAsset.MetalToolchain-v17.6.109.0.ozHyXD/Metal.xctoolchain --toolchain /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain --destination /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/BicTermCoreTests.xctest/Frameworks --strip-bitcode --scan-executable /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib/libXCTestSwiftSupport.dylib --strip-bitcode-tool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/bitcode_strip --emit-dependency-info /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/BicTermCore.build/Debug-iphonesimulator/BicTermCoreTests.build/SwiftStdLibToolInputDependencies.dep --filter-for-swift-os
+
+Test Suite 'Selected tests' started at 2026-09-09 16:45:06.991.
+Test Suite 'BicTermCoreTests.xctest' started at 2026-09-09 16:45:06.991.
+Test Suite 'CoderTransportTests' started at 2026-09-09 16:45:06.991.
+Test Case '-[BicTermCoreTests.CoderTransportTests testAgentGoneSurfacesReconnectRequired]' started.
+Test Case '-[BicTermCoreTests.CoderTransportTests testAgentGoneSurfacesReconnectRequired]' passed (0.006 seconds).
+Test Case '-[BicTermCoreTests.CoderTransportTests testCloseIsTerminalIdempotentAndFinishesOutput]' started.
+Test Case '-[BicTermCoreTests.CoderTransportTests testCloseIsTerminalIdempotentAndFinishesOutput]' passed (0.086 seconds).
+Test Case '-[BicTermCoreTests.CoderTransportTests testCoderConnectionWithoutReferenceThrowsReconnectRequired]' started.
+Test Case '-[BicTermCoreTests.CoderTransportTests testCoderConnectionWithoutReferenceThrowsReconnectRequired]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.CoderTransportTests testConnectFailureSurfacesTypedTransportError]' started.
+Test Case '-[BicTermCoreTests.CoderTransportTests testConnectFailureSurfacesTypedTransportError]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.CoderTransportTests testConnectRejectsNonCoderConnection]' started.
+Test Case '-[BicTermCoreTests.CoderTransportTests testConnectRejectsNonCoderConnection]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.CoderTransportTests testConnectSucceedsAndOutputStreamIsLive]' started.
+Test Case '-[BicTermCoreTests.CoderTransportTests testConnectSucceedsAndOutputStreamIsLive]' passed (0.038 seconds).
+Test Case '-[BicTermCoreTests.CoderTransportTests testDeadChannelDuringSuspendRedisalsOnResumeWithoutReauth]' started.
+Test Case '-[BicTermCoreTests.CoderTransportTests testDeadChannelDuringSuspendRedisalsOnResumeWithoutReauth]' passed (0.064 seconds).
+Test Case '-[BicTermCoreTests.CoderTransportTests testDialFailureSurfacesUnreachableAndClosesHandle]' started.
+Test Case '-[BicTermCoreTests.CoderTransportTests testDialFailureSurfacesUnreachableAndClosesHandle]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.CoderTransportTests testInputOutputRoundTrip]' started.
+Test Case '-[BicTermCoreTests.CoderTransportTests testInputOutputRoundTrip]' passed (0.066 seconds).
+Test Case '-[BicTermCoreTests.CoderTransportTests testRegistryHasNoCoderNetImports]' started.
+Test Case '-[BicTermCoreTests.CoderTransportTests testRegistryHasNoCoderNetImports]' passed (0.070 seconds).
+Test Case '-[BicTermCoreTests.CoderTransportTests testResizeIsObserved]' started.
+Test Case '-[BicTermCoreTests.CoderTransportTests testResizeIsObserved]' passed (0.065 seconds).
+Test Case '-[BicTermCoreTests.CoderTransportTests testResumeFailureSurfacesTypedTransportError]' started.
+Test Case '-[BicTermCoreTests.CoderTransportTests testResumeFailureSurfacesTypedTransportError]' passed (0.037 seconds).
+Test Case '-[BicTermCoreTests.CoderTransportTests testSendBeforeConnectThrowsTypedChannelDenied]' started.
+Test Case '-[BicTermCoreTests.CoderTransportTests testSendBeforeConnectThrowsTypedChannelDenied]' passed (0.002 seconds).
+Test Case '-[BicTermCoreTests.CoderTransportTests testSessionChannelHandleLifecycle]' started.
+Test Case '-[BicTermCoreTests.CoderTransportTests testSessionChannelHandleLifecycle]' passed (0.007 seconds).
+Test Case '-[BicTermCoreTests.CoderTransportTests testStartConfigCarriesResolutionVerbatim]' started.
+Test Case '-[BicTermCoreTests.CoderTransportTests testStartConfigCarriesResolutionVerbatim]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.CoderTransportTests testSuspendResumeFollowsDeclaredStrategy]' started.
+Test Case '-[BicTermCoreTests.CoderTransportTests testSuspendResumeFollowsDeclaredStrategy]' passed (0.068 seconds).
+Test Case '-[BicTermCoreTests.CoderTransportTests testSuspendWithoutConnectIsNoOpAndResumeIsChannelDenied]' started.
+Test Case '-[BicTermCoreTests.CoderTransportTests testSuspendWithoutConnectIsNoOpAndResumeIsChannelDenied]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.CoderTransportTests testUnauthorizedListingSurfacesAuthRequiredWithoutTouchingTunnel]' started.
+Test Case '-[BicTermCoreTests.CoderTransportTests testUnauthorizedListingSurfacesAuthRequiredWithoutTouchingTunnel]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.CoderTransportTests testWorkspaceMissingSurfacesReconnectRequired]' started.
+Test Case '-[BicTermCoreTests.CoderTransportTests testWorkspaceMissingSurfacesReconnectRequired]' passed (0.103 seconds).
+Test Suite 'CoderTransportTests' passed at 2026-09-09 16:45:07.617.
+	 Executed 19 tests, with 0 failures (0 unexpected) in 0.619 (0.626) seconds
+Test Suite 'BicTermCoreTests.xctest' passed at 2026-09-09 16:45:07.618.
+	 Executed 19 tests, with 0 failures (0 unexpected) in 0.619 (0.627) seconds
+Test Suite 'Selected tests' passed at 2026-09-09 16:45:07.618.
+	 Executed 19 tests, with 0 failures (0 unexpected) in 0.619 (0.627) seconds
+2026-09-09 16:45:07.901 xcodebuild[91930:32318352] [MT] IDETestOperationsObserverDebug: 1.880 elapsed -- Testing started completed.
+2026-09-09 16:45:07.901 xcodebuild[91930:32318352] [MT] IDETestOperationsObserverDebug: 0.000 sec, +0.000 sec -- start
+2026-09-09 16:45:07.901 xcodebuild[91930:32318352] [MT] IDETestOperationsObserverDebug: 1.880 sec, +1.880 sec -- end
+
+Test session results, code coverage, and logs:
+	/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Logs/Test/Test-BicTermCore-2026.09.09_16-45-03--0600.xcresult
+
+** TEST SUCCEEDED **
+
+Testing started
