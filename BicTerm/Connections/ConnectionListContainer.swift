@@ -4,7 +4,7 @@ import BicTermCore
 struct ConnectionListContainer: View {
     @Environment(\.openWindow) private var openWindow
     @Environment(\.scenePhase) private var scenePhase
-    @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.supportsMultipleWindows) private var supportsMultipleWindows
 
     let store: SessionStore
 
@@ -157,11 +157,11 @@ struct ConnectionListContainer: View {
         ))
     }
 
-    /// iPad (regular width): every session opens as its own window. iPhone
-    /// (compact): the terminal presents as a full-screen cover over the
+    /// On iPad every new session opens its own window, including narrow
+    /// multitasking layouts. On iPhone the terminal uses a cover over the
     /// connection list.
     private func present(_ descriptor: SessionStore.SessionDescriptor) {
-        if sizeClass == .regular {
+        if supportsMultipleWindows {
             openWindow(id: "terminal", value: SessionID(value: descriptor.id))
         } else {
             coverDescriptor = descriptor

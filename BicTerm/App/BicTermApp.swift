@@ -35,6 +35,9 @@ private struct RestoredTerminalWindowHost: View {
 /// and the previously shown one keeps running detached).
 @MainActor
 private struct TerminalWindowRoot: View {
+    @Environment(\.openWindow) private var openWindow
+    @Environment(\.supportsMultipleWindows) private var supportsMultipleWindows
+
     let store: SessionStore
     let windowSessionID: UUID?
 
@@ -61,7 +64,11 @@ private struct TerminalWindowRoot: View {
                 onConnectRequested: { connection in
                     listPresented = false
                     let descriptor = store.openSession(for: connection)
-                    switchedSessionID = descriptor.id
+                    if supportsMultipleWindows {
+                        openWindow(id: "terminal", value: SessionID(value: descriptor.id))
+                    } else {
+                        switchedSessionID = descriptor.id
+                    }
                 },
                 onClose: { listPresented = false }
             )
