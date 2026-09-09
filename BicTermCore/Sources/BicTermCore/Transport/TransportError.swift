@@ -52,6 +52,8 @@ public enum TransportError: Error, Equatable, Sendable {
     /// or not running, agent gone or ambiguous, server configuration
     /// removed); the connection record is stale.
     case reconnectRequired
+
+    case remoteStartupFailed(state: String)
 }
 
 extension TransportError: LocalizedError {
@@ -75,6 +77,8 @@ extension TransportError: LocalizedError {
             "The server rejected the stored credential. Reauthenticate to continue."
         case .reconnectRequired:
             "The remote workspace or agent is no longer available. Reconnect to resolve it again."
+        case .remoteStartupFailed(let state):
+            "Remote startup failed (\(state)). Review startup logs before retrying."
         }
     }
 }

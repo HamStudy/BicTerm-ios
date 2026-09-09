@@ -85,6 +85,23 @@ final class CoderWorkspaceResolverTests: XCTestCase {
         }
     }
 
+    func testBlockingUnknownLifecycleWaitsAndSurfacesStartupFailure() async throws {
+        let results = ["unknown", "start_error"].map { lifecycle in
+            Result<CoderHTTPResponse, CoderRequestLoadingError>.success(response(body: """
+            {"workspaces":[{"id":"\(workspaceID)","name":"ws","owner_name":"fixture-user",
+            "latest_build":{"status":"running","resources":[{"agents":[{
+            "id":"\(agentID)","name":"main","status":"connected",
+            "lifecycle_state":"\(lifecycle)","scripts":[{"start_blocks_login":true}]
+            }]}]}}],"count":1}
+            """))
+        }
+        let resolver = try makeResolver(results: results)
+
+        await assertThrowsResolutionError(.agentStartupFailed(state: "start_error")) {
+            try await resolver.resolve(reference)
+        }
+    }
+
     func testMissingTokenIsTyped() async throws {
         let resolver = try makeResolver(token: nil, results: [])
         await assertThrowsResolutionError(.tokenMissing) {

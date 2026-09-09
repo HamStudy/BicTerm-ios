@@ -176,7 +176,7 @@ public struct JumpChainBuilder: Sendable {
         switch error {
         case .requiresTrust, .hostKeyChanged, .authenticationFailed, .authRequired:
             ownerIndex
-        case .unreachable, .channelDenied, .protocolUnavailable, .resumeUnsupported, .reconnectRequired:
+        case .unreachable, .channelDenied, .protocolUnavailable, .resumeUnsupported, .reconnectRequired, .remoteStartupFailed:
             targetIndex
         }
     }

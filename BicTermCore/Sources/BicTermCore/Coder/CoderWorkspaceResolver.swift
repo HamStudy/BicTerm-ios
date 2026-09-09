@@ -35,19 +35,34 @@ public enum CoderResolutionError: Error, Equatable, Sendable {
     /// No single eligible connected agent exists (zero, or ambiguous
     /// multiple candidates — spec §5.2 never picks silently).
     case agentUnavailable
+    case agentStartupFailed(state: String)
 }
 
 public enum CoderAgentSelection: Equatable, Sendable {
     case automatic
     case id(UUID)
     case name(String)
+
+    init(options: ProtocolOptions) throws(CoderResolutionError) {
+        if let option = options["coder.agentID"] {
+            guard let rawID = option.stringValue, let id = UUID(uuidString: rawID) else {
+                throw .agentUnavailable
+            }
+            self = .id(id)
+        } else if let option = options["coder.agentName"] {
+            guard let name = option.stringValue, !name.isEmpty else { throw .agentUnavailable }
+            self = .name(name)
+        } else {
+            self = .automatic
+        }
+    }
 }
 
 /// Resolves a persisted ``CoderReference`` to a dialable
 /// ``CoderAgentEndpoint`` through the REST layer (spec §13's
 /// WorkspaceResolver): explicit selection is restricted to the current build;
-/// automatic selection requires a single connected candidate. Startup policy
-/// and wait loops belong to the connection-preparation layer.
+/// automatic selection requires a single connected candidate. Blocking startup
+/// scripts are followed with a bounded, cancellation-aware readiness wait.
 public struct CoderWorkspaceResolver: Sendable {
     private let serverStore: any CoderServerStoreProtocol
     private let tokenStore: any CoderTokenStoring
@@ -87,19 +102,41 @@ public struct CoderWorkspaceResolver: Sendable {
         }
         guard let token, !token.isEmpty else { throw .tokenMissing }
 
-        let workspaces: [CoderWorkspace]
-        do {
-            workspaces = try await client.workspaces(for: server)
-        } catch let error as CoderClientError {
-            throw Self.transportMapping(error)
+        let deadline = ContinuousClock.now.advanced(by: .seconds(600))
+        while true {
+            let workspaces: [CoderWorkspace]
+            do {
+                workspaces = try await client.workspaces(for: server)
+            } catch let error as CoderClientError {
+                throw Self.transportMapping(error)
+            }
+            guard let workspace = workspaces.first(where: { $0.id == reference.workspaceID }) else {
+                throw .workspaceMissing
+            }
+            guard workspace.state == .running else {
+                throw .workspaceNotRunning(state: workspace.state)
+            }
+            let agent = try selectedAgent(in: workspace, selection: selection)
+            let lifecycle = agent.lifecycleState ?? "unknown"
+            switch lifecycle {
+            case "start_error", "start_timeout", "shutdown_error", "shutdown_timeout":
+                throw .agentStartupFailed(state: lifecycle)
+            default:
+                break
+            }
+            if !agent.blocksLoginUntilReady || lifecycle == "ready" {
+                return CoderAgentEndpoint(serverURL: server.baseURL, sessionToken: token, agentID: agent.id)
+            }
+            guard ContinuousClock.now < deadline else { throw .agentStartupFailed(state: "deadline_exceeded") }
+            do {
+                try await Task.sleep(for: .seconds(1))
+            } catch {
+                throw .serverUnreachable
+            }
         }
+    }
 
-        guard let workspace = workspaces.first(where: { $0.id == reference.workspaceID }) else {
-            throw .workspaceMissing
-        }
-        guard workspace.state == .running else {
-            throw .workspaceNotRunning(state: workspace.state)
-        }
+    private func selectedAgent(in workspace: CoderWorkspace, selection: CoderAgentSelection) throws(CoderResolutionError) -> CoderWorkspaceAgent {
         let connected: [CoderWorkspaceAgent]
         switch selection {
         case .automatic:
@@ -112,11 +149,7 @@ public struct CoderWorkspaceResolver: Sendable {
         guard connected.count == 1, let agent = connected.first else {
             throw .agentUnavailable
         }
-        return CoderAgentEndpoint(
-            serverURL: server.baseURL,
-            sessionToken: token,
-            agentID: agent.id
-        )
+        return agent
     }
 
     private static func transportMapping(_ error: CoderClientError) -> CoderResolutionError {

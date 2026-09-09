@@ -70,6 +70,24 @@ public struct CoderWorkspaceAgent: Decodable, Equatable, Identifiable, Sendable 
     /// Raw upstream `status` (`connected`/`connecting`/`disconnected`/`timeout`,
     /// possibly a newer value); only `connected` makes the agent dialable.
     public let status: String
+    public let lifecycleState: String?
+    public let scripts: [Script]?
+
+    public struct Script: Decodable, Equatable, Sendable {
+        public let startBlocksLogin: Bool
+        private enum CodingKeys: String, CodingKey {
+            case startBlocksLogin = "start_blocks_login"
+        }
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, status, scripts
+        case lifecycleState = "lifecycle_state"
+    }
+
+    public var blocksLoginUntilReady: Bool {
+        scripts?.contains(where: \.startBlocksLogin) == true
+    }
 
     public var isConnected: Bool {
         status.lowercased() == "connected"

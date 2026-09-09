@@ -108,19 +108,8 @@ public actor CoderTransport: TerminalTransport {
         }
 
         let endpoint: CoderAgentEndpoint
-        let selection: CoderAgentSelection
-        if let option = connection.protocolOptions["coder.agentID"] {
-            guard let rawID = option.stringValue, let id = UUID(uuidString: rawID) else {
-                throw .reconnectRequired
-            }
-            selection = .id(id)
-        } else if let option = connection.protocolOptions["coder.agentName"] {
-            guard let name = option.stringValue, !name.isEmpty else { throw .reconnectRequired }
-            selection = .name(name)
-        } else {
-            selection = .automatic
-        }
         do {
+            let selection = try CoderAgentSelection(options: connection.protocolOptions)
             endpoint = try await resolver.resolve(reference, selecting: selection)
         } catch let error as CoderResolutionError {
             let mapped = Self.transportError(error)
@@ -132,6 +121,7 @@ public actor CoderTransport: TerminalTransport {
             throw mapped
         }
 
+        guard phase == .connecting, !Task.isCancelled else { throw .channelDenied }
         let handle: Int
         do {
             handle = try await tunnel.start(configJSON: CoderTunnelStartConfig.json(
@@ -330,6 +320,8 @@ public actor CoderTransport: TerminalTransport {
             .authRequired
         case .serverUnreachable:
             .unreachable
+        case .agentStartupFailed(let state):
+            .remoteStartupFailed(state: state)
         case .serverUnknown, .workspaceMissing, .workspaceNotRunning, .agentUnavailable:
             .reconnectRequired
         }
