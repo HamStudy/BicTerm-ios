@@ -171,7 +171,7 @@ struct ConnectionEditorView: View {
                 .autocorrectionDisabled()
 
             labeledField("Port", text: $draft.port, identifier: "field-port", error: draft.portError, focus: .port)
-                .keyboardType(.numberPad)
+                .keyboardType(UIDevice.current.userInterfaceIdiom == .pad ? .numbersAndPunctuation : .numberPad)
 
             labeledField("Username", text: $draft.username, identifier: "field-username", error: draft.usernameError, focus: .username)
                 .textInputAutocapitalization(.never)

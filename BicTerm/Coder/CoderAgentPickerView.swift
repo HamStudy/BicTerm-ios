@@ -32,6 +32,7 @@ struct CoderAgentPickerView: View {
                         dismiss()
                     } label: {
                         agentRow(agent)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("coder-agent-\(sanitized(agent.name))")

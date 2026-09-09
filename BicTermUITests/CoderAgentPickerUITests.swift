@@ -302,6 +302,7 @@ final class CoderAgentPickerUITests: XCTestCase {
         scrollToHittable(persisted)
         XCTAssertTrue(persisted.waitForExistence(timeout: 5))
         XCTAssertTrue(persisted.label.contains("main"), "picked agent name must show in the row (got: \(persisted.label))")
+        captureState("selected-agent-in-editor")
 
         selectAuthenticationKey("Fixture Ed25519")
         let connect = app.buttons["connect-button"]

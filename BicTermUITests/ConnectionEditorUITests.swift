@@ -15,9 +15,21 @@ final class ConnectionEditorUITests: XCTestCase {
         openEditorForNewConnection()
         let port = app.textFields["field-port"]
 
+        port.tap()
+        awaitKeyboardFocus(on: port)
+        capturePortState("port-keyboard-focused")
+
         typeInto(port, "12222", clearing: "22")
 
         XCTAssertEqual(port.value as? String, "12222")
+        capturePortState("port-value-replaced")
+    }
+
+    private func capturePortState(_ name: String) {
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
     }
 
     // MARK: Scenario 1 — create + persist a 2-hop jump-chain connection
