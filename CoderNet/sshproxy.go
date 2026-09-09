@@ -131,11 +131,14 @@ func (proxy *sshProxy) serveSession(downstream gossh.Channel, downstreamRequests
 		return
 	}
 
-	done := make(chan struct{}, 4)
+	var inbound, draining sync.WaitGroup
+	inbound.Add(2)
+	draining.Add(3)
 
 	// Request relay: downstream -> upstream (replies flow back to the
 	// downstream requester).
 	go func() {
+		defer inbound.Done()
 		for req := range downstreamRequests {
 			ok, err := upstream.SendRequest(req.Type, req.WantReply, req.Payload)
 			if req.WantReply {
@@ -144,34 +147,40 @@ func (proxy *sshProxy) serveSession(downstream gossh.Channel, downstreamRequests
 			}
 		}
 		_ = upstream.Close()
-		done <- struct{}{}
+		_ = upstreamConn.Close()
 	}()
 
 	// Request relay: upstream -> downstream (exit-status and friends).
 	go func() {
+		defer draining.Done()
 		for req := range upstreamRequests {
 			ok, err := downstream.SendRequest(req.Type, req.WantReply, req.Payload)
 			if req.WantReply {
 				_ = req.Reply(err == nil && ok, nil)
 			}
 		}
-		done <- struct{}{}
 	}()
 
 	go func() {
+		defer inbound.Done()
 		_, _ = io.Copy(upstream, downstream)
 		_ = upstream.CloseWrite()
-		done <- struct{}{}
 	}()
 	go func() {
+		defer draining.Done()
 		_, _ = io.Copy(downstream, upstream)
-		_ = downstream.CloseWrite()
-		done <- struct{}{}
+	}()
+	go func() {
+		defer draining.Done()
+		_, _ = io.Copy(downstream.Stderr(), upstream.Stderr())
 	}()
 
-	<-done
+	// Input EOF is a half-close; output, extended data and status must drain.
+	draining.Wait()
+	_ = downstream.CloseWrite()
 	_ = upstream.Close()
 	_ = downstream.Close()
 	_ = upstreamConn.Close()
 	_ = raw.Close()
+	inbound.Wait()
 }
