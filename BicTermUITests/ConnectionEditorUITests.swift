@@ -10,6 +10,16 @@ final class ConnectionEditorUITests: XCTestCase {
         app = XCUIApplication()
     }
 
+    func testReplacingDefaultPortDoesNotAppendToExistingDigits() {
+        launchApp(reset: true)
+        openEditorForNewConnection()
+        let port = app.textFields["field-port"]
+
+        typeInto(port, "12222", clearing: "22")
+
+        XCTAssertEqual(port.value as? String, "12222")
+    }
+
     // MARK: Scenario 1 — create + persist a 2-hop jump-chain connection
 
     func testCreateAndPersistTwoHopChainConnection() {
