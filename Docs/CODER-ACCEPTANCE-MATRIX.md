@@ -2,9 +2,10 @@
 
 Gate: INCOMPLETE. FAIL includes unverified requirements.
 
-Continuation: `.sisyphus/evidence/phase2-g12-repair-brief.md` records repaired
-UI root causes and fresh regressions. No additional full normative outcome
-was established, so the row dispositions below are unchanged.
+Latest evidence: `.sisyphus/evidence/phase2-g12-final-progress-brief.md` records
+green full UI regressions and additional native protocol execution. There are
+13 PASS, 3 NOT-LOCAL and 18 FAIL rows. The raw suite's individual passing
+cases do not hide its separate A31 stdout-failure timeout or imply a green gate.
 
 This is a blocked-gate inventory, not a compatibility declaration. The 34
 normative rows below are generated directly from the read-only spec section
@@ -24,11 +25,11 @@ and task 12, line 465. They are not optional live-deployment work.
 |---|---|
 | Valid user token, one running agent | OpenSSH can execute a command through the raw adapter. |
 
-- Status: FAIL
-- Command: `Fixtures/run/coder-bin/coder ssh --disable-autostart --wait auto --log-dir "$PWD/.scratch/g12-cli" bicterm-host -- printf bicterm-g12-cli-ok`
-- Evidence: `.sisyphus/evidence/phase2-g12-cli-reference.log`
+- Status: PASS
+- Command: `ruby scripts/test-coder-raw.rb`
+- Evidence: `.sisyphus/evidence/phase2-g12-final-raw-cancellation.log`
 - Reason: -
-- Detail: Official pinned CLI command succeeded in 0.272 seconds; live native NIOSSH conformance also passed. Neither establishes OpenSSH execution through BicTerm's raw adapter, so the entire normative row is not PASS.
+- Detail: OpenSSH executes printf through the production CoderNet UDS translation proxy into the native v2.36.4 agent, with none authentication and no PTY; exact stdout and zero exit status asserted. Host build command is bash scripts/test-coder-raw.sh. The separate A31 case fails later in the same suite.
 
 ### A02
 
@@ -168,11 +169,11 @@ and task 12, line 465. They are not optional live-deployment work.
 |---|---|
 | Direct UDP path available | Session works; diagnostics can show direct connectivity when selected. |
 
-- Status: FAIL
-- Command: `ruby scripts/verify-coder-matrix.rb --gate`
-- Evidence: `.sisyphus/evidence/phase2-g12-gate-brief.md`
+- Status: PASS
+- Command: `ruby scripts/test-coder-raw.rb`
+- Evidence: `.sisyphus/evidence/phase2-g12-final-raw-cancellation.log`
 - Reason: -
-- Detail: Live shell conformance passed without capturing an asserted direct path. Synthetic direct-path event observation is not proof of direct UDP connectivity.
+- Detail: Real shell/binary traffic succeeded, and the bridge's observed networkPathChanged event was asserted to report direct. This is not a synthetic path event.
 
 ### A14
 
@@ -180,11 +181,11 @@ and task 12, line 465. They are not optional live-deployment work.
 |---|---|
 | Direct UDP blocked | Session works through DERP. |
 
-- Status: FAIL
-- Command: `ruby scripts/verify-coder-matrix.rb --gate`
-- Evidence: `.sisyphus/evidence/phase2-g12-gate-brief.md`
+- Status: PASS
+- Command: `CODER_GATE_RELAY_ONLY=1 ruby scripts/test-coder-raw.rb`
+- Evidence: `.sisyphus/evidence/phase2-g12-final-raw-relay-current.log`
 - Reason: -
-- Detail: Relay-only bridge configuration was not forced during this session's live conformance run. No DERP-only PASS inferred from a working shell.
+- Detail: BlockEndpoints is enabled through the production relay_only configuration. Real command, binary, stderr/status and 5 MiB transfer cases passed, with an asserted relayed path event. The separate stdout-failure case remains A31 FAIL.
 
 ### A15
 
@@ -192,11 +193,11 @@ and task 12, line 465. They are not optional live-deployment work.
 |---|---|
 | Server disables direct connections | No user preference bypasses server policy. |
 
-- Status: FAIL
-- Command: `ruby scripts/verify-coder-matrix.rb --gate`
-- Evidence: `.sisyphus/evidence/phase2-g12-gate-brief.md`
+- Status: PASS
+- Command: `bash scripts/test-coder-derp.sh`
+- Evidence: `.sisyphus/evidence/phase2-g12-final-derp-retry.log`
 - Reason: -
-- Detail: Server help was inspected; server-side direct-disable policy was not activated and challenged by a client preference.
+- Detail: Both executed proxy modes restart the native server with CODER_BLOCK_DIRECT=true, leave the client relay_only=false, and require an observed relayed path while executing the raw cases. The raw child evidence is phase2-g12-final-derp-fallback-raw.log and phase2-g12-final-derp-forced-raw.log; the independent initial policy run is phase2-g12-final-server-policy.log.
 
 ### A16
 
@@ -204,11 +205,11 @@ and task 12, line 465. They are not optional live-deployment work.
 |---|---|
 | DERP custom upgrade rejected, WS permitted | Compatible WebSocket relay fallback works. |
 
-- Status: FAIL
-- Command: `ruby scripts/verify-coder-matrix.rb --gate`
-- Evidence: `.sisyphus/evidence/phase2-g12-gate-brief.md`
+- Status: PASS
+- Command: `bash scripts/test-coder-derp.sh`
+- Evidence: `.sisyphus/evidence/phase2-g12-final-derp-retry.log`
 - Reason: -
-- Detail: A proxy rejecting custom upgrades while accepting WebSockets was not installed. This is an unexecuted local harness requirement, not an established environment limitation.
+- Detail: The loopback audit proxy recorded custom DERP upgrades rejected with 403 followed by WebSocket upgrades accepted with 101. Raw command/binary/exit/5 MiB/EOF cases then passed through the relay. Detailed request ledger: phase2-g12-final-derp-fallback-proxy.log. Server fixture was restored afterward.
 
 ### A17
 
@@ -216,11 +217,11 @@ and task 12, line 465. They are not optional live-deployment work.
 |---|---|
 | Server forces DERP WebSockets | Initial relay setup uses the required transport. |
 
-- Status: FAIL
-- Command: `Fixtures/run/coder-bin/coder server --help`
-- Evidence: `.sisyphus/evidence/phase2-g12-server-help.log`
+- Status: PASS
+- Command: `bash scripts/test-coder-derp.sh`
+- Evidence: `.sisyphus/evidence/phase2-g12-final-derp-retry.log`
 - Reason: -
-- Detail: The pinned server exposes --derp-force-websockets. Help inspection is only a capability probe; this flag was not enabled and initial relay transport was not observed. It cannot honestly be classified unforceable.
+- Detail: Native server restarted with CODER_DERP_FORCE_WEBSOCKETS=true. The fresh proxy ledger recorded WebSocket 101 upgrades and no custom DERP upgrade attempts; real raw cases passed. Detailed request ledger: phase2-g12-final-derp-forced-proxy.log. This is an executed transport check, not help output.
 
 ### A18
 
@@ -288,11 +289,11 @@ and task 12, line 465. They are not optional live-deployment work.
 |---|---|
 | Network change or suspend/resume | Bounded recovery or clear reconnect error; no leaked sessions. |
 
-- Status: FAIL
-- Command: `ruby scripts/verify-coder-matrix.rb --gate`
-- Evidence: `.sisyphus/evidence/phase2-g12-gate-brief.md`
+- Status: PASS
+- Command: `DEST_OVERRIDE='platform=iOS Simulator,id=732CE8E1-F9EF-4020-BF93-5BA1AA365B0E' DERIVED_DATA="$PWD/.build-artifacts/DerivedData/g12-core" EVIDENCE_LOG='.sisyphus/evidence/phase2-g12-verified-core-iphone.log' scripts/test-core.sh`
+- Evidence: `.sisyphus/evidence/phase2-g12-verified-core-iphone.log`
 - Reason: -
-- Detail: Live transport suspend/resume and close conformance passed on both destinations. Full iPad UI regression failed in scene flows, and the combined no-leaked-session recovery outcome was not fully audited.
+- Detail: The live Coder conformance suite passed suspend/resume without re-handshake and terminal close/output cleanup on both canonical devices. Typed resume-failure and dead-channel recovery tests also passed. Corresponding full UI suites are now green. This covers the suspend/resume branch, not a physical Wi-Fi/cellular transition.
 
 ### A24
 
@@ -312,11 +313,11 @@ and task 12, line 465. They are not optional live-deployment work.
 |---|---|
 | Noninteractive binary stdout | Byte-exact output; no CRLF/text transformations or debug banners. |
 
-- Status: FAIL
-- Command: `ruby scripts/verify-coder-matrix.rb --gate`
-- Evidence: `.sisyphus/evidence/phase2-g12-gate-brief.md`
+- Status: PASS
+- Command: `ruby scripts/test-coder-raw.rb`
+- Evidence: `.sisyphus/evidence/phase2-g12-final-raw-cancellation.log`
 - Reason: -
-- Detail: Live conformance uses a PTY shell and text markers. No non-PTY binary byte comparison was run; this row is not scope-excluded merely because exec work remains.
+- Detail: OpenSSH -T over the production proxy receives exactly bytes 00 01 0A 0D 7F 80 FF from the agent, with empty stderr and status 0. Both direct and relay paths passed this non-PTY case.
 
 ### A26
 
@@ -324,11 +325,11 @@ and task 12, line 465. They are not optional live-deployment work.
 |---|---|
 | Remote command exit status/stderr | Preserved by the downstream/native SSH implementation. |
 
-- Status: FAIL
-- Command: `ruby scripts/verify-coder-matrix.rb --gate`
-- Evidence: `.sisyphus/evidence/phase2-g12-gate-brief.md`
+- Status: PASS
+- Command: `ruby scripts/test-coder-raw.rb`
+- Evidence: `.sisyphus/evidence/phase2-g12-final-raw-cancellation.log`
 - Reason: -
-- Detail: No separate stderr and nonzero remote exit-status assertions were exercised through BicTerm's native downstream implementation.
+- Detail: The raw OpenSSH case asserts stdout-marker, separate stderr-marker, and exact exit status 37 through the production translation proxy. The failing-first Go test also verifies extended data and exit-status preservation after stdin EOF. Evidence is for the raw adapter with OpenSSH as downstream, not a new app exec UI.
 
 ### A27
 
@@ -336,11 +337,11 @@ and task 12, line 465. They are not optional live-deployment work.
 |---|---|
 | Large output and transfers greater than 4 MiB | Complete streaming transfer; coordinator limits not misapplied to SSH data. |
 
-- Status: FAIL
-- Command: `ruby scripts/verify-coder-matrix.rb --gate`
-- Evidence: `.sisyphus/evidence/phase2-g12-gate-brief.md`
+- Status: PASS
+- Command: `ruby scripts/test-coder-raw.rb`
+- Evidence: `.sisyphus/evidence/phase2-g12-final-raw-cancellation.log`
 - Reason: -
-- Detail: No greater-than-4-MiB end-to-end transfer with byte count and digest comparison was executed. Small shell markers are insufficient.
+- Detail: Streamed 5,242,880 bytes through the live agent and proxy on direct and relay paths. Byte count and SHA-256 were independently checked against the known all-zero input; digest c036cbb7553a909f8b8877d4461924307f27ecb66cff928eeeafd569c3887e29.
 
 ### A28
 
@@ -372,11 +373,11 @@ and task 12, line 465. They are not optional live-deployment work.
 |---|---|
 | Stdin EOF with trailing remote output | Half-close permits output to drain; no truncation. |
 
-- Status: FAIL
-- Command: `ruby scripts/verify-coder-matrix.rb --gate`
-- Evidence: `.sisyphus/evidence/phase2-g12-gate-brief.md`
+- Status: PASS
+- Command: `ruby scripts/test-coder-raw.rb`
+- Evidence: `.sisyphus/evidence/phase2-g12-final-raw-cancellation.log`
 - Reason: -
-- Detail: No stdin half-close followed by trailing-output drain test was run through the live bridge. Full close conformance is a different outcome.
+- Detail: Non-PTY cat receives binary input and EOF, then the remote command emits trailing-output after a one-second delay. Exact combined bytes and status 0 pass through both direct and relay paths. This exposed and repaired the proxy's first-copy-completion teardown defect.
 
 ### A31
 
@@ -385,10 +386,10 @@ and task 12, line 465. They are not optional live-deployment work.
 | Cancellation, stdout failure, peer EOF | Both copy directions and network/controller resources terminate. |
 
 - Status: FAIL
-- Command: `ruby scripts/verify-coder-matrix.rb --gate`
-- Evidence: `.sisyphus/evidence/phase2-g12-gate-brief.md`
+- Command: `ruby scripts/test-coder-raw.rb`
+- Evidence: `.sisyphus/evidence/phase2-g12-final-raw-cancellation.log`
 - Reason: -
-- Detail: Close and partial-dial cleanup coverage passed, but stdout-write failure and both copy directions under peer EOF were not exercised together as required.
+- Detail: Active handle cancellation terminates an established cat session and removes the bridge socket. However, closing the local stdout reader while OpenSSH runs an unbounded producer does not terminate the child within 15 seconds; the harness records FAIL and forcibly cleans its process group. No full-row PASS or NOT-LOCAL exemption is claimed. Layer ownership of the observed stdout failure still needs resolution.
 
 ### A32
 

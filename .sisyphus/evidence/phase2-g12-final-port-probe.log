@@ -1,0 +1,1023 @@
+Command line invocation:
+    /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild test -scheme BicTerm -destination "platform=iOS Simulator,id=3686DD9C-ACA2-4A79-8968-A9C3572C8276" -derivedDataPath /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app -resultBundlePath /Users/richard/code/BicTerm/.build-artifacts/xcresults/g12-final-port-probe.xcresult -parallel-testing-enabled NO "-only-testing:BicTermUITests/ConnectionEditorUITests/testReplacingDefaultPortDoesNotAppendToExistingDigits"
+
+Resolve Package Graph
+
+
+Resolved source packages:
+  swift-nio: https://github.com/apple/swift-nio.git @ 2.102.0
+  swift-nio-ssh: /Users/richard/code/BicTerm/Vendor/swift-nio-ssh @ local
+  SwiftDocCPlugin: https://github.com/apple/swift-docc-plugin @ 1.5.0
+  SymbolKit: https://github.com/swiftlang/swift-docc-symbolkit @ 1.0.0
+  swift-asn1: https://github.com/apple/swift-asn1.git @ 1.7.2
+  swift-crypto: https://github.com/apple/swift-crypto.git @ 4.5.2
+  swift-argument-parser: https://github.com/apple/swift-argument-parser @ 1.8.2
+  SwiftTerm: /Users/richard/code/BicTerm/Vendor/SwiftTerm
+  swift-collections: https://github.com/apple/swift-collections.git @ 1.6.0
+  swift-atomics: https://github.com/apple/swift-atomics.git @ 1.3.1
+  BicTermCore: /Users/richard/code/BicTerm/BicTermCore
+  swift-system: https://github.com/apple/swift-system.git @ 1.8.1
+
+Writing result bundle at path:
+	/Users/richard/code/BicTerm/.build-artifacts/xcresults/g12-final-port-probe.xcresult
+
+ComputePackagePrebuildTargetDependencyGraph
+
+Prepare packages
+
+Compile plug-in “SwiftTermBuildInfoPlugin” in package “swiftterm”
+[debug]: Compiling plugin to executable at /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Products/PluginExecutables/SwiftTermBuildInfoPlugin
+[debug]: Using compiler /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc
+[debug]: Plugin compilation output directory '/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Products/PluginExecutables'
+[debug]: Computed hash of plugin compilation inputs: a89582677f16616d3ae07a046f0d81e39cf426cc338b7a282fc0e8a9a3a779ee
+
+
+Apply build tool plug-in “SwiftTermBuildInfoPlugin” to target “SwiftTerm” in package “swiftterm”
+
+Process build tool plug-in results
+package: <IDESwiftPackageCore.IDESwiftPackage:0x7f6878300 path:'/Users/richard/code/BicTerm/Vendor/SwiftTerm'>
+    target: SwiftTerm
+        prebuildCommandOutputPaths: []
+        buildCommands: [SwiftPM.SPMCustomBuildCommand(displayName: Optional("Generate SwiftTerm build information"), executable: "/${BUILD_DIR}/${CONFIGURATION}/SwiftTermBuildInfoGenerator", arguments: ["/Users/richard/code/BicTerm/Vendor/SwiftTerm", "/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BuildToolPluginIntermediates/swiftterm.output/SwiftTerm/SwiftTermBuildInfoPlugin/Generated/SwiftTermBuildInfo.swift"], environment: [:], workingDir: nil, inputPaths: [SwiftPM.SPMAbsolutePath(absolutePath: <AbsolutePath:"/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BuildToolPluginIntermediates/swiftterm.output/SwiftTerm/SwiftTermBuildInfoPlugin/build-info-trigger">)], pluginOutputDir: SwiftPM.SPMAbsolutePath(absolutePath: <AbsolutePath:"/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BuildToolPluginIntermediates/swiftterm.output/SwiftTerm/SwiftTermBuildInfoPlugin">), outputPaths: ["/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BuildToolPluginIntermediates/swiftterm.output/SwiftTerm/SwiftTermBuildInfoPlugin/Generated/SwiftTermBuildInfo.swift"], sandboxProfile: Optional(SwiftPM.SPMSandboxProfile(strictness: Basics.Sandbox.Strictness.writableTemporaryDirectory, writableDirectories: [<AbsolutePath:"/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BuildToolPluginIntermediates/swiftterm.output/SwiftTerm/SwiftTermBuildInfoPlugin">], readOnlyDirectories: [<AbsolutePath:"/Users/richard/code/BicTerm/Vendor/SwiftTerm">])))]
+        allDerivedOutputPaths: [SwiftPM.SPMAbsolutePath(absolutePath: <AbsolutePath:"/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BuildToolPluginIntermediates/swiftterm.output/SwiftTerm/SwiftTermBuildInfoPlugin/Generated/SwiftTermBuildInfo.swift">)]
+
+CreateBuildRequest
+
+SendProjectDescription
+
+CreateBuildOperation
+
+ComputeTargetDependencyGraph
+note: Building targets in dependency order
+note: Target dependency graph (47 targets)
+    Target 'BicTermUITests' in project 'BicTerm'
+        ➜ Explicit dependency on target 'BicTerm' in project 'BicTerm'
+    Target 'BicTermTests' in project 'BicTerm'
+        ➜ Explicit dependency on target 'BicTerm' in project 'BicTerm'
+    Target 'BicTerm' in project 'BicTerm'
+        ➜ Implicit dependency on target 'CoderTunnel' in project 'BicTerm' via options '-framework CoderTunnel' in build setting 'OTHER_LDFLAGS'
+        ➜ Explicit dependency on target 'BicTermCore' in project 'BicTermCore'
+        ➜ Explicit dependency on target 'SwiftTerm' in project 'SwiftTerm'
+    Target 'SwiftTerm' in project 'SwiftTerm'
+        ➜ Explicit dependency on target 'SwiftTerm' in project 'SwiftTerm'
+        ➜ Explicit dependency on target 'SwiftTerm_SwiftTerm' in project 'SwiftTerm'
+        ➜ Explicit dependency on target 'SwiftTermBuildInfoGenerator' in project 'SwiftTerm'
+        ➜ Explicit dependency on target 'SwiftTermBuildInfoPlugin' in project 'SwiftTerm'
+    Target 'SwiftTerm' in project 'SwiftTerm'
+        ➜ Explicit dependency on target 'SwiftTerm_SwiftTerm' in project 'SwiftTerm'
+        ➜ Explicit dependency on target 'SwiftTermBuildInfoGenerator' in project 'SwiftTerm'
+        ➜ Explicit dependency on target 'SwiftTermBuildInfoPlugin' in project 'SwiftTerm'
+    Target 'SwiftTermBuildInfoGenerator' in project 'SwiftTerm' (no dependencies)
+    Target 'SwiftTerm_SwiftTerm' in project 'SwiftTerm'
+        ➜ Explicit dependency on target 'SwiftTermBuildInfoPlugin' in project 'SwiftTerm'
+    Target 'SwiftTermBuildInfoPlugin' in project 'SwiftTerm'
+        ➜ Explicit dependency on target 'SwiftTermBuildInfoGenerator' in project 'SwiftTerm'
+    Target 'SwiftTermBuildInfoGenerator' in project 'SwiftTerm' (no dependencies)
+    Target 'CoderTunnel' in project 'BicTerm'
+        ➜ Explicit dependency on target 'BicTermCore' in project 'BicTermCore'
+    Target 'BicTermCore' in project 'BicTermCore'
+        ➜ Explicit dependency on target 'BicTermCore' in project 'BicTermCore'
+        ➜ Explicit dependency on target 'CBcryptPBKDF' in project 'BicTermCore'
+        ➜ Explicit dependency on target 'NIOSSH' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOPosix' in project 'swift-nio'
+    Target 'BicTermCore' in project 'BicTermCore'
+        ➜ Explicit dependency on target 'CBcryptPBKDF' in project 'BicTermCore'
+        ➜ Explicit dependency on target 'NIOSSH' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOPosix' in project 'swift-nio'
+    Target 'NIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'swift-nio_NIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics' in project 'swift-atomics'
+    Target 'NIOSSH' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOSSH' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOFoundationCompat' in project 'swift-nio'
+        ➜ Explicit dependency on target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'Atomics' in project 'swift-atomics'
+    Target 'NIOSSH' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOFoundationCompat' in project 'swift-nio'
+        ➜ Explicit dependency on target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'Atomics' in project 'swift-atomics'
+    Target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'swift-crypto_Crypto' in project 'swift-crypto'
+    Target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'swift-crypto_Crypto' in project 'swift-crypto'
+    Target 'swift-crypto_Crypto' in project 'swift-crypto' (no dependencies)
+    Target 'NIOFoundationCompat' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOFoundationCompat' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOEmbedded' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIO' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOFoundationEssentialsCompat' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics' in project 'swift-atomics'
+    Target 'NIOFoundationCompat' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOEmbedded' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIO' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOFoundationEssentialsCompat' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics' in project 'swift-atomics'
+    Target 'NIOFoundationEssentialsCompat' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics' in project 'swift-atomics'
+    Target 'NIO' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOEmbedded' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics' in project 'swift-atomics'
+    Target 'NIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'swift-nio_NIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics' in project 'swift-atomics'
+    Target 'swift-nio_NIOPosix' in project 'swift-nio' (no dependencies)
+    Target 'CNIOPosix' in project 'swift-nio' (no dependencies)
+    Target 'NIOEmbedded' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics' in project 'swift-atomics'
+    Target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+    Target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics' in project 'swift-atomics'
+    Target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics' in project 'swift-atomics'
+    Target 'Atomics' in project 'swift-atomics'
+        ➜ Explicit dependency on target 'Atomics' in project 'swift-atomics'
+        ➜ Explicit dependency on target '_AtomicsShims' in project 'swift-atomics'
+    Target 'Atomics' in project 'swift-atomics'
+        ➜ Explicit dependency on target '_AtomicsShims' in project 'swift-atomics'
+    Target '_AtomicsShims' in project 'swift-atomics' (no dependencies)
+    Target 'DequeModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'DequeModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'InternalCollectionsUtilities' in project 'swift-collections'
+        ➜ Explicit dependency on target 'ContainersPreview' in project 'swift-collections'
+    Target 'DequeModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'InternalCollectionsUtilities' in project 'swift-collections'
+        ➜ Explicit dependency on target 'ContainersPreview' in project 'swift-collections'
+    Target 'ContainersPreview' in project 'swift-collections'
+        ➜ Explicit dependency on target 'InternalCollectionsUtilities' in project 'swift-collections'
+    Target 'InternalCollectionsUtilities' in project 'swift-collections' (no dependencies)
+    Target '_NIODataStructures' in project 'swift-nio' (no dependencies)
+    Target 'CNIOWASI' in project 'swift-nio' (no dependencies)
+    Target 'CNIOWindows' in project 'swift-nio' (no dependencies)
+    Target 'CNIOLinux' in project 'swift-nio' (no dependencies)
+    Target 'CNIODarwin' in project 'swift-nio' (no dependencies)
+    Target 'CNIOFreeBSD' in project 'swift-nio' (no dependencies)
+    Target 'CNIOOpenBSD' in project 'swift-nio' (no dependencies)
+    Target '_NIOBase64' in project 'swift-nio' (no dependencies)
+    Target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+    Target 'CNIOAtomics' in project 'swift-nio' (no dependencies)
+    Target 'CBcryptPBKDF' in project 'BicTermCore' (no dependencies)
+
+GatherProvisioningInputs
+
+CreateBuildDescription
+
+ClangStatCache /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang-stat-cache /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/SDKStatCaches.noindex/iphonesimulator26.5-23F81a-688ef53f1462e2c8f657fdc38a81448f6cfe768891a92b912361537c460fe42b.sdkstatcache
+    cd /Users/richard/code/BicTerm/BicTerm.xcodeproj
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang-stat-cache /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -o /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/SDKStatCaches.noindex/iphonesimulator26.5-23F81a-688ef53f1462e2c8f657fdc38a81448f6cfe768891a92b912361537c460fe42b.sdkstatcache
+
+ClangStatCache /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang-stat-cache /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/SDKStatCaches.noindex/macosx26.5-25F70-688ef53f1462e2c8f657fdc38a81448fe082c4a02f00227109f4ed75e425c832.sdkstatcache
+    cd /Users/richard/code/BicTerm/BicTerm.xcodeproj
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang-stat-cache /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.5.sdk -o /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/SDKStatCaches.noindex/macosx26.5-25F70-688ef53f1462e2c8f657fdc38a81448fe082c4a02f00227109f4ed75e425c832.sdkstatcache
+
+CustomTask Generate\ SwiftTerm\ build\ information 3a48a1b50e085985cc79445200ce99b4 (in target 'SwiftTerm' from project 'SwiftTerm')
+    cd /Users/richard/code/BicTerm/Vendor/SwiftTerm
+    export ACTION\=build
+    export AD_HOC_CODE_SIGNING_ALLOWED\=YES
+    export ALLOW_BUILD_REQUEST_OVERRIDES\=NO
+    export ALLOW_TARGET_PLATFORM_SPECIALIZATION\=NO
+    export ALTERNATE_GROUP\=staff
+    export ALTERNATE_MODE\=u+w,go-w,a+rX
+    export ALTERNATE_OWNER\=richard
+    export ALTERNATIVE_DISTRIBUTION_WEB\=NO
+    export ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES\=NO
+    export ALWAYS_SEARCH_USER_PATHS\=YES
+    export ALWAYS_USE_SEPARATE_HEADERMAPS\=NO
+    export APPLICATION_EXTENSION_API_ONLY\=NO
+    export APPLY_RULES_IN_COPY_FILES\=NO
+    export APPLY_RULES_IN_COPY_HEADERS\=NO
+    export APP_SHORTCUTS_ENABLE_FLEXIBLE_MATCHING\=YES
+    export ARCHS\=arm64
+    export ARCHS_BASE\=arm64
+    export ARCHS_STANDARD\=arm64\ x86_64
+    export ARCHS_STANDARD_32_64_BIT\=arm64\ x86_64
+    export ARCHS_STANDARD_64_BIT\=arm64\ x86_64
+    export ARCHS_STANDARD_INCLUDING_64_BIT\=arm64\ x86_64
+    export ARCHS_UNIVERSAL_IPHONE_OS\=arm64\ x86_64
+    export ASSETCATALOG_FILTER_FOR_DEVICE_MODEL\=iPad17,4-A
+    export ASSETCATALOG_FILTER_FOR_DEVICE_OS_VERSION\=26.3.1
+    export ASSETCATALOG_FILTER_FOR_THINNING_DEVICE_CONFIGURATION\=iPad17,4-A
+    export AUTOMATICALLY_MERGE_DEPENDENCIES\=NO
+    export AUTOMATION_APPLE_EVENTS\=NO
+    export AVAILABLE_PLATFORMS\=android\ appletvos\ appletvsimulator\ driverkit\ freebsd\ iphoneos\ iphonesimulator\ linux\ macosx\ none\ openbsd\ qnx\ watchos\ watchsimulator\ webassembly\ xros\ xrsimulator
+    export BUILD_ACTIVE_RESOURCES_ONLY\=YES
+    export BUILD_COMPONENTS\=headers\ build
+    export BUILD_DIR\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Products
+    export BUILD_LIBRARY_FOR_DISTRIBUTION\=NO
+    export BUILD_ONLY_KNOWN_LOCALIZATIONS\=NO
+    export BUILD_ROOT\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Products
+    export BUILD_STYLE\=
+    export BUILD_VARIANTS\=normal
+    export BUILT_PRODUCTS_DIR\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Products/Debug-iphonesimulator
+    export BUNDLE_CONTENTS_FOLDER_PATH_deep\=Contents/
+    export BUNDLE_EXECUTABLE_FOLDER_NAME_deep\=MacOS
+    export BUNDLE_EXTENSIONS_FOLDER_PATH\=Extensions
+    export BUNDLE_FORMAT\=shallow
+    export BUNDLE_FRAMEWORKS_FOLDER_PATH\=Frameworks
+    export BUNDLE_PLUGINS_FOLDER_PATH\=PlugIns
+    export BUNDLE_PRIVATE_HEADERS_FOLDER_PATH\=PrivateHeaders
+    export BUNDLE_PUBLIC_HEADERS_FOLDER_PATH\=Headers
+    export CACHE_ROOT\=/var/folders/hy/m79bdqfj21g6ndt8hbtf0c6w0000gn/C/com.apple.DeveloperTools/26.6-17F113/Xcode
+    export CCHROOT\=/var/folders/hy/m79bdqfj21g6ndt8hbtf0c6w0000gn/C/com.apple.DeveloperTools/26.6-17F113/Xcode
+    export CHMOD\=/bin/chmod
+    export CHOWN\=chown
+    export CLANG_CACHE_FINE_GRAINED_OUTPUTS\=YES
+    export CLANG_COVERAGE_MAPPING_LINKER_ARGS\=NO
+    export CLANG_ENABLE_EXPLICIT_MODULES\=YES
+    export CLANG_ENABLE_MODULES\=YES
+    export CLANG_ENABLE_OBJC_ARC\=YES
+    export CLANG_MODULES_BUILD_SESSION_FILE\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/ModuleCache.noindex/Session.modulevalidation
+    export CLASS_FILE_DIR\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/SwiftTerm.build/Debug-iphonesimulator/SwiftTerm.build/JavaClasses
+    export CLEAN_PRECOMPS\=YES
+    export CLONE_HEADERS\=NO
+    export CODESIGNING_FOLDER_PATH\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Products/Debug-iphonesimulator/SwiftTerm.o
+    export CODE_SIGNING_ALLOWED\=NO
+    export CODE_SIGNING_REQUIRED\=NO
+    export CODE_SIGN_CONTEXT_CLASS\=XCiPhoneSimulatorCodeSignContext
+    export CODE_SIGN_INJECT_BASE_ENTITLEMENTS\=YES
+    export COLOR_DIAGNOSTICS\=NO
+    export COMBINE_HIDPI_IMAGES\=NO
+    export COMPILATION_CACHE_CAS_PATH\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/CompilationCache.noindex
+    export COMPILATION_CACHE_KEEP_CAS_DIRECTORY\=YES
+    export COMPILER_INDEX_STORE_ENABLE\=Default
+    export COMPILER_WORKING_DIRECTORY\=/Users/richard/code/BicTerm/BicTerm.xcodeproj
+    export COMPOSITE_SDK_DIRS\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/CompositeSDKs
+    export COMPRESS_PNG_FILES\=YES
+    export CONFIGURATION\=Debug
+    export CONFIGURATION_BUILD_DIR\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Products/Debug-iphonesimulator
+    export CONFIGURATION_TEMP_DIR\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/SwiftTerm.build/Debug-iphonesimulator
+    export COPYING_PRESERVES_HFS_DATA\=NO
+    export COPY_HEADERS_RUN_UNIFDEF\=NO
+    export COPY_PHASE_STRIP\=NO
+    export COREML_CODEGEN_LANGUAGE\=Swift
+    export COREML_COMPILER_CONTAINER\=swift-package
+    export CORRESPONDING_DEVICE_PLATFORM_DIR\=/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform
+    export CORRESPONDING_DEVICE_PLATFORM_NAME\=iphoneos
+    export CORRESPONDING_DEVICE_SDK_DIR\=/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.5.sdk
+    export CORRESPONDING_DEVICE_SDK_NAME\=iphoneos26.5
+    export CP\=/bin/cp
+    export CREATE_INFOPLIST_SECTION_IN_BINARY\=NO
+    export CURRENT_ARCH\=undefined_arch
+    export CURRENT_VARIANT\=normal
+    export DEAD_CODE_STRIPPING\=NO
+    export DEBUGGING_SYMBOLS\=YES
+    export DEBUG_INFORMATION_FORMAT\=dwarf
+    export DEBUG_INFORMATION_VERSION\=compiler-default
+    export DEFAULT_COMPILER\=com.apple.compilers.llvm.clang.1_0
+    export DEFAULT_DEXT_INSTALL_PATH\=/System/Library/DriverExtensions
+    export DEFAULT_KEXT_INSTALL_PATH\=/System/Library/Extensions
+    export DEFINES_MODULE\=YES
+    export DEPLOYMENT_LOCATION\=NO
+    export DEPLOYMENT_POSTPROCESSING\=NO
+    export DEPLOYMENT_TARGET_SETTING_NAME\=IPHONEOS_DEPLOYMENT_TARGET
+    export DEPLOYMENT_TARGET_SUGGESTED_VALUES\=12.0\ 12.1\ 12.2\ 12.3\ 12.4\ 13.0\ 13.1\ 13.2\ 13.3\ 13.4\ 13.5\ 13.6\ 14.0\ 14.1\ 14.2\ 14.3\ 14.4\ 14.5\ 14.6\ 14.7\ 15.0\ 15.1\ 15.2\ 15.3\ 15.4\ 15.5\ 15.6\ 16.0\ 16.1\ 16.2\ 16.3\ 16.4\ 16.5\ 16.6\ 17.0\ 17.1\ 17.2\ 17.3\ 17.4\ 17.5\ 17.6\ 18.0\ 18.1\ 18.2\ 18.3\ 18.4\ 18.5\ 18.6\ 26.0\ 26.2\ 26.3\ 26.4\ 26.5
+    export DERIVED_FILES_DIR\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/SwiftTerm.build/Debug-iphonesimulator/SwiftTerm.build/DerivedSources
+    export DERIVED_FILE_DIR\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/SwiftTerm.build/Debug-iphonesimulator/SwiftTerm.build/DerivedSources
+    export DERIVED_SOURCES_DIR\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/SwiftTerm.build/Debug-iphonesimulator/SwiftTerm.build/DerivedSources
+    export DEVELOPER_APPLICATIONS_DIR\=/Applications/Xcode.app/Contents/Developer/Applications
+    export DEVELOPER_BIN_DIR\=/Applications/Xcode.app/Contents/Developer/usr/bin
+    export DEVELOPER_DIR\=/Applications/Xcode.app/Contents/Developer
+    export DEVELOPER_FRAMEWORKS_DIR\=/Applications/Xcode.app/Contents/Developer/Library/Frameworks
+    export DEVELOPER_FRAMEWORKS_DIR_QUOTED\=/Applications/Xcode.app/Contents/Developer/Library/Frameworks
+    export DEVELOPER_LIBRARY_DIR\=/Applications/Xcode.app/Contents/Developer/Library
+    export DEVELOPER_SDK_DIR\=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs
+    export DEVELOPER_TOOLS_DIR\=/Applications/Xcode.app/Contents/Developer/Tools
+    export DEVELOPER_USR_DIR\=/Applications/Xcode.app/Contents/Developer/usr
+    export DEVELOPMENT_LANGUAGE\=en
+    export DIAGNOSE_MISSING_TARGET_DEPENDENCIES\=YES
+    export DIFF\=/usr/bin/diff
+    export DONT_GENERATE_INFOPLIST_FILE\=NO
+    export DSTROOT\=/tmp/SwiftTerm.dst
+    export DT_TOOLCHAIN_DIR\=/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain
+    export DUMP_DEPENDENCIES\=NO
+    export DUMP_DEPENDENCIES_OUTPUT_PATH\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/SwiftTerm.build/Debug-iphonesimulator/SwiftTerm.build/SwiftTerm-BuildDependencyInfo.json
+    export DWARF_DSYM_FILE_NAME\=SwiftTerm.o.dSYM
+    export DWARF_DSYM_FILE_SHOULD_ACCOMPANY_PRODUCT\=NO
+    export DWARF_DSYM_FOLDER_PATH\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Products/Debug-iphonesimulator
+    export DYLIB_INSTALL_NAME_BASE\=@rpath
+    export DYNAMIC_LIBRARY_EXTENSION\=dylib
+    export EAGER_COMPILATION_ALLOW_SCRIPTS\=NO
+    export EAGER_LINKING\=NO
+    export EFFECTIVE_PLATFORM_NAME\=-iphonesimulator
+    export EFFECTIVE_SWIFT_VERSION\=5
+    export EMBEDDED_CONTENT_CONTAINS_SWIFT\=NO
+    export EMBED_ASSET_PACKS_IN_PRODUCT_BUNDLE\=NO
+    export ENABLE_APP_SANDBOX\=NO
+    export ENABLE_CODE_COVERAGE\=YES
+    export ENABLE_COHORT_ARCHS\=NO
+    export ENABLE_CPLUSPLUS_BOUNDS_SAFE_BUFFERS\=NO
+    export ENABLE_C_BOUNDS_SAFETY\=NO
+    export ENABLE_DEFAULT_HEADER_SEARCH_PATHS\=YES
+    export ENABLE_DEFAULT_SEARCH_PATHS\=YES
+    export ENABLE_ENHANCED_SECURITY\=NO
+    export ENABLE_HARDENED_RUNTIME\=NO
+    export ENABLE_HEADER_DEPENDENCIES\=YES
+    export ENABLE_INCOMING_NETWORK_CONNECTIONS\=NO
+    export ENABLE_NS_ASSERTIONS\=YES
+    export ENABLE_ON_DEMAND_RESOURCES\=NO
+    export ENABLE_OUTGOING_NETWORK_CONNECTIONS\=NO
+    export ENABLE_POINTER_AUTHENTICATION\=NO
+    export ENABLE_PREVIEWS\=NO
+    export ENABLE_RESOURCE_ACCESS_AUDIO_INPUT\=NO
+    export ENABLE_RESOURCE_ACCESS_BLUETOOTH\=NO
+    export ENABLE_RESOURCE_ACCESS_CALENDARS\=NO
+    export ENABLE_RESOURCE_ACCESS_CAMERA\=NO
+    export ENABLE_RESOURCE_ACCESS_CONTACTS\=NO
+    export ENABLE_RESOURCE_ACCESS_LOCATION\=NO
+    export ENABLE_RESOURCE_ACCESS_PHOTO_LIBRARY\=NO
+    export ENABLE_RESOURCE_ACCESS_PRINTING\=NO
+    export ENABLE_RESOURCE_ACCESS_USB\=NO
+    export ENABLE_SDK_IMPORTS\=NO
+    export ENABLE_SECURITY_COMPILER_WARNINGS\=NO
+    export ENABLE_TESTABILITY\=YES
+    export ENABLE_TESTING_SEARCH_PATHS\=YES
+    export ENABLE_USER_SCRIPT_SANDBOXING\=NO
+    export ENABLE_XOJIT_PREVIEWS\=YES
+    export ENFORCE_VALID_ARCHS\=YES
+    export ENTITLEMENTS_DESTINATION\=__entitlements
+    export ENTITLEMENTS_REQUIRED\=NO
+    export EXCLUDED_INSTALLSRC_SUBDIRECTORY_PATTERNS\=.DS_Store\ .svn\ .git\ .hg\ CVS
+    export EXCLUDED_RECURSIVE_SEARCH_PATH_SUBDIRECTORIES\=\*.nib\ \*.lproj\ \*.framework\ \*.gch\ \*.xcode\*\ \*.xcassets\ \*.icon\ \(\*\)\ .DS_Store\ CVS\ .svn\ .git\ .hg\ \*.pbproj\ \*.pbxproj
+    export EXECUTABLE_EXTENSION\=o
+    export EXECUTABLE_NAME\=SwiftTerm.o
+    export EXECUTABLE_PATH\=SwiftTerm.o
+    export EXECUTABLE_SUFFIX\=.o
+    export FILE_LIST\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/SwiftTerm.build/Debug-iphonesimulator/SwiftTerm.build/Objects/LinkFileList
+    export FIXED_FILES_DIR\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/SwiftTerm.build/Debug-iphonesimulator/SwiftTerm.build/FixedFiles
+    export FRAMEWORK_FLAG_PREFIX\=-framework
+    export FRAMEWORK_SEARCH_PATHS\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Products/Debug-iphonesimulator\ 
+    export FRAMEWORK_VERSION\=A
+    export FULL_PRODUCT_NAME\=SwiftTerm.o
+    export FUSE_BUILD_PHASES\=YES
+    export FUSE_BUILD_SCRIPT_PHASES\=NO
+    export GCC3_VERSION\=3.3
+    export GCC_INLINES_ARE_PRIVATE_EXTERN\=YES
+    export GCC_OBJC_LEGACY_DISPATCH\=YES
+    export GCC_OPTIMIZATION_LEVEL\=0
+    export GCC_PFE_FILE_C_DIALECTS\=c\ objective-c\ c++\ objective-c++
+    export GCC_PREPROCESSOR_DEFINITIONS\=\ SWIFT_PACKAGE\ DEBUG\=1
+    export GCC_TREAT_WARNINGS_AS_ERRORS\=NO
+    export GCC_VERSION\=com.apple.compilers.llvm.clang.1_0
+    export GCC_VERSION_IDENTIFIER\=com_apple_compilers_llvm_clang_1_0
+    export GCC_WARN_64_TO_32_BIT_CONVERSION\=NO
+    export GENERATED_MODULEMAP_DIR\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/GeneratedModuleMaps-iphonesimulator
+    export GENERATE_INFOPLIST_FILE\=NO
+    export GENERATE_INTERMEDIATE_TEXT_BASED_STUBS\=YES
+    export GENERATE_MASTER_OBJECT_FILE\=NO
+    export GENERATE_PKGINFO_FILE\=NO
+    export GENERATE_PRELINK_OBJECT_FILE\=NO
+    export GENERATE_PROFILING_CODE\=NO
+    export GENERATE_RESOURCE_ACCESSORS\=YES
+    export GENERATE_TEXT_BASED_STUBS\=NO
+    export GID\=20
+    export GROUP\=staff
+    export HEADERMAP_INCLUDES_FLAT_ENTRIES_FOR_TARGET_BEING_BUILT\=YES
+    export HEADERMAP_INCLUDES_FRAMEWORK_ENTRIES_FOR_ALL_PRODUCT_TYPES\=YES
+    export HEADERMAP_INCLUDES_FRAMEWORK_ENTRIES_FOR_TARGETS_NOT_BEING_BUILT\=YES
+    export HEADERMAP_INCLUDES_NONPUBLIC_NONPRIVATE_HEADERS\=YES
+    export HEADERMAP_INCLUDES_PROJECT_HEADERS\=YES
+    export HEADERMAP_USES_FRAMEWORK_PREFIX_ENTRIES\=YES
+    export HEADERMAP_USES_VFS\=YES
+    export HEADER_SEARCH_PATHS\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Products/Debug-iphonesimulator/include\ 
+    export HOME\=/Users/richard
+    export HOST_ARCH\=arm64
+    export HOST_PLATFORM\=macosx
+    export ICONV\=/usr/bin/iconv
+    export IMPLICIT_DEPENDENCY_DOMAIN\=default
+    export INDEX_STORE_COMPRESS\=NO
+    export INDEX_STORE_ONLY_PROJECT_FILES\=NO
+    export INFOPLIST_ENABLE_CFBUNDLEICONS_MERGE\=YES
+    export INFOPLIST_EXPAND_BUILD_SETTINGS\=YES
+    export INFOPLIST_OUTPUT_FORMAT\=binary
+    export INFOPLIST_PREPROCESS\=NO
+    export INLINE_PRIVATE_FRAMEWORKS\=NO
+    export INSTALLAPI_IGNORE_SKIP_INSTALL\=YES
+    export INSTALLHDRS_COPY_PHASE\=NO
+    export INSTALLHDRS_SCRIPT_PHASE\=NO
+    export INSTALL_DIR\=/tmp/SwiftTerm.dst/Users/richard/Objects
+    export INSTALL_GROUP\=staff
+    export INSTALL_MODE_FLAG\=u+w,go-w,a+rX
+    export INSTALL_OWNER\=richard
+    export INSTALL_PATH\=/Users/richard/Objects
+    export INSTALL_ROOT\=/tmp/SwiftTerm.dst
+    export IPHONEOS_DEPLOYMENT_TARGET\=14.0
+    export IS_UNOPTIMIZED_BUILD\=YES
+    export JAVAC_DEFAULT_FLAGS\=-J-Xms64m\ -J-XX:NewSize\=4M\ -J-Dfile.encoding\=UTF8
+    export JAVA_APP_STUB\=/System/Library/Frameworks/JavaVM.framework/Resources/MacOS/JavaApplicationStub
+    export JAVA_ARCHIVE_CLASSES\=YES
+    export JAVA_ARCHIVE_TYPE\=JAR
+    export JAVA_COMPILER\=/usr/bin/javac
+    export JAVA_FRAMEWORK_RESOURCES_DIRS\=Resources
+    export JAVA_JAR_FLAGS\=cv
+    export JAVA_SOURCE_SUBDIR\=.
+    export JAVA_USE_DEPENDENCIES\=YES
+    export JAVA_ZIP_FLAGS\=-urg
+    export JIKES_DEFAULT_FLAGS\=+E\ +OLDCSO
+    export KEEP_PRIVATE_EXTERNS\=NO
+    export LD_DEPENDENCY_INFO_FILE\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/SwiftTerm.build/Debug-iphonesimulator/SwiftTerm.build/Objects-normal/undefined_arch/SwiftTerm_dependency_info.dat
+    export LD_EXPORT_SYMBOLS\=YES
+    export LD_GENERATE_MAP_FILE\=NO
+    export LD_MAP_FILE_PATH\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/SwiftTerm.build/Debug-iphonesimulator/SwiftTerm.build/SwiftTerm-LinkMap-normal-undefined_arch.txt
+    export LD_NO_PIE\=NO
+    export LD_QUOTE_LINKER_ARGUMENTS_FOR_COMPILER_DRIVER\=YES
+    export LD_SHARED_CACHE_ELIGIBLE\=Automatic
+    export LD_WARN_DUPLICATE_LIBRARIES\=NO
+    export LD_WARN_UNUSED_DYLIBS\=NO
+    export LEGACY_DEVELOPER_DIR\=/Applications/Xcode.app/Contents/PlugIns/Xcode3Core.ideplugin/Contents/SharedSupport/Developer
+    export LEX\=lex
+    export LIBRARY_DEXT_INSTALL_PATH\=/Library/DriverExtensions
+    export LIBRARY_FLAG_NOSPACE\=YES
+    export LIBRARY_FLAG_PREFIX\=-l
+    export LIBRARY_KEXT_INSTALL_PATH\=/Library/Extensions
+    export LIBRARY_SEARCH_PATHS\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Products/Debug-iphonesimulator\ \ \ /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib
+    export LINKER_DISPLAYS_MANGLED_NAMES\=NO
+    export LINK_FILE_LIST_normal_arm64\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/SwiftTerm.build/Debug-iphonesimulator/SwiftTerm.build/Objects-normal/arm64/SwiftTerm.LinkFileList
+    export LINK_OBJC_RUNTIME\=YES
+    export LINK_WITH_STANDARD_LIBRARIES\=NO
+    export LLVM_TARGET_TRIPLE_OS_VERSION\=ios14.0
+    export LLVM_TARGET_TRIPLE_SUFFIX\=-simulator
+    export LLVM_TARGET_TRIPLE_VENDOR\=apple
+    export LM_AUX_CONST_METADATA_LIST_PATH_normal_arm64\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/SwiftTerm.build/Debug-iphonesimulator/SwiftTerm.build/Objects-normal/arm64/SwiftTerm.SwiftConstValuesFileList
+    export LOCALIZATION_EXPORT_SUPPORTED\=YES
+    export LOCALIZATION_PREFERS_STRING_CATALOGS\=NO
+    export LOCALIZED_STRING_CODE_COMMENTS\=NO
+    export LOCALIZED_STRING_MACRO_NAMES\=NSLocalizedString\ CFCopyLocalizedString
+    export LOCALIZED_STRING_SWIFTUI_SUPPORT\=YES
+    export LOCAL_ADMIN_APPS_DIR\=/Applications/Utilities
+    export LOCAL_APPS_DIR\=/Applications
+    export LOCAL_DEVELOPER_DIR\=/Library/Developer
+    export LOCAL_LIBRARY_DIR\=/Library
+    export LOCROOT\=/Users/richard/code/BicTerm/Vendor/SwiftTerm
+    export LOCSYMROOT\=/Users/richard/code/BicTerm/Vendor/SwiftTerm
+    export MACH_O_TYPE\=mh_object
+    export MAC_OS_X_PRODUCT_BUILD_VERSION\=25G83
+    export MAC_OS_X_VERSION_ACTUAL\=260602
+    export MAC_OS_X_VERSION_MAJOR\=260000
+    export MAC_OS_X_VERSION_MINOR\=260600
+    export MAKE_MERGEABLE\=NO
+    export MERGEABLE_LIBRARY\=NO
+    export MERGED_BINARY_TYPE\=none
+    export MERGE_LINKED_LIBRARIES\=NO
+    export METAL_LIBRARY_FILE_BASE\=default
+    export METAL_LIBRARY_OUTPUT_DIR\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Products/Debug-iphonesimulator/
+    export MODULEMAP_FILE_CONTENTS\=module\ SwiftTerm\ \{'
+'header\ \"SwiftTerm-Swift.h\"'
+'export\ \*'
+'\}
+    export MODULEMAP_PATH\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/GeneratedModuleMaps-iphonesimulator/SwiftTerm.modulemap
+    export MODULE_CACHE_DIR\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/ModuleCache.noindex
+    export NATIVE_ARCH\=arm64
+    export NATIVE_ARCH_32_BIT\=arm
+    export NATIVE_ARCH_64_BIT\=arm64
+    export NATIVE_ARCH_ACTUAL\=arm64
+    export NO_COMMON\=YES
+    export OBJC_ABI_VERSION\=2
+    export OBJECT_FILE_DIR\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/SwiftTerm.build/Debug-iphonesimulator/SwiftTerm.build/Objects
+    export OBJECT_FILE_DIR_normal\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/SwiftTerm.build/Debug-iphonesimulator/SwiftTerm.build/Objects-normal
+    export OBJROOT\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex
+    export ONLY_ACTIVE_ARCH\=YES
+    export OS\=MACOS
+    export OSAC\=/usr/bin/osacompile
+    export OTHER_CFLAGS\=\ -DXcode
+    export OTHER_CPLUSPLUSFLAGS\=\ -DXcode
+    export OTHER_SWIFT_FLAGS\=\ -DXcode\ -plugin-path\ /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing
+    export PACKAGE_RESOURCE_BUNDLE_NAME\=SwiftTerm_SwiftTerm
+    export PACKAGE_RESOURCE_TARGET_KIND\=regular
+    export PACKAGE_TYPE\=com.apple.package-type.mach-o-objfile
+    export PASCAL_STRINGS\=YES
+    export PATH\=/Applications/Xcode.app/Contents/SharedFrameworks/SwiftBuild.framework/Versions/A/PlugIns/SWBBuildService.bundle/Contents/PlugIns/SWBUniversalPlatformPlugin.bundle/Contents/Frameworks/SWBUniversalPlatform.framework/Resources:/var/run/com.apple.security.cryptexd/mnt/com.apple.MobileAsset.MetalToolchain-v17.6.109.0.ozHyXD/Metal.xctoolchain/usr/bin:/var/run/com.apple.security.cryptexd/mnt/com.apple.MobileAsset.MetalToolchain-v17.6.109.0.ozHyXD/Metal.xctoolchain/usr/local/bin:/var/run/com.apple.security.cryptexd/mnt/com.apple.MobileAsset.MetalToolchain-v17.6.109.0.ozHyXD/Metal.xctoolchain/usr/libexec:/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin:/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/local/bin:/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/libexec:/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/usr/bin:/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/usr/local/bin:/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/bin:/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/local/bin:/Applications/Xcode.app/Contents/Developer/usr/bin:/Applications/Xcode.app/Contents/Developer/usr/local/bin:/Users/richard/.opencode/bin:/Users/richard/.bun/bin:/Users/richard/.local/bin:/opt/homebrew/opt/ruby/bin:/Users/richard/.pyenv/shims:/Users/richard/.krew/bin:/opt/homebrew/bin:/Users/richard/.nvm/versions/node/v22.22.0/bin:/usr/local/bin:/opt/local/bin:/opt/local/sbin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/pkg/env/global/bin:/Library/Apple/usr/bin:/usr/local/MacGPG2/bin:/usr/local/share/dotnet:/Library/Frameworks/Mono.framework/Versions/Current/Commands:/Users/richard/.cargo/bin:/Users/richard/go/bin:/opt/homebrew/opt/go/libexec/bin:/Users/richard/.lmstudio/bin
+    export PATH_PREFIXES_EXCLUDED_FROM_HEADER_DEPENDENCIES\=/usr/include\ /usr/local/include\ /System/Library/Frameworks\ /System/Library/PrivateFrameworks\ /Applications/Xcode.app/Contents/Developer/Headers\ /Applications/Xcode.app/Contents/Developer/SDKs\ /Applications/Xcode.app/Contents/Developer/Platforms
+    export PER_ARCH_MODULE_FILE_DIR\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/SwiftTerm.build/Debug-iphonesimulator/SwiftTerm.build/Objects-normal/undefined_arch
+    export PER_ARCH_OBJECT_FILE_DIR\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/SwiftTerm.build/Debug-iphonesimulator/SwiftTerm.build/Objects-normal/undefined_arch
+    export PER_VARIANT_OBJECT_FILE_DIR\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/SwiftTerm.build/Debug-iphonesimulator/SwiftTerm.build/Objects-normal
+    export PKGINFO_FILE_PATH\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/SwiftTerm.build/Debug-iphonesimulator/SwiftTerm.build/PkgInfo
+    export PLATFORM_DEVELOPER_APPLICATIONS_DIR\=/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Applications
+    export PLATFORM_DEVELOPER_BIN_DIR\=/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/bin
+    export PLATFORM_DEVELOPER_LIBRARY_DIR\=/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library
+    export PLATFORM_DEVELOPER_SDK_DIR\=/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs
+    export PLATFORM_DEVELOPER_TOOLS_DIR\=/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Tools
+    export PLATFORM_DEVELOPER_USR_DIR\=/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr
+    export PLATFORM_DIR\=/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform
+    export PLATFORM_DISPLAY_NAME\=iOS\ Simulator
+    export PLATFORM_FAMILY_NAME\=iOS
+    export PLATFORM_NAME\=iphonesimulator
+    export PLATFORM_PREFERRED_ARCH\=x86_64
+    export PLATFORM_PRODUCT_BUILD_VERSION\=23F81a
+    export PLATFORM_REQUIRES_SWIFT_AUTOLINK_EXTRACT\=NO
+    export PLATFORM_REQUIRES_SWIFT_MODULEWRAP\=NO
+    export PLATFORM_USES_DSYMS\=YES
+    export PLIST_FILE_OUTPUT_FORMAT\=binary
+    export PRECOMPS_INCLUDE_HEADERS_FROM_BUILT_PRODUCTS_DIR\=YES
+    export PRECOMP_DESTINATION_DIR\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/SwiftTerm.build/Debug-iphonesimulator/SwiftTerm.build/PrefixHeaders
+    export PRIVATE_HEADERS_FOLDER_PATH\=/usr/local/include
+    export PROCESSED_INFOPLIST_PATH\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/SwiftTerm.build/Debug-iphonesimulator/SwiftTerm.build/Objects-normal/undefined_arch/Processed-Info.plist
+    export PRODUCT_BUNDLE_IDENTIFIER\=swiftterm.SwiftTerm
+    export PRODUCT_MODULE_NAME\=SwiftTerm
+    export PRODUCT_NAME\=SwiftTerm
+    export PRODUCT_SETTINGS_PATH\=
+    export PRODUCT_TYPE\=com.apple.product-type.objfile
+    export PROFILING_CODE\=NO
+    export PROJECT\=SwiftTerm
+    export PROJECT_DERIVED_FILE_DIR\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/SwiftTerm.build/DerivedSources
+    export PROJECT_DIR\=/Users/richard/code/BicTerm/Vendor/SwiftTerm
+    export PROJECT_FILE_PATH\=/Users/richard/code/BicTerm/Vendor/SwiftTerm/Package.swift
+    export PROJECT_GUID\=PACKAGE:/Users/richard/code/BicTerm/Vendor/SwiftTerm
+    export PROJECT_NAME\=SwiftTerm
+    export PROJECT_TEMP_DIR\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/SwiftTerm.build
+    export PROJECT_TEMP_ROOT\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex
+    export PUBLIC_HEADERS_FOLDER_PATH\=/usr/local/include
+    export RECOMMENDED_IPHONEOS_DEPLOYMENT_TARGET\=15.0
+    export RECURSIVE_SEARCH_PATHS_FOLLOW_SYMLINKS\=YES
+    export REMOVE_CVS_FROM_RESOURCES\=YES
+    export REMOVE_GIT_FROM_RESOURCES\=YES
+    export REMOVE_HEADERS_FROM_EMBEDDED_BUNDLES\=YES
+    export REMOVE_HG_FROM_RESOURCES\=YES
+    export REMOVE_STATIC_EXECUTABLES_FROM_EMBEDDED_BUNDLES\=YES
+    export REMOVE_SVN_FROM_RESOURCES\=YES
+    export RESCHEDULE_INDEPENDENT_HEADERS_PHASES\=YES
+    export REZ_COLLECTOR_DIR\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/SwiftTerm.build/Debug-iphonesimulator/SwiftTerm.build/ResourceManagerResources
+    export REZ_EXECUTABLE\=YES
+    export REZ_OBJECTS_DIR\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/SwiftTerm.build/Debug-iphonesimulator/SwiftTerm.build/ResourceManagerResources/Objects
+    export REZ_SEARCH_PATHS\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Products/Debug-iphonesimulator\ 
+    export RPATH_ORIGIN\=@loader_path
+    export RUNTIME_EXCEPTION_ALLOW_DYLD_ENVIRONMENT_VARIABLES\=NO
+    export RUNTIME_EXCEPTION_ALLOW_JIT\=NO
+    export RUNTIME_EXCEPTION_ALLOW_UNSIGNED_EXECUTABLE_MEMORY\=NO
+    export RUNTIME_EXCEPTION_DEBUGGING_TOOL\=NO
+    export RUNTIME_EXCEPTION_DISABLE_EXECUTABLE_PAGE_PROTECTION\=NO
+    export RUNTIME_EXCEPTION_DISABLE_LIBRARY_VALIDATION\=NO
+    export SCANNING_PCM_KEEP_CACHE_DIRECTORY\=YES
+    export SCAN_ALL_SOURCE_FILES_FOR_INCLUDES\=NO
+    export SDKROOT\=/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk
+    export SDK_DIR\=/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk
+    export SDK_DIR_iphonesimulator\=/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk
+    export SDK_DIR_iphonesimulator26_5\=/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk
+    export SDK_NAME\=iphonesimulator26.5
+    export SDK_NAMES\=iphonesimulator26.5
+    export SDK_PRODUCT_BUILD_VERSION\=23F81a
+    export SDK_STAT_CACHE_DIR\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app
+    export SDK_STAT_CACHE_ENABLE\=YES
+    export SDK_STAT_CACHE_PATH\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/SDKStatCaches.noindex/iphonesimulator26.5-23F81a-688ef53f1462e2c8f657fdc38a81448f6cfe768891a92b912361537c460fe42b.sdkstatcache
+    export SDK_VERSION\=26.5
+    export SDK_VERSION_ACTUAL\=260500
+    export SDK_VERSION_MAJOR\=260000
+    export SDK_VERSION_MINOR\=260500
+    export SED\=/usr/bin/sed
+    export SEPARATE_STRIP\=NO
+    export SEPARATE_SYMBOL_EDIT\=NO
+    export SET_DIR_MODE_OWNER_GROUP\=YES
+    export SET_FILE_MODE_OWNER_GROUP\=NO
+    export SHALLOW_BUNDLE\=NO
+    export SHARED_DERIVED_FILE_DIR\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Products/Debug-iphonesimulator/DerivedSources
+    export SHARED_PRECOMPS_DIR\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/PrecompiledHeaders
+    export SKIP_INSTALL\=YES
+    export SKIP_MERGEABLE_LIBRARY_BUNDLE_HOOK\=NO
+    export SOURCE_ROOT\=/Users/richard/code/BicTerm/Vendor/SwiftTerm
+    export SRCROOT\=/Users/richard/code/BicTerm/Vendor/SwiftTerm
+    export STRINGSDATA_DIR\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/SwiftTerm.build/Debug-iphonesimulator/SwiftTerm.build/Objects-normal/undefined_arch
+    export STRINGSDATA_ROOT\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/SwiftTerm.build/Debug-iphonesimulator/SwiftTerm.build
+    export STRINGS_FILE_INFOPLIST_RENAME\=YES
+    export STRINGS_FILE_OUTPUT_ENCODING\=binary
+    export STRING_CATALOG_GENERATE_SYMBOLS\=NO
+    export STRIP_BITCODE_FROM_COPIED_FILES\=NO
+    export STRIP_INSTALLED_PRODUCT\=NO
+    export STRIP_STYLE\=debugging
+    export STRIP_SWIFT_SYMBOLS\=YES
+    export SUPPORTED_DEVICE_FAMILIES\=1,2
+    export SUPPORTED_PLATFORMS\=android\ appletvos\ appletvsimulator\ driverkit\ freebsd\ iphoneos\ iphonesimulator\ linux\ macosx\ none\ openbsd\ qnx\ watchos\ watchsimulator\ webassembly\ xros\ xrsimulator
+    export SUPPORTS_MACCATALYST\=NO
+    export SUPPORTS_TEXT_BASED_API\=NO
+    export SUPPRESS_WARNINGS\=NO
+    export SWIFT_ACTIVE_COMPILATION_CONDITIONS\=\ SWIFT_PACKAGE\ DEBUG\ SWIFT_MODULE_RESOURCE_BUNDLE_AVAILABLE
+    export SWIFT_EMIT_CONST_VALUE_PROTOCOLS\=AnyResolverProviding\ AppEntity\ AppEnum\ AppExtension\ AppIntent\ AppIntentsPackage\ AppShortcutProviding\ AppShortcutsProvider\ DynamicOptionsProvider\ EntityQuery\ ExtensionPointDefining\ IntentValueQuery\ Resolver\ TransientEntity\ _AssistantIntentsProvider\ _GenerativeFunctionExtractable\ _IntentValueRepresentable
+    export SWIFT_EMIT_LOC_STRINGS\=NO
+    export SWIFT_ENABLE_BARE_SLASH_REGEX\=NO
+    export SWIFT_ENABLE_EXPLICIT_MODULES\=YES
+    export SWIFT_INSTALL_OBJC_HEADER\=NO
+    export SWIFT_OBJC_INTERFACE_HEADER_DIR\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/GeneratedModuleMaps-iphonesimulator
+    export SWIFT_OBJC_INTERFACE_HEADER_NAME\=SwiftTerm-Swift.h
+    export SWIFT_OPTIMIZATION_LEVEL\=-Onone
+    export SWIFT_PACKAGE_NAME\=swiftterm
+    export SWIFT_PLATFORM_TARGET_PREFIX\=ios
+    export SWIFT_RESPONSE_FILE_PATH_normal_arm64\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/SwiftTerm.build/Debug-iphonesimulator/SwiftTerm.build/Objects-normal/arm64/SwiftTerm.SwiftFileList
+    export SWIFT_VERSION\=5
+    export SYMROOT\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Products
+    export SYSTEM_ADMIN_APPS_DIR\=/Applications/Utilities
+    export SYSTEM_APPS_DIR\=/Applications
+    export SYSTEM_CORE_SERVICES_DIR\=/System/Library/CoreServices
+    export SYSTEM_DEMOS_DIR\=/Applications/Extras
+    export SYSTEM_DEVELOPER_APPS_DIR\=/Applications/Xcode.app/Contents/Developer/Applications
+    export SYSTEM_DEVELOPER_BIN_DIR\=/Applications/Xcode.app/Contents/Developer/usr/bin
+    export SYSTEM_DEVELOPER_DEMOS_DIR\=/Applications/Xcode.app/Contents/Developer/Applications/Utilities/Built\ Examples
+    export SYSTEM_DEVELOPER_DIR\=/Applications/Xcode.app/Contents/Developer
+    export SYSTEM_DEVELOPER_DOC_DIR\=/Applications/Xcode.app/Contents/Developer/ADC\ Reference\ Library
+    export SYSTEM_DEVELOPER_GRAPHICS_TOOLS_DIR\=/Applications/Xcode.app/Contents/Developer/Applications/Graphics\ Tools
+    export SYSTEM_DEVELOPER_JAVA_TOOLS_DIR\=/Applications/Xcode.app/Contents/Developer/Applications/Java\ Tools
+    export SYSTEM_DEVELOPER_PERFORMANCE_TOOLS_DIR\=/Applications/Xcode.app/Contents/Developer/Applications/Performance\ Tools
+    export SYSTEM_DEVELOPER_RELEASENOTES_DIR\=/Applications/Xcode.app/Contents/Developer/ADC\ Reference\ Library/releasenotes
+    export SYSTEM_DEVELOPER_TOOLS\=/Applications/Xcode.app/Contents/Developer/Tools
+    export SYSTEM_DEVELOPER_TOOLS_DOC_DIR\=/Applications/Xcode.app/Contents/Developer/ADC\ Reference\ Library/documentation/DeveloperTools
+    export SYSTEM_DEVELOPER_TOOLS_RELEASENOTES_DIR\=/Applications/Xcode.app/Contents/Developer/ADC\ Reference\ Library/releasenotes/DeveloperTools
+    export SYSTEM_DEVELOPER_USR_DIR\=/Applications/Xcode.app/Contents/Developer/usr
+    export SYSTEM_DEVELOPER_UTILITIES_DIR\=/Applications/Xcode.app/Contents/Developer/Applications/Utilities
+    export SYSTEM_DEXT_INSTALL_PATH\=/System/Library/DriverExtensions
+    export SYSTEM_DOCUMENTATION_DIR\=/Library/Documentation
+    export SYSTEM_FRAMEWORK_SEARCH_PATHS\=\ \ /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Frameworks\ /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk/Developer/Library/Frameworks
+    export SYSTEM_KEXT_INSTALL_PATH\=/System/Library/Extensions
+    export SYSTEM_LIBRARY_DIR\=/System/Library
+    export TAPI_DEMANGLE\=YES
+    export TAPI_DYLIB_INSTALL_NAME\=SwiftTerm
+    export TAPI_ENABLE_PROJECT_HEADERS\=NO
+    export TAPI_LANGUAGE\=objective-c
+    export TAPI_LANGUAGE_STANDARD\=compiler-default
+    export TAPI_USE_SRCROOT\=YES
+    export TAPI_VERIFY_MODE\=Pedantic
+    export TARGETED_DEVICE_FAMILY\=1,2,3,4,6,7
+    export TARGETNAME\=SwiftTerm
+    export TARGET_BUILD_DIR\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Products/Debug-iphonesimulator
+    export TARGET_DEVICE_IDENTIFIER\=3686DD9C-ACA2-4A79-8968-A9C3572C8276
+    export TARGET_DEVICE_MODEL\=iPad17,4
+    export TARGET_DEVICE_OS_VERSION\=26.3.1
+    export TARGET_DEVICE_PLATFORM_NAME\=iphonesimulator
+    export TARGET_NAME\=SwiftTerm
+    export TARGET_TEMP_DIR\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/SwiftTerm.build/Debug-iphonesimulator/SwiftTerm.build
+    export TEMP_DIR\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/SwiftTerm.build/Debug-iphonesimulator/SwiftTerm.build
+    export TEMP_FILES_DIR\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/SwiftTerm.build/Debug-iphonesimulator/SwiftTerm.build
+    export TEMP_FILE_DIR\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/SwiftTerm.build/Debug-iphonesimulator/SwiftTerm.build
+    export TEMP_ROOT\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex
+    export TEMP_SANDBOX_DIR\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/TemporaryTaskSandboxes
+    export TEST_FRAMEWORK_SEARCH_PATHS\=\ /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Frameworks\ /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk/Developer/Library/Frameworks
+    export TEST_LIBRARY_SEARCH_PATHS\=\ /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib
+    export TOOLCHAINS\=com.apple.dt.toolchain.Metal.32023.883\ com.apple.dt.toolchain.XcodeDefault
+    export TOOLCHAIN_DIR\=/var/run/com.apple.security.cryptexd/mnt/com.apple.MobileAsset.MetalToolchain-v17.6.109.0.ozHyXD/Metal.xctoolchain
+    export TOOLCHAIN_VERSION\=32023.883
+    export TREAT_MISSING_BASELINES_AS_TEST_FAILURES\=NO
+    export TREAT_MISSING_SCRIPT_PHASE_OUTPUTS_AS_ERRORS\=NO
+    export UID\=501
+    export UNINSTALLED_PRODUCTS_DIR\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/UninstalledProducts
+    export UNSTRIPPED_PRODUCT\=NO
+    export USER\=richard
+    export USER_APPS_DIR\=/Users/richard/Applications
+    export USER_LIBRARY_DIR\=/Users/richard/Library
+    export USE_DYNAMIC_NO_PIC\=YES
+    export USE_HEADERMAP\=NO
+    export USE_HEADER_SYMLINKS\=NO
+    export VALIDATE_DEVELOPMENT_ASSET_PATHS\=YES_ERROR
+    export VALIDATE_PRODUCT\=NO
+    export VALID_ARCHS\=arm64\ x86_64
+    export VERBOSE_PBXCP\=NO
+    export VERSION_INFO_BUILDER\=richard
+    export VERSION_INFO_FILE\=SwiftTerm_vers.c
+    export VERSION_INFO_STRING\=\"@\(\#\)PROGRAM:SwiftTerm\ \ PROJECT:SwiftTerm-\"
+    export WORKSPACE_DIR\=/Users/richard/code/BicTerm/BicTerm.xcodeproj
+    export WRAP_ASSET_PACKS_IN_SEPARATE_DIRECTORIES\=NO
+    export XCODE_APP_SUPPORT_DIR\=/Applications/Xcode.app/Contents/Developer/Library/Xcode
+    export XCODE_PRODUCT_BUILD_VERSION\=17F113
+    export XCODE_VERSION_ACTUAL\=2660
+    export XCODE_VERSION_MAJOR\=2600
+    export XCODE_VERSION_MINOR\=2660
+    export XPCSERVICES_FOLDER_PATH\=/XPCServices
+    export YACC\=yacc
+    export _DISCOVER_COMMAND_LINE_LINKER_INPUTS\=YES
+    export _DISCOVER_COMMAND_LINE_LINKER_INPUTS_INCLUDE_WL\=YES
+    export _LD_MULTIARCH\=YES
+    export __DIAGNOSE_DEPRECATED_ARCHS\=YES
+    export __ORIGINAL_SDK_DEFINED_LLVM_TARGET_TRIPLE_SYS\=ios
+    export arch\=undefined_arch
+    export variant\=normal
+    /usr/bin/sandbox-exec -p \(version\ 1\)'
+'\(deny\ default\)'
+'\(import\ \"system.sb\"\)'
+'\(allow\ file-read\*\)'
+'\(allow\ process\*\)'
+'\(allow\ mach-lookup\ \(global-name\ \"com.apple.lsd.mapdb\"\)\)'
+'\(allow\ mach-lookup\ \(global-name\ \"com.apple.mobileassetd.v2\"\)\)'
+'\(allow\ file-write\*'
+'\ \ \ \ \(subpath\ \"/private/tmp\"\)'
+'\ \ \ \ \(subpath\ \"/private/var/tmp\"\)'
+'\ \ \ \ \(subpath\ \"/Users/richard/code/BicTerm/.scratch/tmp\"\)'
+'\ \ \ \ \(subpath\ \"/private/var/folders/hy/m79bdqfj21g6ndt8hbtf0c6w0000gn/T\"\)'
+'\ \ \ \ \(subpath\ \"/private/var/folders/hy/m79bdqfj21g6ndt8hbtf0c6w0000gn/C\"\)'
+'\)'
+'\(deny\ file-write\*'
+'\ \ \ \ \(subpath\ \"/Users/richard/code/BicTerm/Vendor/SwiftTerm\"\)'
+'\)'
+'\(allow\ file-write\*'
+'\ \ \ \ \(subpath\ \"/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BuildToolPluginIntermediates/swiftterm.output/SwiftTerm/SwiftTermBuildInfoPlugin\"\)'
+'\ \ \ \ \(subpath\ \"/Users/richard/code/.TemporaryItems/folders.501/TemporaryItems\"\)'
+'\)'
+' //Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Products/Debug/SwiftTermBuildInfoGenerator /Users/richard/code/BicTerm/Vendor/SwiftTerm /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BuildToolPluginIntermediates/swiftterm.output/SwiftTerm/SwiftTermBuildInfoPlugin/Generated/SwiftTermBuildInfo.swift
+
+SwiftDriver BicTermUITests normal arm64 com.apple.xcode.tools.swift.compiler (in target 'BicTermUITests' from project 'BicTerm')
+    cd /Users/richard/code/BicTerm
+    builtin-SwiftDriver -- /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name BicTermUITests -Onone @/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BicTerm.build/Debug-iphonesimulator/BicTermUITests.build/Objects-normal/arm64/BicTermUITests.SwiftFileList -DDEBUG -DCODER_TUNNEL -module-alias Testing\=_Testing_Unavailable -plugin-path /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -target arm64-apple-ios18.0-simulator -g -module-cache-path /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/ModuleCache.noindex -Xfrontend -serialize-debugging-options -enable-testing -index-store-path /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Index.noindex/DataStore -Xcc -D_LIBCPP_HARDENING_MODE\=_LIBCPP_HARDENING_MODE_DEBUG -swift-version 6 -I /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Products/Debug-iphonesimulator -Isystem /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Products/Debug-iphonesimulator -F /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Frameworks -F /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk/Developer/Library/Frameworks -c -j20 -enable-batch-mode -incremental -Xcc -ivfsstatcache -Xcc /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/SDKStatCaches.noindex/iphonesimulator26.5-23F81a-688ef53f1462e2c8f657fdc38a81448f6cfe768891a92b912361537c460fe42b.sdkstatcache -output-file-map /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BicTerm.build/Debug-iphonesimulator/BicTermUITests.build/Objects-normal/arm64/BicTermUITests-OutputFileMap.json -use-frontend-parseable-output -save-temps -no-color-diagnostics -explicit-module-build -module-cache-path /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules -clang-scanner-module-cache-path /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/ModuleCache.noindex -sdk-module-cache-path /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/ModuleCache.noindex -serialize-diagnostics -emit-dependencies -emit-module -emit-module-path /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BicTerm.build/Debug-iphonesimulator/BicTermUITests.build/Objects-normal/arm64/BicTermUITests.swiftmodule -validate-clang-modules-once -clang-build-session-file /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/ModuleCache.noindex/Session.modulevalidation -Xcc -I/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BicTerm.build/Debug-iphonesimulator/BicTermUITests.build/swift-overrides.hmap -emit-const-values -Xfrontend -const-gather-protocols-file -Xfrontend /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BicTerm.build/Debug-iphonesimulator/BicTermUITests.build/Objects-normal/arm64/BicTermUITests_const_extract_protocols.json -Xcc -iquote -Xcc /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BicTerm.build/Debug-iphonesimulator/BicTermUITests.build/BicTermUITests-generated-files.hmap -Xcc -I/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BicTerm.build/Debug-iphonesimulator/BicTermUITests.build/BicTermUITests-own-target-headers.hmap -Xcc -I/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BicTerm.build/Debug-iphonesimulator/BicTermUITests.build/BicTermUITests-all-non-framework-target-headers.hmap -Xcc -ivfsoverlay -Xcc /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BicTerm.build/Debug-iphonesimulator/BicTerm-016255f037ae87c93052aa8a3749f82d-VFS-iphonesimulator/all-product-headers.yaml -Xcc -iquote -Xcc /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BicTerm.build/Debug-iphonesimulator/BicTermUITests.build/BicTermUITests-project-headers.hmap -Xcc -I/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Products/Debug-iphonesimulator/include -Xcc -I/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BicTerm.build/Debug-iphonesimulator/BicTermUITests.build/DerivedSources-normal/arm64 -Xcc -I/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BicTerm.build/Debug-iphonesimulator/BicTermUITests.build/DerivedSources/arm64 -Xcc -I/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BicTerm.build/Debug-iphonesimulator/BicTermUITests.build/DerivedSources -Xcc -DDEBUG\=1 -emit-objc-header -emit-objc-header-path /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BicTerm.build/Debug-iphonesimulator/BicTermUITests.build/Objects-normal/arm64/BicTermUITests-Swift.h -working-directory /Users/richard/code/BicTerm -experimental-emit-module-separately -disable-cmo
+
+SwiftCompile normal arm64 Compiling\ ConnectionEditorUITests.swift /Users/richard/code/BicTerm/BicTermUITests/ConnectionEditorUITests.swift (in target 'BicTermUITests' from project 'BicTerm')
+
+SwiftCompile normal arm64 /Users/richard/code/BicTerm/BicTermUITests/ConnectionEditorUITests.swift (in target 'BicTermUITests' from project 'BicTerm')
+    cd /Users/richard/code/BicTerm
+    
+/Users/richard/code/BicTerm/BicTermUITests/ConnectionEditorUITests.swift:10:9: warning: main actor-isolated property 'app' can not be mutated from a nonisolated context
+        app = XCUIApplication()
+        ^
+/Users/richard/code/BicTerm/BicTermUITests/ConnectionEditorUITests.swift:5:9: note: mutation of this property is only permitted within the actor
+    var app: XCUIApplication!
+        ^
+/Users/richard/code/BicTerm/BicTermUITests/ConnectionEditorUITests.swift:10:15: warning: call to main actor-isolated initializer 'init()' in a synchronous nonisolated context
+        app = XCUIApplication()
+              ^
+/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Frameworks/XCUIAutomation.framework/Headers/XCUIApplication.h:29:1: note: calls to initializer 'init()' from outside of its actor context are implicitly asynchronous
+- (instancetype)init NS_DESIGNATED_INITIALIZER;
+^
+
+SwiftEmitModule normal arm64 Emitting\ module\ for\ BicTermUITests (in target 'BicTermUITests' from project 'BicTerm')
+
+EmitSwiftModule normal arm64 (in target 'BicTermUITests' from project 'BicTerm')
+    cd /Users/richard/code/BicTerm
+    
+
+SwiftCompile normal arm64 Compiling\ WindowRelaunchUITests.swift /Users/richard/code/BicTerm/BicTermUITests/WindowRelaunchUITests.swift (in target 'BicTermUITests' from project 'BicTerm')
+
+SwiftCompile normal arm64 /Users/richard/code/BicTerm/BicTermUITests/WindowRelaunchUITests.swift (in target 'BicTermUITests' from project 'BicTerm')
+    cd /Users/richard/code/BicTerm
+    
+
+SwiftDriverJobDiscovery normal arm64 Emitting module for BicTermUITests (in target 'BicTermUITests' from project 'BicTerm')
+
+SwiftDriver\ Compilation\ Requirements BicTermUITests normal arm64 com.apple.xcode.tools.swift.compiler (in target 'BicTermUITests' from project 'BicTerm')
+    cd /Users/richard/code/BicTerm
+    builtin-Swift-Compilation-Requirements -- /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name BicTermUITests -Onone @/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BicTerm.build/Debug-iphonesimulator/BicTermUITests.build/Objects-normal/arm64/BicTermUITests.SwiftFileList -DDEBUG -DCODER_TUNNEL -module-alias Testing\=_Testing_Unavailable -plugin-path /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -target arm64-apple-ios18.0-simulator -g -module-cache-path /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/ModuleCache.noindex -Xfrontend -serialize-debugging-options -enable-testing -index-store-path /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Index.noindex/DataStore -Xcc -D_LIBCPP_HARDENING_MODE\=_LIBCPP_HARDENING_MODE_DEBUG -swift-version 6 -I /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Products/Debug-iphonesimulator -Isystem /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Products/Debug-iphonesimulator -F /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Frameworks -F /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk/Developer/Library/Frameworks -c -j20 -enable-batch-mode -incremental -Xcc -ivfsstatcache -Xcc /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/SDKStatCaches.noindex/iphonesimulator26.5-23F81a-688ef53f1462e2c8f657fdc38a81448f6cfe768891a92b912361537c460fe42b.sdkstatcache -output-file-map /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BicTerm.build/Debug-iphonesimulator/BicTermUITests.build/Objects-normal/arm64/BicTermUITests-OutputFileMap.json -use-frontend-parseable-output -save-temps -no-color-diagnostics -explicit-module-build -module-cache-path /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules -clang-scanner-module-cache-path /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/ModuleCache.noindex -sdk-module-cache-path /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/ModuleCache.noindex -serialize-diagnostics -emit-dependencies -emit-module -emit-module-path /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BicTerm.build/Debug-iphonesimulator/BicTermUITests.build/Objects-normal/arm64/BicTermUITests.swiftmodule -validate-clang-modules-once -clang-build-session-file /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/ModuleCache.noindex/Session.modulevalidation -Xcc -I/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BicTerm.build/Debug-iphonesimulator/BicTermUITests.build/swift-overrides.hmap -emit-const-values -Xfrontend -const-gather-protocols-file -Xfrontend /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BicTerm.build/Debug-iphonesimulator/BicTermUITests.build/Objects-normal/arm64/BicTermUITests_const_extract_protocols.json -Xcc -iquote -Xcc /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BicTerm.build/Debug-iphonesimulator/BicTermUITests.build/BicTermUITests-generated-files.hmap -Xcc -I/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BicTerm.build/Debug-iphonesimulator/BicTermUITests.build/BicTermUITests-own-target-headers.hmap -Xcc -I/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BicTerm.build/Debug-iphonesimulator/BicTermUITests.build/BicTermUITests-all-non-framework-target-headers.hmap -Xcc -ivfsoverlay -Xcc /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BicTerm.build/Debug-iphonesimulator/BicTerm-016255f037ae87c93052aa8a3749f82d-VFS-iphonesimulator/all-product-headers.yaml -Xcc -iquote -Xcc /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BicTerm.build/Debug-iphonesimulator/BicTermUITests.build/BicTermUITests-project-headers.hmap -Xcc -I/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Products/Debug-iphonesimulator/include -Xcc -I/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BicTerm.build/Debug-iphonesimulator/BicTermUITests.build/DerivedSources-normal/arm64 -Xcc -I/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BicTerm.build/Debug-iphonesimulator/BicTermUITests.build/DerivedSources/arm64 -Xcc -I/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BicTerm.build/Debug-iphonesimulator/BicTermUITests.build/DerivedSources -Xcc -DDEBUG\=1 -emit-objc-header -emit-objc-header-path /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BicTerm.build/Debug-iphonesimulator/BicTermUITests.build/Objects-normal/arm64/BicTermUITests-Swift.h -working-directory /Users/richard/code/BicTerm -experimental-emit-module-separately -disable-cmo
+
+Copy /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Products/Debug-iphonesimulator/BicTermUITests.swiftmodule/Project/arm64-apple-ios-simulator.swiftsourceinfo /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BicTerm.build/Debug-iphonesimulator/BicTermUITests.build/Objects-normal/arm64/BicTermUITests.swiftsourceinfo (in target 'BicTermUITests' from project 'BicTerm')
+    cd /Users/richard/code/BicTerm
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BicTerm.build/Debug-iphonesimulator/BicTermUITests.build/Objects-normal/arm64/BicTermUITests.swiftsourceinfo /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Products/Debug-iphonesimulator/BicTermUITests.swiftmodule/Project/arm64-apple-ios-simulator.swiftsourceinfo
+
+Copy /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Products/Debug-iphonesimulator/BicTermUITests.swiftmodule/arm64-apple-ios-simulator.abi.json /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BicTerm.build/Debug-iphonesimulator/BicTermUITests.build/Objects-normal/arm64/BicTermUITests.abi.json (in target 'BicTermUITests' from project 'BicTerm')
+    cd /Users/richard/code/BicTerm
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BicTerm.build/Debug-iphonesimulator/BicTermUITests.build/Objects-normal/arm64/BicTermUITests.abi.json /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Products/Debug-iphonesimulator/BicTermUITests.swiftmodule/arm64-apple-ios-simulator.abi.json
+
+SwiftDriverJobDiscovery normal arm64 Compiling WindowRelaunchUITests.swift (in target 'BicTermUITests' from project 'BicTerm')
+
+SwiftDriverJobDiscovery normal arm64 Compiling ConnectionEditorUITests.swift (in target 'BicTermUITests' from project 'BicTerm')
+
+SwiftDriver\ Compilation BicTermUITests normal arm64 com.apple.xcode.tools.swift.compiler (in target 'BicTermUITests' from project 'BicTerm')
+    cd /Users/richard/code/BicTerm
+    builtin-Swift-Compilation -- /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name BicTermUITests -Onone @/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BicTerm.build/Debug-iphonesimulator/BicTermUITests.build/Objects-normal/arm64/BicTermUITests.SwiftFileList -DDEBUG -DCODER_TUNNEL -module-alias Testing\=_Testing_Unavailable -plugin-path /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -target arm64-apple-ios18.0-simulator -g -module-cache-path /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/ModuleCache.noindex -Xfrontend -serialize-debugging-options -enable-testing -index-store-path /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Index.noindex/DataStore -Xcc -D_LIBCPP_HARDENING_MODE\=_LIBCPP_HARDENING_MODE_DEBUG -swift-version 6 -I /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Products/Debug-iphonesimulator -Isystem /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Products/Debug-iphonesimulator -F /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Frameworks -F /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk/Developer/Library/Frameworks -c -j20 -enable-batch-mode -incremental -Xcc -ivfsstatcache -Xcc /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/SDKStatCaches.noindex/iphonesimulator26.5-23F81a-688ef53f1462e2c8f657fdc38a81448f6cfe768891a92b912361537c460fe42b.sdkstatcache -output-file-map /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BicTerm.build/Debug-iphonesimulator/BicTermUITests.build/Objects-normal/arm64/BicTermUITests-OutputFileMap.json -use-frontend-parseable-output -save-temps -no-color-diagnostics -explicit-module-build -module-cache-path /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules -clang-scanner-module-cache-path /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/ModuleCache.noindex -sdk-module-cache-path /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/ModuleCache.noindex -serialize-diagnostics -emit-dependencies -emit-module -emit-module-path /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BicTerm.build/Debug-iphonesimulator/BicTermUITests.build/Objects-normal/arm64/BicTermUITests.swiftmodule -validate-clang-modules-once -clang-build-session-file /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/ModuleCache.noindex/Session.modulevalidation -Xcc -I/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BicTerm.build/Debug-iphonesimulator/BicTermUITests.build/swift-overrides.hmap -emit-const-values -Xfrontend -const-gather-protocols-file -Xfrontend /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BicTerm.build/Debug-iphonesimulator/BicTermUITests.build/Objects-normal/arm64/BicTermUITests_const_extract_protocols.json -Xcc -iquote -Xcc /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BicTerm.build/Debug-iphonesimulator/BicTermUITests.build/BicTermUITests-generated-files.hmap -Xcc -I/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BicTerm.build/Debug-iphonesimulator/BicTermUITests.build/BicTermUITests-own-target-headers.hmap -Xcc -I/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BicTerm.build/Debug-iphonesimulator/BicTermUITests.build/BicTermUITests-all-non-framework-target-headers.hmap -Xcc -ivfsoverlay -Xcc /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BicTerm.build/Debug-iphonesimulator/BicTerm-016255f037ae87c93052aa8a3749f82d-VFS-iphonesimulator/all-product-headers.yaml -Xcc -iquote -Xcc /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BicTerm.build/Debug-iphonesimulator/BicTermUITests.build/BicTermUITests-project-headers.hmap -Xcc -I/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Products/Debug-iphonesimulator/include -Xcc -I/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BicTerm.build/Debug-iphonesimulator/BicTermUITests.build/DerivedSources-normal/arm64 -Xcc -I/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BicTerm.build/Debug-iphonesimulator/BicTermUITests.build/DerivedSources/arm64 -Xcc -I/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BicTerm.build/Debug-iphonesimulator/BicTermUITests.build/DerivedSources -Xcc -DDEBUG\=1 -emit-objc-header -emit-objc-header-path /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BicTerm.build/Debug-iphonesimulator/BicTermUITests.build/Objects-normal/arm64/BicTermUITests-Swift.h -working-directory /Users/richard/code/BicTerm -experimental-emit-module-separately -disable-cmo
+
+Ld /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Products/Debug-iphonesimulator/BicTermUITests-Runner.app/PlugIns/BicTermUITests.xctest/BicTermUITests normal (in target 'BicTermUITests' from project 'BicTerm')
+    cd /Users/richard/code/BicTerm
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -Xlinker -reproducible -target arm64-apple-ios18.0-simulator -bundle -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -O0 -L/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/EagerLinkingTBDs/Debug-iphonesimulator -L/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Products/Debug-iphonesimulator -L/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib -F/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/EagerLinkingTBDs/Debug-iphonesimulator -F/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Products/Debug-iphonesimulator -iframework /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Frameworks -iframework /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk/Developer/Library/Frameworks -filelist /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BicTerm.build/Debug-iphonesimulator/BicTermUITests.build/Objects-normal/arm64/BicTermUITests.LinkFileList -Xlinker -rpath -Xlinker /usr/lib/swift -Xlinker -rpath -Xlinker @loader_path/Frameworks -Xlinker -rpath -Xlinker @executable_path/Frameworks -Xlinker -dead_strip -Xlinker -object_path_lto -Xlinker /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BicTerm.build/Debug-iphonesimulator/BicTermUITests.build/Objects-normal/arm64/BicTermUITests_lto.o -rdynamic -Xlinker -no_deduplicate -Xlinker -objc_abi_version -Xlinker 2 -Xlinker -dependency_info -Xlinker /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BicTerm.build/Debug-iphonesimulator/BicTermUITests.build/Objects-normal/arm64/BicTermUITests_dependency_info.dat -fobjc-link-runtime -L/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphonesimulator -L/usr/lib/swift -Xlinker -add_ast_path -Xlinker /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BicTerm.build/Debug-iphonesimulator/BicTermUITests.build/Objects-normal/arm64/BicTermUITests.swiftmodule @/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BicTerm.build/Debug-iphonesimulator/BicTermUITests.build/Objects-normal/arm64/BicTermUITests-linker-args.resp -Xlinker -needed_framework -Xlinker XCTest -framework XCTest -Xlinker -needed-lXCTestSwiftSupport -lXCTestSwiftSupport -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __entitlements -Xlinker /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BicTerm.build/Debug-iphonesimulator/BicTermUITests.build/BicTermUITests.xctest-Simulated.xcent -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __ents_der -Xlinker /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BicTerm.build/Debug-iphonesimulator/BicTermUITests.build/BicTermUITests.xctest-Simulated.xcent.der -Xlinker -no_adhoc_codesign -o /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Products/Debug-iphonesimulator/BicTermUITests-Runner.app/PlugIns/BicTermUITests.xctest/BicTermUITests
+
+CopySwiftLibs /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Products/Debug-iphonesimulator/BicTermUITests-Runner.app/PlugIns/BicTermUITests.xctest (in target 'BicTermUITests' from project 'BicTerm')
+    cd /Users/richard/code/BicTerm
+    builtin-swiftStdLibTool --copy --verbose --sign - --scan-executable /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Products/Debug-iphonesimulator/BicTermUITests-Runner.app/PlugIns/BicTermUITests.xctest/BicTermUITests --scan-folder /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Products/Debug-iphonesimulator/BicTermUITests-Runner.app/PlugIns/BicTermUITests.xctest/Frameworks --scan-folder /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Products/Debug-iphonesimulator/BicTermUITests-Runner.app/PlugIns/BicTermUITests.xctest/PlugIns --scan-folder /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Products/Debug-iphonesimulator/BicTermUITests-Runner.app/PlugIns/BicTermUITests.xctest/SystemExtensions --scan-folder /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Products/Debug-iphonesimulator/BicTermUITests-Runner.app/PlugIns/BicTermUITests.xctest/Extensions --platform iphonesimulator --toolchain /var/run/com.apple.security.cryptexd/mnt/com.apple.MobileAsset.MetalToolchain-v17.6.109.0.ozHyXD/Metal.xctoolchain --toolchain /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain --destination /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Products/Debug-iphonesimulator/BicTermUITests-Runner.app/PlugIns/BicTermUITests.xctest/Frameworks --strip-bitcode --scan-executable /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib/libXCTestSwiftSupport.dylib --strip-bitcode-tool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/bitcode_strip --emit-dependency-info /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BicTerm.build/Debug-iphonesimulator/BicTermUITests.build/SwiftStdLibToolInputDependencies.dep --filter-for-swift-os
+
+ExtractAppIntentsMetadata (in target 'BicTermUITests' from project 'BicTerm')
+    cd /Users/richard/code/BicTerm
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/appintentsmetadataprocessor --toolchain-dir /var/run/com.apple.security.cryptexd/mnt/com.apple.MobileAsset.MetalToolchain-v17.6.109.0.ozHyXD/Metal.xctoolchain --module-name BicTermUITests --sdk-root /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk --xcode-version 17F113 --platform-family iOS --deployment-target 18.0 --bundle-identifier com.bicterm.BicTermUITests --output /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Products/Debug-iphonesimulator/BicTermUITests-Runner.app/PlugIns/BicTermUITests.xctest --target-triple arm64-apple-ios18.0-simulator --binary-file /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Products/Debug-iphonesimulator/BicTermUITests-Runner.app/PlugIns/BicTermUITests.xctest/BicTermUITests --dependency-file /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BicTerm.build/Debug-iphonesimulator/BicTermUITests.build/Objects-normal/arm64/BicTermUITests_dependency_info.dat --stringsdata-file /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BicTerm.build/Debug-iphonesimulator/BicTermUITests.build/Objects-normal/arm64/ExtractedAppShortcutsMetadata.stringsdata --source-file-list /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BicTerm.build/Debug-iphonesimulator/BicTermUITests.build/Objects-normal/arm64/BicTermUITests.SwiftFileList --metadata-file-list /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BicTerm.build/Debug-iphonesimulator/BicTermUITests.build/BicTermUITests.DependencyMetadataFileList --static-metadata-file-list /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BicTerm.build/Debug-iphonesimulator/BicTermUITests.build/BicTermUITests.DependencyStaticMetadataFileList --swift-const-vals-list /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Intermediates.noindex/BicTerm.build/Debug-iphonesimulator/BicTermUITests.build/Objects-normal/arm64/BicTermUITests.SwiftConstValuesFileList --compile-time-extraction --deployment-aware-processing --validate-assistant-intents --no-app-shortcuts-localization
+2026-09-08 21:41:59.829 appintentsmetadataprocessor[9801:29731837] Starting appintentsmetadataprocessor export
+2026-09-08 21:41:59.831 appintentsmetadataprocessor[9801:29731837] warning: Metadata extraction skipped. No AppIntents.framework dependency found.
+
+CodeSign /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Products/Debug-iphonesimulator/BicTermUITests-Runner.app/PlugIns/BicTermUITests.xctest (in target 'BicTermUITests' from project 'BicTerm')
+    cd /Users/richard/code/BicTerm
+    
+    Signing Identity:     "Sign to Run Locally"
+    
+    /usr/bin/codesign --force --sign - --timestamp\=none --generate-entitlement-der /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Products/Debug-iphonesimulator/BicTermUITests-Runner.app/PlugIns/BicTermUITests.xctest
+
+CodeSign /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Products/Debug-iphonesimulator/BicTermUITests-Runner.app (in target 'BicTermUITests' from project 'BicTerm')
+    cd /Users/richard/code/BicTerm
+    
+    Signing Identity:     "Sign to Run Locally"
+    
+    /usr/bin/codesign --force --sign - --timestamp\=none --generate-entitlement-der /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Products/Debug-iphonesimulator/BicTermUITests-Runner.app
+/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-app/Build/Products/Debug-iphonesimulator/BicTermUITests-Runner.app: replacing existing signature
+
+2026-09-08 21:42:03.325786-0600 BicTermUITests-Runner[9812:29732177] [Default] Running tests...
+2026-09-08 21:42:03.339868-0600 BicTermUITests-Runner[9812:29732177] [UIKit App Config] Update the Info.plist: Launch screens will soon be required.
+    t =      nans Interface orientation changed to Portrait
+Test Suite 'Selected tests' started at 2026-09-08 21:42:03.901.
+Test Suite 'BicTermUITests.xctest' started at 2026-09-08 21:42:03.901.
+Test Suite 'ConnectionEditorUITests' started at 2026-09-08 21:42:03.901.
+Test Case '-[BicTermUITests.ConnectionEditorUITests testReplacingDefaultPortDoesNotAppendToExistingDigits]' started.
+    t =     0.00s Start Test at 2026-09-08 21:42:03.902
+    t =     0.02s Set Up
+    t =     0.02s Open com.bicterm.app
+    t =     0.02s     Launch com.bicterm.app
+2026-09-08 21:42:03.960 xcodebuild[9694:29730721] [MT] IDELaunchParametersSnapshot: The operation couldn’t be completed. (DebuggerLLDB.DebuggerVersionStore.StoreError error 0.)
+2026-09-08 21:42:03.960 xcodebuild[9694:29730721] [MT] IDELaunchParametersSnapshot: no debugger version
+    t =     0.67s         Setting up automation session
+    t =     1.54s         Wait for com.bicterm.app to idle
+    t =     3.00s Waiting 15.0s for "add-connection" Button to exist
+    t =     4.06s     Checking `Expect predicate `existsNoRetry == 1` for object "add-connection" Button`
+    t =     4.06s         Checking existence of `"add-connection" Button`
+    t =     4.13s Tap "add-connection" Button
+    t =     4.13s     Wait for com.bicterm.app to idle
+    t =     4.13s     Find the "add-connection" Button
+    t =     4.15s     Check for interrupting elements affecting "add-connection" Button
+    t =     4.18s         Wait for com.apple.springboard to idle
+    t =     4.21s Ignoring failure to get hierarchy for remote element in process 1995 (Error getting main window kAXErrorServerNotFound)
+    t =     4.21s Ignoring failure to get hierarchy for remote element in process 1995 (Error getting main window kAXErrorServerNotFound)
+    t =     4.22s     Synthesize event
+    t =     4.52s     Wait for com.bicterm.app to idle
+    t =     5.57s Waiting 10.0s for "field-name" TextField to exist
+    t =     6.63s     Checking `Expect predicate `existsNoRetry == 1` for object "field-name" TextField`
+    t =     6.63s         Checking existence of `"field-name" TextField`
+    t =     6.74s Tap "field-port" TextField
+    t =     6.74s     Wait for com.bicterm.app to idle
+    t =     6.75s     Find the "field-port" TextField
+    t =     6.81s     Check for interrupting elements affecting "field-port" TextField
+    t =     6.88s         Wait for com.apple.springboard to idle
+    t =     6.90s Ignoring failure to get hierarchy for remote element in process 1995 (Error getting main window kAXErrorServerNotFound)
+    t =     6.90s Ignoring failure to get hierarchy for remote element in process 1995 (Error getting main window kAXErrorServerNotFound)
+    t =     6.91s     Synthesize event
+    t =     7.20s     Wait for com.bicterm.app to idle
+    t =     8.75s Checking `Expect predicate `hasKeyboardFocus == 1` for object "field-port" TextField`
+    t =     8.75s     Find the "field-port" TextField
+    t =     8.86s Press "field-port" TextField for 1.1 seconds
+    t =     8.86s     Wait for com.bicterm.app to idle
+    t =     8.86s     Find the "field-port" TextField
+    t =     8.95s     Check for interrupting elements affecting "field-port" TextField
+    t =     9.03s         Wait for com.apple.springboard to idle
+    t =     9.05s Ignoring failure to get hierarchy for remote element in process 1995 (Error getting main window kAXErrorServerNotFound)
+    t =     9.06s Ignoring failure to get hierarchy for remote element in process 1995 (Error getting main window kAXErrorServerNotFound)
+    t =     9.06s     Synthesize event
+    t =     9.07s         Scroll element to visible
+    t =     9.07s         Find the "field-port" TextField
+    t =     9.16s         Computed hit point {-1, -1} after scrolling to visible
+    t =     9.16s         Failed: Not hittable: TextField, {{131.0, 352.5}, {813.0, 18.5}}, identifier: 'field-port', value: 22, Keyboard Focused
+    t =     9.16s     Wait for com.bicterm.app to idle
+    t =    10.18s     Retrying `Press "field-port" TextField for 1.1 seconds` (attempt #2)
+    t =    10.18s         Wait for com.bicterm.app to idle
+    t =    10.18s         Find the "field-port" TextField
+    t =    10.27s         Check for interrupting elements affecting "field-port" TextField
+    t =    10.36s             Wait for com.apple.springboard to idle
+    t =    10.38s Ignoring failure to get hierarchy for remote element in process 1995 (Error getting main window kAXErrorServerNotFound)
+    t =    10.38s Ignoring failure to get hierarchy for remote element in process 1995 (Error getting main window kAXErrorServerNotFound)
+    t =    10.38s         Synthesize event
+    t =    10.39s             Scroll element to visible
+    t =    10.39s             Find the "field-port" TextField
+    t =    10.49s             Computed hit point {-1, -1} after scrolling to visible
+    t =    10.49s             Failed: Not hittable: TextField, {{131.0, 352.5}, {813.0, 18.5}}, identifier: 'field-port', value: 22, Keyboard Focused
+    t =    10.49s         Wait for com.bicterm.app to idle
+    t =    11.50s     Retrying `Press "field-port" TextField for 1.1 seconds` (attempt #3)
+    t =    11.50s         Wait for com.bicterm.app to idle
+    t =    11.50s         Find the "field-port" TextField
+    t =    11.59s         Check for interrupting elements affecting "field-port" TextField
+    t =    11.67s             Wait for com.apple.springboard to idle
+    t =    11.69s Ignoring failure to get hierarchy for remote element in process 1995 (Error getting main window kAXErrorServerNotFound)
+    t =    11.69s Ignoring failure to get hierarchy for remote element in process 1995 (Error getting main window kAXErrorServerNotFound)
+    t =    11.69s         Synthesize event
+    t =    11.70s             Scroll element to visible
+    t =    11.70s             Find the "field-port" TextField
+    t =    11.79s             Computed hit point {-1, -1} after scrolling to visible
+    t =    11.79s             Failed: Not hittable: TextField, {{131.0, 352.5}, {813.0, 18.5}}, identifier: 'field-port', value: 22, Keyboard Focused
+    t =    11.79s         Wait for com.bicterm.app to idle
+    t =    11.80s     Requesting snapshot of accessibility hierarchy for app with pid 9820
+<unknown>:0: error: -[BicTermUITests.ConnectionEditorUITests testReplacingDefaultPortDoesNotAppendToExistingDigits] : Failed to synthesize event: Not hittable: TextField, {{131.0, 352.5}, {813.0, 18.5}}, identifier: 'field-port', value: 22, Keyboard Focused
+    t =    11.97s Tear Down
+Test Case '-[BicTermUITests.ConnectionEditorUITests testReplacingDefaultPortDoesNotAppendToExistingDigits]' failed (12.217 seconds).
+Test Suite 'ConnectionEditorUITests' failed at 2026-09-08 21:42:16.120.
+	 Executed 1 test, with 1 failure (0 unexpected) in 12.217 (12.219) seconds
+Test Suite 'BicTermUITests.xctest' failed at 2026-09-08 21:42:16.121.
+	 Executed 1 test, with 1 failure (0 unexpected) in 12.217 (12.220) seconds
+Test Suite 'Selected tests' failed at 2026-09-08 21:42:16.122.
+	 Executed 1 test, with 1 failure (0 unexpected) in 12.217 (12.221) seconds
+2026-09-08 21:42:25.983 xcodebuild[9694:29730721] [MT] IDETestOperationsObserverDebug: 26.008 elapsed -- Testing started completed.
+2026-09-08 21:42:25.983 xcodebuild[9694:29730721] [MT] IDETestOperationsObserverDebug: 0.000 sec, +0.000 sec -- start
+2026-09-08 21:42:25.983 xcodebuild[9694:29730721] [MT] IDETestOperationsObserverDebug: 26.008 sec, +26.008 sec -- end
+
+Test session results, code coverage, and logs:
+	/Users/richard/code/BicTerm/.build-artifacts/xcresults/g12-final-port-probe.xcresult
+
+Failing tests:
+	ConnectionEditorUITests.testReplacingDefaultPortDoesNotAppendToExistingDigits()
+
+** TEST FAILED **
+
+Testing started
