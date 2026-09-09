@@ -1,7 +1,7 @@
 # T12 protocol acceptance checkpoint — INCOMPLETE
 
-Latest status: **PASS=26, FAIL=5, NOT-LOCAL=3**. Batch A closed A31;
-Batch B has closed A02-A12 and A32. The checkpoint narrative below
+Latest status: **PASS=29, FAIL=2, NOT-LOCAL=3**. Batch A closed A31;
+Batch B has closed A02-A12, A20-A22, and A32. The checkpoint narrative below
 preserves the earlier 13/18/3 state. A31 evidence is in
 `phase2-g12-a31-investigation.md`; native authentication/permission evidence
 is in `phase2-g12-b-auth-native-green.log`, `phase2-g12-b-auth-audit.log`,
@@ -40,7 +40,17 @@ both concurrently in one Swift process. Each stream returns its own remote
 workspace value, and the second survives closing the first. Evidence:
 `phase2-g12-b-profiles-brief.md` and `phase2-g12-b-profile-native.log`.
 
-Remaining: A19-A22, A34.
+Active-session rebuild: `bash scripts/test-coder-rebuild.sh` proves the old
+stream ends during a real rebuild, the old UUID is rejected, and a fresh
+transport executes on the replacement. Evidence: `phase2-g12-b-rebuild-brief.md`.
+
+Control recovery: `bash scripts/test-coder-control.sh reset` and `resume`
+exercise real coordinator resets and invalid resume-token rejection. The SDK
+reconnects; the invalid-token retry omits that token. The original stream stays
+usable with its execution counter and SSH establishment count both unchanged
+at one. Evidence: `phase2-g12-b-control-brief.md`.
+
+Remaining: A19, A34.
 
 This checkpoints executed native evidence, not phase approval. Matrix:
 **PASS=13, FAIL=18, NOT-LOCAL=3**. Structural validation passes; `--gate`

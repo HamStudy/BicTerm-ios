@@ -4,7 +4,7 @@ Gate: INCOMPLETE. FAIL includes unverified requirements.
 
 Latest evidence: `.sisyphus/evidence/phase2-g12-final-progress-brief.md` records
 green full UI regressions and additional native protocol execution. There are
-26 PASS, 3 NOT-LOCAL and 5 FAIL rows. Native lifecycle gates, startup policy,
+29 PASS, 3 NOT-LOCAL and 2 FAIL rows. Native lifecycle gates, startup policy,
 script failures, and concurrent user isolation are verified; remaining rows block approval.
 
 This is a blocked-gate inventory, not a compatibility declaration. The 34
@@ -253,11 +253,11 @@ and task 12, line 465. They are not optional live-deployment work.
 |---|---|
 | Coordinator connection reset | Appropriate control reconnect; no command replay. |
 
-- Status: FAIL
-- Command: `ruby scripts/verify-coder-matrix.rb --gate`
-- Evidence: `.sisyphus/evidence/phase2-g12-gate-brief.md`
+- Status: PASS
+- Command: `bash scripts/test-coder-control.sh reset`
+- Evidence: `.sisyphus/evidence/phase2-g12-b-control-reset-tests.log`
 - Reason: -
-- Detail: Lifecycle unit tests passed, but no live coordinator reset with a command-execution counter was run. No-replay is not inferred from suspend/resume alone.
+- Detail: A loopback fault proxy closes the real coordinator sockets during a live native CoderTransport session. The SDK reconnects with HTTP 101, the original SSH stream remains usable, a remote execution counter remains one, and SSH establishment count remains one. See phase2-g12-b-control-reset-proxy.log and phase2-g12-b-control-brief.md.
 
 ### A21
 
@@ -265,11 +265,11 @@ and task 12, line 465. They are not optional live-deployment work.
 |---|---|
 | Invalid/expired resume token | Retry without resume token, not a spurious login prompt. |
 
-- Status: FAIL
-- Command: `ruby scripts/verify-coder-matrix.rb --gate`
-- Evidence: `.sisyphus/evidence/phase2-g12-gate-brief.md`
+- Status: PASS
+- Command: `bash scripts/test-coder-control.sh resume`
+- Evidence: `.sisyphus/evidence/phase2-g12-b-control-resume-tests.log`
 - Reason: -
-- Detail: Swift resume-token classification tests passed. A real expired resume token was not injected to observe SDK retry without that token.
+- Detail: After a real coordinator reset, the proxy substitutes an invalid token in the SDK's resume-bearing handshake. The native server returns 401, then the SDK retries without the resume token and receives 101. The primary credential remains unchanged, the original SSH stream stays usable without an authentication error, and the remote counter remains one. See phase2-g12-b-control-resume-proxy.log and phase2-g12-b-control-brief.md.
 
 ### A22
 
@@ -277,11 +277,11 @@ and task 12, line 465. They are not optional live-deployment work.
 |---|---|
 | Agent restart/workspace rebuild | Existing session ends appropriately; new connection resolves the right agent. |
 
-- Status: FAIL
-- Command: `ruby scripts/verify-coder-matrix.rb --gate`
-- Evidence: `.sisyphus/evidence/phase2-g12-gate-brief.md`
+- Status: PASS
+- Command: `bash scripts/test-coder-rebuild.sh`
+- Evidence: `.sisyphus/evidence/phase2-g12-b-rebuild-tests.log`
 - Reason: -
-- Detail: Real agent restart or workspace rebuild was not performed during an active session. Fake agent-gone errors do not establish subsequent current-build resolution.
+- Detail: An owned native workspace is rebuilt during an active CoderTransport session. Its original output stream finishes, fresh resolution returns a replacement agent UUID, explicit old-UUID resolution is rejected, and a new transport executes on the rebuilt workspace. See phase2-g12-b-rebuild-brief.md and phase2-g12-b-rebuild-agent.log for the real rebuild evidence.
 
 ### A23
 
