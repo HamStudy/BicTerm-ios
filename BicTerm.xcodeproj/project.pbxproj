@@ -36,6 +36,7 @@
 		5F7BA31B518717F3F7C7D021 /* TestKeyInterposerController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6752FAECA4F5CB79E1BA7376 /* TestKeyInterposerController.swift */; };
 		5F835DFB18FF5FD8CF4D8DCB /* ConnectionDraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6158268C19E09108160238C /* ConnectionDraft.swift */; };
 		6002E4C470E2A70D0F84298F /* CoderNet.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = E20F350306A27C4DDBF8F31F /* CoderNet.xcframework */; };
+		62B05EC9C2E58ABC03E383AD /* WindowRelaunchUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBD8FFB5DA9FCC86FC262784 /* WindowRelaunchUITests.swift */; };
 		653238EAE77D214255CAE0C9 /* ConnectionEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41191DBF20B2C68D6DE82B32 /* ConnectionEditorView.swift */; };
 		6B407211A6E7D8DC950253D8 /* CoderServerDraftTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2021A3E870796F577B2977B9 /* CoderServerDraftTests.swift */; };
 		6E19487335AF8C03FEB7C0F4 /* BicTermApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = C289650F4565C1664160B8C7 /* BicTermApp.swift */; };
@@ -175,6 +176,7 @@
 		D33C2C2243BFF07FBCBAE9B4 /* CoderWorkspaceConnectionModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoderWorkspaceConnectionModel.swift; sourceTree = "<group>"; };
 		D54E86DC16E786DEBA885A18 /* CoderAgentPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoderAgentPickerView.swift; sourceTree = "<group>"; };
 		DA5CD19F0365C45C630C3747 /* AgentApprovalPresenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentApprovalPresenter.swift; sourceTree = "<group>"; };
+		DBD8FFB5DA9FCC86FC262784 /* WindowRelaunchUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowRelaunchUITests.swift; sourceTree = "<group>"; };
 		E20F350306A27C4DDBF8F31F /* CoderNet.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = CoderNet.xcframework; path = ".build-artifacts/coder-net/CoderNet.xcframework"; sourceTree = "<group>"; };
 		E76A6A24C5E64A49A72CDFDB /* BicTermCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = BicTermCore; path = BicTermCore; sourceTree = SOURCE_ROOT; };
 		F4E11EA37839E114E930D8F5 /* CoderSessionInfoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoderSessionInfoView.swift; sourceTree = "<group>"; };
@@ -355,6 +357,7 @@
 				9CDBD24515C3D13084296F43 /* SessionScenesUITests.swift */,
 				91CE759126C72FF9092D43CD /* SessionSwitcherUITests.swift */,
 				1D27F017056FBA03DF32FAB9 /* TerminalUITests.swift */,
+				DBD8FFB5DA9FCC86FC262784 /* WindowRelaunchUITests.swift */,
 			);
 			path = BicTermUITests;
 			sourceTree = "<group>";
@@ -650,6 +653,7 @@
 				5672839E124E656D01A53B13 /* SessionScenesUITests.swift in Sources */,
 				F21EDD308CA574A7D6833409 /* SessionSwitcherUITests.swift in Sources */,
 				134C9CEEF577B85E1E8AE6C9 /* TerminalUITests.swift in Sources */,
+				62B05EC9C2E58ABC03E383AD /* WindowRelaunchUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

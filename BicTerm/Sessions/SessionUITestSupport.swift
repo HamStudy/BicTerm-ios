@@ -44,12 +44,15 @@ enum TerminalSceneUITest {
 /// each once its session is active — standing in for the cross-window
 /// interaction XCUITest cannot synthesize on iPad.
 enum SessionUITestDriver {
+    @MainActor private static var hasStarted = false
+
     @MainActor
     static func run(
         store: SessionStore,
         present: @MainActor (SessionStore.SessionDescriptor) -> Void
     ) async {
-        guard TerminalSceneUITest.seamsEnabled else { return }
+        guard TerminalSceneUITest.seamsEnabled, !hasStarted else { return }
+        hasStarted = true
         let arguments = ProcessInfo.processInfo.arguments
 
         if !arguments.contains("--uitest-expect-restore") {
