@@ -385,7 +385,7 @@ final class CoderWorkspaceStarter {
                     phase = .failed(.agentStartupFailed(state: lifecycle))
                     return .agentStartupFailed(state: lifecycle)
                 }
-                if agent.isConnected, lifecycle == "ready" || lifecycle == "unknown" {
+                if agent.isConnected, !agent.blocksLoginUntilReady || lifecycle == "ready" {
                     appendLog("build running, agent connected, lifecycle \(lifecycle)")
                     phase = .ready
                     return nil
