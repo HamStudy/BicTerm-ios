@@ -1,0 +1,4 @@
+blocking: CLI pending with startup script held
+blocking: remote command completed after startup script release
+nonblocking: remote command completed while startup script remained held
+PASS: pinned CLI auto-wait matches both native startup policy variants
