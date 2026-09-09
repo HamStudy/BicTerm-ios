@@ -125,6 +125,7 @@ struct ConnectionEditorView: View {
         .environment(\.terminalColors, colors)
         .environment(\.terminalTypography, typography)
         .environment(\.terminalSpacing, spacing)
+        .presentationSizing(.page)
     }
 
     private var descriptor: ProtocolDescriptor? {
@@ -148,6 +149,7 @@ struct ConnectionEditorView: View {
             .tint(colors.accent)
             .accessibilityIdentifier("protocol-picker")
             .onChange(of: draft.protocolID) { _, newID in
+                focus = nil
                 if let newDescriptor = model.descriptor(forProtocolID: newID) {
                     if !newDescriptor.supportsJumpChain { draft.hops = [] }
                     draft.port = String(newDescriptor.defaultPort)

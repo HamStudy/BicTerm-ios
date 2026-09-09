@@ -133,6 +133,7 @@ struct CoderServersListView: View {
                     editorTarget = EditorTarget(server: server)
                 } label: {
                     CoderServerRow(server: server)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .listRowBackground(colors.background)
