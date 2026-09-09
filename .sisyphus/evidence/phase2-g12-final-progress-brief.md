@@ -1,7 +1,7 @@
 # T12 protocol acceptance checkpoint — INCOMPLETE
 
-Latest status: **PASS=22, FAIL=9, NOT-LOCAL=3**. Batch A closed A31;
-Batch B's first slices closed A02-A09. The checkpoint narrative below
+Latest status: **PASS=24, FAIL=7, NOT-LOCAL=3**. Batch A closed A31;
+Batch B has closed A02-A09 and A11-A12. The checkpoint narrative below
 preserves the earlier 13/18/3 state. A31 evidence is in
 `phase2-g12-a31-investigation.md`; native authentication/permission evidence
 is in `phase2-g12-b-auth-native-green.log`, `phase2-g12-b-auth-audit.log`,
@@ -21,8 +21,14 @@ and accepted-response loss via the app-side starter. The ledger asserts one
 `phase2-g12-b-start-native.log`, `phase2-g12-b-start-agent-ledger.log`.
 `phase2-g12-b-start-disabled.log` proves the disabled native path sends GETs only.
 
-Remaining: A10-A12, A19-A22, A32, A34. Template startup-policy variants exist
-but are not claimed as exercised until their own native evidence is complete.
+Startup slice: `bash scripts/test-coder-startup.sh` provisions blocking,
+nonblocking, error and timeout scripts and executes four Core tests.
+`bash scripts/test-coder-startup-policy.sh` independently exercises the two
+held-script policies through explicit app-side starts. Evidence:
+`phase2-g12-b-startup-tests.log`, `phase2-g12-b-auto-final.log`, with red runs
+in `...-startup-red.log` and `...-auto-red.log`.
+
+Remaining: A10, A19-A22, A32, A34.
 
 This checkpoints executed native evidence, not phase approval. Matrix:
 **PASS=13, FAIL=18, NOT-LOCAL=3**. Structural validation passes; `--gate`

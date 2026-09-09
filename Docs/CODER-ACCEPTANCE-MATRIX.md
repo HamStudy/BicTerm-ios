@@ -4,8 +4,8 @@ Gate: INCOMPLETE. FAIL includes unverified requirements.
 
 Latest evidence: `.sisyphus/evidence/phase2-g12-final-progress-brief.md` records
 green full UI regressions and additional native protocol execution. There are
-22 PASS, 3 NOT-LOCAL and 9 FAIL rows. Native authentication, selection and
-start/recheck behavior are verified; remaining rows still block approval.
+24 PASS, 3 NOT-LOCAL and 7 FAIL rows. Native startup policy and script
+failure/timeout handling are verified; remaining rows still block approval.
 
 This is a blocked-gate inventory, not a compatibility declaration. The 34
 normative rows below are generated directly from the read-only spec section
@@ -145,11 +145,11 @@ and task 12, line 465. They are not optional live-deployment work.
 |---|---|
 | Blocking and nonblocking startup scripts | `auto` waiting follows script policy. |
 
-- Status: FAIL
-- Command: `ruby scripts/verify-coder-matrix.rb --gate`
-- Evidence: `.sisyphus/evidence/phase2-g12-gate-brief.md`
+- Status: PASS
+- Command: `bash scripts/test-coder-startup.sh && bash scripts/test-coder-startup-policy.sh`
+- Evidence: `.sisyphus/evidence/phase2-g12-b-auto-final.log`
 - Reason: -
-- Detail: The native fixture template has no startup script or start_blocks_login variant. The CLI auto-wait option was inspected, but neither required template variant was provisioned or tested.
+- Detail: Both real start_blocks_login variants are provisioned with a script held on a repository-local release marker. Blocking connections remain pending until release; nonblocking connections complete while the script is still held. Native Core tests cover already-running workspaces, and app-side starter tests cover explicit starts. Evidence also includes phase2-g12-b-startup-tests.log and each variant's captured script-policy metadata. The pinned v2.36.4 CLI independently matches both policies with --wait auto; see phase2-g12-b-startup-cli-comparison.log and phase2-g12-b-startup-verification.md.
 
 ### A12
 
@@ -157,11 +157,11 @@ and task 12, line 465. They are not optional live-deployment work.
 |---|---|
 | Startup timeout/error | Bounded, informative failure or explicit diagnostic-login override. |
 
-- Status: FAIL
-- Command: `ruby scripts/verify-coder-matrix.rb --gate`
-- Evidence: `.sisyphus/evidence/phase2-g12-gate-brief.md`
+- Status: PASS
+- Command: `bash scripts/test-coder-startup.sh`
+- Evidence: `.sisyphus/evidence/phase2-g12-b-startup-tests.log`
 - Reason: -
-- Detail: A failing or timing-out startup script was not provisioned. A bounded tailnet dial timeout does not prove startup-script timeout/error semantics.
+- Detail: Real script variants exit with error and exceed their one-second script timeout. Core refuses to connect and reports remoteStartupFailed retaining start_error or start_timeout in its actionable description. The native red run previously connected silently in both states; the green run rejects them. Waiting uses a monotonic ten-minute bound and cancellation-aware sleeps, not a tailnet timeout substitute.
 
 ### A13
 
