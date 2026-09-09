@@ -1,0 +1,765 @@
+Provisioner tags: <none>
+WARN: No .terraform.lock.hcl file found
+  | When provisioning, Coder will be unable to cache providers without a lockfile and must download them from the internet each time.
+  | Create one by running terraform init in your template directory.
+=== ✔ Queued [0ms]
+==> ⧗ Running
+==> ⧗ Running
+=== ✔ Running [1ms]
+==> ⧗ Setting up
+=== ✔ Setting up [84ms]
+==> ⧗ Initializing Terraform Directory
+2026-09-09 17:27:47.684-06:00 Initializing the backend...
+2026-09-09 17:27:47.685-06:00 Initializing provider plugins...
+2026-09-09 17:27:47.685-06:00 Finding matching versions for provider: coder/coder, version_constraint: "~> 2.18"
+2026-09-09 17:27:47.959-06:00 Finding matching versions for provider: hashicorp/null, version_constraint: "~> 3.2"
+2026-09-09 17:27:48.501-06:00 Installing provider version: coder/coder v2.18.0...
+2026-09-09 17:27:49.196-06:00 Installed provider version: coder/coder v2.18.0 (signed by a HashiCorp partnerkey_id: 93C75807601AA0EC)
+2026-09-09 17:27:49.487-06:00 Installing provider version: hashicorp/null v3.3.1...
+2026-09-09 17:27:49.832-06:00 Installed provider version: hashicorp/null v3.3.1 (signed by HashiCorp)
+2026-09-09 17:27:49.832-06:00 Partner and community providers are signed by their developers.
+If you'd like to know more about provider signing, you can read about it here:
+https://developer.hashicorp.com/terraform/cli/plugins/signing
+2026-09-09 17:27:49.832-06:00 Terraform has created a lock file .terraform.lock.hcl to record the provider
+selections it made above. Include this file in your version control repository
+so that Terraform can guarantee to make the same selections by default when
+you run "terraform init" in the future.
+2026-09-09 17:27:49.833-06:00 Terraform has been successfully initialized!
+2026-09-09 17:27:49.833-06:00 You may now begin working with Terraform. Try running "terraform plan" to see
+any changes that are required for your infrastructure. All Terraform commands
+should now work.
+
+If you ever set or change modules or backend configuration for Terraform,
+rerun this command to reinitialize your working directory. If you forget, other
+commands will detect it and remind you to do so if necessary.
+=== ✔ Initializing Terraform Directory [2152ms]
+==> ⧗ Parsing template parameters
+=== ✔ Parsing template parameters [2ms]
+==> ⧗ Detecting persistent resources
+2026-09-09 17:27:49.889-06:00 Terraform 1.14.5
+2026-09-09 17:27:50.858-06:00 data.coder_provisioner.me: Refreshing...
+2026-09-09 17:27:50.858-06:00 data.coder_parameter.multi_agent: Refreshing...
+2026-09-09 17:27:50.858-06:00 data.coder_workspace.me: Refreshing...
+2026-09-09 17:27:50.858-06:00 data.coder_parameter.start_blocks_login: Refreshing...
+2026-09-09 17:27:50.859-06:00 data.coder_parameter.script_mode: Refreshing...
+2026-09-09 17:27:50.859-06:00 data.coder_provisioner.me: Refresh complete after 0s [id=2c25360b-7da1-47c6-85a4-ddd506ea2f97]
+2026-09-09 17:27:50.860-06:00 data.coder_parameter.multi_agent: Refresh complete after 0s [id=1a447635-ad44-467c-9534-ad4523dc12e6]
+2026-09-09 17:27:50.860-06:00 data.coder_workspace.me: Refresh complete after 0s [id=a6c3f839-18a9-42f9-a783-746aa1d723bf]
+2026-09-09 17:27:50.860-06:00 data.coder_parameter.start_blocks_login: Refresh complete after 0s [id=8b39c254-3e58-42d3-8ad8-6c11e415e6ad]
+2026-09-09 17:27:50.860-06:00 data.coder_parameter.script_mode: Refresh complete after 0s [id=ad0d6ee7-ccd6-45af-9015-7a32ff2e83bf]
+2026-09-09 17:27:50.870-06:00 coder_agent.main[0]: Plan to create
+2026-09-09 17:27:50.870-06:00 coder_script.startup[0]: Plan to create
+2026-09-09 17:27:50.870-06:00 null_resource.main_script[0]: Plan to create
+2026-09-09 17:27:50.870-06:00 Plan: 3 to add, 0 to change, 0 to destroy.
+2026-09-09 17:27:50.871-06:00 Warning: "dir" is deprecated and will be removed in a future release.
+2026-09-09 17:27:50.871-06:00 on main.tf line 71, in resource "coder_agent" "main":
+2026-09-09 17:27:50.871-06:00   71:   dir   = "${local.base}/work"
+2026-09-09 17:27:50.871-06:00 
+2026-09-09 17:27:50.871-06:00 
+2026-09-09 17:27:50.872-06:00 Warning: Setting "dir" to a value other than $HOME will break Coder Desktop file sync.
+2026-09-09 17:27:50.872-06:00 on main.tf line 71, in resource "coder_agent" "main":
+2026-09-09 17:27:50.872-06:00   71:   dir   = "${local.base}/work"
+2026-09-09 17:27:50.872-06:00 
+2026-09-09 17:27:50.872-06:00 
+2026-09-09 17:27:50.874-06:00 Warning: Argument is deprecated
+2026-09-09 17:27:50.874-06:00 on main.tf line 71, in resource "coder_agent" "main":
+2026-09-09 17:27:50.874-06:00   71:   dir   = "${local.base}/work"
+2026-09-09 17:27:50.874-06:00 
+2026-09-09 17:27:50.874-06:00 dir has been deprecated and will be removed in a future release.
+=== ✔ Detecting persistent resources [1406ms]
+==> ⧗ Detecting ephemeral resources
+2026-09-09 17:27:51.294-06:00 Terraform 1.14.5
+2026-09-09 17:27:51.479-06:00 data.coder_parameter.multi_agent: Refreshing...
+2026-09-09 17:27:51.479-06:00 data.coder_workspace.me: Refreshing...
+2026-09-09 17:27:51.480-06:00 data.coder_provisioner.me: Refreshing...
+2026-09-09 17:27:51.480-06:00 data.coder_parameter.start_blocks_login: Refreshing...
+2026-09-09 17:27:51.480-06:00 data.coder_parameter.script_mode: Refreshing...
+2026-09-09 17:27:51.481-06:00 data.coder_provisioner.me: Refresh complete after 0s [id=db989de0-3037-4894-8ee0-40affe1e5d18]
+2026-09-09 17:27:51.481-06:00 data.coder_workspace.me: Refresh complete after 0s [id=f4838ee2-f9c0-4c4c-b131-63a6afd27fa9]
+2026-09-09 17:27:51.481-06:00 data.coder_parameter.multi_agent: Refresh complete after 0s [id=2725eee9-c091-42ea-8058-49270f80cb26]
+2026-09-09 17:27:51.481-06:00 data.coder_parameter.start_blocks_login: Refresh complete after 0s [id=0a2176e1-4f9e-4a83-b2d3-f6f6593d2600]
+2026-09-09 17:27:51.481-06:00 data.coder_parameter.script_mode: Refresh complete after 0s [id=85ac092d-31de-4326-9d42-0746b8c67ede]
+2026-09-09 17:27:51.485-06:00 Plan: 0 to add, 0 to change, 0 to destroy.
+=== ✔ Detecting ephemeral resources [621ms]
+==> ⧗ Cleaning Up
+=== ✔ Cleaning Up [6ms]
+┌─────────────────────────────────┐
+│ Template Preview                │
+├─────────────────────────────────┤
+│ RESOURCE                        │
+├─────────────────────────────────┤
+│ null_resource.main_script       │
+│ └─ main (darwin, arm64)         │
+└─────────────────────────────────┘
+
+The bicterm-profiles template has been created at Sep  9 17:27:51! Developers
+can provision a workspace with this template using:
+
+Updated version at Sep  9 17:27:51!
+No preset applied.
+Planning workspace...
+=== ✔ Queued [0ms]
+==> ⧗ Running
+==> ⧗ Running
+=== ✔ Running [5ms]
+==> ⧗ Setting up
+=== ✔ Setting up [81ms]
+==> ⧗ Initializing Terraform Directory
+=== ✔ Initializing Terraform Directory [1947ms]
+==> ⧗ Detecting persistent resources
+=== ✔ Detecting persistent resources [1187ms]
+==> ⧗ Cleaning Up
+=== ✔ Cleaning Up [7ms]
+┌─────────────────────────────────────────────────────────────────┐
+│ Workspace Preview                                               │
+├─────────────────────────────────────────────────────────────────┤
+│ RESOURCE                   ACCESS                               │
+├─────────────────────────────────────────────────────────────────┤
+│ null_resource.main_script                                       │
+│ └─ main (darwin, arm64)    coder ssh g12-profile-a-48e4c1d1     │
+└─────────────────────────────────────────────────────────────────┘
+=== ✔ Queued [0ms]
+==> ⧗ Running
+==> ⧗ Running
+=== ✔ Running [16ms]
+==> ⧗ Setting up
+=== ✔ Setting up [82ms]
+==> ⧗ Initializing Terraform Directory
+2026-09-09 17:27:55.502-06:00 Initializing the backend...
+2026-09-09 17:27:55.503-06:00 Initializing provider plugins...
+2026-09-09 17:27:55.503-06:00 Finding matching versions for provider: coder/coder, version_constraint: "~> 2.18"
+2026-09-09 17:27:55.626-06:00 Finding matching versions for provider: hashicorp/null, version_constraint: "~> 3.2"
+2026-09-09 17:27:56.134-06:00 Installing provider version: coder/coder v2.18.0...
+2026-09-09 17:27:56.773-06:00 Installed provider version: coder/coder v2.18.0 (signed by a HashiCorp partnerkey_id: 93C75807601AA0EC)
+2026-09-09 17:27:56.971-06:00 Installing provider version: hashicorp/null v3.3.1...
+2026-09-09 17:27:57.292-06:00 Installed provider version: hashicorp/null v3.3.1 (signed by HashiCorp)
+2026-09-09 17:27:57.292-06:00 Partner and community providers are signed by their developers.
+If you'd like to know more about provider signing, you can read about it here:
+https://developer.hashicorp.com/terraform/cli/plugins/signing
+2026-09-09 17:27:57.292-06:00 Terraform has created a lock file .terraform.lock.hcl to record the provider
+selections it made above. Include this file in your version control repository
+so that Terraform can guarantee to make the same selections by default when
+you run "terraform init" in the future.
+2026-09-09 17:27:57.292-06:00 Terraform has been successfully initialized!
+2026-09-09 17:27:57.292-06:00 You may now begin working with Terraform. Try running "terraform plan" to see
+any changes that are required for your infrastructure. All Terraform commands
+should now work.
+
+If you ever set or change modules or backend configuration for Terraform,
+rerun this command to reinitialize your working directory. If you forget, other
+commands will detect it and remind you to do so if necessary.
+=== ✔ Initializing Terraform Directory [1846ms]
+==> ⧗ Planning Infrastructure
+2026-09-09 17:27:58.134-06:00 data.coder_provisioner.me: Refreshing...
+2026-09-09 17:27:58.134-06:00 data.coder_parameter.script_mode: Refreshing...
+2026-09-09 17:27:58.134-06:00 data.coder_parameter.start_blocks_login: Refreshing...
+2026-09-09 17:27:58.135-06:00 data.coder_parameter.multi_agent: Refreshing...
+2026-09-09 17:27:58.135-06:00 data.coder_workspace.me: Refreshing...
+2026-09-09 17:27:58.135-06:00 data.coder_provisioner.me: Refresh complete after 0s [id=5ca80039-f22a-4d24-9149-fa8158bba6be]
+2026-09-09 17:27:58.136-06:00 data.coder_parameter.start_blocks_login: Refresh complete after 0s [id=88ec2268-1957-48d1-8372-624f71fce895]
+2026-09-09 17:27:58.136-06:00 data.coder_workspace.me: Refresh complete after 0s [id=0affa6a1-38de-4ab2-b300-d143f37a6204]
+2026-09-09 17:27:58.136-06:00 data.coder_parameter.multi_agent: Refresh complete after 0s [id=ce7bdf3d-abe0-42ba-b6ca-6ce00d25d334]
+2026-09-09 17:27:58.136-06:00 data.coder_parameter.script_mode: Refresh complete after 0s [id=84a3577d-c322-44f0-9c0c-f1f00a81b250]
+2026-09-09 17:27:58.146-06:00 coder_agent.main[0]: Plan to create
+2026-09-09 17:27:58.146-06:00 coder_script.startup[0]: Plan to create
+2026-09-09 17:27:58.146-06:00 null_resource.main_script[0]: Plan to create
+2026-09-09 17:27:58.146-06:00 Plan: 3 to add, 0 to change, 0 to destroy.
+2026-09-09 17:27:58.147-06:00 Warning: "dir" is deprecated and will be removed in a future release.
+2026-09-09 17:27:58.147-06:00 on main.tf line 71, in resource "coder_agent" "main":
+2026-09-09 17:27:58.147-06:00   71:   dir   = "${local.base}/work"
+2026-09-09 17:27:58.147-06:00 
+2026-09-09 17:27:58.147-06:00 
+2026-09-09 17:27:58.147-06:00 Warning: Setting "dir" to a value other than $HOME will break Coder Desktop file sync.
+2026-09-09 17:27:58.147-06:00 on main.tf line 71, in resource "coder_agent" "main":
+2026-09-09 17:27:58.147-06:00   71:   dir   = "${local.base}/work"
+2026-09-09 17:27:58.147-06:00 
+2026-09-09 17:27:58.147-06:00 
+2026-09-09 17:27:58.148-06:00 Warning: Argument is deprecated
+2026-09-09 17:27:58.148-06:00 on main.tf line 71, in resource "coder_agent" "main":
+2026-09-09 17:27:58.148-06:00   71:   dir   = "${local.base}/work"
+2026-09-09 17:27:58.148-06:00 
+2026-09-09 17:27:58.148-06:00 dir has been deprecated and will be removed in a future release.
+=== ✔ Planning Infrastructure [916ms]
+==> ⧗ Starting workspace
+2026-09-09 17:27:58.313-06:00 Terraform 1.14.5
+2026-09-09 17:27:58.396-06:00 coder_agent.main[0]: Plan to create
+2026-09-09 17:27:58.396-06:00 coder_script.startup[0]: Plan to create
+2026-09-09 17:27:58.396-06:00 null_resource.main_script[0]: Plan to create
+2026-09-09 17:27:58.448-06:00 coder_agent.main[0]: Creating...
+2026-09-09 17:27:58.450-06:00 coder_agent.main[0]: Creation complete after 0s [id=e8c17572-0e1f-4b78-81dd-b73d53d9c39e]
+2026-09-09 17:27:58.467-06:00 coder_script.startup[0]: Creating...
+2026-09-09 17:27:58.467-06:00 null_resource.main_script[0]: Creating...
+2026-09-09 17:27:58.468-06:00 null_resource.main_script[0]: Provisioning with 'local-exec'...
+2026-09-09 17:27:58.468-06:00 null_resource.main_script[0]: (local-exec): (output suppressed due to sensitive value in config)
+2026-09-09 17:27:58.468-06:00 coder_script.startup[0]: Creation complete after 0s [id=26a625c0-f7c8-448a-9a1a-07871968c243]
+2026-09-09 17:27:58.481-06:00 null_resource.main_script[0]: (local-exec) Provisioning complete
+2026-09-09 17:27:58.481-06:00 null_resource.main_script[0]: Creation complete after 0s [id=363178766443006619]
+2026-09-09 17:27:58.503-06:00 Warning: "dir" is deprecated and will be removed in a future release.
+2026-09-09 17:27:58.503-06:00 on main.tf line 71, in resource "coder_agent" "main":
+2026-09-09 17:27:58.503-06:00   71:   dir   = "${local.base}/work"
+2026-09-09 17:27:58.503-06:00 
+2026-09-09 17:27:58.503-06:00 
+2026-09-09 17:27:58.504-06:00 Warning: Setting "dir" to a value other than $HOME will break Coder Desktop file sync.
+2026-09-09 17:27:58.504-06:00 on main.tf line 71, in resource "coder_agent" "main":
+2026-09-09 17:27:58.504-06:00   71:   dir   = "${local.base}/work"
+2026-09-09 17:27:58.504-06:00 
+2026-09-09 17:27:58.504-06:00 
+2026-09-09 17:27:58.504-06:00 Warning: Argument is deprecated
+2026-09-09 17:27:58.505-06:00 on main.tf line 71, in resource "coder_agent" "main":
+2026-09-09 17:27:58.505-06:00   71:   dir   = "${local.base}/work"
+2026-09-09 17:27:58.505-06:00 
+2026-09-09 17:27:58.505-06:00 dir has been deprecated and will be removed in a future release.
+2026-09-09 17:27:58.505-06:00 Apply complete! Resources: 3 added, 0 changed, 0 destroyed.
+2026-09-09 17:27:58.505-06:00 Outputs: 0
+=== ✔ Starting workspace [524ms]
+==> ⧗ Cleaning Up
+=== ✔ Cleaning Up [8ms]
+
+The g12-profile-a-48e4c1d1 workspace has been created at Sep  9 17:27:58!
+PROFILE a user=2444ace7-909e-42c3-a36b-60707fcd84de agent=33a43da6-1edd-4ce8-95cb-2fb5639e6400 connected and ready
+No preset applied.
+Planning workspace...
+=== ✔ Queued [0ms]
+==> ⧗ Running
+==> ⧗ Running
+=== ✔ Running [4ms]
+==> ⧗ Setting up
+=== ✔ Setting up [82ms]
+==> ⧗ Initializing Terraform Directory
+=== ✔ Initializing Terraform Directory [1909ms]
+==> ⧗ Detecting persistent resources
+=== ✔ Detecting persistent resources [1190ms]
+==> ⧗ Cleaning Up
+=== ✔ Cleaning Up [6ms]
+┌─────────────────────────────────────────────────────────────────┐
+│ Workspace Preview                                               │
+├─────────────────────────────────────────────────────────────────┤
+│ RESOURCE                   ACCESS                               │
+├─────────────────────────────────────────────────────────────────┤
+│ null_resource.main_script                                       │
+│ └─ main (darwin, arm64)    coder ssh g12-profile-b-b81fc5f2     │
+└─────────────────────────────────────────────────────────────────┘
+=== ✔ Queued [0ms]
+==> ⧗ Running
+==> ⧗ Running
+=== ✔ Running [15ms]
+==> ⧗ Setting up
+=== ✔ Setting up [81ms]
+==> ⧗ Initializing Terraform Directory
+2026-09-09 17:28:02.633-06:00 Initializing the backend...
+2026-09-09 17:28:02.634-06:00 Initializing provider plugins...
+2026-09-09 17:28:02.634-06:00 Finding matching versions for provider: coder/coder, version_constraint: "~> 2.18"
+2026-09-09 17:28:02.758-06:00 Finding matching versions for provider: hashicorp/null, version_constraint: "~> 3.2"
+2026-09-09 17:28:03.297-06:00 Installing provider version: coder/coder v2.18.0...
+2026-09-09 17:28:03.922-06:00 Installed provider version: coder/coder v2.18.0 (signed by a HashiCorp partnerkey_id: 93C75807601AA0EC)
+2026-09-09 17:28:04.157-06:00 Installing provider version: hashicorp/null v3.3.1...
+2026-09-09 17:28:04.490-06:00 Installed provider version: hashicorp/null v3.3.1 (signed by HashiCorp)
+2026-09-09 17:28:04.490-06:00 Partner and community providers are signed by their developers.
+If you'd like to know more about provider signing, you can read about it here:
+https://developer.hashicorp.com/terraform/cli/plugins/signing
+2026-09-09 17:28:04.490-06:00 Terraform has created a lock file .terraform.lock.hcl to record the provider
+selections it made above. Include this file in your version control repository
+so that Terraform can guarantee to make the same selections by default when
+you run "terraform init" in the future.
+2026-09-09 17:28:04.490-06:00 Terraform has been successfully initialized!
+2026-09-09 17:28:04.490-06:00 You may now begin working with Terraform. Try running "terraform plan" to see
+any changes that are required for your infrastructure. All Terraform commands
+should now work.
+
+If you ever set or change modules or backend configuration for Terraform,
+rerun this command to reinitialize your working directory. If you forget, other
+commands will detect it and remind you to do so if necessary.
+=== ✔ Initializing Terraform Directory [1914ms]
+==> ⧗ Planning Infrastructure
+2026-09-09 17:28:05.338-06:00 data.coder_provisioner.me: Refreshing...
+2026-09-09 17:28:05.338-06:00 data.coder_parameter.start_blocks_login: Refreshing...
+2026-09-09 17:28:05.338-06:00 data.coder_workspace.me: Refreshing...
+2026-09-09 17:28:05.338-06:00 data.coder_parameter.multi_agent: Refreshing...
+2026-09-09 17:28:05.339-06:00 data.coder_parameter.script_mode: Refreshing...
+2026-09-09 17:28:05.340-06:00 data.coder_provisioner.me: Refresh complete after 0s [id=bf81dde1-5c86-4c4c-aff3-c76e88f4617b]
+2026-09-09 17:28:05.340-06:00 data.coder_parameter.multi_agent: Refresh complete after 0s [id=5d7906a4-c2a7-43ce-b600-567094423ef6]
+2026-09-09 17:28:05.340-06:00 data.coder_parameter.start_blocks_login: Refresh complete after 0s [id=1ccb22f1-2f59-4046-82de-7adc0fe51d7d]
+2026-09-09 17:28:05.340-06:00 data.coder_workspace.me: Refresh complete after 0s [id=8f162858-d46c-400e-91c1-5b6a4c5ac84f]
+2026-09-09 17:28:05.341-06:00 data.coder_parameter.script_mode: Refresh complete after 0s [id=3c772ca0-6500-441e-8822-605497099a05]
+2026-09-09 17:28:05.352-06:00 coder_agent.main[0]: Plan to create
+2026-09-09 17:28:05.352-06:00 coder_script.startup[0]: Plan to create
+2026-09-09 17:28:05.352-06:00 null_resource.main_script[0]: Plan to create
+2026-09-09 17:28:05.352-06:00 Plan: 3 to add, 0 to change, 0 to destroy.
+2026-09-09 17:28:05.352-06:00 Warning: "dir" is deprecated and will be removed in a future release.
+2026-09-09 17:28:05.353-06:00 on main.tf line 71, in resource "coder_agent" "main":
+2026-09-09 17:28:05.353-06:00   71:   dir   = "${local.base}/work"
+2026-09-09 17:28:05.353-06:00 
+2026-09-09 17:28:05.353-06:00 
+2026-09-09 17:28:05.353-06:00 Warning: Setting "dir" to a value other than $HOME will break Coder Desktop file sync.
+2026-09-09 17:28:05.353-06:00 on main.tf line 71, in resource "coder_agent" "main":
+2026-09-09 17:28:05.353-06:00   71:   dir   = "${local.base}/work"
+2026-09-09 17:28:05.353-06:00 
+2026-09-09 17:28:05.353-06:00 
+2026-09-09 17:28:05.354-06:00 Warning: Argument is deprecated
+2026-09-09 17:28:05.354-06:00 on main.tf line 71, in resource "coder_agent" "main":
+2026-09-09 17:28:05.354-06:00   71:   dir   = "${local.base}/work"
+2026-09-09 17:28:05.354-06:00 
+2026-09-09 17:28:05.354-06:00 dir has been deprecated and will be removed in a future release.
+=== ✔ Planning Infrastructure [928ms]
+==> ⧗ Starting workspace
+2026-09-09 17:28:05.525-06:00 Terraform 1.14.5
+2026-09-09 17:28:05.606-06:00 coder_agent.main[0]: Plan to create
+2026-09-09 17:28:05.606-06:00 coder_script.startup[0]: Plan to create
+2026-09-09 17:28:05.606-06:00 null_resource.main_script[0]: Plan to create
+2026-09-09 17:28:05.657-06:00 coder_agent.main[0]: Creating...
+2026-09-09 17:28:05.658-06:00 coder_agent.main[0]: Creation complete after 0s [id=2b3f2aa8-6c8f-44ae-94bc-a4fd83e91120]
+2026-09-09 17:28:05.675-06:00 coder_script.startup[0]: Creating...
+2026-09-09 17:28:05.675-06:00 null_resource.main_script[0]: Creating...
+2026-09-09 17:28:05.677-06:00 coder_script.startup[0]: Creation complete after 0s [id=6cad1865-daa5-433b-9c47-2c326248f1dd]
+2026-09-09 17:28:05.683-06:00 null_resource.main_script[0]: Provisioning with 'local-exec'...
+2026-09-09 17:28:05.683-06:00 null_resource.main_script[0]: (local-exec): (output suppressed due to sensitive value in config)
+2026-09-09 17:28:05.693-06:00 null_resource.main_script[0]: (local-exec) Provisioning complete
+2026-09-09 17:28:05.693-06:00 null_resource.main_script[0]: Creation complete after 0s [id=5906824977387277796]
+2026-09-09 17:28:05.713-06:00 Warning: "dir" is deprecated and will be removed in a future release.
+2026-09-09 17:28:05.713-06:00 on main.tf line 71, in resource "coder_agent" "main":
+2026-09-09 17:28:05.713-06:00   71:   dir   = "${local.base}/work"
+2026-09-09 17:28:05.713-06:00 
+2026-09-09 17:28:05.713-06:00 
+2026-09-09 17:28:05.713-06:00 Warning: Setting "dir" to a value other than $HOME will break Coder Desktop file sync.
+2026-09-09 17:28:05.713-06:00 on main.tf line 71, in resource "coder_agent" "main":
+2026-09-09 17:28:05.713-06:00   71:   dir   = "${local.base}/work"
+2026-09-09 17:28:05.714-06:00 
+2026-09-09 17:28:05.714-06:00 
+2026-09-09 17:28:05.714-06:00 Warning: Argument is deprecated
+2026-09-09 17:28:05.714-06:00 on main.tf line 71, in resource "coder_agent" "main":
+2026-09-09 17:28:05.714-06:00   71:   dir   = "${local.base}/work"
+2026-09-09 17:28:05.714-06:00 
+2026-09-09 17:28:05.714-06:00 dir has been deprecated and will be removed in a future release.
+2026-09-09 17:28:05.714-06:00 Apply complete! Resources: 3 added, 0 changed, 0 destroyed.
+2026-09-09 17:28:05.714-06:00 Outputs: 0
+=== ✔ Starting workspace [532ms]
+==> ⧗ Cleaning Up
+=== ✔ Cleaning Up [9ms]
+
+The g12-profile-b-b81fc5f2 workspace has been created at Sep  9 17:28:06!
+PROFILE b user=5fc74b62-292a-4c7c-b50e-32f5a74eb385 agent=775968dc-2c37-4af3-8c6a-2cfd732a0cf0 connected and ready
+PROFILE 0 own agent authorized; other profile agent denied with 404
+PROFILE 1 own agent authorized; other profile agent denied with 404
+READY: two distinct non-administrator profiles with mutually denied cross-agent access
+Command line invocation:
+    /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild test -scheme BicTermCore -destination "platform=iOS Simulator,id=732CE8E1-F9EF-4020-BF93-5BA1AA365B0E" -derivedDataPath /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core "-only-testing:BicTermCoreTests/CoderNativeProfileIsolationTests"
+
+Resolve Package Graph
+2026-09-09 17:28:11.389 xcodebuild[17950:32565049] [MT] IDERunDestination: Supported platforms for the buildables in the current scheme is empty.
+
+
+Resolved source packages:
+  swift-atomics: https://github.com/apple/swift-atomics.git @ 1.3.1
+  swift-system: https://github.com/apple/swift-system.git @ 1.8.1
+  swift-asn1: https://github.com/apple/swift-asn1.git @ 1.7.2
+  BicTermCore: /Users/richard/code/BicTerm/BicTermCore
+  swift-crypto: https://github.com/apple/swift-crypto.git @ 4.5.2
+  swift-nio-ssh: /Users/richard/code/BicTerm/Vendor/swift-nio-ssh @ local
+  swift-collections: https://github.com/apple/swift-collections.git @ 1.6.0
+  swift-nio: https://github.com/apple/swift-nio.git @ 2.102.0
+
+ComputePackagePrebuildTargetDependencyGraph
+
+Prepare packages
+
+CreateBuildRequest
+
+SendProjectDescription
+
+CreateBuildOperation
+
+ComputeTargetDependencyGraph
+note: Building targets in dependency order
+note: Target dependency graph (39 targets)
+    Target 'BicTermCore' in project 'BicTermCore'
+        ➜ Explicit dependency on target 'BicTermCore' in project 'BicTermCore'
+        ➜ Explicit dependency on target 'CBcryptPBKDF' in project 'BicTermCore'
+        ➜ Explicit dependency on target 'NIOSSH' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOPosix' in project 'swift-nio'
+    Target 'BicTermCoreTests' in project 'BicTermCore'
+        ➜ Explicit dependency on target 'CBcryptPBKDF' in project 'BicTermCore'
+        ➜ Explicit dependency on target 'BicTermCore' in project 'BicTermCore'
+        ➜ Explicit dependency on target 'NIOSSH' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOEmbedded' in project 'swift-nio'
+    Target 'NIOEmbedded' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOEmbedded' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics' in project 'swift-atomics'
+    Target 'BicTermCore' in project 'BicTermCore'
+        ➜ Explicit dependency on target 'CBcryptPBKDF' in project 'BicTermCore'
+        ➜ Explicit dependency on target 'NIOSSH' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOPosix' in project 'swift-nio'
+    Target 'NIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'swift-nio_NIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics' in project 'swift-atomics'
+    Target 'NIOSSH' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOSSH' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOFoundationCompat' in project 'swift-nio'
+        ➜ Explicit dependency on target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'Atomics' in project 'swift-atomics'
+    Target 'NIOSSH' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOFoundationCompat' in project 'swift-nio'
+        ➜ Explicit dependency on target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'Atomics' in project 'swift-atomics'
+    Target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'swift-crypto_Crypto' in project 'swift-crypto'
+    Target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'swift-crypto_Crypto' in project 'swift-crypto'
+    Target 'swift-crypto_Crypto' in project 'swift-crypto' (no dependencies)
+    Target 'NIOFoundationCompat' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOFoundationCompat' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOEmbedded' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIO' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOFoundationEssentialsCompat' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics' in project 'swift-atomics'
+    Target 'NIOFoundationCompat' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOEmbedded' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIO' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOFoundationEssentialsCompat' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics' in project 'swift-atomics'
+    Target 'NIOFoundationEssentialsCompat' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics' in project 'swift-atomics'
+    Target 'NIO' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOEmbedded' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics' in project 'swift-atomics'
+    Target 'NIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'swift-nio_NIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics' in project 'swift-atomics'
+    Target 'swift-nio_NIOPosix' in project 'swift-nio' (no dependencies)
+    Target 'CNIOPosix' in project 'swift-nio' (no dependencies)
+    Target 'NIOEmbedded' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics' in project 'swift-atomics'
+    Target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+    Target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics' in project 'swift-atomics'
+    Target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics' in project 'swift-atomics'
+    Target 'Atomics' in project 'swift-atomics'
+        ➜ Explicit dependency on target 'Atomics' in project 'swift-atomics'
+        ➜ Explicit dependency on target '_AtomicsShims' in project 'swift-atomics'
+    Target 'Atomics' in project 'swift-atomics'
+        ➜ Explicit dependency on target '_AtomicsShims' in project 'swift-atomics'
+    Target '_AtomicsShims' in project 'swift-atomics' (no dependencies)
+    Target 'DequeModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'DequeModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'InternalCollectionsUtilities' in project 'swift-collections'
+        ➜ Explicit dependency on target 'ContainersPreview' in project 'swift-collections'
+    Target 'DequeModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'InternalCollectionsUtilities' in project 'swift-collections'
+        ➜ Explicit dependency on target 'ContainersPreview' in project 'swift-collections'
+    Target 'ContainersPreview' in project 'swift-collections'
+        ➜ Explicit dependency on target 'InternalCollectionsUtilities' in project 'swift-collections'
+    Target 'InternalCollectionsUtilities' in project 'swift-collections' (no dependencies)
+    Target '_NIODataStructures' in project 'swift-nio' (no dependencies)
+    Target 'CNIOWASI' in project 'swift-nio' (no dependencies)
+    Target 'CNIOWindows' in project 'swift-nio' (no dependencies)
+    Target 'CNIOLinux' in project 'swift-nio' (no dependencies)
+    Target 'CNIODarwin' in project 'swift-nio' (no dependencies)
+    Target 'CNIOFreeBSD' in project 'swift-nio' (no dependencies)
+    Target 'CNIOOpenBSD' in project 'swift-nio' (no dependencies)
+    Target '_NIOBase64' in project 'swift-nio' (no dependencies)
+    Target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+    Target 'CNIOAtomics' in project 'swift-nio' (no dependencies)
+    Target 'CBcryptPBKDF' in project 'BicTermCore' (no dependencies)
+
+GatherProvisioningInputs
+
+CreateBuildDescription
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -v -E -dM -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -x c -c /dev/null
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc --version
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -v -E -dM -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -x c -c /dev/null
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld -version_details
+
+ReadFileContents /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/share/docc/features.json
+
+Build description signature: 203cf9f97077b0b5ff007453cc5fec21
+Build description path: /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/XCBuildData/203cf9f97077b0b5ff007453cc5fec21.xcbuilddata
+ClangStatCache /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang-stat-cache /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/SDKStatCaches.noindex/iphonesimulator26.5-23F81a-688ef53f1462e2c8f657fdc38a81448f6cfe768891a92b912361537c460fe42b.sdkstatcache
+    cd /Users/richard/code/BicTerm/BicTermCore/.swiftpm/xcode
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang-stat-cache /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -o /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/SDKStatCaches.noindex/iphonesimulator26.5-23F81a-688ef53f1462e2c8f657fdc38a81448f6cfe768891a92b912361537c460fe42b.sdkstatcache
+
+ProcessInfoPlistFile /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/swift-nio_NIOPosix.bundle/Info.plist /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/swift-nio.build/Debug-iphonesimulator/swift-nio_NIOPosix.build/empty-swift-nio_NIOPosix.plist (in target 'swift-nio_NIOPosix' from project 'swift-nio')
+    cd /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/SourcePackages/checkouts/swift-nio
+    builtin-infoPlistUtility /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/swift-nio.build/Debug-iphonesimulator/swift-nio_NIOPosix.build/empty-swift-nio_NIOPosix.plist -producttype com.apple.product-type.bundle -expandbuildsettings -format binary -platform iphonesimulator -o /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/swift-nio_NIOPosix.bundle/Info.plist
+
+ProcessInfoPlistFile /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/swift-crypto_Crypto.bundle/Info.plist /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/swift-crypto.build/Debug-iphonesimulator/swift-crypto_Crypto.build/empty-swift-crypto_Crypto.plist (in target 'swift-crypto_Crypto' from project 'swift-crypto')
+    cd /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/SourcePackages/checkouts/swift-crypto
+    builtin-infoPlistUtility /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/swift-crypto.build/Debug-iphonesimulator/swift-crypto_Crypto.build/empty-swift-crypto_Crypto.plist -producttype com.apple.product-type.bundle -expandbuildsettings -format binary -platform iphonesimulator -o /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/swift-crypto_Crypto.bundle/Info.plist
+
+WriteAuxiliaryFile /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/BicTermCore.build/Debug-iphonesimulator/BicTermCoreTests.build/Objects-normal/arm64/BicTermCoreTests.SwiftConstValuesFileList (in target 'BicTermCoreTests' from project 'BicTermCore')
+    cd /Users/richard/code/BicTerm/BicTermCore
+    write-file /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/BicTermCore.build/Debug-iphonesimulator/BicTermCoreTests.build/Objects-normal/arm64/BicTermCoreTests.SwiftConstValuesFileList
+
+WriteAuxiliaryFile /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/BicTermCore.build/Debug-iphonesimulator/BicTermCoreTests.build/Objects-normal/arm64/BicTermCoreTests.SwiftFileList (in target 'BicTermCoreTests' from project 'BicTermCore')
+    cd /Users/richard/code/BicTerm/BicTermCore
+    write-file /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/BicTermCore.build/Debug-iphonesimulator/BicTermCoreTests.build/Objects-normal/arm64/BicTermCoreTests.SwiftFileList
+
+WriteAuxiliaryFile /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/BicTermCore.build/Debug-iphonesimulator/BicTermCoreTests.build/Objects-normal/arm64/BicTermCoreTests-OutputFileMap.json (in target 'BicTermCoreTests' from project 'BicTermCore')
+    cd /Users/richard/code/BicTerm/BicTermCore
+    write-file /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/BicTermCore.build/Debug-iphonesimulator/BicTermCoreTests.build/Objects-normal/arm64/BicTermCoreTests-OutputFileMap.json
+
+WriteAuxiliaryFile /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/BicTermCore.build/Debug-iphonesimulator/BicTermCoreTests.build/Objects-normal/arm64/BicTermCoreTests.LinkFileList (in target 'BicTermCoreTests' from project 'BicTermCore')
+    cd /Users/richard/code/BicTerm/BicTermCore
+    write-file /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/BicTermCore.build/Debug-iphonesimulator/BicTermCoreTests.build/Objects-normal/arm64/BicTermCoreTests.LinkFileList
+
+ProcessInfoPlistFile /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/BicTermCoreTests.xctest/Info.plist /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/BicTermCore.build/Debug-iphonesimulator/BicTermCoreTests.build/empty-BicTermCoreTests.plist (in target 'BicTermCoreTests' from project 'BicTermCore')
+    cd /Users/richard/code/BicTerm/BicTermCore
+    builtin-infoPlistUtility /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/BicTermCore.build/Debug-iphonesimulator/BicTermCoreTests.build/empty-BicTermCoreTests.plist -producttype com.apple.product-type.bundle.unit-test -expandbuildsettings -format binary -platform iphonesimulator -scanforprivacyfile /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/BicTermCoreTests.xctest/swift-crypto_Crypto.bundle -scanforprivacyfile /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/BicTermCoreTests.xctest/swift-nio_NIOPosix.bundle -o /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/BicTermCoreTests.xctest/Info.plist
+
+SwiftDriver BicTermCoreTests normal arm64 com.apple.xcode.tools.swift.compiler (in target 'BicTermCoreTests' from project 'BicTermCore')
+    cd /Users/richard/code/BicTerm/BicTermCore/.swiftpm/xcode
+    builtin-SwiftDriver -- /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name BicTermCoreTests -Onone @/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/BicTermCore.build/Debug-iphonesimulator/BicTermCoreTests.build/Objects-normal/arm64/BicTermCoreTests.SwiftFileList -DSWIFT_PACKAGE -DDEBUG -Xcc -fmodule-map-file\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/GeneratedModuleMaps-iphonesimulator/CNIOPosix.modulemap -Xcc -fmodule-map-file\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/GeneratedModuleMaps-iphonesimulator/CNIOWASI.modulemap -Xcc -fmodule-map-file\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/GeneratedModuleMaps-iphonesimulator/CNIOLinux.modulemap -Xcc -fmodule-map-file\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/GeneratedModuleMaps-iphonesimulator/CNIODarwin.modulemap -Xcc -fmodule-map-file\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/GeneratedModuleMaps-iphonesimulator/CNIOFreeBSD.modulemap -Xcc -fmodule-map-file\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/GeneratedModuleMaps-iphonesimulator/CNIOOpenBSD.modulemap -Xcc -fmodule-map-file\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/GeneratedModuleMaps-iphonesimulator/CNIOAtomics.modulemap -Xcc -fmodule-map-file\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/GeneratedModuleMaps-iphonesimulator/CBcryptPBKDF.modulemap -DXcode -plugin-path /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -target arm64-apple-ios18.0-simulator -g -module-cache-path /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/ModuleCache.noindex -Xfrontend -serialize-debugging-options -profile-coverage-mapping -profile-generate -enable-testing -index-store-path /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Index.noindex/DataStore -Xcc -D_LIBCPP_HARDENING_MODE\=_LIBCPP_HARDENING_MODE_DEBUG -swift-version 6 -I /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator -Isystem /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator -F /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Frameworks -F /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk/Developer/Library/Frameworks -c -j20 -enable-batch-mode -incremental -Xcc -ivfsstatcache -Xcc /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/SDKStatCaches.noindex/iphonesimulator26.5-23F81a-688ef53f1462e2c8f657fdc38a81448f6cfe768891a92b912361537c460fe42b.sdkstatcache -output-file-map /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/BicTermCore.build/Debug-iphonesimulator/BicTermCoreTests.build/Objects-normal/arm64/BicTermCoreTests-OutputFileMap.json -use-frontend-parseable-output -save-temps -no-color-diagnostics -explicit-module-build -module-cache-path /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules -clang-scanner-module-cache-path /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/ModuleCache.noindex -sdk-module-cache-path /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/ModuleCache.noindex -serialize-diagnostics -emit-dependencies -emit-module -emit-module-path /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/BicTermCore.build/Debug-iphonesimulator/BicTermCoreTests.build/Objects-normal/arm64/BicTermCoreTests.swiftmodule -validate-clang-modules-once -clang-build-session-file /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/ModuleCache.noindex/Session.modulevalidation -package-name bictermcore -emit-const-values -Xfrontend -const-gather-protocols-file -Xfrontend /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/BicTermCore.build/Debug-iphonesimulator/BicTermCoreTests.build/Objects-normal/arm64/BicTermCoreTests_const_extract_protocols.json -Xcc -I/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/SourcePackages/checkouts/swift-nio/Sources/CNIOPosix/include -Xcc -I/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/SourcePackages/checkouts/swift-atomics/Sources/_AtomicsShims/include -Xcc -I/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/SourcePackages/checkouts/swift-nio/Sources/CNIOWASI/include -Xcc -I/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/SourcePackages/checkouts/swift-nio/Sources/CNIOWindows/include -Xcc -I/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/SourcePackages/checkouts/swift-nio/Sources/CNIOLinux/include -Xcc -I/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/SourcePackages/checkouts/swift-nio/Sources/CNIODarwin/include -Xcc -I/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/SourcePackages/checkouts/swift-nio/Sources/CNIOFreeBSD/include -Xcc -I/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/SourcePackages/checkouts/swift-nio/Sources/CNIOOpenBSD/include -Xcc -I/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/SourcePackages/checkouts/swift-nio/Sources/CNIOAtomics/include -Xcc -I/Users/richard/code/BicTerm/BicTermCore/Sources/CBcryptPBKDF/include -Xcc -I/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/include -Xcc -I/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/BicTermCore.build/Debug-iphonesimulator/BicTermCoreTests.build/DerivedSources-normal/arm64 -Xcc -I/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/BicTermCore.build/Debug-iphonesimulator/BicTermCoreTests.build/DerivedSources/arm64 -Xcc -I/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/BicTermCore.build/Debug-iphonesimulator/BicTermCoreTests.build/DerivedSources -Xcc -DSWIFT_PACKAGE -Xcc -DDEBUG\=1 -working-directory /Users/richard/code/BicTerm/BicTermCore/.swiftpm/xcode -experimental-emit-module-separately -disable-cmo
+
+SwiftCompile normal arm64 Compiling\ CoderNativeProfileIsolationTests.swift /Users/richard/code/BicTerm/BicTermCore/Tests/BicTermCoreTests/CoderNativeProfileIsolationTests.swift (in target 'BicTermCoreTests' from project 'BicTermCore')
+
+SwiftCompile normal arm64 /Users/richard/code/BicTerm/BicTermCore/Tests/BicTermCoreTests/CoderNativeProfileIsolationTests.swift (in target 'BicTermCoreTests' from project 'BicTermCore')
+    cd /Users/richard/code/BicTerm/BicTermCore/.swiftpm/xcode
+    
+
+SwiftCompile normal arm64 Compiling\ CoderNativeFixture.swift /Users/richard/code/BicTerm/BicTermCore/Tests/BicTermCoreTests/CoderNativeFixture.swift (in target 'BicTermCoreTests' from project 'BicTermCore')
+
+SwiftCompile normal arm64 /Users/richard/code/BicTerm/BicTermCore/Tests/BicTermCoreTests/CoderNativeFixture.swift (in target 'BicTermCoreTests' from project 'BicTermCore')
+    cd /Users/richard/code/BicTerm/BicTermCore/.swiftpm/xcode
+    
+
+SwiftEmitModule normal arm64 Emitting\ module\ for\ BicTermCoreTests (in target 'BicTermCoreTests' from project 'BicTermCore')
+EmitSwiftModule normal arm64 (in target 'BicTermCoreTests' from project 'BicTermCore')
+    cd /Users/richard/code/BicTerm/BicTermCore/.swiftpm/xcode
+    
+
+SwiftDriverJobDiscovery normal arm64 Compiling CoderNativeFixture.swift (in target 'BicTermCoreTests' from project 'BicTermCore')
+
+SwiftCompile normal arm64 Compiling\ CoderNativeSelectionAcceptanceTests.swift /Users/richard/code/BicTerm/BicTermCore/Tests/BicTermCoreTests/CoderNativeSelectionAcceptanceTests.swift (in target 'BicTermCoreTests' from project 'BicTermCore')
+SwiftCompile normal arm64 /Users/richard/code/BicTerm/BicTermCore/Tests/BicTermCoreTests/CoderNativeSelectionAcceptanceTests.swift (in target 'BicTermCoreTests' from project 'BicTermCore')
+    cd /Users/richard/code/BicTerm/BicTermCore/.swiftpm/xcode
+    
+
+SwiftCompile normal arm64 Compiling\ CoderNativeStartPolicyAcceptanceTests.swift /Users/richard/code/BicTerm/BicTermCore/Tests/BicTermCoreTests/CoderNativeStartPolicyAcceptanceTests.swift (in target 'BicTermCoreTests' from project 'BicTermCore')
+
+SwiftCompile normal arm64 /Users/richard/code/BicTerm/BicTermCore/Tests/BicTermCoreTests/CoderNativeStartPolicyAcceptanceTests.swift (in target 'BicTermCoreTests' from project 'BicTermCore')
+    cd /Users/richard/code/BicTerm/BicTermCore/.swiftpm/xcode
+    
+
+SwiftCompile normal arm64 Compiling\ CoderNativeStartupAcceptanceTests.swift /Users/richard/code/BicTerm/BicTermCore/Tests/BicTermCoreTests/CoderNativeStartupAcceptanceTests.swift (in target 'BicTermCoreTests' from project 'BicTermCore')
+
+SwiftCompile normal arm64 /Users/richard/code/BicTerm/BicTermCore/Tests/BicTermCoreTests/CoderNativeStartupAcceptanceTests.swift (in target 'BicTermCoreTests' from project 'BicTermCore')
+    cd /Users/richard/code/BicTerm/BicTermCore/.swiftpm/xcode
+    
+
+SwiftDriverJobDiscovery normal arm64 Compiling CoderNativeProfileIsolationTests.swift (in target 'BicTermCoreTests' from project 'BicTermCore')
+
+SwiftDriverJobDiscovery normal arm64 Compiling CoderNativeStartPolicyAcceptanceTests.swift (in target 'BicTermCoreTests' from project 'BicTermCore')
+
+SwiftDriverJobDiscovery normal arm64 Emitting module for BicTermCoreTests (in target 'BicTermCoreTests' from project 'BicTermCore')
+
+SwiftDriver\ Compilation\ Requirements BicTermCoreTests normal arm64 com.apple.xcode.tools.swift.compiler (in target 'BicTermCoreTests' from project 'BicTermCore')
+    cd /Users/richard/code/BicTerm/BicTermCore/.swiftpm/xcode
+    builtin-Swift-Compilation-Requirements -- /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name BicTermCoreTests -Onone @/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/BicTermCore.build/Debug-iphonesimulator/BicTermCoreTests.build/Objects-normal/arm64/BicTermCoreTests.SwiftFileList -DSWIFT_PACKAGE -DDEBUG -Xcc -fmodule-map-file\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/GeneratedModuleMaps-iphonesimulator/CNIOPosix.modulemap -Xcc -fmodule-map-file\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/GeneratedModuleMaps-iphonesimulator/CNIOWASI.modulemap -Xcc -fmodule-map-file\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/GeneratedModuleMaps-iphonesimulator/CNIOLinux.modulemap -Xcc -fmodule-map-file\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/GeneratedModuleMaps-iphonesimulator/CNIODarwin.modulemap -Xcc -fmodule-map-file\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/GeneratedModuleMaps-iphonesimulator/CNIOFreeBSD.modulemap -Xcc -fmodule-map-file\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/GeneratedModuleMaps-iphonesimulator/CNIOOpenBSD.modulemap -Xcc -fmodule-map-file\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/GeneratedModuleMaps-iphonesimulator/CNIOAtomics.modulemap -Xcc -fmodule-map-file\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/GeneratedModuleMaps-iphonesimulator/CBcryptPBKDF.modulemap -DXcode -plugin-path /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -target arm64-apple-ios18.0-simulator -g -module-cache-path /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/ModuleCache.noindex -Xfrontend -serialize-debugging-options -profile-coverage-mapping -profile-generate -enable-testing -index-store-path /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Index.noindex/DataStore -Xcc -D_LIBCPP_HARDENING_MODE\=_LIBCPP_HARDENING_MODE_DEBUG -swift-version 6 -I /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator -Isystem /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator -F /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Frameworks -F /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk/Developer/Library/Frameworks -c -j20 -enable-batch-mode -incremental -Xcc -ivfsstatcache -Xcc /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/SDKStatCaches.noindex/iphonesimulator26.5-23F81a-688ef53f1462e2c8f657fdc38a81448f6cfe768891a92b912361537c460fe42b.sdkstatcache -output-file-map /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/BicTermCore.build/Debug-iphonesimulator/BicTermCoreTests.build/Objects-normal/arm64/BicTermCoreTests-OutputFileMap.json -use-frontend-parseable-output -save-temps -no-color-diagnostics -explicit-module-build -module-cache-path /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules -clang-scanner-module-cache-path /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/ModuleCache.noindex -sdk-module-cache-path /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/ModuleCache.noindex -serialize-diagnostics -emit-dependencies -emit-module -emit-module-path /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/BicTermCore.build/Debug-iphonesimulator/BicTermCoreTests.build/Objects-normal/arm64/BicTermCoreTests.swiftmodule -validate-clang-modules-once -clang-build-session-file /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/ModuleCache.noindex/Session.modulevalidation -package-name bictermcore -emit-const-values -Xfrontend -const-gather-protocols-file -Xfrontend /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/BicTermCore.build/Debug-iphonesimulator/BicTermCoreTests.build/Objects-normal/arm64/BicTermCoreTests_const_extract_protocols.json -Xcc -I/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/SourcePackages/checkouts/swift-nio/Sources/CNIOPosix/include -Xcc -I/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/SourcePackages/checkouts/swift-atomics/Sources/_AtomicsShims/include -Xcc -I/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/SourcePackages/checkouts/swift-nio/Sources/CNIOWASI/include -Xcc -I/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/SourcePackages/checkouts/swift-nio/Sources/CNIOWindows/include -Xcc -I/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/SourcePackages/checkouts/swift-nio/Sources/CNIOLinux/include -Xcc -I/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/SourcePackages/checkouts/swift-nio/Sources/CNIODarwin/include -Xcc -I/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/SourcePackages/checkouts/swift-nio/Sources/CNIOFreeBSD/include -Xcc -I/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/SourcePackages/checkouts/swift-nio/Sources/CNIOOpenBSD/include -Xcc -I/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/SourcePackages/checkouts/swift-nio/Sources/CNIOAtomics/include -Xcc -I/Users/richard/code/BicTerm/BicTermCore/Sources/CBcryptPBKDF/include -Xcc -I/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/include -Xcc -I/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/BicTermCore.build/Debug-iphonesimulator/BicTermCoreTests.build/DerivedSources-normal/arm64 -Xcc -I/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/BicTermCore.build/Debug-iphonesimulator/BicTermCoreTests.build/DerivedSources/arm64 -Xcc -I/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/BicTermCore.build/Debug-iphonesimulator/BicTermCoreTests.build/DerivedSources -Xcc -DSWIFT_PACKAGE -Xcc -DDEBUG\=1 -working-directory /Users/richard/code/BicTerm/BicTermCore/.swiftpm/xcode -experimental-emit-module-separately -disable-cmo
+
+Copy /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/BicTermCoreTests.swiftmodule/arm64-apple-ios-simulator.swiftmodule /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/BicTermCore.build/Debug-iphonesimulator/BicTermCoreTests.build/Objects-normal/arm64/BicTermCoreTests.swiftmodule (in target 'BicTermCoreTests' from project 'BicTermCore')
+    cd /Users/richard/code/BicTerm/BicTermCore
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/BicTermCore.build/Debug-iphonesimulator/BicTermCoreTests.build/Objects-normal/arm64/BicTermCoreTests.swiftmodule /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/BicTermCoreTests.swiftmodule/arm64-apple-ios-simulator.swiftmodule
+
+Copy /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/BicTermCoreTests.swiftmodule/arm64-apple-ios-simulator.abi.json /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/BicTermCore.build/Debug-iphonesimulator/BicTermCoreTests.build/Objects-normal/arm64/BicTermCoreTests.abi.json (in target 'BicTermCoreTests' from project 'BicTermCore')
+    cd /Users/richard/code/BicTerm/BicTermCore
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/BicTermCore.build/Debug-iphonesimulator/BicTermCoreTests.build/Objects-normal/arm64/BicTermCoreTests.abi.json /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/BicTermCoreTests.swiftmodule/arm64-apple-ios-simulator.abi.json
+
+Copy /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/BicTermCoreTests.swiftmodule/Project/arm64-apple-ios-simulator.swiftsourceinfo /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/BicTermCore.build/Debug-iphonesimulator/BicTermCoreTests.build/Objects-normal/arm64/BicTermCoreTests.swiftsourceinfo (in target 'BicTermCoreTests' from project 'BicTermCore')
+    cd /Users/richard/code/BicTerm/BicTermCore
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/BicTermCore.build/Debug-iphonesimulator/BicTermCoreTests.build/Objects-normal/arm64/BicTermCoreTests.swiftsourceinfo /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/BicTermCoreTests.swiftmodule/Project/arm64-apple-ios-simulator.swiftsourceinfo
+
+SwiftDriverJobDiscovery normal arm64 Compiling CoderNativeStartupAcceptanceTests.swift (in target 'BicTermCoreTests' from project 'BicTermCore')
+
+SwiftDriverJobDiscovery normal arm64 Compiling CoderNativeSelectionAcceptanceTests.swift (in target 'BicTermCoreTests' from project 'BicTermCore')
+
+SwiftDriver\ Compilation BicTermCoreTests normal arm64 com.apple.xcode.tools.swift.compiler (in target 'BicTermCoreTests' from project 'BicTermCore')
+    cd /Users/richard/code/BicTerm/BicTermCore/.swiftpm/xcode
+    builtin-Swift-Compilation -- /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name BicTermCoreTests -Onone @/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/BicTermCore.build/Debug-iphonesimulator/BicTermCoreTests.build/Objects-normal/arm64/BicTermCoreTests.SwiftFileList -DSWIFT_PACKAGE -DDEBUG -Xcc -fmodule-map-file\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/GeneratedModuleMaps-iphonesimulator/CNIOPosix.modulemap -Xcc -fmodule-map-file\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/GeneratedModuleMaps-iphonesimulator/CNIOWASI.modulemap -Xcc -fmodule-map-file\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/GeneratedModuleMaps-iphonesimulator/CNIOLinux.modulemap -Xcc -fmodule-map-file\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/GeneratedModuleMaps-iphonesimulator/CNIODarwin.modulemap -Xcc -fmodule-map-file\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/GeneratedModuleMaps-iphonesimulator/CNIOFreeBSD.modulemap -Xcc -fmodule-map-file\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/GeneratedModuleMaps-iphonesimulator/CNIOOpenBSD.modulemap -Xcc -fmodule-map-file\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/GeneratedModuleMaps-iphonesimulator/CNIOAtomics.modulemap -Xcc -fmodule-map-file\=/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/GeneratedModuleMaps-iphonesimulator/CBcryptPBKDF.modulemap -DXcode -plugin-path /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -target arm64-apple-ios18.0-simulator -g -module-cache-path /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/ModuleCache.noindex -Xfrontend -serialize-debugging-options -profile-coverage-mapping -profile-generate -enable-testing -index-store-path /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Index.noindex/DataStore -Xcc -D_LIBCPP_HARDENING_MODE\=_LIBCPP_HARDENING_MODE_DEBUG -swift-version 6 -I /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator -Isystem /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator -F /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Frameworks -F /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk/Developer/Library/Frameworks -c -j20 -enable-batch-mode -incremental -Xcc -ivfsstatcache -Xcc /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/SDKStatCaches.noindex/iphonesimulator26.5-23F81a-688ef53f1462e2c8f657fdc38a81448f6cfe768891a92b912361537c460fe42b.sdkstatcache -output-file-map /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/BicTermCore.build/Debug-iphonesimulator/BicTermCoreTests.build/Objects-normal/arm64/BicTermCoreTests-OutputFileMap.json -use-frontend-parseable-output -save-temps -no-color-diagnostics -explicit-module-build -module-cache-path /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules -clang-scanner-module-cache-path /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/ModuleCache.noindex -sdk-module-cache-path /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/ModuleCache.noindex -serialize-diagnostics -emit-dependencies -emit-module -emit-module-path /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/BicTermCore.build/Debug-iphonesimulator/BicTermCoreTests.build/Objects-normal/arm64/BicTermCoreTests.swiftmodule -validate-clang-modules-once -clang-build-session-file /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/ModuleCache.noindex/Session.modulevalidation -package-name bictermcore -emit-const-values -Xfrontend -const-gather-protocols-file -Xfrontend /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/BicTermCore.build/Debug-iphonesimulator/BicTermCoreTests.build/Objects-normal/arm64/BicTermCoreTests_const_extract_protocols.json -Xcc -I/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/SourcePackages/checkouts/swift-nio/Sources/CNIOPosix/include -Xcc -I/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/SourcePackages/checkouts/swift-atomics/Sources/_AtomicsShims/include -Xcc -I/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/SourcePackages/checkouts/swift-nio/Sources/CNIOWASI/include -Xcc -I/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/SourcePackages/checkouts/swift-nio/Sources/CNIOWindows/include -Xcc -I/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/SourcePackages/checkouts/swift-nio/Sources/CNIOLinux/include -Xcc -I/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/SourcePackages/checkouts/swift-nio/Sources/CNIODarwin/include -Xcc -I/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/SourcePackages/checkouts/swift-nio/Sources/CNIOFreeBSD/include -Xcc -I/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/SourcePackages/checkouts/swift-nio/Sources/CNIOOpenBSD/include -Xcc -I/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/SourcePackages/checkouts/swift-nio/Sources/CNIOAtomics/include -Xcc -I/Users/richard/code/BicTerm/BicTermCore/Sources/CBcryptPBKDF/include -Xcc -I/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/include -Xcc -I/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/BicTermCore.build/Debug-iphonesimulator/BicTermCoreTests.build/DerivedSources-normal/arm64 -Xcc -I/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/BicTermCore.build/Debug-iphonesimulator/BicTermCoreTests.build/DerivedSources/arm64 -Xcc -I/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/BicTermCore.build/Debug-iphonesimulator/BicTermCoreTests.build/DerivedSources -Xcc -DSWIFT_PACKAGE -Xcc -DDEBUG\=1 -working-directory /Users/richard/code/BicTerm/BicTermCore/.swiftpm/xcode -experimental-emit-module-separately -disable-cmo
+
+Ld /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/BicTermCoreTests.xctest/BicTermCoreTests normal (in target 'BicTermCoreTests' from project 'BicTermCore')
+    cd /Users/richard/code/BicTerm/BicTermCore
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -Xlinker -reproducible -target arm64-apple-ios18.0-simulator -bundle -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -O0 -L/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/EagerLinkingTBDs/Debug-iphonesimulator -L/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator -L/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib -F/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/EagerLinkingTBDs/Debug-iphonesimulator -F/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -F/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator -iframework /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Frameworks -iframework /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk/Developer/Library/Frameworks -filelist /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/BicTermCore.build/Debug-iphonesimulator/BicTermCoreTests.build/Objects-normal/arm64/BicTermCoreTests.LinkFileList -Xlinker -rpath -Xlinker /usr/lib/swift -Xlinker -rpath -Xlinker /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/PackageFrameworks -Xlinker -rpath -Xlinker @loader_path/Frameworks -Xlinker -rpath -Xlinker @loader_path/../Frameworks -Xlinker -dead_strip -Xlinker -object_path_lto -Xlinker /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/BicTermCore.build/Debug-iphonesimulator/BicTermCoreTests.build/Objects-normal/arm64/BicTermCoreTests_lto.o -rdynamic -Xlinker -no_deduplicate -Xlinker -objc_abi_version -Xlinker 2 -Xlinker -debug_variant -Xlinker -dependency_info -Xlinker /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/BicTermCore.build/Debug-iphonesimulator/BicTermCoreTests.build/Objects-normal/arm64/BicTermCoreTests_dependency_info.dat -fobjc-link-runtime -fprofile-instr-generate -L/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphonesimulator -L/usr/lib/swift -Xlinker -add_ast_path -Xlinker /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/BicTermCore.build/Debug-iphonesimulator/BicTermCoreTests.build/Objects-normal/arm64/BicTermCoreTests.swiftmodule @/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/BicTermCore.build/Debug-iphonesimulator/BicTermCoreTests.build/Objects-normal/arm64/BicTermCoreTests-linker-args.resp -Wl,-no_warn_duplicate_libraries -Wl,-no_warn_duplicate_libraries -Wl,-no_warn_duplicate_libraries -Wl,-no_warn_duplicate_libraries -Wl,-no_warn_duplicate_libraries -Wl,-no_warn_duplicate_libraries -Wl,-no_warn_duplicate_libraries -Wl,-no_warn_duplicate_libraries -Wl,-no_warn_duplicate_libraries -Wl,-no_warn_duplicate_libraries -Wl,-no_warn_duplicate_libraries -Wl,-no_warn_duplicate_libraries -Wl,-no_warn_duplicate_libraries -Wl,-no_warn_duplicate_libraries -Wl,-no_warn_duplicate_libraries -Wl,-no_warn_duplicate_libraries -Wl,-no_warn_duplicate_libraries -Wl,-no_warn_duplicate_libraries -Wl,-no_warn_duplicate_libraries -Wl,-no_warn_duplicate_libraries -Wl,-no_warn_duplicate_libraries -Wl,-no_warn_duplicate_libraries -Wl,-no_warn_duplicate_libraries -Wl,-no_warn_duplicate_libraries -Wl,-no_warn_duplicate_libraries -Wl,-no_warn_duplicate_libraries -lresolv -Xlinker -needed_framework -Xlinker XCTest -framework XCTest -Xlinker -needed-lXCTestSwiftSupport -lXCTestSwiftSupport /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/CoderNet.a -Xlinker -no_adhoc_codesign -o /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/BicTermCoreTests.xctest/BicTermCoreTests -Xlinker -add_ast_path -Xlinker /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/swift-nio-ssh.build/Debug-iphonesimulator/NIOSSH.build/Objects-normal/arm64/NIOSSH.swiftmodule @/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/swift-nio-ssh.build/Debug-iphonesimulator/NIOSSH.build/Objects-normal/arm64/NIOSSH-linker-args.resp -Xlinker -add_ast_path -Xlinker /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/swift-nio.build/Debug-iphonesimulator/NIOCore.build/Objects-normal/arm64/NIOCore.swiftmodule @/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/swift-nio.build/Debug-iphonesimulator/NIOCore.build/Objects-normal/arm64/NIOCore-linker-args.resp -Xlinker -add_ast_path -Xlinker /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/swift-nio.build/Debug-iphonesimulator/NIOConcurrencyHelpers.build/Objects-normal/arm64/NIOConcurrencyHelpers.swiftmodule @/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/swift-nio.build/Debug-iphonesimulator/NIOConcurrencyHelpers.build/Objects-normal/arm64/NIOConcurrencyHelpers-linker-args.resp -Xlinker -add_ast_path -Xlinker /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/swift-nio.build/Debug-iphonesimulator/_NIOBase64.build/Objects-normal/arm64/_NIOBase64.swiftmodule @/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/swift-nio.build/Debug-iphonesimulator/_NIOBase64.build/Objects-normal/arm64/_NIOBase64-linker-args.resp -Xlinker -add_ast_path -Xlinker /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/swift-nio.build/Debug-iphonesimulator/_NIODataStructures.build/Objects-normal/arm64/_NIODataStructures.swiftmodule @/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/swift-nio.build/Debug-iphonesimulator/_NIODataStructures.build/Objects-normal/arm64/_NIODataStructures-linker-args.resp -Xlinker -add_ast_path -Xlinker /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/swift-collections.build/Debug-iphonesimulator/DequeModule.build/Objects-normal/arm64/DequeModule.swiftmodule @/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/swift-collections.build/Debug-iphonesimulator/DequeModule.build/Objects-normal/arm64/DequeModule-linker-args.resp -Xlinker -add_ast_path -Xlinker /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/swift-collections.build/Debug-iphonesimulator/InternalCollectionsUtilities.build/Objects-normal/arm64/InternalCollectionsUtilities.swiftmodule @/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/swift-collections.build/Debug-iphonesimulator/InternalCollectionsUtilities.build/Objects-normal/arm64/InternalCollectionsUtilities-linker-args.resp -Xlinker -add_ast_path -Xlinker /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/swift-collections.build/Debug-iphonesimulator/ContainersPreview.build/Objects-normal/arm64/ContainersPreview.swiftmodule @/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/swift-collections.build/Debug-iphonesimulator/ContainersPreview.build/Objects-normal/arm64/ContainersPreview-linker-args.resp -Xlinker -add_ast_path -Xlinker /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/swift-atomics.build/Debug-iphonesimulator/Atomics.build/Objects-normal/arm64/Atomics.swiftmodule @/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/swift-atomics.build/Debug-iphonesimulator/Atomics.build/Objects-normal/arm64/Atomics-linker-args.resp -Xlinker -add_ast_path -Xlinker /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/swift-nio.build/Debug-iphonesimulator/NIOFoundationCompat.build/Objects-normal/arm64/NIOFoundationCompat.swiftmodule @/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/swift-nio.build/Debug-iphonesimulator/NIOFoundationCompat.build/Objects-normal/arm64/NIOFoundationCompat-linker-args.resp -Xlinker -add_ast_path -Xlinker /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/swift-nio.build/Debug-iphonesimulator/NIOEmbedded.build/Objects-normal/arm64/NIOEmbedded.swiftmodule @/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/swift-nio.build/Debug-iphonesimulator/NIOEmbedded.build/Objects-normal/arm64/NIOEmbedded-linker-args.resp -Xlinker -add_ast_path -Xlinker /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/swift-nio.build/Debug-iphonesimulator/NIOPosix.build/Objects-normal/arm64/NIOPosix.swiftmodule @/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/swift-nio.build/Debug-iphonesimulator/NIOPosix.build/Objects-normal/arm64/NIOPosix-linker-args.resp -Xlinker -add_ast_path -Xlinker /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/swift-nio.build/Debug-iphonesimulator/NIO.build/Objects-normal/arm64/NIO.swiftmodule @/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/swift-nio.build/Debug-iphonesimulator/NIO.build/Objects-normal/arm64/NIO-linker-args.resp -Xlinker -add_ast_path -Xlinker /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/swift-nio.build/Debug-iphonesimulator/NIOFoundationEssentialsCompat.build/Objects-normal/arm64/NIOFoundationEssentialsCompat.swiftmodule @/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/swift-nio.build/Debug-iphonesimulator/NIOFoundationEssentialsCompat.build/Objects-normal/arm64/NIOFoundationEssentialsCompat-linker-args.resp -Xlinker -add_ast_path -Xlinker /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/swift-crypto.build/Debug-iphonesimulator/Crypto.build/Objects-normal/arm64/Crypto.swiftmodule @/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/swift-crypto.build/Debug-iphonesimulator/Crypto.build/Objects-normal/arm64/Crypto-linker-args.resp -Xlinker -add_ast_path -Xlinker /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/BicTermCore.build/Debug-iphonesimulator/BicTermCore.build/Objects-normal/arm64/BicTermCore.swiftmodule @/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/BicTermCore.build/Debug-iphonesimulator/BicTermCore.build/Objects-normal/arm64/BicTermCore-linker-args.resp
+
+CopySwiftLibs /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/BicTermCoreTests.xctest (in target 'BicTermCoreTests' from project 'BicTermCore')
+    cd /Users/richard/code/BicTerm/BicTermCore
+    builtin-swiftStdLibTool --copy --verbose --sign - --scan-executable /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/BicTermCoreTests.xctest/BicTermCoreTests --scan-folder /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/BicTermCoreTests.xctest/Frameworks --scan-folder /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/BicTermCoreTests.xctest/PlugIns --scan-folder /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/BicTermCoreTests.xctest/SystemExtensions --scan-folder /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/BicTermCoreTests.xctest/Extensions --platform iphonesimulator --toolchain /var/run/com.apple.security.cryptexd/mnt/com.apple.MobileAsset.MetalToolchain-v17.6.109.0.ozHyXD/Metal.xctoolchain --toolchain /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain --destination /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/BicTermCoreTests.xctest/Frameworks --strip-bitcode --scan-executable /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib/libXCTestSwiftSupport.dylib --strip-bitcode-tool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/bitcode_strip --emit-dependency-info /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/BicTermCore.build/Debug-iphonesimulator/BicTermCoreTests.build/SwiftStdLibToolInputDependencies.dep --filter-for-swift-os
+
+ExtractAppIntentsMetadata (in target 'BicTermCoreTests' from project 'BicTermCore')
+    cd /Users/richard/code/BicTerm/BicTermCore
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/appintentsmetadataprocessor --toolchain-dir /var/run/com.apple.security.cryptexd/mnt/com.apple.MobileAsset.MetalToolchain-v17.6.109.0.ozHyXD/Metal.xctoolchain --module-name BicTermCoreTests --sdk-root /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk --xcode-version 17F113 --platform-family iOS --deployment-target 18.0 --bundle-identifier bictermcore.BicTermCoreTests --output /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/BicTermCoreTests.xctest --target-triple arm64-apple-ios18.0-simulator --binary-file /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/BicTermCoreTests.xctest/BicTermCoreTests --dependency-file /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/BicTermCore.build/Debug-iphonesimulator/BicTermCoreTests.build/Objects-normal/arm64/BicTermCoreTests_dependency_info.dat --stringsdata-file /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/BicTermCore.build/Debug-iphonesimulator/BicTermCoreTests.build/Objects-normal/arm64/ExtractedAppShortcutsMetadata.stringsdata --source-file-list /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/BicTermCore.build/Debug-iphonesimulator/BicTermCoreTests.build/Objects-normal/arm64/BicTermCoreTests.SwiftFileList --metadata-file-list /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/BicTermCore.build/Debug-iphonesimulator/BicTermCoreTests.build/BicTermCoreTests.DependencyMetadataFileList --static-metadata-file-list /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/BicTermCore.build/Debug-iphonesimulator/BicTermCoreTests.build/BicTermCoreTests.DependencyStaticMetadataFileList --swift-const-vals-list /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/BicTermCore.build/Debug-iphonesimulator/BicTermCoreTests.build/Objects-normal/arm64/BicTermCoreTests.SwiftConstValuesFileList --compile-time-extraction --deployment-aware-processing --validate-assistant-intents --no-app-shortcuts-localization
+2026-09-09 17:28:15.326 appintentsmetadataprocessor[18136:32566487] Starting appintentsmetadataprocessor export
+2026-09-09 17:28:15.328 appintentsmetadataprocessor[18136:32566487] warning: Metadata extraction skipped. No AppIntents.framework dependency found.
+
+CodeSign /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/BicTermCoreTests.xctest (in target 'BicTermCoreTests' from project 'BicTermCore')
+    cd /Users/richard/code/BicTerm/BicTermCore
+    
+    Signing Identity:     "Sign to Run Locally"
+    
+    /usr/bin/codesign --force --sign - --timestamp\=none --generate-entitlement-der /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/BicTermCoreTests.xctest
+
+Test Suite 'Selected tests' started at 2026-09-09 17:28:16.473.
+Test Suite 'BicTermCoreTests.xctest' started at 2026-09-09 17:28:16.473.
+Test Suite 'CoderNativeProfileIsolationTests' started at 2026-09-09 17:28:16.473.
+Test Case '-[BicTermCoreTests.CoderNativeProfileIsolationTests testConcurrentDistinctUsersKeepTheirStreamsAndCloseIndependent]' started.
+NATIVE_PROFILE_ISOLATION concurrent distinct users; own outputs only; second stream survives first close
+Test Case '-[BicTermCoreTests.CoderNativeProfileIsolationTests testConcurrentDistinctUsersKeepTheirStreamsAndCloseIndependent]' passed (0.342 seconds).
+Test Suite 'CoderNativeProfileIsolationTests' passed at 2026-09-09 17:28:16.816.
+	 Executed 1 test, with 0 failures (0 unexpected) in 0.342 (0.343) seconds
+Test Suite 'BicTermCoreTests.xctest' passed at 2026-09-09 17:28:16.817.
+	 Executed 1 test, with 0 failures (0 unexpected) in 0.342 (0.344) seconds
+Test Suite 'Selected tests' passed at 2026-09-09 17:28:16.817.
+	 Executed 1 test, with 0 failures (0 unexpected) in 0.342 (0.344) seconds
+2026-09-09 17:28:17.098 xcodebuild[17950:32565049] [MT] IDETestOperationsObserverDebug: 1.596 elapsed -- Testing started completed.
+2026-09-09 17:28:17.099 xcodebuild[17950:32565049] [MT] IDETestOperationsObserverDebug: 0.000 sec, +0.000 sec -- start
+2026-09-09 17:28:17.099 xcodebuild[17950:32565049] [MT] IDETestOperationsObserverDebug: 1.596 sec, +1.596 sec -- end
+
+Test session results, code coverage, and logs:
+	/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Logs/Test/Test-BicTermCore-2026.09.09_17-28-11--0600.xcresult
+
+** TEST SUCCEEDED **
+
+Testing started
+check: '** TEST SUCCEEDED **' present in /Users/richard/code/BicTerm/.sisyphus/evidence/phase2-g12-b-profile-tests.log
