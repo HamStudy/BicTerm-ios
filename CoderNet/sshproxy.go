@@ -56,7 +56,12 @@ type sshProxy struct {
 }
 
 func (proxy *sshProxy) newServerConfig() *gossh.ServerConfig {
-	config := &gossh.ServerConfig{NoClientAuth: true}
+	config := &gossh.ServerConfig{
+		NoClientAuth: true,
+		// OpenSSH gates its eow notification on this compatibility prefix.
+		// Identify the adapter explicitly, without claiming an OpenSSH release.
+		ServerVersion: "SSH-2.0-OpenSSH_compat_BicTerm",
+	}
 	config.AddHostKey(proxy.hostSigner)
 	return config
 }
@@ -140,6 +145,9 @@ func (proxy *sshProxy) serveSession(downstream gossh.Channel, downstreamRequests
 	go func() {
 		defer inbound.Done()
 		for req := range downstreamRequests {
+			if req.Type == "eow@openssh.com" {
+				break
+			}
 			ok, err := upstream.SendRequest(req.Type, req.WantReply, req.Payload)
 			if req.WantReply {
 				reply := err == nil && ok
@@ -166,14 +174,14 @@ func (proxy *sshProxy) serveSession(downstream gossh.Channel, downstreamRequests
 		_, _ = io.Copy(upstream, downstream)
 		_ = upstream.CloseWrite()
 	}()
-	go func() {
+	copyOutput := func(destination io.Writer, source io.Reader) {
 		defer draining.Done()
-		_, _ = io.Copy(downstream, upstream)
-	}()
-	go func() {
-		defer draining.Done()
-		_, _ = io.Copy(downstream.Stderr(), upstream.Stderr())
-	}()
+		if _, err := io.Copy(destination, source); err != nil {
+			_ = upstreamConn.Close()
+		}
+	}
+	go copyOutput(downstream, upstream)
+	go copyOutput(downstream.Stderr(), upstream.Stderr())
 
 	// Input EOF is a half-close; output, extended data and status must drain.
 	draining.Wait()

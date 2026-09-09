@@ -1,7 +1,7 @@
 [1] start: session created
 [1] dial: tailnet coordination established agent_ipv6=fd7a:115c:a1e0:4c8a:889f:64a6:fc86:5f55
 [1] {"codernet_event":{"type":"networkPathChanged","source":"coord","handle":1,"path":"direct"}}
-[1] dial: ssh proxy bound /Users/richard/code/BicTerm/Fixtures/run/g12s/coder-ssh-602f55f0-7d69-4c7e-9dea-6dbc1a62c457.sock
+[1] dial: ssh proxy bound /Users/richard/code/BicTerm/Fixtures/run/g12s/coder-ssh-70524ce6-e543-480a-9a64-775d571e9be5.sock
 [1] rebind: network path re-anchored
 [1] [ERR] yamux: Failed to read header: failed to get reader: context canceled
 [1] closing tailnet Conn

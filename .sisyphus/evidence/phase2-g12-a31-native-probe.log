@@ -1,0 +1,23 @@
+Fixture Coder v2.36.4; bridge source built from CoderNet/; relay_only=false
+SSH_OPTIONS ["/usr/bin/ssh", "-F", "/dev/null", "-T", "-o", "ProxyCommand=/usr/bin/nc -U /Users/richard/code/BicTerm/Fixtures/run/g12s/coder-ssh-c24221d7-1ccb-4c82-94ef-7a62fae16d28.sock", "-o", "UserKnownHostsFile=/dev/null", "-o", "GlobalKnownHostsFile=/dev/null", "-o", "StrictHostKeyChecking=no", "-o", "LogLevel=ERROR", "-o", "PreferredAuthentications=none", "-o", "BatchMode=yes", "-o", "ConnectTimeout=15"]
+COMMAND /usr/bin/ssh [recorded fixed options] coder@coder-workspace "printf raw-adapter-ok"
+PASS A01 OpenSSH command over production raw adapter
+COMMAND /usr/bin/ssh [recorded fixed options] coder@coder-workspace "/usr/bin/printf '\\000\\001\\012\\015\\177\\200\\377'"
+PASS A25 binary stdout byte-exact without PTY
+COMMAND /usr/bin/ssh [recorded fixed options] coder@coder-workspace "printf stdout-marker; printf stderr-marker >&2; exit 37"
+PASS A26 stderr and remote exit status preserved
+COMMAND /usr/bin/ssh [recorded fixed options] coder@coder-workspace "/bin/dd if=/dev/zero bs=1048576 count=5 2>/dev/null"
+BYTES 5242880; SHA256 c036cbb7553a909f8b8877d4461924307f27ecb66cff928eeeafd569c3887e29
+PASS A27 more than 4 MiB streamed intact
+COMMAND /usr/bin/ssh [recorded fixed options] coder@coder-workspace "/bin/cat; /bin/sleep 1; printf trailing-output"
+PASS A30 stdin EOF drains trailing remote output
+COMMAND /usr/bin/ssh [recorded fixed options] coder@coder-workspace "printf after-rebind"
+PASS control rebind preserves subsequent SSH use
+COMMAND OpenSSH /usr/bin/yes output-failure; close local stdout reader
+FAIL A31 stdout failure terminates an unbounded producer: Timeout::Error: execution expired
+COMMAND OpenSSH /bin/cat; exchange marker; close bridge control input
+PASS A31 active handle cancellation closes the SSH session
+PASS bridge close removed socket and terminated process
+[1] {"codernet_event":{"type":"networkPathChanged","source":"coord","handle":1,"path":"direct"}}
+PASS observed network path direct
+PASS limited user-token/terminal-content diagnostic scan (not the full four-category audit)

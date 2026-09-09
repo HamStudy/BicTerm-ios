@@ -4,8 +4,8 @@ Gate: INCOMPLETE. FAIL includes unverified requirements.
 
 Latest evidence: `.sisyphus/evidence/phase2-g12-final-progress-brief.md` records
 green full UI regressions and additional native protocol execution. There are
-13 PASS, 3 NOT-LOCAL and 18 FAIL rows. The raw suite's individual passing
-cases do not hide its separate A31 stdout-failure timeout or imply a green gate.
+14 PASS, 3 NOT-LOCAL and 17 FAIL rows. A31 is now verified with both direct
+and relay-only native runs; remaining rows still prevent phase-gate approval.
 
 This is a blocked-gate inventory, not a compatibility declaration. The 34
 normative rows below are generated directly from the read-only spec section
@@ -385,11 +385,11 @@ and task 12, line 465. They are not optional live-deployment work.
 |---|---|
 | Cancellation, stdout failure, peer EOF | Both copy directions and network/controller resources terminate. |
 
-- Status: FAIL
-- Command: `ruby scripts/test-coder-raw.rb`
-- Evidence: `.sisyphus/evidence/phase2-g12-final-raw-cancellation.log`
+- Status: PASS
+- Command: `bash scripts/test-coder-raw.sh`
+- Evidence: `.sisyphus/evidence/phase2-g12-a31-native-green.log`
 - Reason: -
-- Detail: Active handle cancellation terminates an established cat session and removes the bridge socket. However, closing the local stdout reader while OpenSSH runs an unbounded producer does not terminate the child within 15 seconds; the harness records FAIL and forcibly cleans its process group. No full-row PASS or NOT-LOCAL exemption is claimed. Layer ownership of the observed stdout failure still needs resolution.
+- Detail: Closing the local stdout reader now terminates an unbounded remote producer within the unchanged 15-second bound, without harness timeout cleanup. Active handle cancellation also terminates an established cat session, and bridge close removes the socket and exits cleanly. Direct and relay-only runs pass. Go regressions verify write-error and eow@openssh.com cleanup while input remains open. The compatibility-prefixed BicTerm identifier enables OpenSSH's otherwise suppressed end-of-write request; it claims no numeric OpenSSH release. See phase2-g12-a31-investigation.md for the packet-level before/after proof.
 
 ### A32
 

@@ -1,5 +1,10 @@
 # T12 protocol acceptance checkpoint — INCOMPLETE
 
+Latest Batch A status: **PASS=14, FAIL=17, NOT-LOCAL=3**. A31 now passes
+direct and relay-only native runs. The checkpoint narrative below preserves
+the earlier 13/18/3 state; the full A31 evidence is in
+`phase2-g12-a31-investigation.md`.
+
 This checkpoints executed native evidence, not phase approval. Matrix:
 **PASS=13, FAIL=18, NOT-LOCAL=3**. Structural validation passes; `--gate`
 correctly rejects the remaining FAIL rows. UI acceptance is separately
