@@ -8,7 +8,7 @@ struct CoderNativeFixture {
     let workspace: CoderWorkspace
     let resolver: CoderWorkspaceResolver
 
-    static func load(name: String, loader: any CoderRequestLoading = SystemCoderRequestLoader(), tokenOverride: String? = nil) async throws -> Self {
+    static func load(name: String, loader: any CoderRequestLoading = SystemCoderRequestLoader(), tokenOverride: String? = nil, serverURLOverride: URL? = nil) async throws -> Self {
         let text = try String(contentsOf: SSHTestFixture.repoRoot.appendingPathComponent("Fixtures/run/coder-dev.env"), encoding: .utf8)
         let entries = text.split(separator: "\n").compactMap { line -> (String, String)? in
             let pair = line.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
@@ -16,7 +16,7 @@ struct CoderNativeFixture {
             return (String(pair[0]), String(pair[1]))
         }
         let values = Dictionary(uniqueKeysWithValues: entries)
-        let url = try XCTUnwrap(values["CODER_URL"].flatMap(URL.init(string:)))
+        let url = try XCTUnwrap(serverURLOverride ?? values["CODER_URL"].flatMap(URL.init(string:)))
         let token = try XCTUnwrap(tokenOverride ?? values["CODER_SESSION_TOKEN"])
         let server = try CoderServer(name: "native-fixture", baseURL: url, tokenKeychainTag: "native-selection")
         let tokens = NativeFixtureTokenStore(tag: server.tokenKeychainTag, token: token)
