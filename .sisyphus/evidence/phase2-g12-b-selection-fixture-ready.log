@@ -1,0 +1,301 @@
+Re-using provisioner tags from the active template version.
+Tip: You can override these tags by passing --provisioner-tag="key=value".
+     You can also clear all provisioner tags by passing --provisioner-tag="-".
+Provisioner tags: <none>
+WARN: No .terraform.lock.hcl file found
+  | When provisioning, Coder will be unable to cache providers without a lockfile and must download them from the internet each time.
+  | Create one by running terraform init in your template directory.
+=== ✔ Queued [0ms]
+==> ⧗ Running
+==> ⧗ Running
+=== ✔ Running [6ms]
+==> ⧗ Setting up
+=== ✔ Setting up [76ms]
+==> ⧗ Initializing Terraform Directory
+2026-09-09 14:54:41.927-06:00 Initializing the backend...
+2026-09-09 14:54:41.928-06:00 Initializing provider plugins...
+2026-09-09 14:54:41.928-06:00 Finding matching versions for provider: hashicorp/null, version_constraint: "~> 3.2"
+2026-09-09 14:54:42.093-06:00 Finding matching versions for provider: coder/coder, version_constraint: "~> 2.18"
+2026-09-09 14:54:42.450-06:00 Installing provider version: hashicorp/null v3.3.1...
+2026-09-09 14:54:42.826-06:00 Installed provider version: hashicorp/null v3.3.1 (signed by HashiCorp)
+2026-09-09 14:54:43.314-06:00 Installing provider version: coder/coder v2.18.0...
+2026-09-09 14:54:44.052-06:00 Installed provider version: coder/coder v2.18.0 (signed by a HashiCorp partnerkey_id: 93C75807601AA0EC)
+2026-09-09 14:54:44.053-06:00 Partner and community providers are signed by their developers.
+If you'd like to know more about provider signing, you can read about it here:
+https://developer.hashicorp.com/terraform/cli/plugins/signing
+2026-09-09 14:54:44.053-06:00 Terraform has created a lock file .terraform.lock.hcl to record the provider
+selections it made above. Include this file in your version control repository
+so that Terraform can guarantee to make the same selections by default when
+you run "terraform init" in the future.
+2026-09-09 14:54:44.053-06:00 Terraform has been successfully initialized!
+2026-09-09 14:54:44.053-06:00 You may now begin working with Terraform. Try running "terraform plan" to see
+any changes that are required for your infrastructure. All Terraform commands
+should now work.
+
+If you ever set or change modules or backend configuration for Terraform,
+rerun this command to reinitialize your working directory. If you forget, other
+commands will detect it and remind you to do so if necessary.
+=== ✔ Initializing Terraform Directory [2128ms]
+==> ⧗ Parsing template parameters
+=== ✔ Parsing template parameters [3ms]
+==> ⧗ Detecting persistent resources
+2026-09-09 14:54:44.109-06:00 Terraform 1.14.5
+2026-09-09 14:54:44.935-06:00 data.coder_parameter.multi_agent: Refreshing...
+2026-09-09 14:54:44.935-06:00 data.coder_provisioner.me: Refreshing...
+2026-09-09 14:54:44.935-06:00 data.coder_parameter.start_blocks_login: Refreshing...
+2026-09-09 14:54:44.935-06:00 data.coder_workspace.me: Refreshing...
+2026-09-09 14:54:44.935-06:00 data.coder_parameter.script_mode: Refreshing...
+2026-09-09 14:54:44.936-06:00 data.coder_provisioner.me: Refresh complete after 0s [id=a1c27f17-3ea8-4e11-9bc6-cfaaaf0d51d2]
+2026-09-09 14:54:44.936-06:00 data.coder_workspace.me: Refresh complete after 0s [id=84c2ede2-0010-4ef8-936c-b9ca7bcf1a6f]
+2026-09-09 14:54:44.936-06:00 data.coder_parameter.start_blocks_login: Refresh complete after 0s [id=ab120231-a8e2-4a32-a481-50fc97ec54ab]
+2026-09-09 14:54:44.936-06:00 data.coder_parameter.multi_agent: Refresh complete after 0s [id=fbe27d6a-c29d-4a8d-be35-5f7b472af685]
+2026-09-09 14:54:44.937-06:00 data.coder_parameter.script_mode: Refresh complete after 0s [id=9a83e3cb-05d2-4e69-b1cd-47d8be606b65]
+2026-09-09 14:54:44.946-06:00 coder_agent.main[0]: Plan to create
+2026-09-09 14:54:44.946-06:00 null_resource.main_script[0]: Plan to create
+2026-09-09 14:54:44.946-06:00 coder_script.startup[0]: Plan to create
+2026-09-09 14:54:44.946-06:00 Plan: 3 to add, 0 to change, 0 to destroy.
+2026-09-09 14:54:44.947-06:00 Warning: "dir" is deprecated and will be removed in a future release.
+2026-09-09 14:54:44.947-06:00 on main.tf line 70, in resource "coder_agent" "main":
+2026-09-09 14:54:44.947-06:00   70:   dir   = "${local.base}/work"
+2026-09-09 14:54:44.947-06:00 
+2026-09-09 14:54:44.947-06:00 
+2026-09-09 14:54:44.948-06:00 Warning: Setting "dir" to a value other than $HOME will break Coder Desktop file sync.
+2026-09-09 14:54:44.948-06:00 on main.tf line 70, in resource "coder_agent" "main":
+2026-09-09 14:54:44.948-06:00   70:   dir   = "${local.base}/work"
+2026-09-09 14:54:44.948-06:00 
+2026-09-09 14:54:44.948-06:00 
+2026-09-09 14:54:44.949-06:00 Warning: Argument is deprecated
+2026-09-09 14:54:44.949-06:00 on main.tf line 70, in resource "coder_agent" "main":
+2026-09-09 14:54:44.949-06:00   70:   dir   = "${local.base}/work"
+2026-09-09 14:54:44.949-06:00 
+2026-09-09 14:54:44.949-06:00 dir has been deprecated and will be removed in a future release.
+=== ✔ Detecting persistent resources [1257ms]
+==> ⧗ Detecting ephemeral resources
+2026-09-09 14:54:45.365-06:00 Terraform 1.14.5
+2026-09-09 14:54:45.547-06:00 data.coder_parameter.start_blocks_login: Refreshing...
+2026-09-09 14:54:45.547-06:00 data.coder_parameter.multi_agent: Refreshing...
+2026-09-09 14:54:45.547-06:00 data.coder_provisioner.me: Refreshing...
+2026-09-09 14:54:45.547-06:00 data.coder_workspace.me: Refreshing...
+2026-09-09 14:54:45.547-06:00 data.coder_parameter.script_mode: Refreshing...
+2026-09-09 14:54:45.547-06:00 data.coder_provisioner.me: Refresh complete after 0s [id=851e0ed8-62d1-4e23-a839-f6c229a26ef9]
+2026-09-09 14:54:45.547-06:00 data.coder_parameter.multi_agent: Refresh complete after 0s [id=f4526fb4-5118-4ba0-9bb2-fb4a8093f6c4]
+2026-09-09 14:54:45.548-06:00 data.coder_workspace.me: Refresh complete after 0s [id=0adb78c7-5eba-4a13-a37f-82ebada9a522]
+2026-09-09 14:54:45.548-06:00 data.coder_parameter.start_blocks_login: Refresh complete after 0s [id=bb090e0b-7894-423c-91ab-9f90649e3d82]
+2026-09-09 14:54:45.548-06:00 data.coder_parameter.script_mode: Refresh complete after 0s [id=a34feb5b-6c96-4b28-be88-25ad0801a43d]
+2026-09-09 14:54:45.553-06:00 Plan: 0 to add, 0 to change, 0 to destroy.
+=== ✔ Detecting ephemeral resources [596ms]
+==> ⧗ Cleaning Up
+=== ✔ Cleaning Up [7ms]
+┌─────────────────────────────────┐
+│ Template Preview                │
+├─────────────────────────────────┤
+│ RESOURCE                        │
+├─────────────────────────────────┤
+│ null_resource.main_script       │
+│ └─ main (darwin, arm64)         │
+└─────────────────────────────────┘
+Updated version at Sep  9 14:54:45!
+=== ✔ Queued [0ms]
+==> ⧗ Running
+==> ⧗ Running
+=== ✔ Running [24ms]
+==> ⧗ Setting up
+=== ✔ Setting up [79ms]
+==> ⧗ Initializing Terraform Directory
+2026-09-09 14:54:46.283-06:00 Initializing the backend...
+2026-09-09 14:54:46.284-06:00 Initializing provider plugins...
+2026-09-09 14:54:46.284-06:00 Finding matching versions for provider: hashicorp/null, version_constraint: "~> 3.2"
+2026-09-09 14:54:46.389-06:00 Finding matching versions for provider: coder/coder, version_constraint: "~> 2.18"
+2026-09-09 14:54:46.902-06:00 Installing provider version: coder/coder v2.18.0...
+2026-09-09 14:54:47.562-06:00 Installed provider version: coder/coder v2.18.0 (signed by a HashiCorp partnerkey_id: 93C75807601AA0EC)
+2026-09-09 14:54:47.756-06:00 Installing provider version: hashicorp/null v3.3.1...
+2026-09-09 14:54:48.063-06:00 Installed provider version: hashicorp/null v3.3.1 (signed by HashiCorp)
+2026-09-09 14:54:48.063-06:00 Partner and community providers are signed by their developers.
+If you'd like to know more about provider signing, you can read about it here:
+https://developer.hashicorp.com/terraform/cli/plugins/signing
+2026-09-09 14:54:48.063-06:00 Terraform has created a lock file .terraform.lock.hcl to record the provider
+selections it made above. Include this file in your version control repository
+so that Terraform can guarantee to make the same selections by default when
+you run "terraform init" in the future.
+2026-09-09 14:54:48.064-06:00 Terraform has been successfully initialized!
+2026-09-09 14:54:48.064-06:00 You may now begin working with Terraform. Try running "terraform plan" to see
+any changes that are required for your infrastructure. All Terraform commands
+should now work.
+
+If you ever set or change modules or backend configuration for Terraform,
+rerun this command to reinitialize your working directory. If you forget, other
+commands will detect it and remind you to do so if necessary.
+=== ✔ Initializing Terraform Directory [1833ms]
+==> ⧗ Planning Infrastructure
+2026-09-09 14:54:48.896-06:00 data.coder_workspace.me: Refreshing...
+2026-09-09 14:54:48.896-06:00 data.coder_parameter.multi_agent: Refreshing...
+2026-09-09 14:54:48.896-06:00 data.coder_provisioner.me: Refreshing...
+2026-09-09 14:54:48.896-06:00 data.coder_parameter.script_mode: Refreshing...
+2026-09-09 14:54:48.896-06:00 data.coder_parameter.start_blocks_login: Refreshing...
+2026-09-09 14:54:48.897-06:00 data.coder_provisioner.me: Refresh complete after 0s [id=22d4067c-63f6-4994-b277-2773701d139f]
+2026-09-09 14:54:48.898-06:00 data.coder_parameter.multi_agent: Refresh complete after 0s [id=b61073a7-c833-4000-ac95-3845b6d6097c]
+2026-09-09 14:54:48.898-06:00 data.coder_workspace.me: Refresh complete after 0s [id=fb6bb4b1-d116-4273-99d8-b6918a717c8e]
+2026-09-09 14:54:48.898-06:00 data.coder_parameter.start_blocks_login: Refresh complete after 0s [id=a76c712f-53fc-4ffe-be60-6a1de8778b96]
+2026-09-09 14:54:48.898-06:00 data.coder_parameter.script_mode: Refresh complete after 0s [id=bf7e2d70-4425-442c-a722-01bff564c99c]
+2026-09-09 14:54:48.903-06:00 Plan: 0 to add, 0 to change, 0 to destroy.
+=== ✔ Planning Infrastructure [903ms]
+==> ⧗ Stopping workspace
+2026-09-09 14:54:49.069-06:00 Terraform 1.14.5
+2026-09-09 14:54:49.216-06:00 Apply complete! Resources: 0 added, 0 changed, 0 destroyed.
+2026-09-09 14:54:49.216-06:00 Outputs: 0
+=== ✔ Stopping workspace [485ms]
+==> ⧗ Cleaning Up
+=== ✔ Cleaning Up [8ms]
+Planning workspace...
+=== ✔ Queued [0ms]
+==> ⧗ Running
+==> ⧗ Running
+=== ✔ Running [4ms]
+==> ⧗ Setting up
+=== ✔ Setting up [79ms]
+==> ⧗ Initializing Terraform Directory
+=== ✔ Initializing Terraform Directory [1855ms]
+==> ⧗ Detecting persistent resources
+=== ✔ Detecting persistent resources [1161ms]
+==> ⧗ Cleaning Up
+=== ✔ Cleaning Up [7ms]
+┌───────────────────────────────────────────────────────────────────┐
+│ Workspace Preview                                                 │
+├───────────────────────────────────────────────────────────────────┤
+│ RESOURCE                      ACCESS                              │
+├───────────────────────────────────────────────────────────────────┤
+│ null_resource.main_script                                         │
+│ ├─ main (darwin, arm64)       coder ssh g12-selection.main        │
+├───────────────────────────────────────────────────────────────────┤
+│ null_resource.sidecar_script                                      │
+│ ├─ sidecar (darwin, arm64)    coder ssh g12-selection.sidecar     │
+└───────────────────────────────────────────────────────────────────┘
+Output: 
+Output: Terraform 1.14.5
+Output: Initializing the backend...
+Output: Initializing provider plugins...
+Output: Finding matching versions for provider: coder/coder, version_constraint: "~> 2.18"
+Output: Finding matching versions for provider: hashicorp/null, version_constraint: "~> 3.2"
+Output: Installing provider version: coder/coder v2.18.0...
+Output: Installed provider version: coder/coder v2.18.0 (signed by a HashiCorp partnerkey_id: 93C75807601AA0EC)
+Output: Installing provider version: hashicorp/null v3.3.1...
+Output: Installed provider version: hashicorp/null v3.3.1 (signed by HashiCorp)
+Output: Partner and community providers are signed by their developers.
+If you'd like to know more about provider signing, you can read about it here:
+https://developer.hashicorp.com/terraform/cli/plugins/signing
+Output: Terraform has created a lock file .terraform.lock.hcl to record the provider
+selections it made above. Include this file in your version control repository
+so that Terraform can guarantee to make the same selections by default when
+you run "terraform init" in the future.
+Output: Terraform has been successfully initialized!
+Output: You may now begin working with Terraform. Try running "terraform plan" to see
+any changes that are required for your infrastructure. All Terraform commands
+should now work.
+
+If you ever set or change modules or backend configuration for Terraform,
+rerun this command to reinitialize your working directory. If you forget, other
+commands will detect it and remind you to do so if necessary.
+Output: Terraform 1.14.5
+Output: data.coder_parameter.multi_agent: Refreshing...
+Output: data.coder_provisioner.me: Refreshing...
+Output: data.coder_parameter.start_blocks_login: Refreshing...
+Output: data.coder_workspace.me: Refreshing...
+Output: data.coder_parameter.script_mode: Refreshing...
+Output: data.coder_provisioner.me: Refresh complete after 0s [id=ab95ece8-3134-4291-910f-9d0e04ff04e1]
+Output: data.coder_workspace.me: Refresh complete after 0s [id=fb6bb4b1-d116-4273-99d8-b6918a717c8e]
+Output: data.coder_parameter.start_blocks_login: Refresh complete after 0s [id=5a1b10d0-ab04-4539-a14a-ef3cde0ad431]
+Output: data.coder_parameter.multi_agent: Refresh complete after 0s [id=47d92dc2-228b-44f8-a032-8d480e02f6c5]
+Output: data.coder_parameter.script_mode: Refresh complete after 0s [id=b64616a1-dba8-4034-9e47-e79a8f2facbd]
+Output: coder_agent.main[0]: Plan to create
+Output: coder_agent.sidecar[0]: Plan to create
+Output: coder_script.startup[0]: Plan to create
+Output: null_resource.main_script[0]: Plan to create
+Output: null_resource.sidecar_script[0]: Plan to create
+Output: Plan: 5 to add, 0 to change, 0 to destroy.
+Output: Warning: "dir" is deprecated and will be removed in a future release.
+Output: on main.tf line 70, in resource "coder_agent" "main":
+Output:   70:   dir   = "${local.base}/work"
+Output: 
+Output: 
+Output: Warning: Setting "dir" to a value other than $HOME will break Coder Desktop file sync.
+Output: on main.tf line 70, in resource "coder_agent" "main":
+Output:   70:   dir   = "${local.base}/work"
+Output: 
+Output: 
+Output: Warning: Argument is deprecated
+Output: on main.tf line 70, in resource "coder_agent" "main":
+Output:   70:   dir   = "${local.base}/work"
+Output: 
+Output: dir has been deprecated and will be removed in a future release.
+Output: Warning: "dir" is deprecated and will be removed in a future release.
+Output: on main.tf line 83, in resource "coder_agent" "sidecar":
+Output:   83:   dir   = "${local.base}/work"
+Output: 
+Output: 
+Output: Warning: Setting "dir" to a value other than $HOME will break Coder Desktop file sync.
+Output: on main.tf line 83, in resource "coder_agent" "sidecar":
+Output:   83:   dir   = "${local.base}/work"
+Output: 
+Output: 
+Output: Warning: Argument is deprecated
+Output: on main.tf line 83, in resource "coder_agent" "sidecar":
+Output:   83:   dir   = "${local.base}/work"
+Output: 
+Output: dir has been deprecated and will be removed in a future release.
+Output: 
+Output: Terraform 1.14.5
+Output: coder_agent.main[0]: Plan to create
+Output: coder_agent.sidecar[0]: Plan to create
+Output: coder_script.startup[0]: Plan to create
+Output: null_resource.main_script[0]: Plan to create
+Output: null_resource.sidecar_script[0]: Plan to create
+Output: coder_agent.main[0]: Creating...
+Output: coder_agent.sidecar[0]: Creating...
+Output: coder_agent.sidecar[0]: Creation complete after 0s [id=a1724dd0-6bbc-432f-99f2-681087c224db]
+Output: coder_agent.main[0]: Creation complete after 0s [id=7c0625f5-1309-4732-8394-7d734b544990]
+Output: coder_script.startup[0]: Creating...
+Output: coder_script.startup[0]: Creation complete after 0s [id=1fae59c3-5fb1-40e1-a201-dfb11f9ac627]
+Output: null_resource.sidecar_script[0]: Creating...
+Output: null_resource.main_script[0]: Creating...
+Output: null_resource.main_script[0]: Provisioning with 'local-exec'...
+Output: null_resource.sidecar_script[0]: Provisioning with 'local-exec'...
+Output: null_resource.main_script[0]: (local-exec): (output suppressed due to sensitive value in config)
+Output: null_resource.sidecar_script[0]: (local-exec): (output suppressed due to sensitive value in config)
+Output: null_resource.main_script[0]: (local-exec) Provisioning complete
+Output: null_resource.sidecar_script[0]: (local-exec) Provisioning complete
+Output: null_resource.main_script[0]: Creation complete after 0s [id=1129869688967929978]
+Output: null_resource.sidecar_script[0]: Creation complete after 0s [id=527133451654005411]
+Output: Warning: "dir" is deprecated and will be removed in a future release.
+Output: on main.tf line 83, in resource "coder_agent" "sidecar":
+Output:   83:   dir   = "${local.base}/work"
+Output: 
+Output: 
+Output: Warning: Setting "dir" to a value other than $HOME will break Coder Desktop file sync.
+Output: on main.tf line 83, in resource "coder_agent" "sidecar":
+Output:   83:   dir   = "${local.base}/work"
+Output: 
+Output: 
+Output: Warning: Argument is deprecated
+Output: on main.tf line 83, in resource "coder_agent" "sidecar":
+Output:   83:   dir   = "${local.base}/work"
+Output: 
+Output: dir has been deprecated and will be removed in a future release.
+Output: Warning: "dir" is deprecated and will be removed in a future release.
+Output: on main.tf line 70, in resource "coder_agent" "main":
+Output:   70:   dir   = "${local.base}/work"
+Output: 
+Output: 
+Output: Warning: Setting "dir" to a value other than $HOME will break Coder Desktop file sync.
+Output: on main.tf line 70, in resource "coder_agent" "main":
+Output:   70:   dir   = "${local.base}/work"
+Output: 
+Output: 
+Output: Warning: Argument is deprecated
+Output: on main.tf line 70, in resource "coder_agent" "main":
+Output:   70:   dir   = "${local.base}/work"
+Output: 
+Output: dir has been deprecated and will be removed in a future release.
+Output: Apply complete! Resources: 5 added, 0 changed, 0 destroyed.
+Output: Outputs: 0
+Output: 
+Acceptance workspace g12-selection provisioned; agent processes launched

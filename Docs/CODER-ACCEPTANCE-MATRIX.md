@@ -4,8 +4,8 @@ Gate: INCOMPLETE. FAIL includes unverified requirements.
 
 Latest evidence: `.sisyphus/evidence/phase2-g12-final-progress-brief.md` records
 green full UI regressions and additional native protocol execution. There are
-16 PASS, 3 NOT-LOCAL and 15 FAIL rows. Native authentication and permission
-denials are now verified; remaining rows still prevent phase-gate approval.
+19 PASS, 3 NOT-LOCAL and 12 FAIL rows. Native authentication, permission and
+current-build agent selection are verified; remaining rows still block approval.
 
 This is a blocked-gate inventory, not a compatibility declaration. The 34
 normative rows below are generated directly from the read-only spec section
@@ -61,11 +61,11 @@ and task 12, line 465. They are not optional live-deployment work.
 |---|---|
 | Multiple agents without a selector | Explicit ambiguity error; no first-agent guessing. |
 
-- Status: FAIL
-- Command: `ruby scripts/verify-coder-matrix.rb --gate`
-- Evidence: `.sisyphus/evidence/phase2-g12-gate-brief.md`
+- Status: PASS
+- Command: `bash scripts/test-coder-selection.sh`
+- Evidence: `.sisyphus/evidence/phase2-g12-b-selection-acceptance.log`
 - Reason: -
-- Detail: Running-workspace ambiguity unit test and Coder agent-selection UI suite passed; the required multiple-agent T6 deployment scenario remains unexecuted.
+- Detail: The native g12-selection workspace has connected main and sidecar agents. Automatic resolution throws agentUnavailable instead of selecting the first candidate; the native test asserts both agents exist and are connected before exercising rejection. Existing explicit-selection UI behavior is preserved.
 
 ### A05
 
@@ -73,11 +73,11 @@ and task 12, line 465. They are not optional live-deployment work.
 |---|---|
 | Exact agent name and UUID selection | Correct current-build agent is reached. |
 
-- Status: FAIL
-- Command: `ruby scripts/verify-coder-matrix.rb --gate`
-- Evidence: `.sisyphus/evidence/phase2-g12-gate-brief.md`
+- Status: PASS
+- Command: `bash scripts/test-coder-selection.sh`
+- Evidence: `.sisyphus/evidence/phase2-g12-b-selection-acceptance.log`
 - Reason: -
-- Detail: Saved-agent selection UI coverage passed, but exact-name and exact-UUID selection were not both exercised against distinct current-build T6 agents.
+- Detail: Four real CoderTransport connections select main and sidecar by exact name and by UUID. Each executes a command that reads its agent-specific BICTERM_ACCEPTANCE_AGENT environment value; the returned marker must match the requested agent. The failing-first native case exposed ignored protocol options, now fixed in Core resolution and transport wiring.
 
 ### A06
 
@@ -85,11 +85,11 @@ and task 12, line 465. They are not optional live-deployment work.
 |---|---|
 | Unknown or old-build agent UUID | Clear failure/re-resolution path; no accidental access to another workspace. |
 
-- Status: FAIL
-- Command: `ruby scripts/verify-coder-matrix.rb --gate`
-- Evidence: `.sisyphus/evidence/phase2-g12-gate-brief.md`
+- Status: PASS
+- Command: `bash scripts/test-coder-selection.sh`
+- Evidence: `.sisyphus/evidence/phase2-g12-b-selection-acceptance.log`
 - Reason: -
-- Detail: Stale-selection UI coverage passed; old-build UUID isolation against the native deployment was not executed.
+- Detail: The wrapper snapshots actual agent identities, rebuilds the workspace to create a new generation, and tests the absent old UUID. It requires reconnectRequired, not a replacement dial. A separate unknown-UUID case also supplies a valid saved name and proves no fallback. Public before/after IDs are retained in phase2-g12-b-selection-previous.log and phase2-g12-b-selection-current.log.
 
 ### A07
 

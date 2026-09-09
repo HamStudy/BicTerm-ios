@@ -108,8 +108,20 @@ public actor CoderTransport: TerminalTransport {
         }
 
         let endpoint: CoderAgentEndpoint
+        let selection: CoderAgentSelection
+        if let option = connection.protocolOptions["coder.agentID"] {
+            guard let rawID = option.stringValue, let id = UUID(uuidString: rawID) else {
+                throw .reconnectRequired
+            }
+            selection = .id(id)
+        } else if let option = connection.protocolOptions["coder.agentName"] {
+            guard let name = option.stringValue, !name.isEmpty else { throw .reconnectRequired }
+            selection = .name(name)
+        } else {
+            selection = .automatic
+        }
         do {
-            endpoint = try await resolver.resolve(reference)
+            endpoint = try await resolver.resolve(reference, selecting: selection)
         } catch let error as CoderResolutionError {
             let mapped = Self.transportError(error)
             if mapped == .authRequired {

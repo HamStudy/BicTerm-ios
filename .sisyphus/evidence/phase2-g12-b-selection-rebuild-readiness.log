@@ -1,0 +1,29 @@
+{
+  "workspace_id": "fb6bb4b1-d116-4273-99d8-b6918a717c8e",
+  "build_id": "ca7a5a24-a99e-46e1-9602-e341adfc2ff9",
+  "status": "running",
+  "agents": [
+    {
+      "resource": "main_script",
+      "id": "e3826436-d88b-4cca-8433-4e367dce6e34",
+      "name": "main",
+      "status": "connecting",
+      "lifecycle": "created",
+      "scripts": [
+        {
+          "display_name": "Acceptance startup",
+          "start_blocks_login": true,
+          "run_on_start": true
+        }
+      ]
+    },
+    {
+      "resource": "sidecar_script",
+      "id": "22de3c0e-32ff-4c92-8cb5-dc9b9b3087ba",
+      "name": "sidecar",
+      "status": "connecting",
+      "lifecycle": "created",
+      "scripts": []
+    }
+  ]
+}

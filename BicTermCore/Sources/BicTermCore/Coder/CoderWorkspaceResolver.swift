@@ -37,10 +37,17 @@ public enum CoderResolutionError: Error, Equatable, Sendable {
     case agentUnavailable
 }
 
+public enum CoderAgentSelection: Equatable, Sendable {
+    case automatic
+    case id(UUID)
+    case name(String)
+}
+
 /// Resolves a persisted ``CoderReference`` to a dialable
 /// ``CoderAgentEndpoint`` through the REST layer (spec §13's
-/// WorkspaceResolver, MVP scope: current owner listing + single-agent
-/// auto-selection; startup policy and wait loops are deliberate exclusions).
+/// WorkspaceResolver): explicit selection is restricted to the current build;
+/// automatic selection requires a single connected candidate. Startup policy
+/// and wait loops belong to the connection-preparation layer.
 public struct CoderWorkspaceResolver: Sendable {
     private let serverStore: any CoderServerStoreProtocol
     private let tokenStore: any CoderTokenStoring
@@ -56,7 +63,10 @@ public struct CoderWorkspaceResolver: Sendable {
         self.client = CoderClient(tokenStore: tokenStore, requestLoader: requestLoader)
     }
 
-    public func resolve(_ reference: CoderReference) async throws(CoderResolutionError) -> CoderAgentEndpoint {
+    public func resolve(
+        _ reference: CoderReference,
+        selecting selection: CoderAgentSelection = .automatic
+    ) async throws(CoderResolutionError) -> CoderAgentEndpoint {
         let server: CoderServer
         do {
             guard let stored = try await serverStore.coderServer(id: reference.serverID) else {
@@ -90,7 +100,15 @@ public struct CoderWorkspaceResolver: Sendable {
         guard workspace.state == .running else {
             throw .workspaceNotRunning(state: workspace.state)
         }
-        let connected = workspace.agents.filter(\.isConnected)
+        let connected: [CoderWorkspaceAgent]
+        switch selection {
+        case .automatic:
+            connected = workspace.agents.filter(\.isConnected)
+        case .id(let id):
+            connected = workspace.agents.filter { $0.id == id && $0.isConnected }
+        case .name(let name):
+            connected = workspace.agents.filter { $0.name == name && $0.isConnected }
+        }
         guard connected.count == 1, let agent = connected.first else {
             throw .agentUnavailable
         }

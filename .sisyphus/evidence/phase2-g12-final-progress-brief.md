@@ -1,11 +1,22 @@
 # T12 protocol acceptance checkpoint — INCOMPLETE
 
-Latest status: **PASS=16, FAIL=15, NOT-LOCAL=3**. Batch A closed A31;
-Batch B's first slice closed A02 and A03. The checkpoint narrative below
+Latest status: **PASS=19, FAIL=12, NOT-LOCAL=3**. Batch A closed A31;
+Batch B's first slices closed A02-A06. The checkpoint narrative below
 preserves the earlier 13/18/3 state. A31 evidence is in
 `phase2-g12-a31-investigation.md`; native authentication/permission evidence
 is in `phase2-g12-b-auth-native-green.log`, `phase2-g12-b-auth-audit.log`,
 and `phase2-g12-b-permission.log`.
+
+Agent-selection slice: `bash scripts/test-coder-selection.sh` provisions two
+agents, snapshots identities, rebuilds, then runs four native Core tests.
+`phase2-g12-b-selection-behavior-red.log` proves explicit options were ignored
+before the repair; `phase2-g12-b-selection-acceptance.log` is green afterward.
+Before/after public identities are in `...-selection-previous.log` and
+`...-selection-current.log`; the full wrapper is `...-selection-wrapper-final.log`.
+The existing resolver suite remains green in `...-resolver-regression.log`.
+
+Remaining: A07-A12, A19-A22, A32, A34. Template startup-policy variants exist
+but are not claimed as exercised until their own native evidence is complete.
 
 This checkpoints executed native evidence, not phase approval. Matrix:
 **PASS=13, FAIL=18, NOT-LOCAL=3**. Structural validation passes; `--gate`
