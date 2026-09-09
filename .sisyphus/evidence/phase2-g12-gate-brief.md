@@ -1,5 +1,9 @@
 # T12 Coder phase gate: INCOMPLETE
 
+Latest continuation results and root-cause repairs are recorded in
+`phase2-g12-repair-brief.md`. The original results below are retained as
+historical evidence, not the current regression counts. The gate is still closed.
+
 Date: 2026-09-08. Fresh task session; no previous T12 session was reused.
 
 **Do not approve or mark task 12 complete. Do not dispatch Herdr tasks 13–20.**
@@ -17,7 +21,7 @@ has not been requested or recorded.
 - App unit tests: 81 executed, 0 failures on each destination.
 - Full UI, iPhone: 57 executed, 5 skipped, **1 failure**.
 - Full UI, iPad: 57 executed, 2 skipped, **22 failures**.
-- CoderAgentSelectionUITests: 6 passed on each destination within those full
+- CoderAgentPickerUITests: 6 passed on each destination within those full
   UI runs. These are DEBUG fixture tests, not native deployment coverage.
 - Native CoderTransportConformanceTests: all 9 passed on each destination,
   including live printf, remote resize, suspend/resume, and close.

@@ -2,6 +2,10 @@
 
 Gate: INCOMPLETE. FAIL includes unverified requirements.
 
+Continuation: `.sisyphus/evidence/phase2-g12-repair-brief.md` records repaired
+UI root causes and fresh regressions. No additional full normative outcome
+was established, so the row dispositions below are unchanged.
+
 This is a blocked-gate inventory, not a compatibility declaration. The 34
 normative rows below are generated directly from the read-only spec section
 18.1. For unexecuted scenarios, the command is the executed gate-inventory
