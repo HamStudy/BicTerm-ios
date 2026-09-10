@@ -1,0 +1,309 @@
+//! `#[no_mangle]` C surface. Every entry point is wrapped in [`crate::catch`]
+//! so no panic unwinds into C, and every pointer crossing is documented with a
+//! SAFETY argument. Error details are borrowed: client calls overwrite the
+//! client-owned string; client-less calls (create, null handles) use a
+//! thread-local overwritten by the next such call on that thread.
+use crate::client::HerdrClient;
+use crate::input_map::InputPayload;
+use crate::support::{finish, invalid, leak_bytes, ok_result, store_detail, write_error_out};
+use crate::{
+    catch, herdr_bytes, herdr_client, herdr_client_config, herdr_input, track_allocation,
+    track_free, FfiError, HerdrResult, HERDR_CODE_INVALID_ARGUMENT, HERDR_INPUT_KEY,
+    HERDR_INPUT_PASTE, HERDR_INPUT_TEXT_COMMIT,
+};
+use std::ffi::{c_char, CStr};
+use std::ptr;
+
+/// Casts the opaque handle back to its Rust payload pointer.
+///
+/// # Safety in ABI context (not a Rust-safe API)
+/// The handle must be non-null, originate from `herdr_client_create`, not yet
+/// be destroyed, and be confined to one serial executor (documented ABI rule);
+/// callers must never hold the returned reference across another ABI call.
+unsafe fn state_ptr(client: *mut herdr_client) -> *mut HerdrClient {
+    client.cast()
+}
+
+/// # Safety in ABI context
+/// Same contract as `state_ptr`; returns a shared reference valid for the
+/// duration of the current ABI call only.
+unsafe fn state_ref<'a>(client: *mut herdr_client) -> &'a HerdrClient {
+    &*state_ptr(client)
+}
+
+/// # Safety in ABI context
+/// Same contract as `state_ptr`; returns an exclusive reference valid for the
+/// duration of the current ABI call only.
+unsafe fn state_mut<'a>(client: *mut herdr_client) -> &'a mut HerdrClient {
+    &mut *state_ptr(client)
+}
+
+/// Creates an endpoint client and queues the generation-1 hello frame; drain
+/// it with `herdr_client_drain_outbound`. Returns null on failure with the
+/// structured reason in `error_out` (optional).
+#[no_mangle]
+pub extern "C" fn herdr_client_create(
+    config: *const herdr_client_config,
+    error_out: *mut HerdrResult,
+) -> *mut herdr_client {
+    let result = catch(|| {
+        if config.is_null() {
+            return Err(invalid("config pointer is null"));
+        }
+        // SAFETY: caller provides a readable config for the call's duration.
+        let config = unsafe { &*config };
+        crate::factory::create(config)
+    });
+    match result {
+        Ok(inner) => {
+            write_error_out(error_out, ok_result());
+            track_allocation();
+            // SAFETY: fresh allocation handed to C as the opaque handle; the
+            // only way back is herdr_client_destroy's cast below.
+            Box::into_raw(Box::new(inner)).cast::<herdr_client>()
+        }
+        Err(error) => {
+            write_error_out(error_out, store_detail(ptr::null_mut(), error));
+            ptr::null_mut()
+        }
+    }
+}
+
+/// Releases the client and every buffer it still owns. The handle must not be
+/// used afterwards; byte buffers previously handed out stay caller-owned.
+#[no_mangle]
+pub extern "C" fn herdr_client_destroy(client: *mut herdr_client) {
+    if client.is_null() {
+        return;
+    }
+    let result = catch(|| {
+        // SAFETY: taking back the unique HerdrClient allocation from
+        // herdr_client_create; the caller gives up the handle for this call.
+        track_free();
+        drop(unsafe { Box::from_raw(state_ptr(client)) });
+        Ok(())
+    });
+    if let Err(error) = result {
+        // A drop-time panic cannot cross the boundary; surface it only through
+        // the same thread-local channel and keep the process alive.
+        let _ = store_detail(ptr::null_mut(), error);
+    }
+}
+
+/// Feeds opaque transport bytes (stdout of the remote bridge) to the decoder.
+#[no_mangle]
+pub extern "C" fn herdr_client_receive(
+    client: *mut herdr_client,
+    bytes: *const u8,
+    len: usize,
+) -> HerdrResult {
+    let result = catch(|| {
+        if client.is_null() {
+            return Err(invalid("client pointer is null"));
+        }
+        if len == 0 {
+            return Ok(());
+        }
+        if bytes.is_null() {
+            return Err(invalid("bytes pointer is null with a non-zero length"));
+        }
+        // SAFETY: caller provides `len` readable bytes for the call; the slice
+        // is copied into the client buffer and never retained.
+        let bytes = unsafe { std::slice::from_raw_parts(bytes, len) };
+        // SAFETY: non-null, serially confined handle (ABI invariant).
+        Ok(unsafe { state_mut(client) }.receive(bytes)?)
+    });
+    finish(client, result)
+}
+
+/// Sends one semantic input event to an explicit pane target from the latest
+/// snapshot. Routing and lease validation happen in the Rust core.
+#[no_mangle]
+pub extern "C" fn herdr_client_send_input(
+    client: *mut herdr_client,
+    input: *const herdr_input,
+) -> HerdrResult {
+    let result = catch(|| {
+        if client.is_null() {
+            return Err(invalid("client pointer is null"));
+        }
+        if input.is_null() {
+            return Err(invalid("input pointer is null"));
+        }
+        // SAFETY: caller provides a readable input struct for the call.
+        let input = unsafe { &*input };
+        let payload = match input.kind {
+            HERDR_INPUT_TEXT_COMMIT => InputPayload::TextCommit(cstr(input.text, "text")?),
+            HERDR_INPUT_PASTE => InputPayload::Paste(cstr(input.text, "text")?),
+            HERDR_INPUT_KEY => InputPayload::Key {
+                key: crate::herdr_key {
+                    code: input.key.code,
+                    codepoint: input.key.codepoint,
+                    modifiers: input.key.modifiers,
+                    kind: input.key.kind,
+                    repeat_count: input.key.repeat_count,
+                    shifted_codepoint: input.key.shifted_codepoint,
+                },
+            },
+            other => {
+                return Err(FfiError::new(
+                    HERDR_CODE_INVALID_ARGUMENT,
+                    format!("unknown input kind {other}"),
+                ))
+            }
+        };
+        let pane_id = cstr(input.pane_id, "pane_id")?;
+        if pane_id.is_empty() {
+            return Err(invalid("pane_id is required"));
+        }
+        // SAFETY: non-null, serially confined handle (ABI invariant).
+        Ok(unsafe { state_mut(client) }.send_input(&pane_id, payload)?)
+    });
+    finish(client, result)
+}
+
+/// Reads one C string as UTF-8; `name` names the field in diagnostics.
+fn cstr(pointer: *const c_char, name: &'static str) -> Result<String, FfiError> {
+    if pointer.is_null() {
+        return Err(FfiError::new(
+            HERDR_CODE_INVALID_ARGUMENT,
+            format!("{name} pointer is null"),
+        ));
+    }
+    // SAFETY: caller provides a NUL-terminated string for the call's duration.
+    let bytes = unsafe { CStr::from_ptr(pointer) }.to_bytes();
+    std::str::from_utf8(bytes)
+        .map(str::to_owned)
+        .map_err(|_| FfiError::new(HERDR_CODE_INVALID_ARGUMENT, format!("{name} is not UTF-8")))
+}
+
+/// Pops one complete outbound frame (opaque, length-prefixed) for the
+/// transport write; an empty result means the queue is drained.
+#[no_mangle]
+pub extern "C" fn herdr_client_drain_outbound(
+    client: *mut herdr_client,
+    error_out: *mut HerdrResult,
+) -> herdr_bytes {
+    let result = catch(|| {
+        if client.is_null() {
+            return Err(invalid("client pointer is null"));
+        }
+        // SAFETY: non-null, serially confined handle (ABI invariant).
+        Ok(unsafe { state_mut(client) }.drain_outbound()?)
+    });
+    match result {
+        Ok(frame) => {
+            write_error_out(error_out, ok_result());
+            leak_bytes(frame.unwrap_or_default())
+        }
+        Err(error) => {
+            let detail = store_detail(client, error);
+            write_error_out(error_out, detail);
+            herdr_bytes {
+                data: ptr::null_mut(),
+                len: 0,
+            }
+        }
+    }
+}
+
+/// Returns the latest accepted shell snapshot as stable JSON
+/// (`shell.snapshot.v1` carrier), or empty when none has been accepted.
+#[no_mangle]
+pub extern "C" fn herdr_client_snapshot(
+    client: *mut herdr_client,
+    error_out: *mut HerdrResult,
+) -> herdr_bytes {
+    json_accessor(client, error_out, HerdrClient::snapshot_json)
+}
+
+/// Returns the latest committed pane surface as stable JSON, or empty.
+#[no_mangle]
+pub extern "C" fn herdr_client_surface(
+    client: *mut herdr_client,
+    error_out: *mut HerdrResult,
+) -> herdr_bytes {
+    json_accessor(client, error_out, HerdrClient::surface_json)
+}
+
+fn json_accessor(
+    client: *mut herdr_client,
+    error_out: *mut HerdrResult,
+    access: fn(&HerdrClient) -> Result<Option<String>, FfiError>,
+) -> herdr_bytes {
+    let result = catch(|| {
+        if client.is_null() {
+            return Err(invalid("client pointer is null"));
+        }
+        // SAFETY: non-null handle; shared borrow for the call's duration.
+        Ok(access(unsafe { state_ref(client) })?)
+    });
+    match result {
+        Ok(json) => {
+            write_error_out(error_out, ok_result());
+            leak_bytes(json.unwrap_or_default().into_bytes())
+        }
+        Err(error) => {
+            let detail = store_detail(client, error);
+            write_error_out(error_out, detail);
+            herdr_bytes {
+                data: ptr::null_mut(),
+                len: 0,
+            }
+        }
+    }
+}
+
+/// HERDR_PHASE_* value of the client.
+#[no_mangle]
+pub extern "C" fn herdr_client_phase(client: *mut herdr_client) -> u32 {
+    catch(|| {
+        if client.is_null() {
+            return Err(invalid("client pointer is null"));
+        }
+        // SAFETY: non-null handle; shared borrow for the call's duration.
+        Ok(unsafe { state_ref(client) }.phase())
+    })
+    .unwrap_or(u32::MAX)
+}
+
+/// Bytes buffered awaiting a complete inbound frame (diagnostic bound check).
+#[no_mangle]
+pub extern "C" fn herdr_client_pending_inbound(client: *mut herdr_client) -> u64 {
+    catch(|| {
+        if client.is_null() {
+            return Err(invalid("client pointer is null"));
+        }
+        // SAFETY: non-null handle; shared borrow for the call's duration.
+        Ok(unsafe { state_ref(client) }.pending_inbound())
+    })
+    .unwrap_or(u64::MAX)
+}
+
+/// Frees a buffer returned by this ABI exactly once; `{null, 0}` is a no-op.
+#[no_mangle]
+pub extern "C" fn herdr_bytes_free(bytes: herdr_bytes) {
+    if bytes.data.is_null() {
+        return;
+    }
+    track_free();
+    // SAFETY: reconstructs exactly the Box<[u8]> produced by leak_bytes —
+    // same pointer, same length, called exactly once per buffer (ABI contract).
+    let boxed: Box<[u8]> =
+        unsafe { Box::from_raw(std::slice::from_raw_parts_mut(bytes.data, bytes.len)) };
+    drop(boxed);
+}
+
+/// Live allocations currently owned by C callers (diagnostics; zero expected).
+#[no_mangle]
+pub extern "C" fn herdr_debug_live_allocations() -> u64 {
+    crate::debug_live_allocations()
+}
+
+/// Library provenance, e.g. "0.9.0" (static, never freed).
+#[no_mangle]
+pub extern "C" fn herdr_core_version() -> *const c_char {
+    ptr::addr_of!(VERSION_BYTES[0]).cast()
+}
+
+static VERSION_BYTES: [u8; 6] = *b"0.9.0\0";

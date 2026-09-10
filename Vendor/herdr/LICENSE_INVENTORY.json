@@ -43,6 +43,11 @@
         "license": "Apache-2.0"
       },
       {
+        "name": "herdr-ios-ffi",
+        "version": "0.9.0",
+        "license": "Apache-2.0"
+      },
+      {
         "name": "herdr-protocol",
         "version": "0.9.0",
         "license": "Apache-2.0"
@@ -169,6 +174,11 @@
       },
       {
         "name": "herdr-client-core",
+        "version": "0.9.0",
+        "license": "Apache-2.0"
+      },
+      {
+        "name": "herdr-ios-ffi",
         "version": "0.9.0",
         "license": "Apache-2.0"
       },

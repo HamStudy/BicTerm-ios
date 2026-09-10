@@ -9,7 +9,7 @@ test -d "$evidence"
 test "$(GIT_MASTER=1 git -C Vendor/herdr/upstream rev-parse HEAD)" = b99002ac99b09e00b4ca692436cb15a6b0d676f1
 test -z "$(GIT_MASTER=1 git -C Vendor/herdr/upstream status --porcelain)"
 cargo fmt --manifest-path "$manifest" --all -- --check
-cargo test --locked --manifest-path "$manifest" -p herdr-protocol -p herdr-client-core 2>&1 | tee "$evidence/phase2-h13-tests.log"
+cargo test --locked --manifest-path "$manifest" -p herdr-protocol -p herdr-client-core -p herdr-ios-ffi 2>&1 | tee "$evidence/phase2-h13-tests.log"
 for target in aarch64-apple-darwin aarch64-apple-ios aarch64-apple-ios-sim; do
     cargo build --locked --manifest-path "$manifest" --target "$target" 2>&1 | tee "$evidence/phase2-h13-build-$target.log"
 done
@@ -38,7 +38,7 @@ else
     test "$status" -eq 1
     printf 'PASS: zero excluded runtime imports or process-spawning references in either crate source tree\n' >> "$evidence/phase2-h13-exclusion-audit.log"
 fi
-for file in Vendor/herdr/herdr-protocol/src/*.rs; do
+for file in Vendor/herdr/herdr-protocol/src/*.rs Vendor/herdr/herdr-ios-ffi/src/*.rs; do
     awk 'NF && $0 !~ /^[[:space:]]*\/\// {n++} END {if(n>250) {print FILENAME,n; exit 1}}' "$file"
 done
 printf 'PASS: host tests, three target builds, license/advisory/source/ban policy, and exclusion audit\n'

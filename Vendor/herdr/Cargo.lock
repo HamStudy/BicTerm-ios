@@ -77,6 +77,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "herdr-ios-ffi"
+version = "0.9.0"
+dependencies = [
+ "herdr-client-core",
+ "herdr-protocol",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "herdr-protocol"
 version = "0.9.0"
 dependencies = [

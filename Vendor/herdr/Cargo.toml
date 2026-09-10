@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["herdr-protocol", "herdr-client-core"]
+members = ["herdr-protocol", "herdr-client-core", "herdr-ios-ffi"]
 exclude = ["upstream"]
 
 [workspace.package]
@@ -23,3 +23,12 @@ unused_must_use = "deny"
 panic = "unwind"
 lto = true
 codegen-units = 1
+
+# iOS artifact profile: keeps unwind for catch_unwind-based FFI containment
+# and full DWARF for the archived dSYM. LTO is disabled because rustc's LLVM
+# bitcode is newer than Apple's linker/nm readers and they reject the archive.
+[profile.ios-release]
+inherits = "release"
+lto = false
+debug = 2
+strip = "none"

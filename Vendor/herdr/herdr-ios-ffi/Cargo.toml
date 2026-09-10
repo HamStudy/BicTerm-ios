@@ -1,0 +1,29 @@
+[package]
+name = "herdr-ios-ffi"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Panic-safe C ABI over the Herdr client core for Apple platforms"
+build = false
+
+[lib]
+crate-type = ["lib", "staticlib"]
+
+[dependencies]
+herdr-client-core = { version = "=0.9.0", path = "../herdr-client-core" }
+herdr-protocol = { version = "=0.9.0", path = "../herdr-protocol" }
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+
+# Workspace lints forbid `unsafe`; this crate IS the audited FFI boundary and
+# overrides the table (a member `[lints]` fully replaces workspace lints) so
+# the pointer-handling layer can carry its reviewed `unsafe` blocks.
+[lints.rust]
+unsafe_code = "allow"
+unused_must_use = "deny"
+non_camel_case_types = "allow"
+non_snake_case = "allow"
