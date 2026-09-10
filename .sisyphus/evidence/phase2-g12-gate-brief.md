@@ -1,8 +1,11 @@
-# T12 Coder phase gate: INCOMPLETE
+# T12 Coder phase gate: current execution complete, approval pending
 
-Latest continuation results and root-cause repairs are recorded in
-`phase2-g12-repair-brief.md`. The original results below are retained as
-historical evidence, not the current regression counts. The gate is still closed.
+Current results are in `phase2-g12-final-acceptance-brief.md`: 31 PASS,
+zero FAIL, three NOT-LOCAL; both final Core suites passed. The original
+blocked results below are retained as historical evidence only, not current
+regression counts or current blockers. Atlas retains approval and plan marking.
+
+## Historical blocked checkpoint
 
 Date: 2026-09-08. Fresh task session; no previous T12 session was reused.
 

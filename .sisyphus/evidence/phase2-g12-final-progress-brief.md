@@ -1,7 +1,7 @@
-# T12 protocol acceptance checkpoint — INCOMPLETE
+# T12 protocol acceptance execution complete — approval pending
 
-Latest status: **PASS=29, FAIL=2, NOT-LOCAL=3**. Batch A closed A31;
-Batch B has closed A02-A12, A20-A22, and A32. The checkpoint narrative below
+Latest status: **PASS=31, FAIL=0, NOT-LOCAL=3**. Batch A closed A31;
+Batch B has closed A02-A12, A19-A22, and A32. The checkpoint narrative below
 preserves the earlier 13/18/3 state. A31 evidence is in
 `phase2-g12-a31-investigation.md`; native authentication/permission evidence
 is in `phase2-g12-b-auth-native-green.log`, `phase2-g12-b-auth-audit.log`,
@@ -50,7 +50,16 @@ reconnects; the invalid-token retry omits that token. The original stream stays
 usable with its execution counter and SSH establishment count both unchanged
 at one. Evidence: `phase2-g12-b-control-brief.md`.
 
-Remaining: A19, A34.
+Dynamic DERP map: the native Go test injects an additional region through the
+real control protocol, observes it in the connection manager, and preserves
+32 ordered messages on the original SSH channel. The full Go race/shuffle
+suite passed and the XCFramework was rebuilt. Evidence:
+`phase2-g12-b-derpmap-brief.md`.
+
+Final Core runs: 328 tests on each canonical device, zero failures and 15
+existing skips per device. A34's live sentinel audit passed across the T12
+evidence tree. See `phase2-g12-final-acceptance-brief.md` and the audit manifest.
+No plan checkbox was changed; Atlas retains the approval decision.
 
 This checkpoints executed native evidence, not phase approval. Matrix:
 **PASS=13, FAIL=18, NOT-LOCAL=3**. Structural validation passes; `--gate`

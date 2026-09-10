@@ -1,13 +1,13 @@
 # Coder acceptance matrix
 
-Gate: INCOMPLETE. FAIL includes unverified requirements.
+Gate: execution complete; approval remains with Atlas.
 
 Latest evidence: `.sisyphus/evidence/phase2-g12-final-progress-brief.md` records
 green full UI regressions and additional native protocol execution. There are
-29 PASS, 3 NOT-LOCAL and 2 FAIL rows. Native lifecycle gates, startup policy,
-script failures, and concurrent user isolation are verified; remaining rows block approval.
+31 PASS, 3 NOT-LOCAL and zero FAIL rows. Final native regressions and the
+sentinel logging audit are recorded in phase2-g12-final-acceptance-brief.md.
 
-This is a blocked-gate inventory, not a compatibility declaration. The 34
+This is an acceptance evidence inventory, not a compatibility declaration. The 34
 normative rows below are generated directly from the read-only spec section
 18.1. For unexecuted scenarios, the command is the executed gate-inventory
 check, not a claimed scenario run. The brief distinguishes missing evidence
@@ -241,11 +241,11 @@ and task 12, line 465. They are not optional live-deployment work.
 |---|---|
 | Dynamic DERP map update | Connection manager applies updates without corrupting the SSH stream. |
 
-- Status: FAIL
-- Command: `ruby scripts/verify-coder-matrix.rb --gate`
-- Evidence: `.sisyphus/evidence/phase2-g12-gate-brief.md`
+- Status: PASS
+- Command: `go test -C CoderNet -race -shuffle=on -count=1 -run TestNativeDERPMapUpdatePreservesSSHStream -v`
+- Evidence: `.sisyphus/evidence/phase2-g12-b-derpmap-native.log`
 - Reason: -
-- Detail: Dynamic DERP map replacement was not injected while checking SSH stream integrity. No deployment requirement established; local feasibility remains to be exercised.
+- Detail: A real native coordinator is forwarded through WebSocket/yamux/DRPC, then an additional DERP region is injected while an SSH channel is active. The connection manager's DERPMap getter confirms application; the original channel preserves 32 ordered messages through the production Unix-socket SSH proxy. Existing usable relay nodes remain unchanged. See phase2-g12-b-derpmap-brief.md; the full Go race/shuffle suite also passes.
 
 ### A20
 
@@ -421,8 +421,8 @@ and task 12, line 465. They are not optional live-deployment work.
 |---|---|
 | Logging/security audit | No user tokens, resume tokens, private keys, or terminal contents in logs. |
 
-- Status: FAIL
-- Command: `ruby scripts/verify-coder-matrix.rb --gate`
-- Evidence: `.sisyphus/evidence/phase2-g12-gate-brief.md`
+- Status: PASS
+- Command: `ruby scripts/audit-coder-logs.rb`
+- Evidence: `.sisyphus/evidence/phase2-g12-final-log-audit.log`
 - Reason: -
-- Detail: Existing token-bearing-source audits passed, and AppStore exact bridge/SDK isolation was verified separately. No complete sentinel audit covering user/resume tokens, keys, and terminal contents across all T12 scenario logs was executed.
+- Detail: The auditor scans all T12 scenario log/document artifacts, including nested logs, for actual user credentials, captured native resume tokens, fixture private-key material, and unique terminal markers exercised through live sessions. Raw/URL/base64 variants and positive/negative controls pass; private-key headers and JWT-shaped values are absent. Native bridge diagnostics are captured and exclude terminal markers. The exact file/hash manifest is phase2-g12-final-log-audit.json; scope and limitations are documented in phase2-g12-final-acceptance-brief.md.
