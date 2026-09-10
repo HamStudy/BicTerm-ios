@@ -1,9 +1,13 @@
+import CoderNet
 import Foundation
 import XCTest
 @testable import BicTermCore
 
 final class CoderNativeControlRecoveryTests: XCTestCase {
     func testNativeControlRecoveryPreservesStreamWithoutReplay() async throws {
+        nativeControlLogs.reset()
+        CoderNetSetLogCallback(captureNativeControlLog)
+        defer { CoderNetSetLogCallback(nil) }
         struct Proxy: Decodable { let url: URL; let mode: String }
         struct Ledger: Decodable {
             struct Attempt: Decodable { let resume_present: Bool; let injected: Bool; let status: Int? }
@@ -17,6 +21,11 @@ final class CoderNativeControlRecoveryTests: XCTestCase {
         let output = await transport.output
         let collector = Task { for await bytes in output { await sink.append(bytes) } }
         let counter = "g12-counter-\(UUID().uuidString)"
+        let sentinelPath = base.appendingPathComponent("terminal-sentinels.json")
+        var sentinels = (try? JSONDecoder().decode([String].self, from: Data(contentsOf: sentinelPath))) ?? []
+        sentinels.append(counter)
+        let sentinelBytes = try JSONEncoder().encode(sentinels)
+        XCTAssertTrue(FileManager.default.createFile(atPath: sentinelPath.path, contents: sentinelBytes, attributes: [.posixPermissions: 0o600]))
         do {
             try await transport.connect(to: fixture.connection(), cols: 80, rows: 24)
             try await transport.send(Data("n=0; if [ -f \(counter) ]; then n=$(cat \(counter)); fi; n=$((n+1)); printf '%s' \"$n\" > \(counter); printf '\\nG12-COUNT:%s\\n' \"$n\"\n".utf8))
@@ -50,5 +59,24 @@ final class CoderNativeControlRecoveryTests: XCTestCase {
         }
         await transport.close()
         collector.cancel()
+        let diagnostics = nativeControlLogs.snapshot().joined(separator: "\n")
+        XCTAssertFalse(diagnostics.isEmpty, "The audit must observe real bridge diagnostics")
+        XCTAssertFalse(diagnostics.contains(counter), "Terminal data must not enter bridge diagnostics")
+        try Data(diagnostics.utf8).write(to: SSHTestFixture.repoRoot.appendingPathComponent(".sisyphus/evidence/phase2-g12-b-control-\(proxy.mode)-bridge.log"))
     }
+}
+
+private let nativeControlLogs = NativeControlLogCapture()
+
+private func captureNativeControlLog(_: Int32, _ message: UnsafePointer<CChar>?) {
+    guard let message else { return }
+    nativeControlLogs.append(String(cString: message))
+}
+
+private final class NativeControlLogCapture: @unchecked Sendable {
+    private let lock = NSLock()
+    private var lines: [String] = []
+    func reset() { lock.lock(); defer { lock.unlock() }; lines = [] }
+    func append(_ line: String) { lock.lock(); defer { lock.unlock() }; lines.append(line) }
+    func snapshot() -> [String] { lock.lock(); defer { lock.unlock() }; return lines }
 }

@@ -61,6 +61,12 @@ begin
           query = URI.decode_www_form(uri.query.to_s).to_h
           resume_present = !query.fetch('resume_token', '').empty?
           mutex.synchronize do
+            if resume_present
+              secret_path = "#{base}/resume-secrets.json"
+              secrets = File.exist?(secret_path) ? JSON.parse(File.read(secret_path)) : []
+              secrets << query.fetch('resume_token')
+              File.open(secret_path, File::WRONLY | File::CREAT | File::TRUNC, 0o600) { |file| file.write(JSON.generate(secrets.uniq)) }
+            end
             corrupt = mode == 'resume' && resume_present && !injected
             if corrupt
               query['resume_token'] = 'g12-invalid-resume-token'
