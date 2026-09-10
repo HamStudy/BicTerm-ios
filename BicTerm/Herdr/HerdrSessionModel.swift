@@ -115,9 +115,9 @@ final class HerdrSessionModel {
     }
 
     /// Records the scene's desired grid geometry (machine-qualified per
-    /// endpoint). It is carried by the NEXT connection's hello; live
-    /// semantic resize messages are T17 input work — the committed FFI has
-    /// no resize entry point yet.
+    /// endpoint). It is carried by the NEXT connection's hello; routing it
+    /// through the FFI's live `herdr_client_resize` (which exists since the
+    /// activation fix) is T17 input work.
     func resize(cols: Int, rows: Int) {
         guard cols > 0, rows > 0 else { return }
         for id in endpoints.keys {
@@ -125,17 +125,6 @@ final class HerdrSessionModel {
             endpoints[id]?.desiredRows = UInt32(rows)
         }
     }
-
-    #if DEBUG
-    /// UI-test replay seam: feeds the renderer the fixture surface directly
-    /// because the committed FFI cannot commit one (probe evidence). The
-    /// value is byte-identical to what `herdr_client_surface` returns once
-    /// endpoint activation exists in the ABI. Compiled out of Release.
-    func debugInjectSurface(_ surface: HerdrPaneSurface, for endpoint: HerdrEndpointID) {
-        guard endpoints[endpoint] != nil else { return }
-        endpoints[endpoint]?.surface = surface
-    }
-    #endif
 
     // MARK: - Machine-qualified identity
 
@@ -185,6 +174,14 @@ final class HerdrSessionModel {
                 let surfaceData = try? await client.surfaceJSON()
                 let surface = surfaceData.flatMap {
                     try? JSONDecoder().decode(HerdrPaneSurface.self, from: $0)
+                }
+
+                // The FFI queues activation/control frames mid-session
+                // (e.g. the activation transaction after a snapshot); they
+                // must reach the transport in order, not just the connect-
+                // time hello.
+                for frame in try await client.drainOutbound() {
+                    try await transport.write(frame)
                 }
 
                 var freshSnapshot: HerdrShellSnapshot?
@@ -263,11 +260,11 @@ final class HerdrSessionModel {
     ) {
         switch error {
         case .surfaceRejected:
-            // The committed FFI never activates the shell's endpoint
-            // projection, so a real server's PaneSurface frames surface here
-            // (probe: .sisyphus/evidence/phase2-h16-ffi-surface-probe.log).
-            // The frame is dropped whole — never half-applied — and the
-            // client stays Online, so the session continues snapshot-only.
+            // A surface that does not belong to the active endpoint lease
+            // (stale evidence, revision conflict, wrong boot — doc §7
+            // coherence checks). The Rust core drops the frame whole —
+            // never half-applied — and the client stays Online, so the
+            // session continues with the last committed surface.
             guard isActive(endpoint: id, generation: generation) else { return }
             endpoints[id]?.surfaceUnavailable = true
         case .handshakeIncompatible, .handshakeInvalidWelcome:

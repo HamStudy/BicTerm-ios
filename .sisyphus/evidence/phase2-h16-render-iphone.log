@@ -5,18 +5,18 @@ Resolve Package Graph
 
 
 Resolved source packages:
-  swift-asn1: https://github.com/apple/swift-asn1.git @ 1.7.2
-  BicTermCore: /Users/richard/code/BicTerm/BicTermCore
-  swift-nio-ssh: /Users/richard/code/BicTerm/Vendor/swift-nio-ssh @ local
   SymbolKit: https://github.com/swiftlang/swift-docc-symbolkit @ 1.0.0
-  SwiftDocCPlugin: https://github.com/apple/swift-docc-plugin @ 1.5.0
   SwiftTerm: /Users/richard/code/BicTerm/Vendor/SwiftTerm
-  swift-collections: https://github.com/apple/swift-collections.git @ 1.6.0
-  swift-atomics: https://github.com/apple/swift-atomics.git @ 1.3.1
-  swift-nio: https://github.com/apple/swift-nio.git @ 2.102.0
-  swift-system: https://github.com/apple/swift-system.git @ 1.8.1
   swift-crypto: https://github.com/apple/swift-crypto.git @ 4.5.2
+  swift-atomics: https://github.com/apple/swift-atomics.git @ 1.3.1
+  SwiftDocCPlugin: https://github.com/apple/swift-docc-plugin @ 1.5.0
+  swift-nio-ssh: /Users/richard/code/BicTerm/Vendor/swift-nio-ssh @ local
+  swift-system: https://github.com/apple/swift-system.git @ 1.8.1
+  swift-asn1: https://github.com/apple/swift-asn1.git @ 1.7.2
   swift-argument-parser: https://github.com/apple/swift-argument-parser @ 1.8.2
+  swift-nio: https://github.com/apple/swift-nio.git @ 2.102.0
+  swift-collections: https://github.com/apple/swift-collections.git @ 1.6.0
+  BicTermCore: /Users/richard/code/BicTerm/BicTermCore
 
 Writing result bundle at path:
 	/Users/richard/code/BicTerm/.build-artifacts/xcresults/h16-render-iphone.xcresult
@@ -35,7 +35,7 @@ Compile plug-in “SwiftTermBuildInfoPlugin” in package “swiftterm”
 Apply build tool plug-in “SwiftTermBuildInfoPlugin” to target “SwiftTerm” in package “swiftterm”
 
 Process build tool plug-in results
-package: <IDESwiftPackageCore.IDESwiftPackage:0x7ea269e00 path:'/Users/richard/code/BicTerm/Vendor/SwiftTerm'>
+package: <IDESwiftPackageCore.IDESwiftPackage:0xb38704300 path:'/Users/richard/code/BicTerm/Vendor/SwiftTerm'>
     target: SwiftTerm
         prebuildCommandOutputPaths: []
         buildCommands: [SwiftPM.SPMCustomBuildCommand(displayName: Optional("Generate SwiftTerm build information"), executable: "/${BUILD_DIR}/${CONFIGURATION}/SwiftTermBuildInfoGenerator", arguments: ["/Users/richard/code/BicTerm/Vendor/SwiftTerm", "/Users/richard/code/BicTerm/.build-artifacts/DerivedData/h16/Build/Intermediates.noindex/BuildToolPluginIntermediates/swiftterm.output/SwiftTerm/SwiftTermBuildInfoPlugin/Generated/SwiftTermBuildInfo.swift"], environment: [:], workingDir: nil, inputPaths: [SwiftPM.SPMAbsolutePath(absolutePath: <AbsolutePath:"/Users/richard/code/BicTerm/.build-artifacts/DerivedData/h16/Build/Intermediates.noindex/BuildToolPluginIntermediates/swiftterm.output/SwiftTerm/SwiftTermBuildInfoPlugin/build-info-trigger">)], pluginOutputDir: SwiftPM.SPMAbsolutePath(absolutePath: <AbsolutePath:"/Users/richard/code/BicTerm/.build-artifacts/DerivedData/h16/Build/Intermediates.noindex/BuildToolPluginIntermediates/swiftterm.output/SwiftTerm/SwiftTermBuildInfoPlugin">), outputPaths: ["/Users/richard/code/BicTerm/.build-artifacts/DerivedData/h16/Build/Intermediates.noindex/BuildToolPluginIntermediates/swiftterm.output/SwiftTerm/SwiftTermBuildInfoPlugin/Generated/SwiftTermBuildInfo.swift"], sandboxProfile: Optional(SwiftPM.SPMSandboxProfile(strictness: Basics.Sandbox.Strictness.writableTemporaryDirectory, writableDirectories: [<AbsolutePath:"/Users/richard/code/BicTerm/.build-artifacts/DerivedData/h16/Build/Intermediates.noindex/BuildToolPluginIntermediates/swiftterm.output/SwiftTerm/SwiftTermBuildInfoPlugin">], readOnlyDirectories: [<AbsolutePath:"/Users/richard/code/BicTerm/Vendor/SwiftTerm">])))]
@@ -299,7 +299,7 @@ ClangStatCache /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefaul
     cd /Users/richard/code/BicTerm/BicTerm.xcodeproj
     /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang-stat-cache /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -o /Users/richard/code/BicTerm/.build-artifacts/DerivedData/h16/SDKStatCaches.noindex/iphonesimulator26.5-23F81a-688ef53f1462e2c8f657fdc38a81448f6cfe768891a92b912361537c460fe42b.sdkstatcache
 
-CustomTask Generate\ SwiftTerm\ build\ information de1e880656f7755875ba86c754f351fd (in target 'SwiftTerm' from project 'SwiftTerm')
+CustomTask Generate\ SwiftTerm\ build\ information 61b31a3f654e446eede719b9f0de6f00 (in target 'SwiftTerm' from project 'SwiftTerm')
     cd /Users/richard/code/BicTerm/Vendor/SwiftTerm
     export ACTION\=build
     export AD_HOC_CODE_SIGNING_ALLOWED\=YES
@@ -836,92 +836,92 @@ CustomTask Generate\ SwiftTerm\ build\ information de1e880656f7755875ba86c754f35
 '\)'
 ' //Users/richard/code/BicTerm/.build-artifacts/DerivedData/h16/Build/Products/Debug/SwiftTermBuildInfoGenerator /Users/richard/code/BicTerm/Vendor/SwiftTerm /Users/richard/code/BicTerm/.build-artifacts/DerivedData/h16/Build/Intermediates.noindex/BuildToolPluginIntermediates/swiftterm.output/SwiftTerm/SwiftTermBuildInfoPlugin/Generated/SwiftTermBuildInfo.swift
 
-2026-09-10 02:31:26.851692-0600 BicTermUITests-Runner[31547:35397654] [Default] Running tests...
+2026-09-10 08:43:28.824959-0600 BicTermUITests-Runner[59223:36988464] [Default] Running tests...
     t =      nans Interface orientation changed to Portrait
-Test Suite 'Selected tests' started at 2026-09-10 02:31:27.511.
-Test Suite 'BicTermUITests.xctest' started at 2026-09-10 02:31:27.511.
-Test Suite 'HerdrWorkspaceUITests' started at 2026-09-10 02:31:27.512.
+Test Suite 'Selected tests' started at 2026-09-10 08:43:29.484.
+Test Suite 'BicTermUITests.xctest' started at 2026-09-10 08:43:29.484.
+Test Suite 'HerdrWorkspaceUITests' started at 2026-09-10 08:43:29.485.
 Test Case '-[BicTermUITests.HerdrWorkspaceUITests testPaneChromeSurvivesAccessibilityDynamicType]' started.
-    t =     0.00s Start Test at 2026-09-10 02:31:27.513
+    t =     0.00s Start Test at 2026-09-10 08:43:29.485
     t =     0.02s Set Up
     t =     0.02s Open com.bicterm.app
     t =     0.02s     Launch com.bicterm.app
-2026-09-10 02:31:27.575 xcodebuild[31406:35395971] [MT] IDELaunchParametersSnapshot: The operation couldn’t be completed. (DebuggerLLDB.DebuggerVersionStore.StoreError error 0.)
-2026-09-10 02:31:27.575 xcodebuild[31406:35395971] [MT] IDELaunchParametersSnapshot: no debugger version
-objc[31547]: Class UIAccessibilityLoaderWebShared is implemented in both /Library/Developer/CoreSimulator/Volumes/iOS_23F77/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 26.5.simruntime/Contents/Resources/RuntimeRoot/System/Library/AccessibilityBundles/WebCore.axbundle/WebCore (0x107bb8310) and /Library/Developer/CoreSimulator/Volumes/iOS_23F77/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 26.5.simruntime/Contents/Resources/RuntimeRoot/System/Library/AccessibilityBundles/WebKit.axbundle/WebKit (0x107a80398). This may cause spurious casting failures and mysterious crashes. One of the duplicates must be removed or renamed.
-    t =     0.68s         Setting up automation session
-    t =     1.55s         Wait for com.bicterm.app to idle
-    t =     3.19s Waiting 10.0s for "herdr-pane-w1:p2" Any to exist
-    t =     4.25s     Checking `Expect predicate `existsNoRetry == 1` for object "herdr-pane-w1:p2" Any`
-    t =     4.26s         Checking existence of `"herdr-pane-w1:p2" Any`
-    t =     4.33s Checking existence of `"herdr-tab-1" Any`
-    t =     4.36s Find the "herdr-pane-w1:p2" Any
-    t =     4.39s informational: dynamic type survival logged
-    t =     4.39s Find the Target Application 'com.bicterm.app'
-    t =     4.51s Added attachment named 'herdr-workspace-accessibility-type'
-    t =     4.51s Tear Down
-Test Case '-[BicTermUITests.HerdrWorkspaceUITests testPaneChromeSurvivesAccessibilityDynamicType]' passed (4.732 seconds).
+2026-09-10 08:43:29.547 xcodebuild[59090:36986837] [MT] IDELaunchParametersSnapshot: The operation couldn’t be completed. (DebuggerLLDB.DebuggerVersionStore.StoreError error 0.)
+2026-09-10 08:43:29.547 xcodebuild[59090:36986837] [MT] IDELaunchParametersSnapshot: no debugger version
+objc[59223]: Class UIAccessibilityLoaderWebShared is implemented in both /Library/Developer/CoreSimulator/Volumes/iOS_23F77/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 26.5.simruntime/Contents/Resources/RuntimeRoot/System/Library/AccessibilityBundles/WebCore.axbundle/WebCore (0x10aa1c310) and /Library/Developer/CoreSimulator/Volumes/iOS_23F77/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 26.5.simruntime/Contents/Resources/RuntimeRoot/System/Library/AccessibilityBundles/WebKit.axbundle/WebKit (0x10a2b0398). This may cause spurious casting failures and mysterious crashes. One of the duplicates must be removed or renamed.
+    t =     0.67s         Setting up automation session
+    t =     1.59s         Wait for com.bicterm.app to idle
+    t =     3.13s Waiting 10.0s for "herdr-pane-w1:p2" Any to exist
+    t =     4.20s     Checking `Expect predicate `existsNoRetry == 1` for object "herdr-pane-w1:p2" Any`
+    t =     4.20s         Checking existence of `"herdr-pane-w1:p2" Any`
+    t =     4.27s Checking existence of `"herdr-tab-1" Any`
+    t =     4.29s Find the "herdr-pane-w1:p2" Any
+    t =     4.32s informational: dynamic type survival logged
+    t =     4.32s Find the Target Application 'com.bicterm.app'
+    t =     4.44s Added attachment named 'herdr-workspace-accessibility-type'
+    t =     4.44s Tear Down
+Test Case '-[BicTermUITests.HerdrWorkspaceUITests testPaneChromeSurvivesAccessibilityDynamicType]' passed (4.666 seconds).
 Test Case '-[BicTermUITests.HerdrWorkspaceUITests testVersionGateDiagnosticScreenForWrongGenerationWelcome]' started.
-    t =     0.00s Start Test at 2026-09-10 02:31:32.246
-    t =     0.02s Set Up
-    t =     0.02s Open com.bicterm.app
-    t =     0.02s     Launch com.bicterm.app
-    t =     0.03s         Terminate com.bicterm.app:31553
-2026-09-10 02:31:33.342 xcodebuild[31406:35395971] [MT] IDELaunchParametersSnapshot: The operation couldn’t be completed. (DebuggerLLDB.DebuggerVersionStore.StoreError error 0.)
-2026-09-10 02:31:33.342 xcodebuild[31406:35395971] [MT] IDELaunchParametersSnapshot: no debugger version
-    t =     1.31s         Setting up automation session
-    t =     2.20s         Wait for com.bicterm.app to idle
-    t =     3.87s Waiting 10.0s for "herdr-diagnostic" Any to exist
-    t =     4.91s     Checking `Expect predicate `existsNoRetry == 1` for object "herdr-diagnostic" Any`
-    t =     4.91s         Checking existence of `"herdr-diagnostic" Any`
-    t =     4.99s Checking existence of `"herdr-diagnostic-local-version" Any`
-    t =     5.02s Find the "herdr-diagnostic-local-version" Any
-    t =     5.05s Checking existence of `"herdr-diagnostic-generation" Any`
-    t =     5.08s Find the "herdr-diagnostic-generation" Any
-    t =     5.11s Checking existence of `"herdr-diagnostic-remediation" Any`
-    t =     5.14s Checking existence of `"herdr-pane-w1:p1" Any`
-    t =     5.17s Find the Target Application 'com.bicterm.app'
-    t =     5.29s Added attachment named 'herdr-version-gate-gen99'
-    t =     5.29s Tear Down
-Test Case '-[BicTermUITests.HerdrWorkspaceUITests testVersionGateDiagnosticScreenForWrongGenerationWelcome]' passed (5.575 seconds).
-Test Case '-[BicTermUITests.HerdrWorkspaceUITests testWorkspaceRendersTwoByTwoPaneTreeFromCommittedFrames]' started.
-    t =     0.00s Start Test at 2026-09-10 02:31:37.822
+    t =     0.00s Start Test at 2026-09-10 08:43:34.153
     t =     0.02s Set Up
     t =     0.03s Open com.bicterm.app
     t =     0.03s     Launch com.bicterm.app
-    t =     0.03s         Terminate com.bicterm.app:31593
-2026-09-10 02:31:38.926 xcodebuild[31406:35395971] [MT] IDELaunchParametersSnapshot: The operation couldn’t be completed. (DebuggerLLDB.DebuggerVersionStore.StoreError error 0.)
-2026-09-10 02:31:38.926 xcodebuild[31406:35395971] [MT] IDELaunchParametersSnapshot: no debugger version
-    t =     1.32s         Setting up automation session
+    t =     0.03s         Terminate com.bicterm.app:59239
+2026-09-10 08:43:35.251 xcodebuild[59090:36986837] [MT] IDELaunchParametersSnapshot: The operation couldn’t be completed. (DebuggerLLDB.DebuggerVersionStore.StoreError error 0.)
+2026-09-10 08:43:35.251 xcodebuild[59090:36986837] [MT] IDELaunchParametersSnapshot: no debugger version
+    t =     1.30s         Setting up automation session
     t =     2.20s         Wait for com.bicterm.app to idle
-    t =     4.43s Waiting 10.0s for "herdr-status-badge" Any to exist
-    t =     5.49s     Checking `Expect predicate `existsNoRetry == 1` for object "herdr-status-badge" Any`
-    t =     5.49s         Checking existence of `"herdr-status-badge" Any`
-    t =     5.56s Find the "herdr-status-badge" Any
-    t =     5.59s Checking existence of `"herdr-endpoint-label" Any`
-    t =     5.61s Checking existence of `"herdr-tab-1" Any`
-    t =     5.64s Waiting 10.0s for "herdr-pane-w1:p2" Any to exist
-    t =     6.68s     Checking `Expect predicate `existsNoRetry == 1` for object "herdr-pane-w1:p2" Any`
-    t =     6.68s         Checking existence of `"herdr-pane-w1:p2" Any`
-    t =     6.71s Checking existence of `"herdr-pane-w1:p1" Any`
-    t =     6.74s Checking existence of `"herdr-pane-w1:p3" Any`
-    t =     6.76s Checking existence of `"herdr-pane-w1:p4" Any`
-    t =     6.79s Find the "herdr-pane-w1:p2" Any
-    t =     6.81s Find the "herdr-pane-w1:p2" Other
-    t =     6.84s Find the "herdr-disconnect" Any
-    t =     6.88s Find the Target Application 'com.bicterm.app'
-    t =     7.00s Added attachment named 'herdr-workspace-2x2'
-    t =     7.00s Tear Down
-Test Case '-[BicTermUITests.HerdrWorkspaceUITests testWorkspaceRendersTwoByTwoPaneTreeFromCommittedFrames]' passed (7.213 seconds).
-Test Suite 'HerdrWorkspaceUITests' passed at 2026-09-10 02:31:45.036.
-	 Executed 3 tests, with 0 failures (0 unexpected) in 17.520 (17.524) seconds
-Test Suite 'BicTermUITests.xctest' passed at 2026-09-10 02:31:45.037.
-	 Executed 3 tests, with 0 failures (0 unexpected) in 17.520 (17.525) seconds
-Test Suite 'Selected tests' passed at 2026-09-10 02:31:45.038.
-	 Executed 3 tests, with 0 failures (0 unexpected) in 17.520 (17.527) seconds
-2026-09-10 02:31:45.336 xcodebuild[31406:35395971] [MT] IDETestOperationsObserverDebug: 19.904 elapsed -- Testing started completed.
-2026-09-10 02:31:45.336 xcodebuild[31406:35395971] [MT] IDETestOperationsObserverDebug: 0.000 sec, +0.000 sec -- start
-2026-09-10 02:31:45.336 xcodebuild[31406:35395971] [MT] IDETestOperationsObserverDebug: 19.904 sec, +19.904 sec -- end
+    t =     3.85s Waiting 10.0s for "herdr-diagnostic" Any to exist
+    t =     4.93s     Checking `Expect predicate `existsNoRetry == 1` for object "herdr-diagnostic" Any`
+    t =     4.93s         Checking existence of `"herdr-diagnostic" Any`
+    t =     5.01s Checking existence of `"herdr-diagnostic-local-version" Any`
+    t =     5.04s Find the "herdr-diagnostic-local-version" Any
+    t =     5.08s Checking existence of `"herdr-diagnostic-generation" Any`
+    t =     5.11s Find the "herdr-diagnostic-generation" Any
+    t =     5.14s Checking existence of `"herdr-diagnostic-remediation" Any`
+    t =     5.17s Checking existence of `"herdr-pane-w1:p1" Any`
+    t =     5.20s Find the Target Application 'com.bicterm.app'
+    t =     5.32s Added attachment named 'herdr-version-gate-gen99'
+    t =     5.33s Tear Down
+Test Case '-[BicTermUITests.HerdrWorkspaceUITests testVersionGateDiagnosticScreenForWrongGenerationWelcome]' passed (5.542 seconds).
+Test Case '-[BicTermUITests.HerdrWorkspaceUITests testWorkspaceRendersTwoByTwoPaneTreeFromCommittedFrames]' started.
+    t =     0.00s Start Test at 2026-09-10 08:43:39.697
+    t =     0.02s Set Up
+    t =     0.02s Open com.bicterm.app
+    t =     0.02s     Launch com.bicterm.app
+    t =     0.02s         Terminate com.bicterm.app:59275
+2026-09-10 08:43:40.803 xcodebuild[59090:36986837] [MT] IDELaunchParametersSnapshot: The operation couldn’t be completed. (DebuggerLLDB.DebuggerVersionStore.StoreError error 0.)
+2026-09-10 08:43:40.803 xcodebuild[59090:36986837] [MT] IDELaunchParametersSnapshot: no debugger version
+    t =     1.32s         Setting up automation session
+    t =     2.21s         Wait for com.bicterm.app to idle
+    t =     3.73s Waiting 10.0s for "herdr-status-badge" Any to exist
+    t =     4.79s     Checking `Expect predicate `existsNoRetry == 1` for object "herdr-status-badge" Any`
+    t =     4.79s         Checking existence of `"herdr-status-badge" Any`
+    t =     4.87s Find the "herdr-status-badge" Any
+    t =     4.89s Checking existence of `"herdr-endpoint-label" Any`
+    t =     4.92s Checking existence of `"herdr-tab-1" Any`
+    t =     4.94s Waiting 10.0s for "herdr-pane-w1:p2" Any to exist
+    t =     5.98s     Checking `Expect predicate `existsNoRetry == 1` for object "herdr-pane-w1:p2" Any`
+    t =     5.98s         Checking existence of `"herdr-pane-w1:p2" Any`
+    t =     6.01s Checking existence of `"herdr-pane-w1:p1" Any`
+    t =     6.04s Checking existence of `"herdr-pane-w1:p3" Any`
+    t =     6.06s Checking existence of `"herdr-pane-w1:p4" Any`
+    t =     6.09s Find the "herdr-pane-w1:p2" Any
+    t =     6.12s Find the "herdr-pane-w1:p2" Other
+    t =     6.14s Find the "herdr-disconnect" Any
+    t =     6.18s Find the Target Application 'com.bicterm.app'
+    t =     6.30s Added attachment named 'herdr-workspace-2x2'
+    t =     6.30s Tear Down
+Test Case '-[BicTermUITests.HerdrWorkspaceUITests testWorkspaceRendersTwoByTwoPaneTreeFromCommittedFrames]' passed (6.548 seconds).
+Test Suite 'HerdrWorkspaceUITests' passed at 2026-09-10 08:43:46.245.
+	 Executed 3 tests, with 0 failures (0 unexpected) in 16.756 (16.760) seconds
+Test Suite 'BicTermUITests.xctest' passed at 2026-09-10 08:43:46.246.
+	 Executed 3 tests, with 0 failures (0 unexpected) in 16.756 (16.761) seconds
+Test Suite 'Selected tests' passed at 2026-09-10 08:43:46.247.
+	 Executed 3 tests, with 0 failures (0 unexpected) in 16.756 (16.763) seconds
+2026-09-10 08:43:46.545 xcodebuild[59090:36986837] [MT] IDETestOperationsObserverDebug: 19.056 elapsed -- Testing started completed.
+2026-09-10 08:43:46.545 xcodebuild[59090:36986837] [MT] IDETestOperationsObserverDebug: 0.000 sec, +0.000 sec -- start
+2026-09-10 08:43:46.545 xcodebuild[59090:36986837] [MT] IDETestOperationsObserverDebug: 19.056 sec, +19.056 sec -- end
 
 Test session results, code coverage, and logs:
 	/Users/richard/code/BicTerm/.build-artifacts/xcresults/h16-render-iphone.xcresult

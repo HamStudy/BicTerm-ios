@@ -367,3 +367,46 @@ cargo +stable install --locked --root "$PWD/.build-artifacts/tools" cargo-deny
   attachments` come out under raw UUIDs with a manifest; names inside the
   manifest may already carry `_0_<UUID>` dedup suffixes when tests reuse
   attachment names — normalize before committing evidence.
+
+## FFI activation driving (phase 2, herdr-ios-ffi)
+
+- `PendingEndpointActivation::begin` needs a shell projection WITH a snapshot (`endpoint_lease` -> `endpoint_snapshot_identity`), so a begin attempt at welcome ALWAYS fails preflight with zero side effects (target lease is resolved before `freeze_input`/any send). The transaction can only arm on the first accepted snapshot — begin is attempted at welcome (per plan) and retried inside `apply_snapshot` while idle; each failed attempt burns one serial, which is harmless (serials must be unique, not contiguous).
+- Guard the retry with `shell.active_endpoint() == endpoint`: without it, every post-commit snapshot restarts a transaction (freeze_input + lifecycle churn) and the client never settles. `endpoint_is_active` is `pub(crate)` in core and unreachable from the FFI crate; `active_endpoint()` is the public equivalent.
+- `progress()` only reaches `Ready` after a `ClientShellEndpointResponseChunk` carrying `ResponseResult::ClientShellSurfaceSet { active: true, projection_revision }` (sets `acknowledged_revision`) AND a snapshot+surface pair coherent at that revision and geometry. A welcome+snapshot+surface sequence alone never commits — the ack chunk is what closes the loop; `herdr_client_surface` stays empty without it.
+- The completion path (`complete_activation`) itself queues a presentation-sync request AFTER committing the surface, so a post-commit outbound drain is expected to find frames; the surface IS committed (`set_pane_surface`) before presentation sync settles. Input stays frozen until the presentation-effects fence clears, which the FFI does not yet drive (EndpointControl `PRESENTATION_EFFECTS_SYNC_KIND` arm is future work).
+- Golden surface fixture (server-10.bin) does NOT correlate with the golden snapshot (boot-v1/rev-7/80x24 vs "boot"/rev-3/1x1); an activation test must encode its own frames via `herdr_protocol::write_message` and recover the actual `client-shell-surface:{serial}:on` request id from the drained outbound frames (the serial depends on failed begin attempts).
+- `ClientShellResize` carries 4 fields (cell dims, surface_size, pixel_mouse), not just surface_size — the FFI client stores the create-time geometry context to rebuild resizes faithfully.
+- check.sh enforces <=250 pure LOC per src file (blank+comment lines excluded); abi.rs was already at 236, so adding `herdr_client_resize` forced a split (lifecycle/IO in abi.rs, read-only accessors/telemetry in abi_query.rs). Same for the activation methods (client_activation.rs). rustfmt wraps long extern signatures to ~5 lines, budget accordingly.
+- build-herdr-core.sh fails BY DESIGN on cbindgen header drift, updates the committed HerdrCoreC/include/HerdrCore.h, and asks for a re-run; the header change belongs in the same commit as the ABI addition.
+
+## T16 surface-commit repair (2026-09-10) — FFI activation fix follow-up
+
+- The FFI activation transaction (b5c1d98) needs a SERVER ROUND-TRIP
+  before a surface commits: after the first snapshot the client sends
+  resize + `client_shell.surface.set` request + focus baseline, and the
+  surface only commits once a `ClientShellEndpointResponseChunk`
+  acknowledges the request id with
+  `{"result":{"type":"client_shell_surface_set","active":true,
+  "projection_revision":<rev>}}` AND a geometry-matching surface arrives.
+- The activation request id is DETERMINISTIC but NOT "serial 1": the
+  welcome-time `begin_activation_if_idle` attempt consumes serial 1 and
+  fails preflight (no lease without a snapshot), so the snapshot-time
+  transaction is serial 2 → "client-shell-surface:2:on". Fixtures must
+  correlate against that (Fixtures/herdr/golden/surface-ack-2x2.bin).
+- The acknowledged `projection_revision` must equal BOTH the snapshot
+  revision and the surface's `projection_revision` (coherence check).
+- Swift-side consequence: the inbound pump now drains+writes outbound
+  after EVERY receive — activation/control frames queue mid-session, not
+  just the connect-time hello. A connect-only flush would strand the
+  activation request on a live server.
+- `debugInjectSurface` (test-only surface injection) became dead code
+  once the ack frame completed the transaction and was removed; the UI
+  tests now render pane cells from the REAL committed FFI surface on
+  both canonical simulators.
+- `surfaceUnavailable` remains in the model as the typed note for
+  genuine out-of-lease rejections (stale evidence / revision conflicts /
+  wrong boot — doc §7 coherence); it is no longer exercised by the
+  happy-path fixtures.
+- The gen-crate probe (`--probe --golden <dir> --fixtures <dir>`) now
+  drains and decodes every outbound frame after each feed — printing the
+  actual wire round-trip is the fastest way to pin fixture correlation.

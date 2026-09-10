@@ -83,6 +83,7 @@ dependencies = [
  "herdr-client-core",
  "herdr-ios-ffi",
  "herdr-protocol",
+ "serde",
  "serde_json",
 ]
 

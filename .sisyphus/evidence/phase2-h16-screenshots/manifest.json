@@ -5,10 +5,10 @@
         "configurationName" : "Test Scheme Action",
         "deviceId" : "732CE8E1-F9EF-4020-BF93-5BA1AA365B0E",
         "deviceName" : "iPhone 17 Pro",
-        "exportedFileName" : "3318775A-5B04-4DC0-BE84-BD316E856217.png",
+        "exportedFileName" : "B52566A2-C189-420A-B06D-FA1C24AED167.png",
         "isAssociatedWithFailure" : false,
-        "suggestedHumanReadableName" : "herdr-workspace-accessibility-type_0_FC05D1F4-783C-46E5-B361-E65E5D2A2417.png",
-        "timestamp" : 1789029092.023
+        "suggestedHumanReadableName" : "herdr-workspace-accessibility-type_0_B9406106-F512-4BED-9401-85F33FD8D54D.png",
+        "timestamp" : 1789051413.928
       }
     ],
     "testIdentifier" : "HerdrWorkspaceUITests/testPaneChromeSurvivesAccessibilityDynamicType()",
@@ -20,10 +20,10 @@
         "configurationName" : "Test Scheme Action",
         "deviceId" : "732CE8E1-F9EF-4020-BF93-5BA1AA365B0E",
         "deviceName" : "iPhone 17 Pro",
-        "exportedFileName" : "5691F463-1393-41D3-9F37-13E3339367A9.png",
+        "exportedFileName" : "01A94805-C037-4A84-9151-A38D6E635F0A.png",
         "isAssociatedWithFailure" : false,
-        "suggestedHumanReadableName" : "herdr-version-gate-gen99_0_5C797DF3-1219-4C05-83B3-3B5C82748C41.png",
-        "timestamp" : 1789029097.535
+        "suggestedHumanReadableName" : "herdr-version-gate-gen99_0_276691DF-1207-41A4-ABB4-B1E31BB36912.png",
+        "timestamp" : 1789051419.477
       }
     ],
     "testIdentifier" : "HerdrWorkspaceUITests/testVersionGateDiagnosticScreenForWrongGenerationWelcome()",
@@ -35,10 +35,10 @@
         "configurationName" : "Test Scheme Action",
         "deviceId" : "732CE8E1-F9EF-4020-BF93-5BA1AA365B0E",
         "deviceName" : "iPhone 17 Pro",
-        "exportedFileName" : "241243C1-AB67-47A3-803F-89C12568F412.png",
+        "exportedFileName" : "20EA3A0F-3D79-4FFF-84EC-53F2EA339DD9.png",
         "isAssociatedWithFailure" : false,
-        "suggestedHumanReadableName" : "herdr-workspace-2x2_0_DBDF127D-6CA7-42F8-BA6B-F02C995EF0C1.png",
-        "timestamp" : 1789029104.819
+        "suggestedHumanReadableName" : "herdr-workspace-2x2_0_5657526B-7369-45EA-874A-02C7FB778FAC.png",
+        "timestamp" : 1789051425.996
       }
     ],
     "testIdentifier" : "HerdrWorkspaceUITests/testWorkspaceRendersTwoByTwoPaneTreeFromCommittedFrames()",

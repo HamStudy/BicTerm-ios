@@ -183,24 +183,36 @@ final class HerdrSessionModelTests: XCTestCase {
 
     // MARK: - Surface through the committed FFI
 
-    func testSurfaceRejectionThroughCommittedFFIIsNonFatal() async throws {
+    func testSurfaceCommitsThroughTheRepairedFFI() async throws {
         let model = makeModel()
         let transport = HerdrReplayTransport(script: [
             try vendorGolden("server-20"),
             try herdrGolden("snapshot-2x2"),
+            try herdrGolden("surface-ack-2x2"),
             try herdrGolden("surface-2x2"),
         ])
-        let endpoint = HerdrEndpointID(rawValue: "surface-gap")
+        let endpoint = HerdrEndpointID(rawValue: "surface-commit")
         model.connect(endpoint: endpoint, transport: transport)
 
-        let observed = await waitUntil {
-            model.endpoints[endpoint]?.surfaceUnavailable == true
-        }
-        XCTAssertTrue(observed, "the typed surface rejection must be recorded")
+        let committed = await waitUntil { model.endpoints[endpoint]?.surface != nil }
+        XCTAssertTrue(committed, "the surface frame must commit through the FFI activation transaction")
+
         let state = try XCTUnwrap(model.endpoints[endpoint])
-        XCTAssertEqual(state.phase, .online, "the session stays healthy; the frame is dropped, never half-applied")
+        XCTAssertEqual(state.phase, .online, "the session stays healthy through the activation transaction")
         XCTAssertEqual(state.snapshot?.revision, 1)
-        XCTAssertNil(state.surface, "no surface can commit through the committed FFI (probe evidence)")
+        XCTAssertFalse(state.surfaceUnavailable, "no typed surface rejection may occur on the healthy path")
+
+        let surface = try XCTUnwrap(state.surface)
+        XCTAssertEqual(surface.bootID, "boot-2x2")
+        XCTAssertEqual(surface.projectionRevision, 1)
+        XCTAssertEqual(surface.surfaceRevision, 1)
+        XCTAssertEqual(surface.frame.width, 80)
+        XCTAssertEqual(surface.frame.height, 24)
+        XCTAssertTrue(surface.frame.cellCountIsValid, "cells must arrive complete for the whole grid")
+        XCTAssertEqual(surface.panes.map(\.paneID), ["w1:p1", "w1:p2", "w1:p3", "w1:p4"])
+        XCTAssertEqual(surface.panes.first(where: \.focused)?.paneID, "w1:p2", "focus matches the snapshot's focused pane")
+        XCTAssertEqual(surface.frame.cursor?.x, 42)
+        XCTAssertEqual(surface.frame.cursor?.y, 2)
 
         await model.disconnectAll()
     }

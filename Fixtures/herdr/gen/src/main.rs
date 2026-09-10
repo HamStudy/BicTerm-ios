@@ -40,7 +40,11 @@ fn main() {
         "--probe" => {
             let index = args.iter().position(|a| a == "--golden").expect("--golden <dir>");
             let golden = args[index + 1].clone();
-            probe(&golden);
+            let fixtures = match args.iter().position(|a| a == "--fixtures") {
+                Some(index) => args[index + 1].clone(),
+                None => golden.clone(),
+            };
+            probe(&golden, &fixtures);
         }
         _ => {
             eprintln!("usage: herdr-fixture-gen --out <dir> | --probe --golden <dir>");
@@ -87,6 +91,35 @@ fn generate(dir: &str) {
     write_frame(dir, "surface-2x2.bin", &ServerMessage::PaneSurface(surface.clone()));
     let json = serde_json::to_string_pretty(&surface).expect("surface JSON");
     std::fs::write(format!("{dir}/surface-2x2.json"), json).expect("write surface JSON");
+
+    // 3b. Endpoint response acknowledging the activation's surface-set
+    // request. Serials are deterministic: the welcome-time begin attempt
+    // consumes serial 1 (it fails preflight — no lease without a snapshot),
+    // so the snapshot-time transaction that succeeds is serial 2 and its
+    // request id is "client-shell-surface:2:on". The acknowledged
+    // projection revision must match the snapshot AND surface (1).
+    #[derive(serde::Serialize)]
+    struct Envelope<'a> {
+        id: &'a str,
+        result: herdr_client_core::api::schema::ResponseResult,
+    }
+    let ack = Envelope {
+        id: "client-shell-surface:2:on",
+        result: herdr_client_core::api::schema::ResponseResult::ClientShellSurfaceSet {
+            active: true,
+            projection_revision: REVISION,
+        },
+    };
+    write_frame(
+        dir,
+        "surface-ack-2x2.bin",
+        &ServerMessage::ClientShellEndpointResponseChunk {
+            boot_id: BOOT.into(),
+            request_id: "client-shell-surface:2:on".into(),
+            final_chunk: true,
+            data: serde_json::to_vec(&ack).expect("ack JSON"),
+        },
+    );
 }
 
 fn endpoint_snapshot_message(snapshot: &ClientShellSnapshot) -> ServerMessage {
@@ -302,11 +335,13 @@ fn write_frame(dir: &str, name: &str, message: &ServerMessage) {
 // FFI probe
 // ---------------------------------------------------------------------------
 
-fn probe(golden_dir: &str) {
+fn probe(golden_dir: &str, fixture_dir: &str) {
     println!("== T16 FFI surface-path probe ==");
     println!("golden dir: {golden_dir}");
     let welcome = std::fs::read(format!("{golden_dir}/server-20.bin")).expect("golden welcome");
     let snapshot = std::fs::read(format!("{golden_dir}/server-21.bin")).expect("golden snapshot");
+    let ack = std::fs::read(format!("{fixture_dir}/surface-ack-2x2.bin")).expect("ack");
+    let surface = std::fs::read(format!("{fixture_dir}/surface-2x2.bin")).expect("surface");
 
     println!("probe fixtures generated in-memory (no writes needed)");
 
@@ -327,28 +362,41 @@ fn probe(golden_dir: &str) {
         assert!(!client.is_null(), "create failed: {}", error.code);
         println!("created client (phase {})", herdr_client_phase(client));
 
-        let r1 = herdr_client_receive(client, welcome.as_ptr(), welcome.len());
-        println!("receive(golden welcome)  -> code {} (0 = OK)", r1.code);
-        println!("phase after welcome      -> {}", herdr_client_phase(client));
+        let feed = |label: &str, bytes: &[u8]| {
+            let r = herdr_client_receive(client, bytes.as_ptr(), bytes.len());
+            let mut e2 = HerdrResult { code: -1, detail: std::ptr::null() };
+            let bytes_now = herdr_client_surface(client, &mut e2);
+            println!(
+                "receive({label:<18}) -> code {} phase {} surface_len {}",
+                r.code,
+                herdr_client_phase(client),
+                bytes_now.len
+            );
+            herdr_bytes_free(bytes_now);
+            loop {
+                let mut e3 = HerdrResult { code: -1, detail: std::ptr::null() };
+                let frame = herdr_ios_ffi::herdr_client_drain_outbound(client, &mut e3);
+                if frame.len == 0 {
+                    herdr_bytes_free(frame);
+                    break;
+                }
+                let data = unsafe { std::slice::from_raw_parts(frame.data, frame.len) }.to_vec();
+                herdr_bytes_free(frame);
+                match herdr_protocol::read_message::<_, herdr_protocol::ClientMessage>(
+                    &mut data.as_slice(),
+                    16 * 1024 * 1024,
+                ) {
+                    Ok(message) => println!("    outbound -> {message:?}"),
+                    Err(err) => println!("    outbound -> <decode error {err:?}>"),
+                }
+            }
+        };
 
-        let r2 = herdr_client_receive(client, snapshot.as_ptr(), snapshot.len());
-        println!("receive(golden snapshot) -> code {} (0 = OK)", r2.code);
-
-        // A REAL v0.9.0 server sends a PaneSurface right after the snapshot.
-        let mut surface_bytes = Vec::new();
-        write_message(&mut surface_bytes, &ServerMessage::PaneSurface(surface_2x2()))
-            .expect("encode surface");
-        let r3 = herdr_client_receive(client, surface_bytes.as_ptr(), surface_bytes.len());
-        println!("receive(PaneSurface)     -> code {} (0 = OK, 15 = SURFACE_REJECTED)", r3.code);
-
-        let mut error2 = HerdrResult { code: -1, detail: std::ptr::null() };
-        let bytes = herdr_client_surface(client, &mut error2);
-        println!(
-            "herdr_client_surface     -> len {} (code {})",
-            bytes.len, error2.code
-        );
-        herdr_bytes_free(bytes);
-        println!("phase at end             -> {}", herdr_client_phase(client));
+        feed("golden welcome", &welcome);
+        feed("snapshot-2x2", &std::fs::read(format!("{fixture_dir}/snapshot-2x2.bin")).expect("snapshot fixture"));
+        feed("surface-ack", &ack);
+        feed("surface-2x2", &surface);
+        let _ = snapshot;
         herdr_client_destroy(client);
         println!("destroyed; probe complete");
     }

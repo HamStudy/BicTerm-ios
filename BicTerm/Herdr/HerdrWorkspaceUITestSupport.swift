@@ -56,16 +56,10 @@ enum HerdrWorkspaceUITest {
         let transport = HerdrReplayTransport(script: [
             load(from: vendorGoldenDirectory, "server-20"),
             load(from: directory, "snapshot-2x2"),
+            load(from: directory, "surface-ack-2x2"),
+            load(from: directory, "surface-2x2"),
         ])
         model.connect(endpoint: HerdrEndpointID(rawValue: "replay-2x2"), transport: transport)
-
-        // Renderer input for the surface commit the committed FFI cannot
-        // make yet (probe evidence): the exact JSON herdr_client_surface
-        // returns once endpoint activation exists in the ABI.
-        if let surfaceJSON = try? Data(contentsOf: URL(fileURLWithPath: directory).appendingPathComponent("surface-2x2.json")),
-           let surface = try? JSONDecoder().decode(HerdrPaneSurface.self, from: surfaceJSON) {
-            model.debugInjectSurface(surface, for: HerdrEndpointID(rawValue: "replay-2x2"))
-        }
         return "replay 2x2"
     }
 }
