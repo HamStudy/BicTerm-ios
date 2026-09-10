@@ -2,8 +2,8 @@
 //! the exact extern "C" surface the xcframework ships.
 use herdr_ios_ffi::*;
 use herdr_protocol::{
-    write_message, CellData, ClientMessage, FrameData, PaneSurfaceFrame, ServerMessage,
-    SurfaceGraphicsScene,
+    write_message, CellData, ClientMessage, FrameData, PaneSurfaceFrame, PaneSurfacePane,
+    ServerMessage, SurfaceGraphicsScene, SurfaceRect,
 };
 use std::ffi::CString;
 use std::ptr;
@@ -369,7 +369,30 @@ fn coherent_surface(cols: u16, rows: u16) -> ServerMessage {
             hyperlinks: vec![],
             graphics: vec![],
         },
-        panes: vec![],
+        panes: vec![PaneSurfacePane {
+            pane_id: "w1:p1".into(),
+            content_revision: 1,
+            rect: SurfaceRect {
+                x: 0,
+                y: 0,
+                width: cols,
+                height: rows,
+            },
+            inner_rect: SurfaceRect {
+                x: 0,
+                y: 0,
+                width: cols,
+                height: rows,
+            },
+            scrollbar_rect: None,
+            scroll: None,
+            focused: true,
+            mouse_reporting: false,
+            sgr_pixel_mouse: false,
+            alternate_screen_active: false,
+            pixel_width: 0,
+            pixel_height: 0,
+        }],
         splits: vec![],
         popup: None,
         graphics: SurfaceGraphicsScene::default(),
@@ -377,23 +400,170 @@ fn coherent_surface(cols: u16, rows: u16) -> ServerMessage {
 }
 
 /// The activation transaction correlates its acknowledgement with the
-/// request id it actually queued, so recover it while draining the queue
-/// down to empty.
+/// request id it actually queued, so drain the queue and recover it.
 fn drain_surface_set_request_id(client: *mut herdr_client) -> String {
-    let mut found = None;
-    for _ in 0..16 {
+    endpoint_request_id(&drain_outbound_messages(client), ":on")
+}
+
+fn drain_outbound_messages(client: *mut herdr_client) -> Vec<ClientMessage> {
+    let mut messages = Vec::new();
+    for _ in 0..64 {
         let frame = drain_one(client);
         if frame.is_empty() {
             break;
         }
-        if let ClientMessage::ClientShellEndpointRequest { request, .. } = decode_client(&frame) {
-            let value: serde_json::Value = serde_json::from_str(&request).expect("request JSON");
-            if value["method"] == "client_shell.surface.set" && value["params"]["active"] == true {
-                found = value["id"].as_str().map(str::to_owned);
-            }
-        }
+        messages.push(decode_client(&frame));
     }
-    found.expect("activation never queued a surface.set(on) request")
+    messages
+}
+
+fn endpoint_request_id(messages: &[ClientMessage], suffix: &str) -> String {
+    messages
+        .iter()
+        .find_map(|message| match message {
+            ClientMessage::ClientShellEndpointRequest { request, .. } => {
+                let value: serde_json::Value = serde_json::from_str(request).expect("request JSON");
+                value["id"]
+                    .as_str()
+                    .filter(|id| id.ends_with(suffix))
+                    .map(str::to_owned)
+            }
+            _ => None,
+        })
+        .unwrap_or_else(|| panic!("no endpoint request id ending with {suffix}"))
+}
+
+fn surface_set_ack(request_id: &str, revision: u64) -> Vec<u8> {
+    let ack = ServerMessage::ClientShellEndpointResponseChunk {
+        boot_id: "boot-v1".into(),
+        request_id: request_id.to_owned(),
+        final_chunk: true,
+        data: serde_json::to_vec(&herdr_client_core::api::schema::SuccessResponse {
+            id: request_id.to_owned(),
+            result: herdr_client_core::api::schema::ResponseResult::ClientShellSurfaceSet {
+                active: true,
+                projection_revision: revision,
+            },
+        })
+        .expect("ack JSON"),
+    };
+    encode_server(&ack)
+}
+
+/// Drives welcome → snapshot (the transaction begins) → surface.set(on)
+/// ack → coherent surface: the first commit at the golden snapshot's
+/// boot-v1/revision-7.
+fn drive_to_surface_commit(client: *mut herdr_client) {
+    drive_welcome_snapshot(client);
+    drive_surface_commit(client);
+}
+
+fn drive_welcome_snapshot(client: *mut herdr_client) {
+    assert_eq!(
+        receive(client, &fixture("golden/server-20.bin")).code,
+        HERDR_CODE_OK
+    );
+    assert_eq!(
+        receive(client, &fixture("golden/server-21.bin")).code,
+        HERDR_CODE_OK
+    );
+}
+
+fn drive_surface_commit(client: *mut herdr_client) {
+    let on_id = drain_surface_set_request_id(client);
+    assert_eq!(
+        receive(client, &surface_set_ack(&on_id, 7)).code,
+        HERDR_CODE_OK
+    );
+    assert_eq!(
+        receive(client, &encode_server(&coherent_surface(80, 24))).code,
+        HERDR_CODE_OK
+    );
+}
+
+/// Completes the presentation fence after [`drive_to_surface_commit`]:
+/// sync ack, re-sent evidence, ready control — the terminal `Activated`
+/// completion that unfreezes the input lane.
+fn drive_fence_to_activated(client: *mut herdr_client) {
+    let sync_id = endpoint_request_id(&drain_outbound_messages(client), ":presentation-sync");
+    assert_eq!(
+        receive(client, &surface_set_ack(&sync_id, 7)).code,
+        HERDR_CODE_OK
+    );
+    // The presentation-sync phase restarts with fresh evidence: the server
+    // re-sends the snapshot and surface before the fence can complete.
+    assert_eq!(
+        receive(client, &fixture("golden/server-21.bin")).code,
+        HERDR_CODE_OK
+    );
+    assert_eq!(
+        receive(client, &encode_server(&coherent_surface(80, 24))).code,
+        HERDR_CODE_OK
+    );
+    assert_eq!(
+        receive(client, &encode_server(&fence_ready_control(client))).code,
+        HERDR_CODE_OK
+    );
+}
+
+/// The ready control must echo the token of the fence the client opened;
+/// recover it from the queued presentation-sync control.
+fn fence_ready_control(client: *mut herdr_client) -> ServerMessage {
+    let token = drain_outbound_messages(client)
+        .into_iter()
+        .find_map(|message| match message {
+            ClientMessage::EndpointControl { kind, data }
+                if kind == "endpoint.presentation.sync.v1" =>
+            {
+                Some(data)
+            }
+            _ => None,
+        })
+        .expect("fence sync control queued");
+    ServerMessage::EndpointControl {
+        kind: "endpoint.presentation.ready.v1".into(),
+        data: token,
+    }
+}
+
+#[test]
+fn presentation_fence_unfreezes_input_after_activation() {
+    let _guard = ledger_lock();
+    let client = create_ok();
+    drive_to_surface_commit(client);
+    // The first commit makes the surface visible while the fence keeps the
+    // input lane frozen (AwaitingPresentationSync).
+    let mut error = HerdrResult {
+        code: -1,
+        detail: ptr::null(),
+    };
+    let bytes = herdr_client_surface(client, &mut error);
+    assert_eq!(error.code, HERDR_CODE_OK);
+    assert!(bytes.len > 0, "first commit must expose the surface");
+    herdr_bytes_free(bytes);
+    let pane = CString::new("w1:p1").expect("static");
+    let text = CString::new("hi").expect("static");
+    let input = herdr_input {
+        kind: HERDR_INPUT_TEXT_COMMIT,
+        pane_id: pane.as_ptr(),
+        text: text.as_ptr(),
+        key: herdr_key {
+            code: 0,
+            codepoint: 0,
+            modifiers: 0,
+            kind: 0,
+            repeat_count: 0,
+            shifted_codepoint: 0,
+        },
+    };
+    assert_eq!(
+        herdr_client_send_input(client, &input).code,
+        HERDR_CODE_INPUT_FROZEN
+    );
+    drive_fence_to_activated(client);
+    assert_eq!(herdr_client_phase(client), HERDR_PHASE_ONLINE);
+    assert_eq!(herdr_client_send_input(client, &input).code, HERDR_CODE_OK);
+    herdr_client_destroy(client);
 }
 
 #[test]
@@ -510,5 +680,220 @@ fn resize_rejects_out_of_bounds_and_queues_before_activation() {
         other => panic!("expected the queued resize frame, got {other:?}"),
     }
     assert!(drain_one(client).is_empty(), "exactly one queued frame");
+    herdr_client_destroy(client);
+}
+
+fn take_clipboard(client: *mut herdr_client) -> Option<Vec<u8>> {
+    let mut error = HerdrResult {
+        code: -1,
+        detail: ptr::null(),
+    };
+    let bytes = herdr_client_take_clipboard(client, &mut error);
+    assert_eq!(error.code, HERDR_CODE_OK);
+    if bytes.len == 0 {
+        return None;
+    }
+    // SAFETY (test): buffer handed out by take_clipboard, freed below.
+    let data = unsafe { std::slice::from_raw_parts(bytes.data, bytes.len) }.to_vec();
+    herdr_bytes_free(bytes);
+    Some(data)
+}
+
+#[test]
+fn server_clipboard_decodes_once_into_the_one_shot_slot() {
+    let _guard = ledger_lock();
+    let client = create_ok();
+    assert_eq!(take_clipboard(client), None, "empty before any frame");
+    assert_eq!(
+        receive(client, &fixture("golden/server-20.bin")).code,
+        HERDR_CODE_OK
+    );
+    assert_eq!(
+        receive(
+            client,
+            &encode_server(&ServerMessage::Clipboard {
+                data: "aGVsbG8=".into(),
+            })
+        )
+        .code,
+        HERDR_CODE_OK
+    );
+    assert_eq!(take_clipboard(client).as_deref(), Some(b"hello".as_slice()));
+    assert_eq!(
+        take_clipboard(client),
+        None,
+        "the slot is one-shot: a second take is empty"
+    );
+    herdr_client_destroy(client);
+}
+
+#[test]
+fn oversized_or_malformed_clipboard_frames_are_dropped_but_not_fatal() {
+    let _guard = ledger_lock();
+    let mut config = golden_config();
+    // The drop path must be exercised inside the frame ceiling.
+    config.max_frame_size = 24 * 1024 * 1024;
+    let mut error = HerdrResult {
+        code: -1,
+        detail: ptr::null(),
+    };
+    let client = herdr_client_create(&config, &mut error);
+    assert_eq!(error.code, HERDR_CODE_OK);
+    assert_eq!(
+        receive(client, &fixture("golden/server-20.bin")).code,
+        HERDR_CODE_OK
+    );
+    // 22.5M base64 chars decode past the 16 MiB clipboard cap; the payload
+    // is dropped before the decode allocation.
+    let oversized = ServerMessage::Clipboard {
+        data: "A".repeat(22_500_000),
+    };
+    let result = receive(client, &encode_server(&oversized));
+    assert_eq!(result.code, HERDR_CODE_CLIPBOARD_DROPPED);
+    let detail = unsafe { std::ffi::CStr::from_ptr(result.detail) };
+    assert!(detail.to_string_lossy().contains("protocol cap"));
+    let malformed = ServerMessage::Clipboard {
+        data: "!!!!".into(),
+    };
+    assert_eq!(
+        receive(client, &encode_server(&malformed)).code,
+        HERDR_CODE_CLIPBOARD_DROPPED
+    );
+    assert_eq!(herdr_client_phase(client), HERDR_PHASE_ONLINE);
+    assert_eq!(take_clipboard(client), None, "nothing was stored");
+    // A later well-formed frame still lands after the drops.
+    assert_eq!(
+        receive(
+            client,
+            &encode_server(&ServerMessage::Clipboard {
+                data: "aGVsbG8=".into(),
+            })
+        )
+        .code,
+        HERDR_CODE_OK
+    );
+    assert_eq!(take_clipboard(client).as_deref(), Some(b"hello".as_slice()));
+    herdr_client_destroy(client);
+}
+
+#[test]
+fn send_clipboard_image_guards_and_queues_the_bridge_frame() {
+    let _guard = ledger_lock();
+    let pane = CString::new("w1:p1").expect("static");
+    let extension = CString::new("png").expect("static");
+    let image = b"\x89PNG\r\n\x1a\n".to_vec();
+    // Before the handshake: structured not-online, nothing queued.
+    let client = create_ok();
+    assert_eq!(
+        herdr_client_send_clipboard_image(
+            ptr::null_mut(),
+            pane.as_ptr(),
+            extension.as_ptr(),
+            image.as_ptr(),
+            image.len(),
+        )
+        .code,
+        HERDR_CODE_INVALID_ARGUMENT
+    );
+    assert_eq!(
+        herdr_client_send_clipboard_image(
+            client,
+            pane.as_ptr(),
+            extension.as_ptr(),
+            image.as_ptr(),
+            image.len(),
+        )
+        .code,
+        HERDR_CODE_NOT_ONLINE
+    );
+    // Online but mid-activation: the input lane is still frozen.
+    drive_welcome_snapshot(client);
+    assert_eq!(
+        herdr_client_send_clipboard_image(
+            client,
+            pane.as_ptr(),
+            extension.as_ptr(),
+            image.as_ptr(),
+            image.len(),
+        )
+        .code,
+        HERDR_CODE_INPUT_FROZEN
+    );
+    // Null/empty argument shapes are rejected at the boundary.
+    let oversized = vec![0u8; 16 * 1024 * 1024 + 1];
+    drive_surface_commit(client);
+    drive_fence_to_activated(client);
+    assert_eq!(
+        herdr_client_send_clipboard_image(
+            client,
+            ptr::null(),
+            extension.as_ptr(),
+            image.as_ptr(),
+            image.len(),
+        )
+        .code,
+        HERDR_CODE_INVALID_ARGUMENT
+    );
+    let empty = CString::new("").expect("static");
+    assert_eq!(
+        herdr_client_send_clipboard_image(
+            client,
+            empty.as_ptr(),
+            extension.as_ptr(),
+            image.as_ptr(),
+            image.len(),
+        )
+        .code,
+        HERDR_CODE_INVALID_ARGUMENT
+    );
+    assert_eq!(
+        herdr_client_send_clipboard_image(
+            client,
+            pane.as_ptr(),
+            extension.as_ptr(),
+            image.as_ptr(),
+            0,
+        )
+        .code,
+        HERDR_CODE_INVALID_ARGUMENT
+    );
+    assert_eq!(
+        herdr_client_send_clipboard_image(
+            client,
+            pane.as_ptr(),
+            extension.as_ptr(),
+            image.as_ptr(),
+            oversized.len(),
+        )
+        .code,
+        HERDR_CODE_INVALID_ARGUMENT
+    );
+    // Happy path: exactly one ClipboardImage frame with the typed target.
+    assert_eq!(
+        herdr_client_send_clipboard_image(
+            client,
+            pane.as_ptr(),
+            extension.as_ptr(),
+            image.as_ptr(),
+            image.len(),
+        )
+        .code,
+        HERDR_CODE_OK
+    );
+    match drain_outbound_messages(client).as_slice() {
+        [ClientMessage::ClipboardImage {
+            target,
+            extension,
+            data,
+        }] => {
+            assert_eq!(
+                *target,
+                herdr_protocol::ClientClipboardImageTarget::Pane("w1:p1".into())
+            );
+            assert_eq!(extension, "png");
+            assert_eq!(data, &image);
+        }
+        other => panic!("expected exactly the clipboard image frame, got {other:?}"),
+    }
     herdr_client_destroy(client);
 }

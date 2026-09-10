@@ -207,6 +207,76 @@ pub extern "C" fn herdr_client_drain_outbound(
     }
 }
 
+/// Drains the one-shot clipboard slot holding the decoded bytes of the most
+/// recent OSC 52 server clipboard frame; empty when none arrived since the
+/// previous take. The returned buffer is caller-owned; free it with
+/// `herdr_bytes_free` exactly once.
+#[no_mangle]
+pub extern "C" fn herdr_client_take_clipboard(
+    client: *mut herdr_client,
+    error_out: *mut HerdrResult,
+) -> herdr_bytes {
+    let result = catch(|| {
+        if client.is_null() {
+            return Err(invalid("client pointer is null"));
+        }
+        // SAFETY: non-null, serially confined handle (ABI invariant).
+        Ok(unsafe { state_mut(client) }.take_clipboard())
+    });
+    match result {
+        Ok(bytes) => {
+            write_error_out(error_out, ok_result());
+            leak_bytes(bytes.unwrap_or_default())
+        }
+        Err(error) => {
+            let detail = store_detail(client, error);
+            write_error_out(error_out, detail);
+            herdr_bytes {
+                data: ptr::null_mut(),
+                len: 0,
+            }
+        }
+    }
+}
+
+/// Sends one local-clipboard image (raw bytes plus a file extension without
+/// a leading dot) to the given pane for remote paste bridging. Guarded like
+/// semantic input: requires the Online phase and an unfrozen input lane.
+#[no_mangle]
+pub extern "C" fn herdr_client_send_clipboard_image(
+    client: *mut herdr_client,
+    pane_id: *const c_char,
+    extension: *const c_char,
+    data: *const u8,
+    len: usize,
+) -> HerdrResult {
+    let result = catch(|| {
+        if client.is_null() {
+            return Err(invalid("client pointer is null"));
+        }
+        let pane_id = cstr(pane_id, "pane_id")?;
+        if pane_id.is_empty() {
+            return Err(invalid("pane_id is required"));
+        }
+        let extension = cstr(extension, "extension")?;
+        if extension.is_empty() {
+            return Err(invalid("extension is required"));
+        }
+        if len == 0 {
+            return Err(invalid("data length must be non-zero"));
+        }
+        if data.is_null() {
+            return Err(invalid("data pointer is null with a non-zero length"));
+        }
+        // SAFETY: caller provides `len` readable bytes for the call; the
+        // slice is copied into the queued message and never retained.
+        let data = unsafe { std::slice::from_raw_parts(data, len) };
+        // SAFETY: non-null, serially confined handle (ABI invariant).
+        Ok(unsafe { state_mut(client) }.send_clipboard_image(&pane_id, &extension, data)?)
+    });
+    finish(client, result)
+}
+
 /// Resizes the logical surface geometry (each dimension 1..=65535). While an
 /// activation transaction is in flight the resize routes through it so
 /// pending surface evidence is invalidated coherently; otherwise the resize

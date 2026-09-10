@@ -3,6 +3,11 @@
     "target": "aarch64-apple-ios",
     "packages": [
       {
+        "name": "base64",
+        "version": "0.22.1",
+        "license": "MIT OR Apache-2.0"
+      },
+      {
         "name": "bincode",
         "version": "2.0.1",
         "license": "MIT"
@@ -137,6 +142,11 @@
   {
     "target": "aarch64-apple-ios-sim",
     "packages": [
+      {
+        "name": "base64",
+        "version": "0.22.1",
+        "license": "MIT OR Apache-2.0"
+      },
       {
         "name": "bincode",
         "version": "2.0.1",

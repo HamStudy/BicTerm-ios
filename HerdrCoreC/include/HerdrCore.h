@@ -41,6 +41,12 @@
 
 #define HERDR_CODE_CLIENT_FAILED 15
 
+/**
+ * Non-fatal: a server clipboard frame was dropped (oversized or malformed
+ * base64). The client stays Online; the receive call reports this detail.
+ */
+#define HERDR_CODE_CLIPBOARD_DROPPED 16
+
 #define HERDR_INPUT_TEXT_COMMIT 0
 
 #define HERDR_INPUT_KEY 1
@@ -245,6 +251,26 @@ struct HerdrResult herdr_client_send_input(struct herdr_client *client,
  */
 struct herdr_bytes herdr_client_drain_outbound(struct herdr_client *client,
                                                struct HerdrResult *error_out);
+
+/**
+ * Drains the one-shot clipboard slot holding the decoded bytes of the most
+ * recent OSC 52 server clipboard frame; empty when none arrived since the
+ * previous take. The returned buffer is caller-owned; free it with
+ * `herdr_bytes_free` exactly once.
+ */
+struct herdr_bytes herdr_client_take_clipboard(struct herdr_client *client,
+                                               struct HerdrResult *error_out);
+
+/**
+ * Sends one local-clipboard image (raw bytes plus a file extension without
+ * a leading dot) to the given pane for remote paste bridging. Guarded like
+ * semantic input: requires the Online phase and an unfrozen input lane.
+ */
+struct HerdrResult herdr_client_send_clipboard_image(struct herdr_client *client,
+                                                     const char *pane_id,
+                                                     const char *extension,
+                                                     const uint8_t *data,
+                                                     size_t len);
 
 /**
  * Resizes the logical surface geometry (each dimension 1..=65535). While an

@@ -14,6 +14,7 @@ mod abi;
 mod abi_query;
 mod client;
 mod client_activation;
+mod clipboard;
 mod errors;
 mod factory;
 mod frame;
@@ -120,6 +121,9 @@ pub const HERDR_CODE_INPUT_STALE_TARGET: i32 = 12;
 pub const HERDR_CODE_INPUT_WRITE_FAILED: i32 = 13;
 pub const HERDR_CODE_SURFACE_REJECTED: i32 = 14;
 pub const HERDR_CODE_CLIENT_FAILED: i32 = 15;
+/// Non-fatal: a server clipboard frame was dropped (oversized or malformed
+/// base64). The client stays Online; the receive call reports this detail.
+pub const HERDR_CODE_CLIPBOARD_DROPPED: i32 = 16;
 
 pub const HERDR_INPUT_TEXT_COMMIT: u8 = 0;
 pub const HERDR_INPUT_KEY: u8 = 1;

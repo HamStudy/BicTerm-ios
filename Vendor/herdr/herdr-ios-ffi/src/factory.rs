@@ -82,6 +82,7 @@ pub(crate) fn create(config: &herdr_client_config) -> Result<HerdrClient, FfiErr
         max_frame_size,
         snapshot: None,
         pending: None,
+        pending_clipboard: None,
         cols: config.cols as u16,
         rows: config.rows as u16,
         cell_width_px: config.cell_width_px,

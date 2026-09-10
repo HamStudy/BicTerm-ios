@@ -3,7 +3,9 @@
 //! `client.rs` so each module stays under the reviewed size ceiling.
 use crate::client::HerdrClient;
 use crate::{FfiError, HERDR_CODE_DISCONNECTED};
-use herdr_client_core::client::endpoint::{PendingEndpointActivation, SurfaceActivationProgress};
+use herdr_client_core::client::endpoint::{
+    ActivationCompletion, PendingEndpointActivation, SurfaceActivationProgress,
+};
 use herdr_client_core::EndpointTransport;
 use herdr_protocol::{ClientMessage, ClientSurfaceSize};
 use std::time::Instant;
@@ -43,22 +45,39 @@ impl HerdrClient {
         }
     }
 
-    /// Commits the transaction when its evidence reaches `Ready`; a failed
-    /// completion restores the pending transaction instead of failing the
-    /// client, so later evidence can still settle it.
+    /// Commits the transaction when its evidence reaches `Ready`. The
+    /// pending transaction survives every intermediate completion
+    /// (`AwaitingPresentationSync`/`AwaitingPresentationEffects` keep the
+    /// fence drivable; a failed completion also restores it) and is dropped
+    /// only on the terminal `Activated`/`RestoredSource` completions, which
+    /// are the ones that unfreeze the input lane.
     pub(crate) fn try_complete_activation(&mut self, progress: SurfaceActivationProgress) {
         if !matches!(progress, SurfaceActivationProgress::Ready) {
             return;
         }
         if let Some(mut pending) = self.pending.take() {
-            if self
+            match self
                 .shell
                 .complete_activation(&mut self.registry, &mut pending)
-                .is_err()
             {
-                self.pending = Some(pending);
+                Ok(
+                    ActivationCompletion::Activated | ActivationCompletion::RestoredSource { .. },
+                ) => {}
+                Ok(_) | Err(_) => self.pending = Some(pending),
             }
         }
+    }
+
+    /// Feeds one presentation-effects ready control (doc §7 fence): the
+    /// token in `data` must match the fence the pending transaction opened.
+    pub(crate) fn feed_presentation_ready(&mut self, token: &str) -> Result<(), FfiError> {
+        if let Some(mut pending) = self.pending.take() {
+            let progress =
+                pending.receive_presentation_effects_ready(&self.endpoint, self.generation, token);
+            self.pending = Some(pending);
+            self.try_complete_activation(progress);
+        }
+        Ok(())
     }
 
     /// Updates the logical geometry and routes the resize through the

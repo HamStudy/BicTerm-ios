@@ -163,3 +163,13 @@ automatically updates fixtures when the codec changes.
   for a future panic-isolating C ABI (no C ABI implemented here).
 - Root `README.md`: public API sequencing and ownership contract, especially
   caller-driven I/O, presentation replay, qualified input and per-viewer scope.
+
+## iOS FFI crate dependencies
+
+The `herdr-ios-ffi` crate is wholly local (no upstream counterpart), so only
+its external dependencies are ledgered here.
+
+- `herdr-ios-ffi/Cargo.toml`: added `base64 = "0.22"` (MIT OR Apache-2.0, no
+  transitive dependencies) for OSC 52 clipboard decoding in the client FFI.
+  Re-run `check.sh` cargo-deny gates after any change here; the generated
+  `LICENSE_INVENTORY.json` is the shipping inventory of record.

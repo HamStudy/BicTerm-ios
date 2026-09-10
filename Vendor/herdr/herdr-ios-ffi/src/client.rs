@@ -15,7 +15,9 @@ use herdr_client_core::outbound::OutboundQueue;
 use herdr_client_core::{
     ClientEndpointId, ClientEndpointStatus, ClientShellState, EndpointRegistry,
 };
-use herdr_protocol::endpoint::{ENDPOINT_SNAPSHOT_KIND, ENDPOINT_WELCOME_KIND};
+use herdr_protocol::endpoint::{
+    ENDPOINT_SNAPSHOT_KIND, ENDPOINT_WELCOME_KIND, PRESENTATION_EFFECTS_READY_KIND,
+};
 use herdr_protocol::{ClientShellSnapshot, ServerMessage};
 use std::io::Cursor;
 use std::time::Instant;
@@ -31,6 +33,7 @@ pub(crate) struct HerdrClient {
     pub(crate) max_frame_size: usize,
     pub(crate) snapshot: Option<ClientShellSnapshot>,
     pub(crate) pending: Option<PendingEndpointActivation>,
+    pub(crate) pending_clipboard: Option<Vec<u8>>,
     pub(crate) cols: u16,
     pub(crate) rows: u16,
     pub(crate) cell_width_px: u32,
@@ -125,11 +128,14 @@ impl HerdrClient {
                         HERDR_CODE_PROTOCOL_VIOLATION,
                         "endpoint welcome received after handshake completed",
                     ))
+                } else if kind == PRESENTATION_EFFECTS_READY_KIND {
+                    self.feed_presentation_ready(&data)
                 } else {
                     // Unknown named controls are optional and ignored (doc §4).
                     Ok(())
                 }
             }
+            ServerMessage::Clipboard { data } => self.accept_clipboard(&data),
             ServerMessage::ClientShellSnapshot(snapshot) => self.apply_snapshot(*snapshot),
             ServerMessage::PaneSurface(surface) => {
                 if let Some(mut pending) = self.pending.take() {
