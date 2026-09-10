@@ -1,0 +1,18 @@
+[package]
+name = "herdr-protocol"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Frozen Herdr v0.9.0 endpoint messages and framing"
+
+[dependencies]
+bincode.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+sha2.workspace = true
+
+[lints]
+workspace = true
