@@ -2,6 +2,8 @@
 
 Scope: iOS input → semantic Herdr FFI messages (keyboard, focus, resize, pointer).
 Commit: `feat(app): herdr semantic input mapping with keyboard, focus, resize`.
+Follow-up: `fix(app): gate herdr workspace window root for terminal preview UI tests`
+(resolves the iPad TerminalUITests failure initially reported as an anomaly below).
 
 ## Destinations
 
@@ -20,7 +22,7 @@ one `-only-testing:` suite per invocation, result bundle removed before each rer
 | BicTermUITests/HerdrWorkspaceUITests (regression — workspace view modified) | PASS | PASS | h17-workspace-{iphone,ipad}.xcresult |
 | BicTermUITests/HerdrInputUITests (7, new) | PASS (7/7) | PASS (7/7) | h17-ui-{iphone,ipad}.xcresult |
 | scheme HerdrClientCore (resize passthrough + bounds test) | PASS | n/a | h17-core-iphone.xcresult |
-| BicTermUITests/TerminalUITests (regression — injector modified) | PASS (6/6) | **FAIL (6/6)** — see anomaly | h17-terminal-iphone.xcresult, h17-terminal-ipad.xcresult |
+| BicTermUITests/TerminalUITests (regression — injector modified) | PASS (6/6) | PASS (6/6) after the scene-gate fix (below) | h17-terminal-iphone.xcresult → h17fix-terminal-{iphone,ipad}.xcresult |
 
 Bundles live under `.build-artifacts/xcresults/`.
 
@@ -40,29 +42,55 @@ responder: <BicTerm.HerdrInputField>`, `fromBecomeFirstResponder: 1`,
   (`HerdrWorkspaceUITest.currentInputEcho`) so commits can be ordered after a
   tap retarget.
 
-## Anomaly: TerminalUITests on the iPad simulator (pre-existing / orthogonal)
+## Resolved: iPad TerminalUITests failure was a missing scene gate (follow-up commit)
 
-All six TerminalUITests fail on the iPad destination with the app showing the
-connections list ("No connections yet") — the `-uitest-terminal-preview`
-launch-argument gate never engages, so no preview screen, no SSH connection,
-no injector involvement. Failures reproduce across: the full suite, a targeted
-two-test rerun, and a full-suite rerun after a hard `simctl shutdown`.
+The iPad 6/6 failure was initially misattributed to the environment; the
+empirical root cause (proven by the phase lead): the "Herdr Workspace"
+WindowGroup in `BicTerm/App/BicTermApp.swift` (T16) had NO
+`-uitest-terminal-preview` gate, unlike the main and "Terminal" groups.
+`HerdrWindowRoot`'s nil-state renders `ConnectionListContainer`
+("No connections yet"), and iPadOS persists scene sessions across launches
+AND hard shutdowns — once a herdr UI test opened a herdr window, every
+later TerminalUITests launch restored the stale herdr scene showing the
+connection list; the preview scene was never created and `previewState`
+never appeared, so all six tests timed out at 40 s. Proof: the process
+argv contained `-uitest-terminal-preview` and the installed binary was the
+correct Debug build, yet the connection list rendered; after
+`simctl uninstall` the identical test passed in ~7 s. The earlier
+clean-install attempt targeted a nonexistent bundle ID
+(`com.bicterm.BicTerm` — the real one is `com.bicterm.app`), which is why
+uninstalling "didn't help".
 
-Attribution evidence that this is NOT caused by the H17 diff:
+Fix: the herdr group now mirrors the same `#if DEBUG`
+`-uitest-terminal-preview` gate, rendering `TerminalPreviewScreen()` under
+the flag; production behavior is unchanged (the `#else` branch is the
+pre-fix code). Gate audit conclusion: of all `-uitest-*` flags, only
+`-uitest-terminal-preview` selects which root view renders.
+`--uitest-force-connection-list` is a sub-branch inside TerminalWindowRoot
+(and the herdr nil-state already shows the connection list, which is that
+flag's intent); `--uitest-herdr-replay`, `--uitest-hwkeys`, and
+`--uitest-pretrust-fixtures` are data/behavior knobs with no root-view
+impact. No other gate needed mirroring.
 
-1. `git status`: the gate/preview files (`BicTerm/App/BicTermApp.swift`,
-   `BicTerm/Terminal/TerminalPreviewController.swift`,
-   `BicTerm/Terminal/TerminalRepresentable.swift`) are unmodified.
-2. The identical build passes TerminalUITests 6/6 on the iPhone destination
-   with the same launch-argument mechanism.
-3. Launch arguments provably reach processes on the same iPad simulator: the
-   launch-arg-gated HerdrInputUITests (`--uitest-herdr-replay`) pass 7/7 there.
-4. 5 of 6 failing tests never arm the modified injector (`--uitest-hwkeys`
-   absent); the 6th (`testHardwareKeyboardControlAndMetaKeys`) fails at the
-   40 s preview-ready wait, before the injector would arm.
-5. Last known green iPad terminal run: `.sisyphus/evidence/t12-ipad-nonhardware.log`
-   (T12 era). No post-T12 iPad terminal evidence exists in `.sisyphus/evidence/`,
-   so the breakage window is T13–T16 or the simulator environment, not H17.
+Ordering-repro verification (iPad `3686DD9C-ACA2-4A79-8968-A9C3572C8276`,
+no uninstall between legs — the exact ordering that failed 6/6 pre-fix):
+
+1. HerdrInputUITests + HerdrWorkspaceUITests → PASS (creates the herdr
+   scene sessions): h17fix-herdr-input-ipad-1.xcresult,
+   h17fix-herdr-workspace-ipad-1.xcresult
+2. TerminalUITests full suite WITHOUT uninstall → PASS 6/6 (64.7 s total —
+   healthy per-test timing vs. 6 × 46 s timeouts pre-fix):
+   h17fix-terminal-ipad.xcresult
+3. HerdrInputUITests + HerdrWorkspaceUITests again → PASS:
+   h17fix-herdr-input-ipad-2.xcresult, h17fix-herdr-workspace-ipad-2.xcresult
+4. iPhone `732CE8E1-F9EF-4020-BF93-5BA1AA365B0E`: TerminalUITests 6/6 +
+   both herdr suites PASS: h17fix-terminal-iphone.xcresult,
+   h17fix-herdr-input-iphone.xcresult, h17fix-herdr-workspace-iphone.xcresult
+
+The T12-era green iPad run (t12-ipad-nonhardware.log) predates T16's
+WindowGroup — consistent with the failure being introduced by T16's
+ungated group and merely unmasked by H17's herdr UI suites, not by the
+simulator environment.
 
 ## Fixture note (pre-existing script bug, not fixed in H17)
 

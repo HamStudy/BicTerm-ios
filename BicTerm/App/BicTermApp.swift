@@ -138,11 +138,29 @@ struct BicTermApp: App {
         }
 
         WindowGroup("Herdr Workspace", id: "herdr", for: SessionID.self) { $sessionID in
+            #if DEBUG
+            // iPadOS persists scene sessions across launches and hard
+            // shutdowns: a stale herdr scene restored during a
+            // `-uitest-terminal-preview` run would render the connection
+            // list (HerdrWindowRoot's nil-state) and shadow the preview.
+            // Every WindowGroup must mirror the test gate.
+            if ProcessInfo.processInfo.arguments.contains("-uitest-terminal-preview") {
+                TerminalPreviewScreen()
+                    .terminalStyle()
+            } else {
+                HerdrWindowRoot(
+                    store: sessionStore,
+                    center: HerdrWorkspaceCenter.shared,
+                    windowSessionID: sessionID?.value
+                )
+            }
+            #else
             HerdrWindowRoot(
                 store: sessionStore,
                 center: HerdrWorkspaceCenter.shared,
                 windowSessionID: sessionID?.value
             )
+            #endif
         }
     }
 }
