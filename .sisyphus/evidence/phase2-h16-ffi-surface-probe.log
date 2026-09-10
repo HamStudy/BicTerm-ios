@@ -1,0 +1,39 @@
+== T16 FFI surface-path probe ==
+golden dir: Vendor/herdr/herdr-protocol/tests/fixtures/golden
+probe fixtures generated in-memory (no writes needed)
+created client (phase 0)
+receive(golden welcome)  -> code 0 (0 = OK)
+phase after welcome      -> 1
+receive(golden snapshot) -> code 0 (0 = OK)
+receive(PaneSurface)     -> code 14 (0 = OK, 15 = SURFACE_REJECTED)
+herdr_client_surface     -> len 0 (code 0)
+phase at end             -> 1
+destroyed; probe complete
+
+CONCLUSION (T16 structural finding):
+herdr_client_receive(PaneSurface) = 14 (HERDR_CODE_SURFACE_REJECTED) and
+herdr_client_surface stays empty even after a valid golden welcome+snapshot.
+Root cause: herdr-ios-ffi never activates ClientShellState's endpoint
+projection; `active` stays ClientEndpointId::Home while the endpoint is
+ClientEndpointId::Ssh(ProfileId::generate()), so receive_surface's
+`self.active != incoming.endpoint` check always rejects.
+`activate_endpoint_projection` is pub(crate) in herdr-client-core (unreachable
+from herdr-ios-ffi); only `complete_activation` + `PendingEndpointActivation`
+can flip it and neither is exposed through the committed C ABI. Vendor/herdr
+is read-only for T16 (task MUST NOT), so pane-surface commit through the FFI
+is BLOCKED upstream of Swift.
+
+Consequences for T16 (documented, not silently skipped):
+- Chrome (workspaces/tabs/panes/focus/notifications) renders from real
+  committed snapshot frames through the FFI — unaffected.
+- The native pane-surface renderer is fully implemented and tested against
+  surface-2x2.json — byte-identical to what herdr_client_surface will return
+  once the FFI exposes endpoint activation (same serde type).
+- A live v0.9.0 server WILL send PaneSurface frames; HerdrSessionModel maps
+  the typed surfaceRejected error to a non-fatal surfaceUnavailable note
+  (client stays Online; the frame is dropped, never half-applied) instead of
+  tearing down an otherwise healthy session.
+- Same gap also freezes semantic input (unfreeze happens in
+  complete_activation) — blocks T17 input the same way; routing hint for the
+  orchestrator: a small additive FFI surface (activate-projection /
+  complete-activation + resize) owned by a Vendor-touching task.

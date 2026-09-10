@@ -12,6 +12,9 @@ public struct HerdrShellSnapshot: Sendable, Equatable, Decodable {
     public let workspaces: [HerdrWorkspace]
     public let tabs: [HerdrTab]
     public let panes: [HerdrPane]
+    public let configDiagnostic: String?
+    public let productAnnouncement: HerdrAnnouncement?
+    public let updateAvailable: String?
 
     enum CodingKeys: String, CodingKey {
         case bootID = "boot_id"
@@ -20,7 +23,16 @@ public struct HerdrShellSnapshot: Sendable, Equatable, Decodable {
         case focusedTabID = "focused_tab_id"
         case focusedPaneID = "focused_pane_id"
         case workspaces, tabs, panes
+        case configDiagnostic = "config_diagnostic"
+        case productAnnouncement = "product_announcement"
+        case updateAvailable = "update_available"
     }
+}
+
+/// Title-level view of an endpoint announcement (informational chrome only —
+/// the install/update machinery stays on the host, integration doc §11).
+public struct HerdrAnnouncement: Sendable, Equatable, Decodable {
+    public let title: String
 }
 
 public struct HerdrWorkspace: Sendable, Equatable, Decodable {
