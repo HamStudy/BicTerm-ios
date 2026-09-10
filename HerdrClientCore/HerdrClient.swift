@@ -131,6 +131,15 @@ public actor HerdrClient {
         if result.code != HERDR_CODE_OK { throw HerdrClientError.from(result) }
     }
 
+    /// Reports a surface geometry change. Mid-activation the core re-queues
+    /// the pending geometry frame; once online it queues a resize frame.
+    /// Bounds (1...65535 per axis) are validated by the core.
+    public func resize(cols: UInt32, rows: UInt32) throws(HerdrClientError) {
+        guard let handle else { throw .clientFailed("client already destroyed") }
+        let result = herdr_client_resize(handle, cols, rows)
+        if result.code != HERDR_CODE_OK { throw HerdrClientError.from(result) }
+    }
+
     /// Releases the client and its queues; buffers already handed out belong
     /// to Swift and stay valid until freed.
     ///

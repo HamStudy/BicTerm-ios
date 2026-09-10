@@ -97,6 +97,12 @@ struct HerdrPaneSurfaceView: View {
 
     let surface: HerdrPaneSurface
     let paneMetadata: [String: String]
+    var inputTargetID: String?
+    var onPaneTap: ((String) -> Void)?
+    var onGridChange: ((Int, Int) -> Void)?
+
+    @State private var reportedCols = 0
+    @State private var reportedRows = 0
 
     private var palette: HerdrTerminalPalette {
         HerdrTerminalPalette(
@@ -116,8 +122,30 @@ struct HerdrPaneSurfaceView: View {
                 }
                 paneChrome(cellWidth: cellWidth, cellHeight: cellHeight)
             }
+            .onChange(of: geometry.size, initial: true) { _, newSize in
+                reportGrid(for: newSize)
+            }
         }
         .background(colors.background)
+    }
+
+    /// Desired grid at the current pixel size, quantized to the 8x16 cell
+    /// the FFI is configured with. The first layout is a silent baseline —
+    /// the connect-time fence geometry stands until the geometry genuinely
+    /// changes (rotation, window resize), and only then is a resize sent.
+    private func reportGrid(for size: CGSize) {
+        let cols = Int(size.width / 8)
+        let rows = Int(size.height / 16)
+        guard cols > 0, rows > 0 else { return }
+        if reportedCols == 0 && reportedRows == 0 {
+            reportedCols = cols
+            reportedRows = rows
+            return
+        }
+        guard cols != reportedCols || rows != reportedRows else { return }
+        reportedCols = cols
+        reportedRows = rows
+        onGridChange?(cols, rows)
     }
 
     private func drawCells(context: GraphicsContext, cellWidth: CGFloat, cellHeight: CGFloat) {
@@ -184,37 +212,49 @@ struct HerdrPaneSurfaceView: View {
 
     @ViewBuilder
     private func paneChrome(cellWidth: CGFloat, cellHeight: CGFloat) -> some View {
-        ForEach(surface.panes) { pane in
-            let rect = CGRect(
-                x: CGFloat(pane.rect.x) * cellWidth,
-                y: CGFloat(pane.rect.y) * cellHeight,
-                width: CGFloat(pane.rect.width) * cellWidth,
-                height: CGFloat(pane.rect.height) * cellHeight
-            )
-            ZStack {
-                Rectangle()
-                    .stroke(
-                        pane.focused ? colors.accent : colors.selection,
-                        lineWidth: pane.focused ? 2 : 1
-                    )
-                // Invisible element base: Color.clear frames reliably
-                // materialize as accessibility elements; bare stroke shapes
-                // are pruned unless they carry traits.
-                Color.clear
+        // Layout-based placement, not .position: a positioned view reports
+        // the container's frame to accessibility, so every pane element
+        // claimed the whole pane area and XCUI/VoiceOver landed on the
+        // wrong pane (observed: tap on p1's center hit p4's corner).
+        ZStack(alignment: .topLeading) {
+            ForEach(surface.panes) { pane in
+                let rect = CGRect(
+                    x: CGFloat(pane.rect.x) * cellWidth,
+                    y: CGFloat(pane.rect.y) * cellHeight,
+                    width: CGFloat(pane.rect.width) * cellWidth,
+                    height: CGFloat(pane.rect.height) * cellHeight
+                )
+                let isTarget = pane.paneID == inputTargetID
+                ZStack {
+                    Rectangle()
+                        .stroke(
+                            isTarget ? colors.accent : colors.selection,
+                            lineWidth: isTarget ? 2 : 1
+                        )
+                    // Invisible element base: Color.clear frames reliably
+                    // materialize as accessibility elements; bare stroke shapes
+                    // are pruned unless they carry traits.
+                    Color.clear
+                }
+                .frame(width: rect.width, height: rect.height)
+                .contentShape(Rectangle())
+                .onTapGesture { onPaneTap?(pane.paneID) }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(paneAccessibilityLabel(pane))
+                .accessibilityIdentifier("herdr-pane-\(pane.paneID)")
+                .accessibilityAddTraits(isTarget ? [.isSelected] : [.isStaticText])
+                .padding(.leading, rect.minX)
+                .padding(.top, rect.minY)
             }
-            .frame(width: rect.width, height: rect.height)
-            .position(x: rect.midX, y: rect.midY)
-            .contentShape(Rectangle())
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(paneAccessibilityLabel(pane))
-            .accessibilityIdentifier("herdr-pane-\(pane.paneID)")
-            .accessibilityAddTraits(pane.focused ? [.isSelected] : [.isStaticText])
         }
     }
 
     private func paneAccessibilityLabel(_ pane: HerdrSurfacePane) -> String {
         var parts = ["Pane \(pane.paneID)"]
         parts.append(pane.focused ? "focused" : "background")
+        if pane.paneID == inputTargetID {
+            parts.append("input target")
+        }
         parts.append("\(pane.innerRect.width) by \(pane.innerRect.height) cells")
         if let metadata = paneMetadata[pane.paneID], !metadata.isEmpty {
             parts.append(metadata)

@@ -103,6 +103,28 @@ struct HerdrDiagnostic: Sendable, Equatable, Identifiable {
     }
 }
 
+/// Typed outcome when a semantic input event cannot reach a pane: surfaced
+/// as a transient workspace note and recorded in the DEBUG input echo.
+enum HerdrInputNote: Sendable, Equatable {
+    case offline
+    case frozen
+    case staleTarget(String)
+    case writeFailed(String)
+
+    var message: String {
+        switch self {
+        case .offline: "Herdr endpoint is not online; input ignored"
+        case .frozen: "Server is still syncing the surface; input held off"
+        case .staleTarget(let paneID): "Pane \(paneID) is gone; input retargeted"
+        case .writeFailed(let detail): "Input could not be sent: \(detail)"
+        }
+    }
+}
+
+enum HerdrFocusDirection: Sendable, Equatable {
+    case up, down, left, right
+}
+
 /// Machine-qualified per-endpoint published state (doc §3.5 layer table):
 /// the coordinator above holds one of these per endpoint so T17/T19 can add
 /// machines without reshaping the model.
@@ -115,4 +137,24 @@ struct HerdrEndpointState: Sendable, Equatable {
     var diagnostic: HerdrDiagnostic?
     var desiredCols: UInt32 = 80
     var desiredRows: UInt32 = 24
+    var inputTargetOverride: String?
+    var inputNote: HerdrInputNote?
+
+    /// The pane semantic input routes to right now: an explicit tap/nav
+    /// override while it names a pane on the committed surface, else the
+    /// snapshot's focused pane, else the surface's first pane. The override
+    /// is revalidated every read so a pane removed by a later surface can
+    /// never keep receiving input.
+    var inputTargetPaneID: String? {
+        guard let surface else { return nil }
+        if let inputTargetOverride,
+           surface.panes.contains(where: { $0.paneID == inputTargetOverride }) {
+            return inputTargetOverride
+        }
+        if let focused = snapshot?.focusedPaneID,
+           surface.panes.contains(where: { $0.paneID == focused }) {
+            return focused
+        }
+        return surface.panes.first?.paneID
+    }
 }

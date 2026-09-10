@@ -6,7 +6,9 @@ import HerdrClientCore
 /// DEBUG launch-argument contract for the herdr workspace UI tests:
 ///
 ///   --uitest-herdr-replay         open a replay-backed herdr workspace
-///   --uitest-herdr-mode <mode>    `workspace` (default) or `gen99`
+///   --uitest-herdr-mode <mode>    `workspace` (default), `gen99`, or
+///                                 `input` (full presentation fence — the
+///                                 input lane unfreezes)
 ///   HERDR_FIXTURE_DIR (env)       absolute fixture dir (committed frames)
 ///
 /// Compiles out of Release; the app's Release builds contain no replay
@@ -22,6 +24,27 @@ enum HerdrWorkspaceUITest {
               index + 1 < arguments.count else {
             return "workspace"
         }
+        return arguments[index + 1]
+    }
+
+    /// Number of replay chunks the current mode feeds; the workspace view
+    /// shows `herdr-replay-ready` once the model has applied that many.
+    @MainActor static private(set) var currentScriptChunkCount: Int?
+
+    /// Hardware-key injector for the replay scene, armed from
+    /// `--uitest-hwkeys`. Herdr mode has no terminal tail with a go-marker,
+    /// so the workspace view calls `startNow()` once the script is applied.
+    @MainActor static var keyInjector: TestHardwareKeyInjector?
+
+    /// Mirror of the model's input echo, kept in sync by the workspace view
+    /// so injector `await:echo:` steps can observe retargets without
+    /// walking SwiftUI's accessibility tree.
+    @MainActor static var currentInputEcho: String?
+
+    private static var hwkeysSpec: String? {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard let index = arguments.firstIndex(of: "--uitest-hwkeys"),
+              index + 1 < arguments.count else { return nil }
         return arguments[index + 1]
     }
 
@@ -43,14 +66,35 @@ enum HerdrWorkspaceUITest {
     @MainActor
     static func connectReplay(model: HerdrSessionModel) -> String {
         guard let directory = fixtureDirectory else { return "replay" }
+        keyInjector = TestHardwareKeyInjector(spec: hwkeysSpec)
 
         if mode == "gen99" {
             let transport = HerdrReplayTransport(
                 script: [load(from: directory, "welcome-gen99")],
                 holdOpen: false
             )
+            currentScriptChunkCount = 1
             model.connect(endpoint: HerdrEndpointID(rawValue: "replay-gen99"), transport: transport)
             return "replay gen-99"
+        }
+
+        if mode == "input" {
+            // The full presentation fence: both surface-set acks, the
+            // evidence resend, and the ready control. After the ready chunk
+            // applies, the FFI input lane accepts sends.
+            let transport = HerdrReplayTransport(script: [
+                load(from: vendorGoldenDirectory, "server-20"),
+                load(from: directory, "snapshot-2x2"),
+                load(from: directory, "surface-ack-2x2"),
+                load(from: directory, "surface-2x2"),
+                load(from: directory, "surface-sync-ack-2x2"),
+                load(from: directory, "snapshot-2x2"),
+                load(from: directory, "surface-2x2"),
+                load(from: directory, "presentation-ready-2x2"),
+            ])
+            currentScriptChunkCount = 8
+            model.connect(endpoint: HerdrEndpointID(rawValue: "replay-input"), transport: transport)
+            return "replay input"
         }
 
         let transport = HerdrReplayTransport(script: [
@@ -59,6 +103,7 @@ enum HerdrWorkspaceUITest {
             load(from: directory, "surface-ack-2x2"),
             load(from: directory, "surface-2x2"),
         ])
+        currentScriptChunkCount = 4
         model.connect(endpoint: HerdrEndpointID(rawValue: "replay-2x2"), transport: transport)
         return "replay 2x2"
     }

@@ -18,6 +18,45 @@ struct HerdrPaneSurface: Sendable, Equatable, Decodable {
         case surfaceRevision = "surface_revision"
         case frame, panes, splits
     }
+
+    /// Nearest pane center in the given direction, ties broken by orthogonal
+    /// distance then pane id so spatial navigation is deterministic.
+    func paneNeighbor(of paneID: String, direction: HerdrFocusDirection) -> String? {
+        guard let current = panes.first(where: { $0.paneID == paneID }) else { return nil }
+        let centerX = current.rect.x + current.rect.width / 2
+        let centerY = current.rect.y + current.rect.height / 2
+        var best: HerdrSurfacePane?
+        var bestScore: (primary: Int, orthogonal: Int)?
+        for pane in panes where pane.paneID != paneID {
+            let dx = pane.rect.x + pane.rect.width / 2 - centerX
+            let dy = pane.rect.y + pane.rect.height / 2 - centerY
+            let score: (primary: Int, orthogonal: Int)
+            switch direction {
+            case .left:
+                guard dx < 0 else { continue }
+                score = (-dx, abs(dy))
+            case .right:
+                guard dx > 0 else { continue }
+                score = (dx, abs(dy))
+            case .up:
+                guard dy < 0 else { continue }
+                score = (-dy, abs(dx))
+            case .down:
+                guard dy > 0 else { continue }
+                score = (dy, abs(dx))
+            }
+            if let currentBest = best, let currentScore = bestScore {
+                if score.primary > currentScore.primary { continue }
+                if score.primary == currentScore.primary {
+                    if score.orthogonal > currentScore.orthogonal { continue }
+                    if score.orthogonal == currentScore.orthogonal, pane.paneID > currentBest.paneID { continue }
+                }
+            }
+            best = pane
+            bestScore = score
+        }
+        return best?.paneID
+    }
 }
 
 struct HerdrSurfaceFrame: Sendable, Equatable, Decodable {

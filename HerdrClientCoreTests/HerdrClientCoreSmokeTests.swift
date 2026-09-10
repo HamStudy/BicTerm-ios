@@ -115,6 +115,29 @@ final class HerdrClientCoreSmokeTests: XCTestCase {
             guard case .invalidArgument = error else { return XCTFail("expected invalidArgument, got \(error)") }
         }
     }
+
+    func testResizeBoundsAreValidatedByTheCore() async throws {
+        let client = try HerdrClient(config: Self.goldenConfig)
+        defer { client.destroy() }
+        _ = try await client.drainOutbound()
+
+        for (cols, rows) in [(UInt32(0), UInt32(24)), (UInt32(80), UInt32(0)), (UInt32.max, UInt32(24))] {
+            do {
+                try await client.resize(cols: cols, rows: rows)
+                XCTFail("resize(\(cols)x\(rows)) is outside 1...65535 and must fail")
+            } catch let error as HerdrClientError {
+                guard case .invalidArgument = error else {
+                    return XCTFail("expected invalidArgument, got \(error)")
+                }
+            }
+        }
+
+        try await client.resize(cols: 100, rows: 30)
+        let queued = try await client.drainOutbound()
+        XCTAssertEqual(queued.count, 1, "a valid resize queues exactly one frame")
+        let drainedAgain = try await client.drainOutbound()
+        XCTAssertTrue(drainedAgain.isEmpty)
+    }
 }
 
 /// Deterministic SplitMix64 so the fuzz smoke is reproducible.

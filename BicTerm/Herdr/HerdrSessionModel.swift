@@ -18,18 +18,31 @@ import HerdrClientCore
 @MainActor
 @Observable
 final class HerdrSessionModel {
-    private(set) var endpoints: [HerdrEndpointID: HerdrEndpointState] = [:]
+    var endpoints: [HerdrEndpointID: HerdrEndpointState] = [:]
     private(set) var selectedEndpointID: HerdrEndpointID?
 
-    private struct Runtime {
+    #if DEBUG
+    /// Test surface only (unit/UI suites): semantic input events and gate
+    /// notes in the order the model recorded them.
+    var debugInputEcho: [String] = []
+    /// Counts render-state applies so replay-driven UI tests can wait for
+    /// exact script exhaustion instead of polling labels.
+    private(set) var debugAppliedChunks = 0
+    #endif
+
+    struct Runtime {
         let client: HerdrClient
         let transport: any HerdrByteTransport
         let generation: UInt
+        let inputContinuation: AsyncStream<HerdrInputEvent>.Continuation
+        let kickContinuation: AsyncStream<Void>.Continuation
         var inboundTask: Task<Void, Never>?
+        var inputTask: Task<Void, Never>?
+        var writerTask: Task<Void, Never>?
         var watchdog: Task<Void, Never>?
     }
 
-    private var runtimes: [HerdrEndpointID: Runtime] = [:]
+    var runtimes: [HerdrEndpointID: Runtime] = [:]
     private var generations: [HerdrEndpointID: UInt] = [:]
     private let handshakeTimeout: Duration
 
@@ -74,33 +87,65 @@ final class HerdrSessionModel {
             return
         }
 
-        var runtime = Runtime(client: client, transport: transport, generation: generation)
+        let (inputStream, inputContinuation) = AsyncStream<HerdrInputEvent>.makeStream()
+        let (kickStream, kickContinuation) = AsyncStream<Void>.makeStream(
+            bufferingPolicy: .bufferingNewest(1)
+        )
+        var runtime = Runtime(
+            client: client,
+            transport: transport,
+            generation: generation,
+            inputContinuation: inputContinuation,
+            kickContinuation: kickContinuation
+        )
         let timeout = handshakeTimeout
         runtime.watchdog = Task { [weak self, id, timeout] in
             try? await Task.sleep(for: timeout)
             guard !Task.isCancelled else { return }
             await self?.handshakeTimedOut(endpoint: id)
         }
-        runtime.inboundTask = Task.detached(priority: .userInitiated) { [weak self, client, transport, id, generation] in
+        runtime.inboundTask = Task.detached(priority: .userInitiated) { [weak self, client, transport, id, generation, kickContinuation] in
             await HerdrSessionModel.runInboundPump(
                 model: self,
                 client: client,
                 transport: transport,
                 endpoint: id,
-                generation: generation
+                generation: generation,
+                kick: kickContinuation
+            )
+        }
+        runtime.inputTask = Task.detached(priority: .userInitiated) { [weak self, client, id, generation, inputStream, kickContinuation] in
+            await HerdrSessionModel.runInputLane(
+                model: self,
+                client: client,
+                endpoint: id,
+                generation: generation,
+                events: inputStream,
+                kick: kickContinuation
+            )
+        }
+        runtime.writerTask = Task.detached(priority: .userInitiated) { [weak self, client, transport, id, generation, kickStream] in
+            await HerdrSessionModel.runWriter(
+                model: self,
+                client: client,
+                transport: transport,
+                endpoint: id,
+                generation: generation,
+                kicks: kickStream
             )
         }
         runtimes[id] = runtime
-
-        Task { [weak self, id] in
-            await self?.flushOutbound(endpoint: id)
-        }
+        kickContinuation.yield(())
     }
 
     func disconnect(endpoint id: HerdrEndpointID) async {
         guard let runtime = runtimes.removeValue(forKey: id) else { return }
         runtime.inboundTask?.cancel()
+        runtime.inputTask?.cancel()
+        runtime.writerTask?.cancel()
         runtime.watchdog?.cancel()
+        runtime.inputContinuation.finish()
+        runtime.kickContinuation.finish()
         runtime.client.destroy()
         await runtime.transport.close()
         if endpoints[id]?.phase == .connecting || endpoints[id]?.phase == .online {
@@ -115,14 +160,19 @@ final class HerdrSessionModel {
     }
 
     /// Records the scene's desired grid geometry (machine-qualified per
-    /// endpoint). It is carried by the NEXT connection's hello; routing it
-    /// through the FFI's live `herdr_client_resize` (which exists since the
-    /// activation fix) is T17 input work.
+    /// endpoint). Before a surface commits it is only carried by the NEXT
+    /// connection's hello — mid-activation resizes would restart fence
+    /// evidence, so the committed fence geometry wins. Once online with a
+    /// committed surface it also routes through the FFI's live
+    /// `herdr_client_resize` on the ordered input lane.
     func resize(cols: Int, rows: Int) {
         guard cols > 0, rows > 0 else { return }
         for id in endpoints.keys {
             endpoints[id]?.desiredCols = UInt32(cols)
             endpoints[id]?.desiredRows = UInt32(rows)
+            guard let runtime = runtimes[id], let state = endpoints[id],
+                  state.phase == .online, state.surface != nil else { continue }
+            runtime.inputContinuation.yield(.resize(cols: UInt32(cols), rows: UInt32(rows)))
         }
     }
 
@@ -161,27 +211,24 @@ final class HerdrSessionModel {
         client: HerdrClient,
         transport: any HerdrByteTransport,
         endpoint id: HerdrEndpointID,
-        generation: UInt
+        generation: UInt,
+        kick: AsyncStream<Void>.Continuation
     ) async {
         var lastSnapshotRevision: UInt64?
         var lastSurfaceRevision: UInt64?
         do {
             for try await chunk in transport.inboundBytes() {
                 try await client.receive(chunk)
+                // The FFI queues activation/control frames mid-session (the
+                // activation transaction after a snapshot, fence controls);
+                // the single writer drains them in queue order.
+                kick.yield(())
 
                 let phase = await client.phase
                 let snapshot = try? await client.snapshot()
                 let surfaceData = try? await client.surfaceJSON()
                 let surface = surfaceData.flatMap {
                     try? JSONDecoder().decode(HerdrPaneSurface.self, from: $0)
-                }
-
-                // The FFI queues activation/control frames mid-session
-                // (e.g. the activation transaction after a snapshot); they
-                // must reach the transport in order, not just the connect-
-                // time hello.
-                for frame in try await client.drainOutbound() {
-                    try await transport.write(frame)
                 }
 
                 var freshSnapshot: HerdrShellSnapshot?
@@ -224,6 +271,9 @@ final class HerdrSessionModel {
         surface: HerdrPaneSurface?
     ) {
         guard isActive(endpoint: id, generation: generation) else { return }
+        #if DEBUG
+        debugAppliedChunks += 1
+        #endif
         if let snapshot {
             endpoints[id]?.snapshot = snapshot
         }
@@ -236,16 +286,33 @@ final class HerdrSessionModel {
         }
     }
 
-    private func flushOutbound(endpoint id: HerdrEndpointID) async {
-        guard let runtime = runtimes[id] else { return }
+    // MARK: - Outbound writer (nonisolated: single drain/write lane)
+
+    /// The only drainer of the client's outbound queue and the only writer
+    /// to the transport: connect-time hellos, activation frames the core
+    /// queues mid-session, and semantic input frames all reach the wire in
+    /// queue FIFO order (integration doc §3.2). Kicks coalesce via
+    /// `.bufferingNewest(1)`; every drain empties the queue.
+    private static func runWriter(
+        model: HerdrSessionModel?,
+        client: HerdrClient,
+        transport: any HerdrByteTransport,
+        endpoint id: HerdrEndpointID,
+        generation: UInt,
+        kicks: AsyncStream<Void>
+    ) async {
         do {
-            for frame in try await runtime.client.drainOutbound() {
-                try await runtime.transport.write(frame)
+            for await _ in kicks {
+                for frame in try await client.drainOutbound() {
+                    try await transport.write(frame)
+                }
             }
+        } catch let error as HerdrClientError {
+            await model?.handleClientError(error, endpoint: id, generation: generation)
         } catch {
-            failAndTeardown(
+            await model?.failAndTeardown(
                 endpoint: id,
-                generation: runtime.generation,
+                generation: generation,
                 diagnostic: .simple(.transportLost, detail: "\(error)")
             )
         }
@@ -334,14 +401,18 @@ final class HerdrSessionModel {
 
     // MARK: - Runtime lifecycle
 
-    private func isActive(endpoint id: HerdrEndpointID, generation: UInt) -> Bool {
+    func isActive(endpoint id: HerdrEndpointID, generation: UInt) -> Bool {
         runtimes[id]?.generation == generation
     }
 
     private func teardown(endpoint id: HerdrEndpointID) {
         guard let runtime = runtimes.removeValue(forKey: id) else { return }
         runtime.inboundTask?.cancel()
+        runtime.inputTask?.cancel()
+        runtime.writerTask?.cancel()
         runtime.watchdog?.cancel()
+        runtime.inputContinuation.finish()
+        runtime.kickContinuation.finish()
         runtime.client.destroy()
         let transport = runtime.transport
         Task {
@@ -349,7 +420,7 @@ final class HerdrSessionModel {
         }
     }
 
-    private static func detail(of error: HerdrClientError) -> String {
+    static func detail(of error: HerdrClientError) -> String {
         switch error {
         case .invalidArgument(let detail),
              .panic(let detail),

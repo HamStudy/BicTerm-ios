@@ -30,20 +30,27 @@ struct HerdrWorkspaceView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            if let state, state.phase == .failed || state.phase == .disconnected,
-               let diagnostic = state.diagnostic {
-                HerdrDiagnosticView(
-                    diagnostic: diagnostic,
-                    endpointLabel: endpointLabel,
-                    onDismiss: onClose
-                )
-            } else {
-                workspaceBody
+        ZStack {
+            inputField
+            VStack(spacing: 0) {
+                header
+                if let state, state.phase == .failed || state.phase == .disconnected,
+                   let diagnostic = state.diagnostic {
+                    HerdrDiagnosticView(
+                        diagnostic: diagnostic,
+                        endpointLabel: endpointLabel,
+                        onDismiss: onClose
+                    )
+                } else {
+                    workspaceBody
+                }
             }
         }
         .background(colors.background.ignoresSafeArea())
+        // The remote owns the grid: the soft keyboard overlays instead of
+        // compressing the pane area, so keyboard appearance never reads as
+        // a geometry change (rotation and window resize still do).
+        .ignoresSafeArea(.keyboard)
         .onAppear {
             // Informational (plan T16): record the chrome's Dynamic Type
             // context; survival itself is asserted by the UI test's
@@ -52,6 +59,28 @@ struct HerdrWorkspaceView: View {
                 "herdr chrome rendered at dynamic type size \(String(describing: dynamicTypeSize), privacy: .public)"
             )
         }
+    }
+
+    /// Invisible first responder behind the chrome: hardware presses, soft
+    /// keyboard text, and IME commits all land here and route into the
+    /// model's ordered input lane. Consumed taps (pane overlays, buttons)
+    /// belong to the views stacked above it.
+    private var inputField: some View {
+        HerdrInputFieldHost(
+            onText: { text in
+                guard let id = model.selectedEndpointID else { return }
+                model.sendText(text, endpoint: id)
+            },
+            onKey: { key in
+                guard let id = model.selectedEndpointID else { return }
+                model.sendKey(key, endpoint: id)
+            },
+            onNavigate: { direction in
+                guard let id = model.selectedEndpointID else { return }
+                model.moveInputTarget(direction, endpoint: id)
+            }
+        )
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - Header
@@ -184,14 +213,68 @@ struct HerdrWorkspaceView: View {
         snapshot: HerdrShellSnapshot,
         surface: HerdrPaneSurface?
     ) -> some View {
-        if let surface {
-            HerdrPaneSurfaceView(
-                surface: surface,
-                paneMetadata: paneMetadata(from: snapshot)
-            )
-        } else {
-            snapshotPaneGrid(snapshot: snapshot)
+        Group {
+            if let surface {
+                HerdrPaneSurfaceView(
+                    surface: surface,
+                    paneMetadata: paneMetadata(from: snapshot),
+                    inputTargetID: state?.inputTargetPaneID,
+                    onPaneTap: { paneID in
+                        guard let id = model.selectedEndpointID else { return }
+                        model.setInputTarget(paneID: paneID, endpoint: id)
+                    },
+                    onGridChange: { cols, rows in
+                        model.resize(cols: cols, rows: rows)
+                    }
+                )
+            } else {
+                snapshotPaneGrid(snapshot: snapshot)
+            }
         }
+        .overlay(alignment: .bottom) {
+            inputFeedbackStrip
+                .allowsHitTesting(false)
+        }
+    }
+
+    /// Transient input feedback overlaid on the canvas: strips in the
+    /// layout flow would compress the pane area, and every compression
+    /// reads as a grid change (a resize the remote never asked for).
+    private var inputFeedbackStrip: some View {
+        VStack(spacing: 0) {
+            if let note = state?.inputNote {
+                Text(note.message)
+                    .font(typography.caption)
+                    .foregroundStyle(colors.dimmed)
+                    .padding(.horizontal, spacing.sm)
+                    .padding(.vertical, spacing.xxs)
+                    .accessibilityIdentifier("herdr-input-note")
+            }
+            #if DEBUG
+            if HerdrWorkspaceUITest.isEnabled {
+                Text(model.debugInputEcho.joined(separator: "\n"))
+                    .font(.system(.caption2, design: .monospaced))
+                    .foregroundStyle(colors.dimmed)
+                    .frame(maxWidth: .infinity, maxHeight: 72, alignment: .leading)
+                    .padding(.horizontal, spacing.sm)
+                    .accessibilityIdentifier("herdr-input-echo")
+                    .onChange(of: model.debugInputEcho, initial: true) {
+                        HerdrWorkspaceUITest.currentInputEcho = model.debugInputEcho.joined(separator: "\n")
+                    }
+                if model.debugAppliedChunks >= HerdrWorkspaceUITest.currentScriptChunkCount ?? .max {
+                    Text("ready")
+                        .font(typography.caption)
+                        .accessibilityIdentifier("herdr-replay-ready")
+                        .onAppear {
+                            TestHardwareKeyInjector.herdrInputField?.becomeFirstResponder()
+                            HerdrWorkspaceUITest.keyInjector?.startNow()
+                        }
+                }
+            }
+            #endif
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(colors.background.opacity(0.9))
     }
 
     /// Snapshot-driven pane tree (identity, focus, cwd): the committed
