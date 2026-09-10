@@ -227,9 +227,11 @@ impl ClientShellState {
         crate::surface::validate_surface(&incoming.surface)?;
         if self.surface.as_ref().is_some_and(|current| {
             current.boot_id == incoming.surface.boot_id
-                && current.surface_revision > incoming.surface.surface_revision
+                && (current.surface_revision > incoming.surface.surface_revision
+                    || (current.surface_revision == incoming.surface.surface_revision
+                        && current != &incoming.surface))
         }) {
-            return Err("surface revision regressed".into());
+            return Err("surface revision regressed or conflicts with the committed frame".into());
         }
         self.set_pane_surface(incoming.surface);
         Ok(())

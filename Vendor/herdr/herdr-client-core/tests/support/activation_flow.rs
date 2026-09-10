@@ -1,6 +1,72 @@
 use super::*;
 
 #[test]
+fn activation_response_ignores_optional_future_envelope_fields() {
+    // Given
+    let mut world = World::begin();
+    let response = serde_json::to_vec(&serde_json::json!({
+        "id": "client-shell-surface:1:on", "future_metadata": true,
+        "result": {"type": "client_shell_surface_set", "active": true, "projection_revision": 1}
+    }))
+    .unwrap();
+    // When
+    let result = world.activation.receive_response_for_boot(
+        &world.endpoint,
+        1,
+        "boot",
+        "client-shell-surface:1:on",
+        &response,
+        &mut world.registry,
+    );
+    // Then
+    assert_eq!(result, SurfaceActivationProgress::Pending);
+}
+
+#[test]
+fn activation_response_rejects_ambiguous_success_and_error() {
+    // Given
+    let mut world = World::begin();
+    let response = serde_json::to_vec(&serde_json::json!({
+        "id": "client-shell-surface:1:on", "error": {"code": "denied", "message": "denied"},
+        "result": {"type": "client_shell_surface_set", "active": true, "projection_revision": 1}
+    }))
+    .unwrap();
+    // When
+    let result = world.activation.receive_response_for_boot(
+        &world.endpoint,
+        1,
+        "boot",
+        "client-shell-surface:1:on",
+        &response,
+        &mut world.registry,
+    );
+    // Then
+    assert!(matches!(result, SurfaceActivationProgress::Rejected { .. }));
+    assert!(!world.registry.active_surface_available());
+}
+
+#[test]
+fn conflicting_duplicate_surface_cannot_replace_the_committed_frame() {
+    // Given
+    let mut world = World::ready();
+    let before = world.shell.surface().unwrap().clone();
+    let mut conflict = before.clone();
+    conflict.frame.cells[0].symbol = "conflicting".into();
+    // When
+    let result = world.shell.receive_surface(
+        &world.registry,
+        SurfaceUpdate {
+            endpoint: world.endpoint.clone(),
+            generation: 1,
+            surface: conflict,
+        },
+    );
+    // Then
+    assert!(result.is_err());
+    assert_eq!(world.shell.surface(), Some(&before));
+}
+
+#[test]
 fn byte_transport_activation_keeps_input_frozen_through_the_presentation_fence() {
     // Given: a connected remote endpoint with metadata, no selected surface.
     let mut world = World::begin();
