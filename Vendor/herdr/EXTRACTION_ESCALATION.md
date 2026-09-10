@@ -1,24 +1,17 @@
-# T13 extraction boundary escalation — INCOMPLETE
+# T13 extraction boundaries — initial blocker resolved
 
 Baseline: herdr v0.9.0,
 `b99002ac99b09e00b4ca692436cb15a6b0d676f1`.
 
 ## Disposition
 
-The toolchain blocker is resolved. A narrow copy of the protocol and endpoint
-modules is not a complete extraction: frozen wire data, desktop conversions,
-shell projection, and presentation synchronization cross the proposed crate
-boundaries. The full extraction **has not been implemented**. Do not unblock
-T14/T16 or treat this directory as a Rust client library.
+The earlier probes established missing seams, not impossibility. Those seams
+have now been separated into two compiling, tested library crates. There is
+**no active structural-impossibility escalation**. This file is retained to
+record the original coupling and the precise scope of the extracted core.
+The superseded probe results below must not be confused with current tests.
 
-This assessment does **not** prove that a larger, careful refactor is
-structurally impossible. Compiler errors below establish the missing seams,
-not impossibility. No production refactoring patches were attempted; only
-compile-harness corrections and source-boundary probes were made. Thus the
-full task's structural-impossibility condition is not conclusively established.
-The task remains incomplete, rather than complete by escalation.
-
-## Exact coupling
+## Original coupling and required separation
 
 All source locations below refer to the pinned checkout in `upstream/`.
 
@@ -41,7 +34,7 @@ modules. Pulling it wholesale contradicts the narrow client-core boundary.
 Removing those modules requires preserving their load-bearing state/effect
 interactions in new interfaces, not just resolving names until Cargo is green.
 
-## Executed probes
+## Historical probes (before extraction)
 
 The ignored `.scratch/herdr-boundary-probe/` contains unmodified source copied
 with `git archive`, a local manifest, and a small module harness. It is not a
@@ -93,30 +86,61 @@ export RUSTUP_HOME="$PWD/.build-artifacts/rustup"
 LSP diagnostics for the small probe harness were attempted but the daemon
 timed out. Compiler output, not LSP, establishes the results above.
 
-## Concrete continuation options
+## Implemented neutral boundary
 
-1. **Maintained render-neutral extraction (recommended):** retain task 13 but
-   explicitly carry out the larger seam refactor: frozen data/conversion split,
-   typed endpoint API carriers, injected connection execution, bounded writer,
-   projection/input-effect boundary, then activation and presentation replay.
-   Port upstream adversarial activation tests before replacing any shell method.
-   This keeps exclusions intact but is more than a two-directory copy.
-2. **Upstream alignment:** ask maintainers through the permitted Discussions
-   path to establish the protocol/state/effect boundary and generation-1 fixture
-   contract. A local draft is in [UPSTREAM_PROPOSAL.md](UPSTREAM_PROPOSAL.md).
-   Do not wait for a response before maintaining the local fork.
-3. **Larger desktop-shell port:** would retain more upstream implementations,
-   but requires an explicit scope change and renewed dependency/asset audit.
-   It is not authorized by the current exclusions and was not attempted.
+- Protocol: every frozen outer message variant, the stable hello/welcome/codecs,
+  and upstream framing. Encodable legacy fields are not executable operations.
+- Catalog: opaque profile IDs, validation and in-memory mutation with bounded
+  JSON import/export; no desktop configuration lookup or persistence.
+- Supervisors: independent generations/backoff and bounded parallel attempt
+  intents. The caller executes/cancels transport work and records its result.
+- Registry: per-endpoint transport and health state, failure isolation, surface
+  interest and input gate. Home cannot own a transport.
+- Activation: every upstream phase, coherent evidence, rollback, rapid successor
+  switching, post-commit resynchronization and presentation-ready token. All
+  22 upstream activation tests are retained with transport-neutral fixtures.
+- State: endpoint/generation/boot-qualified metadata and a selected surface,
+  checked full surfaces and atomic patches. Qualified semantic pane input refuses
+  stale targets and stale snapshot/surface pairs.
+- Outbound: bounded frame queues drained by the caller; no socket proxy,
+  process launch, or shared network writer.
+
+## Precisely what remains outside the extracted core
+
+`ClientShellState` is now a neutral projection store, **not a port of the whole
+desktop shell**. Desktop `compose`, hit maps, overlays, theme/keymap parsing,
+mouse capture gestures, selection/copy-mode reducers, and notification/agent
+presentation chrome remain in the unmodified upstream checkout. The core does
+not claim that native iOS equivalents exist. Protocol records for those features
+are preserved, and native interaction/rendering can be layered above them.
+
+`complete_activation` keeps input frozen through `AwaitingPresentationSync`
+and `AwaitingPresentationEffects`. The caller must apply the target's valid
+presentation replay to its committed frame and feed the matching ready control
+to the state machine. It must not discard replay or call the low-level registry
+unfreeze method prematurely. The byte-transport scenario tests the fence order,
+not UIKit presentation execution.
+
+Use one core/coordinator instance per logical viewer/scene. Qualify values with
+that viewer when storing them outside the instance; generation counters are
+not globally unique across independent coordinators. Native SSH trust, endpoint
+I/O cancellation, stderr separation, foreground scheduling/jitter, aggregate
+memory budgets and image decoding remain caller responsibilities. Queue limits
+are explicit caller inputs, not a measured iPad-wide budget.
+
+The typed JSON API projection currently covers activation's four methods and
+four result families only. It rejects unsupported response kinds rather than
+inventing success. The full desktop endpoint-command/UI action system was not
+copied. No remote installation/update/plugin action is executed by either crate.
 
 ## Acceptance status
 
-- No `herdr-protocol` or `herdr-client-core` workspace created.
-- No full host/triple-target builds or client tests passed.
-- No golden-frame fixtures captured; no all-message compatibility claim.
-- No production target-resolved graph, SPDX allowlist, or cargo-deny check.
-- No exclusion-audit pass: there are no shipping crates to audit.
+- Workspace, both crates, 122 host tests and three-target builds pass.
+- 43 committed frames cover all outer message variants and the stable snapshot.
+- Target-specific license inventory and cargo-deny checks pass with the explicit
+  bincode unmaintained-advisory exception described in PROVENANCE.md.
+- Exclusion audit passes; unknown/unlicensed metadata is rejected by policy tests.
 - No submitted upstream issue/PR/discussion or engagement URL.
 - Source pin, archive digest, license copy, and local toolchain are recorded.
 - Plan and protected files untouched. No tasks 14–16 started.
-- No `feat(herdr): extract ...` completion commit is warranted.
+- This is a protocol/pure-state extraction, not a completed native client UI.

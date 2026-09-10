@@ -17,12 +17,12 @@ Herdr servers, using an existing SSH engine's non-PTY exec channels. The app
 would never install or update remote Herdr and would not run the desktop
 binary, local server, PTYs, or SSH subprocesses on iOS.
 
-In v0.9.0, stable endpoint types share modules with desktop conversion
-helpers, while multi-machine activation depends on shell projection and
-desktop presentation replay. Reusable protocol and render-neutral client
-libraries would let native clients preserve compatibility and safe machine
-switching without independently reproducing bincode or weakening activation
-fences.
+Our v0.9.0 fork now separates protocol data from desktop conversion helpers
+and exposes transport-neutral catalog, health, retry and activation state.
+The activation/presentation fence remains intact, tested separately from
+desktop rendering. Both iOS targets compile, and frozen frames cover every
+outer message variant. This makes a small client-library boundary concrete
+without independently reproducing bincode or copying the desktop UI.
 
 Would a supported library boundary for this use case fit Herdr's direction?
 We would value guidance on generation-1 compatibility, conformance fixtures,

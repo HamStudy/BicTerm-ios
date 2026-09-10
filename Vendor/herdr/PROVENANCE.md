@@ -1,7 +1,10 @@
-# Herdr source provenance — extraction INCOMPLETE
+# Herdr source and build provenance
 
-This directory records the source baseline and toolchain for task 13. It is
-**not a usable Cargo workspace or an approved distribution inventory**.
+This directory contains `herdr-protocol` and the transport-neutral
+`herdr-client-core` workspace extracted for task 13. The original desktop
+renderer and interaction UI are not included. See `EXTRACTION_ESCALATION.md`
+for the resolved boundaries and caller responsibilities. This is engineering
+provenance, not legal approval or an App Store release certification.
 
 ## Upstream source
 
@@ -44,6 +47,7 @@ rustup target list --installed --toolchain stable
 rustc +stable --version
 cargo +stable --version
 cargo +stable install --locked --root "$PWD/.build-artifacts/tools" cargo-deny
+rustup component add rustfmt --toolchain stable
 "$PWD/.build-artifacts/tools/bin/cargo-deny" --version
 ```
 
@@ -65,7 +69,7 @@ outputs were redirected under BicTerm. `.build-artifacts/` is already ignored.
 The existing cache script does **not** set `RUSTUP_HOME`; repeat the explicit
 export in every Rust shell. No external toolchain installation was performed.
 
-## Preliminary notice scan
+## Notice scan
 
 `git ls-files '*NOTICE*' '*LICENSE*'` found:
 
@@ -82,17 +86,72 @@ No root NOTICE exists at this pin. A case-insensitive source scan for
 `copyright|SPDX-License-Identifier|licensed under` found no matches in
 `src/protocol`, `src/client/endpoint.rs`, `src/client/endpoint`,
 `src/client/shell.rs`, `src/client/shell`, or `src/client/shell_runtime.rs`.
-This is a preliminary source-header scan, not a substitute for reviewing all
-files actually selected for extraction and their transitive dependencies.
-The nested ConPTY notice and vendor licenses cannot be treated as absent.
+The additional foundational sources (`input/model.rs`, `api/schema/common.rs`,
+`config/model.rs`, `remote/args.rs`, `session.rs`) are covered by the final
+source-notice scan. Copied files retain their upstream comments and carry
+modification/provenance headers. No root NOTICE exists; the nested ConPTY
+notice belongs to excluded Windows packaging, and no Ghostty/portable-pty
+code or asset is copied into either crate. The complete archived source is
+reference material only, never app input.
 
 ## Cargo-deny and target inventory
 
-**NOT RUN against a production graph.** cargo-deny is installed, but no
-production workspace, feature set, or target-resolved dependency graph has
-been completed. There is deliberately no guessed SPDX allowlist or passing
-license claim. The diagnostic probe's dependency graph is not the shipping
-graph. Unknown/unlicensed packages must fail the eventual production audit.
+`bash Vendor/herdr/check.sh` resolves each iOS target independently with the
+workspace's production/default features and excludes dev dependencies in
+cargo-deny. There are no optional workspace features. `LICENSE_INVENTORY.json`
+joins each target's actual cargo-deny package graph to Cargo metadata to retain
+the exact license expressions, rather than treating all of Cargo.lock as a
+shipping inventory. Each target contains 25 packages: two local crates and
+23 external dependencies, including build-time proc macros.
 
-See [EXTRACTION_ESCALATION.md](EXTRACTION_ESCALATION.md) for exact boundaries,
-verification limitations, and remaining work. No downstream API is ready.
+The complete SPDX allowlist is Apache-2.0, MIT, Unicode-3.0, and Unlicense.
+In particular, unicode-ident requires `(MIT OR Apache-2.0) AND Unicode-3.0`;
+memchr declares `Unlicense OR MIT`. version_check's legacy `MIT/Apache-2.0`
+expression is interpreted by cargo-deny. License texts and notices must be
+carried into the eventual application acknowledgement bundle; this inventory
+does not itself constitute that bundle.
+
+Audit result: **licenses, bans, sources, and advisories pass under the checked-in
+policy**, with one explicit maintenance exception:
+
+- **RUSTSEC-2025-0141 — bincode is unmaintained.** There is no safe upgrade.
+  Herdr generation 1 requires bincode 2.0.1; the dependency is pinned exactly
+  and its real encode path is protected by upstream digests plus 43 committed
+  frames. The exception acknowledges maintenance risk, not a vulnerability
+  fix. BicTerm owns monitoring and future codec migration. It must be reviewed
+  before release; it is not a blanket advisory exemption.
+- No vulnerability, source, unknown-license, or unlicensed-package exemption.
+  Negative checks remove a package's license or inject an unknown LicenseRef
+  into resolved metadata and verify cargo-deny rejects both.
+- Bans reject portable-pty, crossterm, ratatui, interprocess, wildcard dependency
+  requirements, and duplicate package versions. The local path dependency has
+  an exact `=0.9.0` version constraint.
+
+## Verification and reproducibility
+
+From the BicTerm root:
+
+```sh
+bash Vendor/herdr/extract-protocol.sh
+bash Vendor/herdr/extract-client-core.sh
+bash Vendor/herdr/check.sh
+```
+
+The extraction recipes verify the upstream commit and preserve declarations
+by pinned source ranges; `MODIFICATIONS.md` records every mapping and adapter.
+Both recipes run rustfmt and leave the upstream checkout untouched.
+
+- Host tests: 65 protocol + 57 client-core = **122 passed**, no ignored tests.
+- Build targets: `aarch64-apple-darwin`, `aarch64-apple-ios`,
+  `aarch64-apple-ios-sim`.
+- Golden frames: 21 client variants, 21 server variants, one additional stable
+  JSON snapshot carrier; byte-exact encode and lossless decode checks.
+- Exclusion audit: zero excluded runtime imports or process-spawning references
+  in either crate source tree; dependency bans provide a second check.
+- LSP diagnostics were attempted but the daemon timed out. Cargo build/tests
+  and rustfmt are the completed verification gates; no clean LSP result is claimed.
+
+Logs and per-target metadata are retained under `.sisyphus/evidence/phase2-h13-*`.
+`UPSTREAM_PROPOSAL.md` is an unsubmitted Discussion draft, not a submitted issue
+or PR. Native transport execution, rendering, C ABI/XCFramework, physical-device
+QA, fuzzing, and App Store acknowledgement packaging are not task-13 artifacts.

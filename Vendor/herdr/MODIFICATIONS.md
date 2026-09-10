@@ -37,7 +37,7 @@ No serialized field, enum variant order, or bincode configuration was changed.
 | `tests/upstream_client.rs` | `wire.rs:1736-1980` | Port client round trips and frozen tags unchanged |
 | `tests/upstream_messages.rs` | `wire.rs:2114-2327` | Port clipboard/focus/theme/request and remaining client round trips unchanged |
 | `tests/upstream_surfaces.rs` | `wire.rs:2423-2610` | Port patch/graphics SHA256 golden assertions and server tags unchanged |
-| `tests/upstream_server.rs` | `wire.rs:2612-2875` | Port snapshot, notification and remaining server round trips; relocate foundational paths |
+| `tests/upstream_snapshot.rs`, `tests/upstream_server.rs` | `wire.rs:2612-2693,2695-2875` | Split snapshot from notification/server round trips; relocate foundational paths; keep each test file bounded |
 | `tests/upstream_framing.rs` | `wire.rs:2876-2891,2951-3191,3471-3500` | Port framing/error/partial-read/version tests and original chunked reader |
 | `tests/fixtures/endpoint-hello-v1.json` | Same path | Exact archived upstream fixture |
 | `tests/fixtures/endpoint-welcome-v1.json` | Same path | Exact archived upstream fixture |
@@ -134,3 +134,32 @@ tests remain present, including rollback and successor-switch behavior.
 
 Original upstream SHA256 digest and tag assertions remain unchanged. No test
 automatically updates fixtures when the codec changes.
+
+## Final validation corrections and audits
+
+- `src/client/shell.rs` and `tests/support/activation_flow.rs` (client-core):
+  conflicting duplicates at the same surface revision are rejected atomically.
+  The new regression failed before the change and passed afterward.
+- `src/client/endpoint_commands.rs` and the same scenario tests: tolerate
+  optional future JSON envelope fields while requiring exactly one result/error
+  and the matching request ID. The forward-compatibility regression failed
+  before replacing the overly strict untagged envelope parser.
+- `extract-client-core.sh` and generated `activation_cases/fixture_surface.rs`:
+  omit an unused fixture import after splitting the upstream tests.
+- `herdr-client-core/Cargo.toml`: constrain the local protocol path dependency
+  to `=0.9.0`, resolving cargo-deny's wildcard requirement finding.
+- `deny.toml`: production device/simulator graph, complete four-license SPDX
+  allowlist, explicit bincode maintenance-advisory exception, source and
+  desktop-dependency bans. No unknown/unlicensed exception.
+- `LICENSE_INVENTORY.json`: generated per-target package/version/SPDX-expression
+  inventories from the actual production cargo-deny graphs and Cargo metadata.
+- `check.sh`: repeatable fmt/tests/triple-build, production graph/license audit,
+  negative unknown/unlicensed policy checks, and excluded-runtime import scan.
+- `PROVENANCE.md`, `EXTRACTION_ESCALATION.md`, `UPSTREAM_PROPOSAL.md`: replace
+  the superseded probe-only status with actual results and precise remaining
+  desktop/caller responsibilities; the upstream draft is still unsubmitted.
+- Root `Cargo.toml` and `Cargo.lock`: two-crate workspace, minimal resolved
+  dependency graph, unsafe-code prohibition, and unwind-enabled release profile
+  for a future panic-isolating C ABI (no C ABI implemented here).
+- Root `README.md`: public API sequencing and ownership contract, especially
+  caller-driven I/O, presentation replay, qualified input and per-viewer scope.
