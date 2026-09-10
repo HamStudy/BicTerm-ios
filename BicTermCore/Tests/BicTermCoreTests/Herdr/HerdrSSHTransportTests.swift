@@ -206,10 +206,11 @@ final class HerdrSSHTransportTests: XCTestCase {
     /// and UTF-8 — every vector inert under POSIX single-quoting.
     func testHostileExecutablePathIsSafelyQuotedAgainstRealShell() async throws {
         let hostile = try Self.materializeHostileShim()
+        defer { try? FileManager.default.removeItem(at: hostile.dir) }
         let transport = try await makeDirectTransport()
         let herdr = try await HerdrSSHTransport(
             transport: transport,
-            executablePath: hostile
+            executablePath: hostile.shim
         )
 
         // The mock consumes one hello frame (payload ignored, not echoed).
@@ -283,23 +284,22 @@ final class HerdrSSHTransportTests: XCTestCase {
 
     // MARK: - Hostile shim materialization
 
-    /// Copies the shim into `Fixtures/run/herdr 'q"$(`dir)`'/` so the
-    /// executable path itself contains every quoting hazard at once.
-    private static func materializeHostileShim() throws -> String {
+    /// Per-run unique hostile dir: no shared Fixtures/run state, immune to
+    /// wrapper fixture resets and concurrent duplicate runs. Caller must
+    /// remove the returned dir (see test's defer).
+    private static func materializeHostileShim() throws -> (dir: URL, shim: String) {
         let runRoot = SSHTestFixture.repoRoot.appendingPathComponent("Fixtures/run")
-        let hostileDir = runRoot.appendingPathComponent("herdr 'q\"$(`dir)`'")
+        let uniqueDir = runRoot.appendingPathComponent("herdr-hostile-\(UUID().uuidString)")
+        let hostileDir = uniqueDir.appendingPathComponent("herdr 'q\"$(`dir)`'")
         let destination = hostileDir.appendingPathComponent("mock-herdr")
         try FileManager.default.createDirectory(at: hostileDir, withIntermediateDirectories: true)
-        if FileManager.default.fileExists(atPath: destination.path) {
-            try FileManager.default.removeItem(at: destination)
-        }
         try FileManager.default.copyItem(at: URL(fileURLWithPath: shimPath), to: destination)
         // The shim resolves mock-bridge.py relative to itself; copy the sibling too.
         try FileManager.default.copyItem(
             at: URL(fileURLWithPath: SSHTestFixture.repoRoot.appendingPathComponent("Fixtures/herdr/mock-bridge.py").path),
             to: hostileDir.appendingPathComponent("mock-bridge.py")
         )
-        return destination.path
+        return (uniqueDir, destination.path)
     }
 }
 
