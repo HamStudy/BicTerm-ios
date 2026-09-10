@@ -1,5 +1,6 @@
 import HerdrClientCore
 import OSLog
+import PhotosUI
 import SwiftUI
 
 /// Native herdr workspace chrome (integration doc §7 Option A): endpoint
@@ -18,6 +19,12 @@ struct HerdrWorkspaceView: View {
     let model: HerdrSessionModel
     let endpointLabel: String
     let onClose: () -> Void
+
+    @State private var photoSelection: PhotosPickerItem?
+    @State private var textPasteConfirmation: TextPasteConfirmation?
+    @State private var imagePaste: PendingImagePaste?
+    @State private var imagePasteError: String?
+    @State private var lastPasteGestureAt = Date.distantPast
 
     private static let logger = Logger(
         subsystem: "com.bicterm.app.herdr",
@@ -59,6 +66,60 @@ struct HerdrWorkspaceView: View {
                 "herdr chrome rendered at dynamic type size \(String(describing: dynamicTypeSize), privacy: .public)"
             )
         }
+        .alert(
+            "Large Paste",
+            isPresented: textPasteConfirmationPresented,
+            presenting: textPasteConfirmation
+        ) { confirmation in
+            Button("Paste") {
+                sendTextPaste(
+                    confirmation.text,
+                    endpoint: confirmation.endpoint,
+                    capturedPane: confirmation.capturedPane,
+                    capturedBoot: confirmation.capturedBoot
+                )
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: { confirmation in
+            Text("Paste \(confirmation.byteCount) bytes into pane \(confirmation.capturedPane) on \(endpointLabel)?")
+        }
+        .sheet(item: $imagePaste) { pending in
+            HerdrImagePasteSheet(
+                sourceBytes: pending.source.count,
+                pixelWidth: pending.pixelWidth,
+                pixelHeight: pending.pixelHeight,
+                needsDownscale: pending.needsDownscale,
+                destinationPane: pending.capturedPane,
+                onSend: { preserve, factor in
+                    imagePaste = nil
+                    sendImagePaste(pending, preserveMetadata: preserve, downscaleFactor: factor)
+                },
+                onCancel: { imagePaste = nil }
+            )
+        }
+        .alert(
+            "Image Not Sent",
+            isPresented: imagePasteErrorPresented,
+            presenting: imagePasteError
+        ) { _ in
+            Button("OK", role: .cancel) {}
+        } message: { message in
+            Text(message)
+        }
+    }
+
+    private var textPasteConfirmationPresented: Binding<Bool> {
+        Binding(
+            get: { textPasteConfirmation != nil },
+            set: { if !$0 { textPasteConfirmation = nil } }
+        )
+    }
+
+    private var imagePasteErrorPresented: Binding<Bool> {
+        Binding(
+            get: { imagePasteError != nil },
+            set: { if !$0 { imagePasteError = nil } }
+        )
     }
 
     /// Invisible first responder behind the chrome: hardware presses, soft
@@ -78,7 +139,8 @@ struct HerdrWorkspaceView: View {
             onNavigate: { direction in
                 guard let id = model.selectedEndpointID else { return }
                 model.moveInputTarget(direction, endpoint: id)
-            }
+            },
+            onPasteRequest: beginPaste
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -100,6 +162,20 @@ struct HerdrWorkspaceView: View {
                 }
             }
             Spacer()
+            if state?.phase == .online {
+                HerdrPasteControl(action: beginPaste)
+                    .frame(width: 88, height: 32)
+                    .accessibilityIdentifier("herdr-paste-control")
+                PhotosPicker(selection: $photoSelection, matching: .images) {
+                    Image(systemName: "photo")
+                }
+                .accessibilityIdentifier("herdr-insert-photo")
+                .onChange(of: photoSelection) { _, item in
+                    guard let item else { return }
+                    photoSelection = nil
+                    beginPhotoPaste(item)
+                }
+            }
             Button("Disconnect", action: disconnect)
                 .font(typography.body)
                 .buttonStyle(.bordered)
@@ -235,6 +311,50 @@ struct HerdrWorkspaceView: View {
             inputFeedbackStrip
                 .allowsHitTesting(false)
         }
+        // The remote-copy banner needs tappable buttons, so it sits in its
+        // own overlay rather than the hit-transparent feedback strip; as an
+        // overlay it never compresses the pane grid into a phantom resize.
+        .overlay(alignment: .top) {
+            remoteClipboardBanner
+        }
+    }
+
+    /// Doc §8.3: server clipboard bytes never touch the system pasteboard
+    /// without this explicit action or the per-host opt-in. The wire
+    /// message carries no pane id, so attribution is endpoint-level.
+    @ViewBuilder
+    private var remoteClipboardBanner: some View {
+        if let pending = state?.pendingRemoteClipboard {
+            HStack(spacing: spacing.xs) {
+                Label(
+                    "Clipboard from \(endpointLabel) — \(pending.byteCount) bytes",
+                    systemImage: "doc.on.clipboard"
+                )
+                .font(typography.caption)
+                .foregroundStyle(colors.foreground)
+                .lineLimit(1)
+                Spacer()
+                Button("Copy") {
+                    guard let id = model.selectedEndpointID else { return }
+                    model.copyRemoteClipboardToPasteboard(endpoint: id)
+                }
+                .font(typography.caption)
+                .buttonStyle(.bordered)
+                .accessibilityIdentifier("herdr-copy-remote")
+                Button("Always for This Host") {
+                    guard let id = model.selectedEndpointID else { return }
+                    model.setAutoCopyRemoteClipboard(true, endpoint: id)
+                }
+                .font(typography.caption)
+                .buttonStyle(.bordered)
+                .accessibilityIdentifier("herdr-autocopy-remote")
+            }
+            .padding(.horizontal, spacing.sm)
+            .padding(.vertical, spacing.xs)
+            .background(colors.selection.opacity(0.4))
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("herdr-remote-clipboard-banner")
+        }
     }
 
     /// Transient input feedback overlaid on the canvas: strips in the
@@ -252,6 +372,10 @@ struct HerdrWorkspaceView: View {
             }
             #if DEBUG
             if HerdrWorkspaceUITest.isEnabled {
+                Text("pasteboard r:\(HerdrPasteboard.readCount) w:\(HerdrPasteboard.writeCount)")
+                    .font(.system(.caption2, design: .monospaced))
+                    .foregroundStyle(colors.dimmed)
+                    .accessibilityIdentifier("herdr-pasteboard-stats")
                 Text(model.debugInputEcho.joined(separator: "\n"))
                     .font(.system(.caption2, design: .monospaced))
                     .foregroundStyle(colors.dimmed)
@@ -331,6 +455,159 @@ struct HerdrWorkspaceView: View {
             .accessibilityIdentifier("herdr-surface-unavailable")
     }
 
+    // MARK: - Paste flow (doc §8.2/§8.4)
+
+    private struct TextPasteConfirmation: Identifiable {
+        let id = UUID()
+        let text: String
+        let endpoint: HerdrEndpointID
+        let capturedPane: String
+        let capturedBoot: String
+        var byteCount: Int { text.utf8.count }
+    }
+
+    private struct PendingImagePaste: Identifiable {
+        let id = UUID()
+        let source: Data
+        let endpoint: HerdrEndpointID
+        let capturedPane: String
+        let capturedBoot: String
+        let pixelWidth: Int
+        let pixelHeight: Int
+        let needsDownscale: Bool
+    }
+
+    /// Entry point for every paste gesture (paste control, cmd+v). The
+    /// destination pane and endpoint boot are captured BEFORE the
+    /// pasteboard read, and the send revalidates both — a paste never
+    /// lands wherever focus happens to sit later. One gesture must read
+    /// and send exactly once: on runtimes where the control's action and
+    /// the system's responder-chain `paste(_:)` both fire for one tap,
+    /// calls inside the coalescing window collapse.
+    private func beginPaste() {
+        let now = Date()
+        guard now.timeIntervalSince(lastPasteGestureAt) > 0.25 else { return }
+        lastPasteGestureAt = now
+        guard let id = model.selectedEndpointID,
+              let current = model.endpoints[id],
+              let pane = current.inputTargetPaneID,
+              let boot = current.snapshot?.bootID else { return }
+        if HerdrPasteboard.hasStrings, let text = HerdrPasteboard.readText() {
+            handleTextPaste(text, endpoint: id, capturedPane: pane, capturedBoot: boot)
+        } else if HerdrPasteboard.hasImages, let data = HerdrPasteboard.readImageData() {
+            handleImagePaste(data, endpoint: id, capturedPane: pane, capturedBoot: boot)
+        }
+    }
+
+    private func handleTextPaste(
+        _ text: String, endpoint: HerdrEndpointID, capturedPane: String, capturedBoot: String
+    ) {
+        switch HerdrClipboard.classifyTextPaste(text) {
+        case .empty:
+            break
+        case .ready(let approved):
+            sendTextPaste(
+                approved, endpoint: endpoint, capturedPane: capturedPane, capturedBoot: capturedBoot
+            )
+        case .needsConfirmation(let approved):
+            textPasteConfirmation = TextPasteConfirmation(
+                text: approved, endpoint: endpoint,
+                capturedPane: capturedPane, capturedBoot: capturedBoot
+            )
+        case .tooLarge:
+            // The model gate records the typed note; nothing is sent.
+            model.pasteText(text, endpoint: endpoint)
+        }
+    }
+
+    private func sendTextPaste(
+        _ text: String, endpoint: HerdrEndpointID, capturedPane: String, capturedBoot: String
+    ) {
+        guard let current = model.endpoints[endpoint],
+              current.inputTargetPaneID == capturedPane,
+              current.snapshot?.bootID == capturedBoot else {
+            model.notePasteTargetChanged(endpoint: endpoint)
+            return
+        }
+        model.pasteText(text, endpoint: endpoint)
+    }
+
+    private func handleImagePaste(
+        _ data: Data, endpoint: HerdrEndpointID, capturedPane: String, capturedBoot: String
+    ) {
+        guard data.count <= HerdrClipboard.maxImagePayloadBytes else {
+            imagePasteError = HerdrClipboard.ImagePasteError.exceedsCap.userMessage
+            return
+        }
+        guard let dimensions = HerdrClipboard.imageDimensions(of: data) else {
+            imagePasteError = HerdrClipboard.ImagePasteError.undecodable.userMessage
+            return
+        }
+        let needsDownscale: Bool
+        switch HerdrClipboard.prepareImage(from: data) {
+        case .success:
+            needsDownscale = false
+        case .failure(.needsDownscale):
+            needsDownscale = true
+        case .failure(let error):
+            imagePasteError = error.userMessage
+            return
+        }
+        imagePaste = PendingImagePaste(
+            source: data, endpoint: endpoint, capturedPane: capturedPane,
+            capturedBoot: capturedBoot, pixelWidth: dimensions.width,
+            pixelHeight: dimensions.height, needsDownscale: needsDownscale
+        )
+    }
+
+    private func beginPhotoPaste(_ item: PhotosPickerItem) {
+        guard let id = model.selectedEndpointID,
+              let current = model.endpoints[id],
+              let pane = current.inputTargetPaneID,
+              let boot = current.snapshot?.bootID else { return }
+        Task {
+            do {
+                guard let streamed = try await item.loadTransferable(type: StreamedImage.self)
+                else { return }
+                handleImagePaste(streamed.data, endpoint: id, capturedPane: pane, capturedBoot: boot)
+            } catch let error as HerdrClipboard.ImagePasteError {
+                imagePasteError = error.userMessage
+            } catch {
+                imagePasteError = "The photo could not be loaded."
+            }
+        }
+    }
+
+    private func sendImagePaste(
+        _ pending: PendingImagePaste, preserveMetadata: Bool, downscaleFactor: Double
+    ) {
+        let prepared: Result<HerdrClipboard.PreparedImage, HerdrClipboard.ImagePasteError>
+        if pending.needsDownscale {
+            let maxPixel = max(
+                1,
+                Int(Double(max(pending.pixelWidth, pending.pixelHeight)) * downscaleFactor)
+            )
+            prepared = HerdrClipboard.prepareImage(
+                from: pending.source, maxPixelSize: maxPixel, preserveMetadata: preserveMetadata
+            )
+        } else {
+            prepared = HerdrClipboard.prepareImage(
+                from: pending.source, preserveMetadata: preserveMetadata
+            )
+        }
+        guard case .success(let image) = prepared else {
+            imagePasteError = "The image could not be prepared at the chosen size."
+            return
+        }
+        guard let current = model.endpoints[pending.endpoint],
+              current.inputTargetPaneID == pending.capturedPane,
+              current.snapshot?.bootID == pending.capturedBoot else {
+            model.notePasteTargetChanged(endpoint: pending.endpoint)
+            return
+        }
+        model.sendClipboardImage(image, endpoint: pending.endpoint)
+    }
+
     // MARK: - Actions
 
     private func disconnect() {
@@ -380,6 +657,56 @@ struct HerdrWorkspaceView: View {
         case .online: colors.success
         case .disconnected: colors.dimmed
         case .failed: colors.error
+        }
+    }
+}
+
+/// UIKit's user-mediated paste button (doc §8.2): the tap itself is the
+/// consent gesture, so the pasteboard read that follows never raises the
+/// system paste prompt.
+/// UIKit's user-mediated paste button (doc §8.2): the tap itself is the
+/// consent gesture. On runtimes where the system's responder-chain
+/// delivery fires, it lands in the input field's consented `paste(_:)`;
+/// this simulator's synthesized taps never ride that delivery, so the
+/// control also carries an explicit action. Both paths converge on
+/// `beginPaste`, whose coalescing guard keeps one tap = one read.
+private struct HerdrPasteControl: UIViewRepresentable {
+    let action: () -> Void
+
+    func makeUIView(context: Context) -> UIPasteControl {
+        let control = UIPasteControl(frame: CGRect(x: 0, y: 0, width: 88, height: 32))
+        control.addAction(UIAction { _ in action() }, for: .primaryActionTriggered)
+        return control
+    }
+
+    func updateUIView(_ uiView: UIPasteControl, context: Context) {}
+}
+
+/// Streams a picked photo into memory through a file representation so the
+/// 16 MiB cap is enforced DURING the load (doc §8.4), before the whole
+/// object is ever retained.
+private struct StreamedImage: Transferable {
+    let data: Data
+
+    static var transferRepresentation: some TransferRepresentation {
+        FileRepresentation(importedContentType: .image) { file in
+            switch HerdrClipboard.readCapped(url: file.file) {
+            case .success(let data):
+                return StreamedImage(data: data)
+            case .failure(let error):
+                throw error
+            }
+        }
+    }
+}
+
+private extension HerdrClipboard.ImagePasteError {
+    var userMessage: String {
+        switch self {
+        case .exceedsCap: "The image exceeds the 16 MB clipboard limit."
+        case .undecodable: "The image could not be decoded."
+        case .encodeFailed: "The image could not be re-encoded."
+        case .needsDownscale: "The image must be downscaled first."
         }
     }
 }

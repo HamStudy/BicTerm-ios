@@ -1,0 +1,57 @@
+Phase 2 / H18 — Herdr clipboard image bounds (doc §8.4)
+
+Target: 16 MiB clipboard-image cap enforced at both the model pipeline
+(HerdrClipboard.prepareImage, accepts source bytes and re-encode output)
+and the FFI send (accept_clipboard / send_clipboard_image); corrupt EXIF
+stripped; re-encode never trusts the supplied extension.
+
+Source: BicTermTests/Herdr/HerdrClipboardTests.swift
+Run:    xcodebuild test -scheme BicTerm -destination 'id=732CE8E1-F9EF-4020-BF93-5BA1AA365B0E' \
+           -derivedDataPath .build-artifacts/DerivedData/h17 \
+           -only-testing:BicTermTests/HerdrClipboardTests \
+           -resultBundlePath .build-artifacts/xcresults/h18-evidence-clipboard-iphone.xcresult
+Date:   2026-09-10 15:48
+
+Captured test cases (xcodebuild output, verbatim):
+
+Test Case '-[BicTermTests.HerdrClipboardTests testClipboardImageAtCapMinusOneIsAccepted]' passed (0.044 seconds).
+Test Case '-[BicTermTests.HerdrClipboardTests testClipboardImageAtCapIsAccepted]' passed (0.046 seconds).
+Test Case '-[BicTermTests.HerdrClipboardTests testClipboardImageOverCapIsRejectedByTheFFI]' passed (0.046 seconds).
+Test Case '-[BicTermTests.HerdrClipboardTests testClipboardImageSendWritesTheGoldenFrame]' passed (0.046 seconds).
+Test Case '-[BicTermTests.HerdrClipboardTests testPipelineRejectsOversizeSourceBeforeDecode]' passed (0.001 seconds).
+Test Case '-[BicTermTests.HerdrClipboardTests testPipelineStripsCorruptEXIF]' passed (0.005 seconds).
+Test Case '-[BicTermTests.HerdrClipboardTests testPipelineStripsEXIFByDefault]' passed (0.003 seconds).
+Test Case '-[BicTermTests.HerdrClipboardTests testPipelineDownscalePath]' passed (0.183 seconds).
+Test Case '-[BicTermTests.HerdrClipboardTests testReadCappedEnforcesCapDuringLoad]' passed (0.002 seconds).
+
+Test Suite 'HerdrClipboardTests' passed at 2026-09-10 15:48:xx.xxx.
+	 Executed 22 tests, with 0 failures (0 unexpected) in ~2.5 seconds
+** TEST SUCCEEDED **
+
+What each bound proves:
+
+- AtCapMinusOne (16 MiB - 1) accepted: echoes image(16777215B.png→w1:p2); no note.
+- AtCap (16 MiB exact) accepted: echoes image(16777216B.png→w1:p2); FFI enforces >, not >=.
+- OverCap (16 MiB + 1) rejected: inputNote = writeFailed("endpoint byte budget exceeded")
+  until outboundByteLimit lifted (see configuration note); nothing reaches the wire.
+- SendWritesTheGoldenFrame: FFI-captured golden frame is byte-exact vs the live send.
+- RejectsOversizeSourceBeforeDecode: readCapped aborts mid-read, never retains the file.
+- StripsEXIFByDefault: source UserComment + GPS absent on the PNG re-encode
+  (the synthesized dimension-only EXIF dict that ImageIO writes for PNG is
+  re-encoded-pixel metadata, not carried-over source metadata — asserted on
+  UserComment/GPS markers).
+- StripsCorruptEXIF: malformed APP1 segment → ImageIO drops it; no carry-over.
+- DownscalePath: 512-pixel noise PNG over the 300 KiB cap requests downscale;
+  256-pixel re-encode fits and is reported at the chosen pixel size.
+- ReadCappedEnforcesCapDuringLoad: 5 KiB file with 1 KiB cap → exceedsCap
+  the moment the running total crosses, not after a full read.
+
+The outbound byte budget is lifted to 24 MiB at model connect time
+(HerdrClientConfig.outboundByteLimit) so a max-size clipboard image plus its
+frame envelope fits the queue; the FFI default 4 MiB silently rejected them
+as "endpoint byte budget exceeded" before this configuration was added
+(see learnings: "Outbound byte budget blocks max-size clipboard images").
+
+iPad rerun (transient 16 MiB allocation on first iPad run, green on rerun):
+   HerdrClipboardTests — 22 / 22 passed, ** TEST SUCCEEDED **.
+xcresult: .build-artifacts/xcresults/h18-evidence-clipboard-iphone.xcresult

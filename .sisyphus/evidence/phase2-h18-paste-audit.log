@@ -1,0 +1,88 @@
+Phase 2 / H18 — Herdr clipboard privacy audit (doc §8.2-§8.3)
+
+Target: zero automatic pasteboard reads; clipboard content never appears in
+the echo / log surface; explicit copy / per-host auto-copy is the only path
+that lets server clipboard bytes reach the system pasteboard.
+
+Source: BicTermTests/Herdr/HerdrClipboardTests.swift (unit)
+        BicTermUITests/HerdrClipboardUITests.swift (UI)
+Runs:   xcodebuild test -scheme BicTerm -destination 'id=732CE8E1-F9EF-4020-BF93-5BA1AA365B0E' \
+           -derivedDataPath .build-artifacts/DerivedData/h17 \
+           -only-testing:BicTermTests/HerdrClipboardTests \
+           -resultBundlePath .build-artifacts/xcresults/h18-evidence-clipboard-iphone.xcresult
+        xcodebuild test -scheme BicTerm -destination 'id=732CE8E1-F9EF-4020-BF93-5BA1AA365B0E' \
+           -derivedDataPath .build-artifacts/DerivedData/h17 \
+           -only-testing:BicTermUITests/HerdrClipboardUITests \
+           -resultBundlePath .build-artifacts/xcresults/h18-clipboard-ui-iphone.xcresult
+        (same suites on iPad 3686DD9C-ACA2-4A79-8968-A9C3572C8276)
+Date:   2026-09-10 15:48
+
+==========================================================================
+Section 1 — Redaction (clipboard content never reaches the UI surface)
+==========================================================================
+
+Unit assertions (xcodebuild output, verbatim):
+
+Test Case '-[BicTermTests.HerdrClipboardTests testEchoNeverContainsClipboardContent]' passed (0.069 seconds).
+Test Case '-[BicTermTests.HerdrClipboardTests testMultilinePasteWritesGoldenFrameByteExact]' passed (0.045 seconds).
+Test Case '-[BicTermTests.HerdrClipboardTests testNonASCIIPasteWritesGoldenFrame]' passed (0.045 seconds).
+Test Case '-[BicTermTests.HerdrClipboardTests testOversizePasteRejectedBeforeTheFFI]' passed (0.034 seconds).
+
+The echo surface (herdr-input-echo / debugInputEcho) carries only:
+  paste(NB->pane)            — text paste, byte count + destination
+  image(NB.ext->pane)        — image send, byte count + extension + destination
+  remoteClipboard(NB)        — server clipboard arrival, byte count
+  copyRemote(NB)             — explicit copy gesture, byte count
+  autoCopyRemote(NB)         — per-host opt-in applied, byte count
+  clipboardDropped           — oversize / malformed server frame dropped
+  pasteTooLarge              — text over the 1 MiB cap, no frame sent
+  pasteTargetChanged         — pane / boot changed between read and send
+  frozen / offline / writeFailed — typed notes
+The strings pasted into the app, the base64 server payload, and the
+decoded remote text are NEVER added to the echo array, NEVER logged via
+os_log / NSLog at any point, and NEVER stored on HerdrEndpointState.
+
+testOversizePasteRejectedBeforeTheFFI proves the 1 MiB cap (text) gates
+before the FFI is touched, so oversized pasted text never crosses the wire.
+
+==========================================================================
+Section 2 — Zero automatic reads (pasteboard stats line, unit + UI)
+==========================================================================
+
+HerdrPasteboard (DEBUG-only counters, @MainActor):
+   readCount  — incremented only inside readText() / readImageData(),
+                 both called exclusively from beginPaste() — i.e. only
+                 from a user gesture (UIPasteControl tap / cmd+v).
+   writeCount — incremented only inside writeText(), called from
+                 copyRemoteClipboardToPasteboard / setAutoCopyRemoteClipboard.
+   lastWrittenText — debug-only record for the unit binding round trip.
+
+UI assertions (xcodebuild output, verbatim):
+
+Test Case '-[BicTermUITests.HerdrClipboardUITests testRemoteClipboardCopyGestureWritesOnExplicitCopy]' passed (8.813 seconds).
+   statsText() == "pasteboard r:0 w:0"  — before the Copy tap
+   after tap: "pasteboard r:0 w:1"       — exactly one write, zero reads
+   echo assertion: contains("copyRemote(27B)")
+   echo does NOT contain "hello remote"  — byte counts only, never content
+
+Test Case '-[BicTermUITests.HerdrClipboardUITests testAutoCopyOptInWritesOnArrival]' passed (8.628 seconds).
+   banner surfaces (remote arrived, not silently written)
+   statsText() == "pasteboard r:0 w:0"  — default OFF confirmed
+   after "Always for This Host" tap: echo autoCopyRemote(27B), stats "r:0 w:1"
+
+The UIPasteControl XCUI tap path is not exercised on the iOS 18 simulator
+this task targets (a known XCUI delivery limitation; see file header in
+HerdrClipboardUITests.swift). Gesture-level coverage of the read-once
+contract lives in the unit suite: testEmptyPasteIsSilent (no read on
+empty / null), testMalformedClipboardFrameDropsNonFatally (server-side
+drop, no client read), and the paste-vector tests (every paste path goes
+through enqueueInput -> applyInputEvent -> client.sendPaste, and the model
+records the byte-count echo only).
+
+==========================================================================
+Section 3 — iPad reruns
+==========================================================================
+
+iPad HerdrClipboardTests:        22 / 22 passed, ** TEST SUCCEEDED **
+iPad HerdrClipboardUITests:      2  / 2  passed, ** TEST SUCCEEDED **
+xcresults: .build-artifacts/xcresults/h18-clipboard-{unit,ui}-{iphone,ipad}.xcresult

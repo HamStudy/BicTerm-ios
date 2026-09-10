@@ -8,11 +8,14 @@ import HerdrClientCore
 enum HerdrInputEvent: Sendable, Equatable {
     case text(String, paneID: String)
     case key(HerdrKeyInput, paneID: String)
+    case paste(String, paneID: String)
+    case clipboardImage(Data, extension: String, paneID: String)
     case resize(cols: UInt32, rows: UInt32)
 
     var paneID: String? {
         switch self {
-        case .text(_, let paneID), .key(_, let paneID): paneID
+        case .text(_, let paneID), .key(_, let paneID), .paste(_, let paneID): paneID
+        case .clipboardImage(_, _, let paneID): paneID
         case .resize: nil
         }
     }
@@ -29,6 +32,29 @@ extension HerdrSessionModel {
 
     func sendKey(_ key: HerdrKeyInput, endpoint id: HerdrEndpointID) {
         enqueueInput(endpoint: id) { paneID in .key(key, paneID: paneID) }
+    }
+
+    /// Clipboard paste to the currently targeted pane (integration doc
+    /// §8.2): the exact approved text as one semantic Paste event — never
+    /// pre-wrapped in bracketed-paste sequences, never newline-rewritten;
+    /// the remote terminal runtime owns both decisions. Oversize text is
+    /// rejected app-side before the FFI is touched.
+    func pasteText(_ text: String, endpoint id: HerdrEndpointID) {
+        guard !text.isEmpty else { return }
+        guard text.utf8.count <= HerdrClipboard.maxTextPasteBytes else {
+            noteAtGate(.pasteTooLarge, endpoint: id)
+            return
+        }
+        enqueueInput(endpoint: id) { paneID in .paste(text, paneID: paneID) }
+    }
+
+    /// One prepared clipboard image (decoded, re-encoded, metadata-stripped,
+    /// cap-checked by ``HerdrClipboard``) for the targeted pane's remote
+    /// paste bridge (doc §8.4).
+    func sendClipboardImage(_ image: HerdrClipboard.PreparedImage, endpoint id: HerdrEndpointID) {
+        enqueueInput(endpoint: id) { paneID in
+            .clipboardImage(image.data, extension: image.extension, paneID: paneID)
+        }
     }
 
     /// Tap-to-focus: retargets the input lane at a pane on the committed
@@ -54,6 +80,12 @@ extension HerdrSessionModel {
         #if DEBUG
         debugRecordEcho("target(\(next))")
         #endif
+    }
+
+    /// Doc §8.2 cancel path: the pane or endpoint boot changed between the
+    /// pasteboard read and the send, so the view dropped the paste.
+    func notePasteTargetChanged(endpoint id: HerdrEndpointID) {
+        noteAtGate(.pasteTargetChanged, endpoint: id)
     }
 
     /// The gate every input event passes: inert without a runtime, `.offline`
@@ -113,6 +145,10 @@ extension HerdrSessionModel {
                 try await client.sendText(text, to: paneID)
             case .key(let key, let paneID):
                 try await client.sendKey(key, to: paneID)
+            case .paste(let text, let paneID):
+                try await client.sendPaste(text, to: paneID)
+            case .clipboardImage(let data, let ext, let paneID):
+                try await client.sendClipboardImage(data, extension: ext, to: paneID)
             case .resize(let cols, let rows):
                 try await client.resize(cols: cols, rows: rows)
             }
@@ -168,6 +204,12 @@ extension HerdrSessionModel {
             "text(\"\(text)\"→\(paneID))"
         case .key(let key, let paneID):
             "key(\(echoDescriptor(for: key))→\(paneID))"
+        case .paste(let text, let paneID):
+            // Clipboard content never enters the echo/log surface (doc
+            // §8.3); the byte count is the assertion handle for tests.
+            "paste(\(text.utf8.count)B→\(paneID))"
+        case .clipboardImage(let data, let ext, let paneID):
+            "image(\(data.count)B.\(ext)→\(paneID))"
         case .resize(let cols, let rows):
             "resize(\(cols)x\(rows))"
         }
@@ -179,6 +221,9 @@ extension HerdrSessionModel {
         case .frozen: "frozen"
         case .staleTarget(let paneID): "staleTarget(\(paneID))"
         case .writeFailed(let detail): "writeFailed(\(detail))"
+        case .clipboardDropped: "clipboardDropped"
+        case .pasteTooLarge: "pasteTooLarge"
+        case .pasteTargetChanged: "pasteTargetChanged"
         }
     }
 

@@ -21,14 +21,26 @@
 //!   - input-*.bin              : exact client frames the FFI emits for each
 //!     semantic input vector (echo-assert goldens for the Swift suites)
 //!
+//! T18 clipboard fixtures:
+//!   - clipboard-osc52-hello.bin     : `ServerMessage::Clipboard` carrying
+//!     base64 text (remote -> local copy path)
+//!   - clipboard-osc52-malformed.bin : invalid base64 payload exercising the
+//!     non-fatal drop path (HERDR_CODE_CLIPBOARD_DROPPED, client stays Online)
+//!   - input-paste-*.bin             : exact client frames for Paste events
+//!     (byte-exact passthrough: no bracketed-paste pre-wrap, no rewriting)
+//!   - clipboard-image-p2.bin        : exact client frame for one 1x1 PNG
+//!     clipboard-image send to w1:p2
+//!
 //! `--probe --golden <dir>`: feeds welcome + snapshot + ack + surface through
 //! the COMMITTED C ABI (`herdr_client_*`) and prints every outbound frame.
 
 use herdr_ios_ffi::{
     HerdrResult, herdr_bytes_free, herdr_client_create, herdr_client_destroy, herdr_client_phase,
-    herdr_client_receive, herdr_client_resize, herdr_client_send_input, herdr_client_surface,
+    herdr_client_receive, herdr_client_resize, herdr_client_send_clipboard_image,
+    herdr_client_send_input, herdr_client_surface,
     herdr_client_config, herdr_input, herdr_key,
-    HERDR_CODE_INPUT_FROZEN, HERDR_CODE_OK, HERDR_INPUT_KEY, HERDR_INPUT_TEXT_COMMIT,
+    HERDR_CODE_INPUT_FROZEN, HERDR_CODE_OK, HERDR_INPUT_KEY, HERDR_INPUT_PASTE,
+    HERDR_INPUT_TEXT_COMMIT,
     HERDR_KEY_CHAR, HERDR_KEY_DOWN, HERDR_KEY_END, HERDR_KEY_ESC, HERDR_KEY_HOME,
     HERDR_KEY_KIND_PRESS, HERDR_KEY_LEFT, HERDR_KEY_PAGE_DOWN, HERDR_KEY_PAGE_UP,
     HERDR_KEY_RIGHT, HERDR_KEY_UP, HERDR_PHASE_ONLINE,
@@ -79,6 +91,21 @@ const BOOT: &str = "boot-2x2";
 const REVISION: u64 = 1;
 const COLS: u16 = 80;
 const ROWS: u16 = 24;
+
+/// Base64 of the UTF-8 text "hello remote clipboard 📋" (27 bytes decoded),
+/// carried by `clipboard-osc52-hello.bin`; the Swift suites assert the
+/// take_clipboard round trip against this exact payload.
+const REMOTE_CLIPBOARD_BASE64: &str = "aGVsbG8gcmVtb3RlIGNsaXBib2FyZCDwn5OL";
+
+/// 1x1 transparent PNG (67 bytes): a real decodable image, so the
+/// clipboard-image golden doubles as valid input for the Swift pipeline.
+const TINY_PNG: [u8; 67] = [
+    0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+    0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
+    0x89, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x62, 0x00, 0x01, 0x00, 0x00,
+    0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
+    0x42, 0x60, 0x82,
+];
 fn generate(dir: &str, golden: &str) {
     std::fs::create_dir_all(dir).expect("create fixture dir");
 
@@ -119,6 +146,23 @@ fn generate(dir: &str, golden: &str) {
         dir,
         "surface-2x2-rev3-solo.bin",
         &ServerMessage::PaneSurface(surface_rev3_solo()),
+    );
+
+    // 3c. T18 OSC 52 server clipboard frames: one valid base64 text payload
+    // and one malformed payload exercising the non-fatal drop path.
+    write_frame(
+        dir,
+        "clipboard-osc52-hello.bin",
+        &ServerMessage::Clipboard {
+            data: REMOTE_CLIPBOARD_BASE64.into(),
+        },
+    );
+    write_frame(
+        dir,
+        "clipboard-osc52-malformed.bin",
+        &ServerMessage::Clipboard {
+            data: "!!!not-base64!!!".into(),
+        },
     );
 
     // 4. Fence + input goldens, driven through the committed C ABI so the
@@ -539,6 +583,25 @@ fn send_text(client: *mut herdr_ios_ffi::herdr_client, pane: &str, text: &str) -
     herdr_client_send_input(client, &input)
 }
 
+fn send_paste(client: *mut herdr_ios_ffi::herdr_client, pane: &str, text: &str) -> HerdrResult {
+    let pane = std::ffi::CString::new(pane).expect("pane");
+    let text = std::ffi::CString::new(text).expect("text");
+    let input = herdr_input {
+        kind: HERDR_INPUT_PASTE,
+        pane_id: pane.as_ptr(),
+        text: text.as_ptr(),
+        key: herdr_key {
+            code: 0,
+            codepoint: 0,
+            modifiers: 0,
+            kind: 0,
+            repeat_count: 0,
+            shifted_codepoint: 0,
+        },
+    };
+    herdr_client_send_input(client, &input)
+}
+
 fn send_key(
     client: *mut herdr_ios_ffi::herdr_client,
     pane: &str,
@@ -614,6 +677,33 @@ fn drive_fence_and_input_goldens(dir: &str, golden: &str) {
     }
     assert_eq!(herdr_client_resize(client, 100, 30).code, HERDR_CODE_OK);
     write_drained(dir, "input-resize-100x30.bin", client);
+
+    // T18: Paste events cross the wire byte-exact — no bracketed-paste
+    // pre-wrap (the remote terminal runtime owns that decision), no newline
+    // rewriting. The bracketed vector deliberately carries the escape
+    // sequences so the golden proves passthrough.
+    for (name, text) in [
+        ("input-paste-multiline-p2.bin", "one\ntwo\r\nthree"),
+        (
+            "input-paste-bracketed-p2.bin",
+            "\u{1b}[200~already wrapped\u{1b}[201~",
+        ),
+        ("input-paste-cjk-p2.bin", "貼り付け📋"),
+    ] {
+        assert_eq!(send_paste(client, "w1:p2", text).code, HERDR_CODE_OK);
+        write_drained(dir, name, client);
+    }
+    let pane = std::ffi::CString::new("w1:p2").expect("pane");
+    let extension = std::ffi::CString::new("png").expect("extension");
+    let image = herdr_client_send_clipboard_image(
+        client,
+        pane.as_ptr(),
+        extension.as_ptr(),
+        TINY_PNG.as_ptr(),
+        TINY_PNG.len(),
+    );
+    assert_eq!(image.code, HERDR_CODE_OK);
+    write_drained(dir, "clipboard-image-p2.bin", client);
     herdr_client_destroy(client);
 }
 

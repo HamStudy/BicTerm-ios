@@ -67,6 +67,11 @@ enum HerdrWorkspaceUITest {
     static func connectReplay(model: HerdrSessionModel) -> String {
         guard let directory = fixtureDirectory else { return "replay" }
         keyInjector = TestHardwareKeyInjector(spec: hwkeysSpec)
+        // Deterministic privacy state: every replay launch starts with the
+        // auto-copy opt-in OFF for the endpoint it is about to use.
+        for raw in ["replay-2x2", "replay-gen99", "replay-input", "replay-clipboard"] {
+            HerdrClipboardSettings().setAutoCopyRemoteClipboard(false, for: HerdrEndpointID(rawValue: raw))
+        }
 
         if mode == "gen99" {
             let transport = HerdrReplayTransport(
@@ -76,6 +81,27 @@ enum HerdrWorkspaceUITest {
             currentScriptChunkCount = 1
             model.connect(endpoint: HerdrEndpointID(rawValue: "replay-gen99"), transport: transport)
             return "replay gen-99"
+        }
+
+        if mode == "clipboard" {
+            // The full input fence plus one OSC 52 server clipboard frame:
+            // the remote-copy banner must be up once the script exhausts.
+            // Replay rides the live inbound pump, so the FFI's
+            // takeClipboard routes the frame to remoteClipboardArrived.
+            let transport = HerdrReplayTransport(script: [
+                load(from: vendorGoldenDirectory, "server-20"),
+                load(from: directory, "snapshot-2x2"),
+                load(from: directory, "surface-ack-2x2"),
+                load(from: directory, "surface-2x2"),
+                load(from: directory, "surface-sync-ack-2x2"),
+                load(from: directory, "snapshot-2x2"),
+                load(from: directory, "surface-2x2"),
+                load(from: directory, "presentation-ready-2x2"),
+                load(from: directory, "clipboard-osc52-hello"),
+            ])
+            currentScriptChunkCount = 9
+            model.connect(endpoint: HerdrEndpointID(rawValue: "replay-clipboard"), transport: transport)
+            return "replay clipboard"
         }
 
         if mode == "input" {

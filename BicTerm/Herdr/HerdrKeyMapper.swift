@@ -34,6 +34,9 @@ struct HerdrKeyStroke: Equatable, Sendable {
 enum HerdrKeyResolution: Equatable, Sendable {
     case event(HerdrKeyInput)
     case navigate(HerdrFocusDirection)
+    /// cmd+v: the keyboard paste gesture (doc §8.2). The chord itself is
+    /// the user's explicit consent for the pasteboard read that follows.
+    case paste
     case textFallthrough
     case ignored
 }
@@ -59,6 +62,10 @@ enum HerdrKeyMapper {
 
     static func resolve(_ stroke: HerdrKeyStroke) -> HerdrKeyResolution {
         if stroke.modifierFlags.contains(.command) {
+            if stroke.keyCode == .keyboardV,
+               stroke.charactersIgnoringModifiers.lowercased() == "v" {
+                return .paste
+            }
             return .ignored
         }
         if stroke.modifierFlags.contains([.control, .shift]),

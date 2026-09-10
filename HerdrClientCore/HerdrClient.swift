@@ -117,6 +117,45 @@ public actor HerdrClient {
         try send(.paste(text), paneID: paneID)
     }
 
+    /// Drains the one-shot OSC 52 clipboard slot: the decoded bytes of the
+    /// most recent server clipboard frame, or nil when none arrived since
+    /// the previous take. The Rust side caps and base64-validates before
+    /// anything lands here.
+    public func takeClipboard() throws(HerdrClientError) -> Data? {
+        try jsonData(herdr_client_take_clipboard)
+    }
+
+    /// Queues one local-clipboard image for remote paste bridging, guarded
+    /// exactly like semantic input (Online phase, unfrozen lane, and the
+    /// protocol's 16 MiB clipboard cap enforced again on the Rust side).
+    public func sendClipboardImage(
+        _ data: Data,
+        extension ext: String,
+        to paneID: String
+    ) throws(HerdrClientError) {
+        guard let handle else { throw .clientFailed("client already destroyed") }
+        var result = HerdrResult(code: -1, detail: nil)
+        data.withUnsafeBytes { raw in
+            paneID.utf8CString.withUnsafeBufferPointer { paneBuffer in
+                ext.utf8CString.withUnsafeBufferPointer { extBuffer in
+                    // SAFETY (Swift): rebinds the NUL-terminated UTF-8 buffers
+                    // to CChar for the call's duration; Rust copies both.
+                    let pane = paneBuffer.baseAddress!.withMemoryRebound(
+                        to: CChar.self, capacity: paneBuffer.count
+                    ) { $0 }
+                    let ext = extBuffer.baseAddress!.withMemoryRebound(
+                        to: CChar.self, capacity: extBuffer.count
+                    ) { $0 }
+                    result = herdr_client_send_clipboard_image(
+                        handle, pane, ext,
+                        raw.bindMemory(to: UInt8.self).baseAddress, data.count
+                    )
+                }
+            }
+        }
+        if result.code != HERDR_CODE_OK { throw HerdrClientError.from(result) }
+    }
+
     /// Sends one semantic key event to a pane.
     public func sendKey(_ key: HerdrKeyInput, to paneID: String) throws(HerdrClientError) {
         try send(.key(key), paneID: paneID)

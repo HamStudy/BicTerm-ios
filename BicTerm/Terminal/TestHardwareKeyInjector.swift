@@ -48,6 +48,7 @@ import UIKit
             case awaitTail(String)
             case text(String)
             case awaitEcho(String)
+            case paste
         }
 
     /// The ready signal as PRINTED by the `-uitest-command` shell probe —
@@ -159,6 +160,15 @@ import UIKit
             DispatchQueue.main.asyncAfter(deadline: .now() + Self.interKeyDelay) { [weak self] in
                 self?.runSteps(from: index + 1, generation: generation)
             }
+        case .paste:
+            guard deliverPaste() else {
+                retryStep(from: index, generation: generation)
+                return
+            }
+            missingContainerRetries = 0
+            DispatchQueue.main.asyncAfter(deadline: .now() + Self.interKeyDelay) { [weak self] in
+                self?.runSteps(from: index + 1, generation: generation)
+            }
         }
     }
 
@@ -245,6 +255,18 @@ import UIKit
         return true
     }
 
+    /// Synthetic cmd+v cannot ride UIKit's consented paste delivery —
+    /// synthetic presses carry no UIPressesEvent the field could forward to
+    /// super — so the token invokes the field's `paste(_:)` directly. The
+    /// resulting system paste prompt (an unconsented-read response) is the
+    /// test's to dismiss via the springboard; real hardware takes the
+    /// consented super path instead.
+    private func deliverPaste() -> Bool {
+        guard let field = Self.herdrInputField, field.window != nil else { return false }
+        field.paste(nil)
+        return true
+    }
+
     private static func parse(_ spec: String) -> [Step]? {
         var steps: [Step] = []
         for rawToken in spec.split(separator: ",") {
@@ -280,6 +302,8 @@ import UIKit
                 steps.append(.key(SyntheticKeystroke(code: .keyboardLeftArrow, modifiers: [.control, .shift], characters: "", charactersIgnoringModifiers: "")))
             case "nav+right":
                 steps.append(.key(SyntheticKeystroke(code: .keyboardRightArrow, modifiers: [.control, .shift], characters: "", charactersIgnoringModifiers: "")))
+            case "cmd+v":
+                steps.append(.paste)
             default:
                 if token.hasPrefix("text:") {
                     let payload = String(token.dropFirst(5))

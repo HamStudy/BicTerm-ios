@@ -19,6 +19,9 @@ public enum HerdrClientError: Error, Sendable, Equatable {
     case inputWriteFailed(String)
     case surfaceRejected(String)
     case clientFailed(String)
+    /// Non-fatal: an OSC 52 clipboard frame was dropped (oversized or
+    /// malformed); the client stays Online and keeps decoding.
+    case clipboardDropped(String)
     case unknown(code: Int32, String)
 
     static func from(_ result: HerdrResult) -> HerdrClientError {
@@ -43,6 +46,7 @@ public enum HerdrClientError: Error, Sendable, Equatable {
         case HERDR_CODE_INPUT_WRITE_FAILED: return .inputWriteFailed(detail)
         case HERDR_CODE_SURFACE_REJECTED: return .surfaceRejected(detail)
         case HERDR_CODE_CLIENT_FAILED: return .clientFailed(detail)
+        case HERDR_CODE_CLIPBOARD_DROPPED: return .clipboardDropped(detail)
         default: return .unknown(code: code, detail)
         }
     }
@@ -69,6 +73,15 @@ public struct HerdrClientConfig: Sendable, Equatable {
     public var cellHeightPx: UInt32
     public var pixelMouse: Bool
     public var mouseCapture: Bool
+    /// Inbound frame byte cap; 0 selects the protocol default. Tests that
+    /// exercise the clipboard drop path lift this so an oversized clipboard
+    /// frame reaches the dedicated drop branch instead of failing the whole
+    /// frame as a protocol violation.
+    public var maxFrameSize: UInt32
+    /// Outbound queue byte budget; 0 selects the FFI default (4 MiB), which
+    /// cannot hold a maximum-size clipboard image frame (16 MiB payload plus
+    /// envelope). The app lifts this so bounded image paste can drain.
+    public var outboundByteLimit: UInt32
 
     public init(
         cols: UInt32,
@@ -76,7 +89,9 @@ public struct HerdrClientConfig: Sendable, Equatable {
         cellWidthPx: UInt32,
         cellHeightPx: UInt32,
         pixelMouse: Bool = false,
-        mouseCapture: Bool = false
+        mouseCapture: Bool = false,
+        maxFrameSize: UInt32 = 0,
+        outboundByteLimit: UInt32 = 0
     ) {
         self.cols = cols
         self.rows = rows
@@ -84,6 +99,8 @@ public struct HerdrClientConfig: Sendable, Equatable {
         self.cellHeightPx = cellHeightPx
         self.pixelMouse = pixelMouse
         self.mouseCapture = mouseCapture
+        self.maxFrameSize = maxFrameSize
+        self.outboundByteLimit = outboundByteLimit
     }
 
     var ffi: herdr_client_config {
@@ -94,9 +111,9 @@ public struct HerdrClientConfig: Sendable, Equatable {
             cell_height_px: cellHeightPx,
             pixel_mouse: pixelMouse,
             mouse_capture: mouseCapture,
-            max_frame_size: 0,
+            max_frame_size: maxFrameSize,
             outbound_message_limit: 0,
-            outbound_byte_limit: 0
+            outbound_byte_limit: outboundByteLimit
         )
     }
 }

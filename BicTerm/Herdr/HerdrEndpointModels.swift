@@ -110,6 +110,11 @@ enum HerdrInputNote: Sendable, Equatable {
     case frozen
     case staleTarget(String)
     case writeFailed(String)
+    /// Non-fatal OSC 52 drop reported by the FFI (oversized or malformed).
+    case clipboardDropped(String)
+    case pasteTooLarge
+    /// The pane or boot changed between pasteboard read and send (doc §8.2).
+    case pasteTargetChanged
 
     var message: String {
         switch self {
@@ -117,12 +122,32 @@ enum HerdrInputNote: Sendable, Equatable {
         case .frozen: "Server is still syncing the surface; input held off"
         case .staleTarget(let paneID): "Pane \(paneID) is gone; input retargeted"
         case .writeFailed(let detail): "Input could not be sent: \(detail)"
+        case .clipboardDropped(let detail): "Server clipboard data was dropped: \(detail)"
+        case .pasteTooLarge:
+            "Pasted text exceeds the \(HerdrClipboard.maxTextPasteBytes)-byte limit; nothing was sent"
+        case .pasteTargetChanged: "Paste target changed before sending; paste cancelled"
         }
     }
 }
 
 enum HerdrFocusDirection: Sendable, Equatable {
     case up, down, left, right
+}
+
+/// Decoded bytes of the most recent OSC 52 server clipboard frame, held
+/// for an explicit user copy (integration doc §8.3). The wire message
+/// carries no pane field, so attribution is endpoint-level. The content is
+/// never logged and never reaches the system pasteboard without a gesture
+/// or the per-endpoint auto-copy opt-in.
+struct HerdrRemoteClipboard: Sendable, Equatable {
+    let data: Data
+    let receivedAt: Date
+
+    var byteCount: Int { data.count }
+
+    /// OSC 52 payloads are clipboard text; non-UTF-8 bytes cannot be
+    /// offered to the pasteboard as a string.
+    var text: String? { String(data: data, encoding: .utf8) }
 }
 
 /// Machine-qualified per-endpoint published state (doc §3.5 layer table):
@@ -139,6 +164,9 @@ struct HerdrEndpointState: Sendable, Equatable {
     var desiredRows: UInt32 = 24
     var inputTargetOverride: String?
     var inputNote: HerdrInputNote?
+    /// Server clipboard bytes awaiting the explicit copy action; nil once
+    /// copied or when the auto-copy opt-in consumed them on arrival.
+    var pendingRemoteClipboard: HerdrRemoteClipboard?
 
     /// The pane semantic input routes to right now: an explicit tap/nav
     /// override while it names a pane on the committed surface, else the

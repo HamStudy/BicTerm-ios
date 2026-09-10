@@ -11,6 +11,7 @@ final class HerdrInputField: UITextField {
     var onText: ((String) -> Void)?
     var onKey: ((HerdrKeyInput) -> Void)?
     var onNavigate: ((HerdrFocusDirection) -> Void)?
+    var onPasteRequest: (() -> Void)?
 
     private var repeatTimer: Timer?
     private var keyWindowObserver: NSObjectProtocol?
@@ -94,6 +95,13 @@ final class HerdrInputField: UITextField {
                 startRepeating(input)
             case .navigate(let direction):
                 onNavigate?(direction)
+            case .paste:
+                // Real hardware cmd+v must reach UIKit's edit machinery via
+                // super so the pasteboard read runs inside the system's
+                // consent window (delivered as `paste(_:)`); invoking the
+                // handler from here reads unconsented and blocks the main
+                // thread on the system paste prompt.
+                unhandled.append(press)
             case .textFallthrough, .ignored:
                 unhandled.append(press)
             }
@@ -113,6 +121,22 @@ final class HerdrInputField: UITextField {
     override func pressesCancelled(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
         stopRepeating()
         if event != nil { super.pressesCancelled(presses, with: event) }
+    }
+
+    /// UIKit's consented paste delivery (UIPasteControl tap, hardware cmd+v,
+    /// edit menu): the system grants pasteboard access for the duration of
+    /// this call, so the read in `beginPaste` never trips the system paste
+    /// prompt. No super call — the field's text storage is a scratchpad that
+    /// pasted content must never touch.
+    override func paste(_ sender: Any?) {
+        onPasteRequest?()
+    }
+
+    override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
+        if action == #selector(paste(_:)) {
+            return HerdrPasteboard.hasStrings || HerdrPasteboard.hasImages
+        }
+        return super.canPerformAction(action, withSender: sender)
     }
 
     /// IME-committed text only — composition arrives via setMarkedText and
@@ -173,12 +197,14 @@ struct HerdrInputFieldHost: UIViewRepresentable {
     var onText: (String) -> Void
     var onKey: (HerdrKeyInput) -> Void
     var onNavigate: (HerdrFocusDirection) -> Void
+    var onPasteRequest: () -> Void
 
     func makeUIView(context: Context) -> HerdrInputField {
         let field = HerdrInputField(frame: .zero)
         field.onText = onText
         field.onKey = onKey
         field.onNavigate = onNavigate
+        field.onPasteRequest = onPasteRequest
         return field
     }
 
@@ -186,5 +212,6 @@ struct HerdrInputFieldHost: UIViewRepresentable {
         field.onText = onText
         field.onKey = onKey
         field.onNavigate = onNavigate
+        field.onPasteRequest = onPasteRequest
     }
 }

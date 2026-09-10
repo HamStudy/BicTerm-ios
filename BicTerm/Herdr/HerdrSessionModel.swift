@@ -45,9 +45,14 @@ final class HerdrSessionModel {
     var runtimes: [HerdrEndpointID: Runtime] = [:]
     private var generations: [HerdrEndpointID: UInt] = [:]
     private let handshakeTimeout: Duration
+    let clipboardSettings: HerdrClipboardSettings
 
-    init(handshakeTimeout: Duration = .seconds(60)) {
+    init(
+        handshakeTimeout: Duration = .seconds(60),
+        clipboardSettings: HerdrClipboardSettings = HerdrClipboardSettings()
+    ) {
         self.handshakeTimeout = handshakeTimeout
+        self.clipboardSettings = clipboardSettings
     }
 
     // MARK: - Connection
@@ -71,7 +76,10 @@ final class HerdrSessionModel {
             cols: state.desiredCols,
             rows: state.desiredRows,
             cellWidthPx: 8,
-            cellHeightPx: 16
+            cellHeightPx: 16,
+            // A max-size clipboard image (16 MiB) plus envelope must fit the
+            // outbound queue; the FFI default budget (4 MiB) would reject it.
+            outboundByteLimit: 24 * 1024 * 1024
         )
         let client: HerdrClient
         do {
@@ -218,11 +226,32 @@ final class HerdrSessionModel {
         var lastSurfaceRevision: UInt64?
         do {
             for try await chunk in transport.inboundBytes() {
-                try await client.receive(chunk)
+                do {
+                    try await client.receive(chunk)
+                } catch {
+                    // A dropped OSC 52 clipboard frame surfaces through
+                    // receive but is non-fatal: note it and keep decoding.
+                    // (Not rethrown: the typed catch + rethrow inside this
+                    // async loop trips a swift-frontend ownership crash.)
+                    if case .clipboardDropped(let detail) = error {
+                        await model?.noteClipboardDropped(
+                            endpoint: id, generation: generation, detail: detail
+                        )
+                        continue
+                    }
+                    await model?.handleClientError(error, endpoint: id, generation: generation)
+                    return
+                }
                 // The FFI queues activation/control frames mid-session (the
                 // activation transaction after a snapshot, fence controls);
                 // the single writer drains them in queue order.
                 kick.yield(())
+
+                if let clipboard = try await client.takeClipboard() {
+                    await model?.remoteClipboardArrived(
+                        endpoint: id, generation: generation, data: clipboard
+                    )
+                }
 
                 let phase = await client.phase
                 let snapshot = try? await client.snapshot()
@@ -436,7 +465,8 @@ final class HerdrSessionModel {
              .inputStaleTarget(let detail),
              .inputWriteFailed(let detail),
              .surfaceRejected(let detail),
-             .clientFailed(let detail):
+             .clientFailed(let detail),
+             .clipboardDropped(let detail):
             detail
         case .unknown(let code, let detail):
             "code \(code): \(detail)"
