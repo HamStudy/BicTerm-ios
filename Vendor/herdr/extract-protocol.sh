@@ -7,6 +7,7 @@ export PATH="$root/.build-artifacts/tools/bin:$PATH"
 base="$root/Vendor/herdr"
 pin=b99002ac99b09e00b4ca692436cb15a6b0d676f1
 test "$(GIT_MASTER=1 git -C "$base/upstream" rev-parse HEAD)" = "$pin"
+test -z "$(GIT_MASTER=1 git -C "$base/upstream" status --porcelain)"
 mkdir -p "$base/herdr-protocol/src" "$base/herdr-protocol/tests/fixtures"
 
 # Pinned line ranges preserve frozen declarations; only paths and schema-only derives change.
@@ -19,7 +20,7 @@ extract() {
             printf 'use herdr_protocol::*;\n'
             case "$destination" in
                 tests/upstream_endpoint.rs) printf 'use herdr_protocol::endpoint::*;\n' ;;
-                tests/upstream_framing.rs) ;;
+                tests/upstream_framing.rs|tests/upstream_snapshot.rs) ;;
                 *) printf 'use serde::Serialize;\n' ;;
             esac
         elif [[ "$destination" != */endpoint.rs ]]; then
@@ -64,7 +65,8 @@ awk 'NR>=71 && NR<=81 { gsub(/schemars::JsonSchema, /, ""); print }' "$base/upst
 extract "$wire" '1736:1980' tests/upstream_client.rs
 extract "$wire" '2114:2327' tests/upstream_messages.rs
 extract "$wire" '2423:2610' tests/upstream_surfaces.rs
-extract "$wire" '2612:2875' tests/upstream_server.rs
+extract "$wire" '2612:2693' tests/upstream_snapshot.rs
+extract "$wire" '2695:2875' tests/upstream_server.rs
 extract "$wire" '2876:2891 2951:3191 3471:3500' tests/upstream_framing.rs
 for file in upstream_client upstream_messages upstream_surfaces upstream_server; do
     printf '\nfn encoded_sha256(value: &impl Serialize) -> String { use sha2::{Digest, Sha256}; format!("{:x}", Sha256::digest(bincode::serde::encode_to_vec(value, bincode::config::standard()).unwrap())) }\n' >> "$base/herdr-protocol/tests/$file.rs"

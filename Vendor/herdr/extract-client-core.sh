@@ -6,6 +6,7 @@ export PATH="$PWD/.build-artifacts/tools/bin:$PATH"
 base="$PWD/Vendor/herdr"
 pin=b99002ac99b09e00b4ca692436cb15a6b0d676f1
 test "$(GIT_MASTER=1 git -C "$base/upstream" rev-parse HEAD)" = "$pin"
+test -z "$(GIT_MASTER=1 git -C "$base/upstream" status --porcelain)"
 out="$base/herdr-client-core/src/client/endpoint"
 mkdir -p "$out/activation" "$out/activation_cases" "$out/registry_cases"
 extract() {
@@ -106,7 +107,6 @@ extract src/client/endpoint/activation/protocol.rs '1:219' "$out/activation/prot
 extract src/client/endpoint/activation_tests.rs '1:187 231:254' "$out/activation_tests.rs"
 printf '\nuse super::super::test_source;\n' >> "$out/activation_tests.rs"
 extract src/client/endpoint/activation_tests.rs '188:230' "$out/activation_cases/fixture_surface.rs"
-printf '\nuse super::*;\n' >> "$out/activation_cases/fixture_surface.rs"
 printf '\n#[path = "activation_cases/fixture_surface.rs"]\nmod fixture_surface;\nuse fixture_surface::surface;\n' >> "$out/activation_tests.rs"
 for spec in 'begin 255:450' 'identity 451:643' 'rollback 644:815' 'successor 816:977' 'recovery 978:1139' 'failure 1140:1305'; do
     set -- $spec

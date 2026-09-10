@@ -7,7 +7,7 @@ repository.workspace = true
 description = "Transport-neutral Herdr endpoint state and activation"
 
 [dependencies]
-herdr-protocol = { path = "../herdr-protocol" }
+herdr-protocol = { version = "=0.9.0", path = "../herdr-protocol" }
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true

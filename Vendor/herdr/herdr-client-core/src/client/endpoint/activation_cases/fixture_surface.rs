@@ -56,5 +56,3 @@ pub(super) fn surface(
         graphics: Default::default(),
     }
 }
-
-use super::*;

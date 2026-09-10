@@ -1,0 +1,38 @@
+[graph]
+targets = ["aarch64-apple-ios", "aarch64-apple-ios-sim"]
+all-features = false
+no-default-features = false
+
+[advisories]
+db-path = "$CARGO_HOME/advisory-dbs"
+ignore = [
+    { id = "RUSTSEC-2025-0141", reason = "Maintenance-only advisory with no safe upgrade: generation-1 requires the upstream bincode 2.0.1 codec. Pinned exactly, frozen-frame tested; replacing serialization requires a newly negotiated codec. See PROVENANCE.md for retained maintenance risk." },
+]
+
+[licenses]
+confidence-threshold = 0.93
+allow = [
+    "Apache-2.0", # Herdr and the dual-licensed Rust dependency family; retain notices.
+    "MIT", # bincode, generic-array, zmij and dual-license alternatives; retain license texts.
+    "Unicode-3.0", # unicode-ident has an AND obligation, not just an MIT/Apache alternative.
+    "Unlicense", # Explicitly inventory memchr's Unlicense OR MIT expression; MIT may be selected.
+]
+
+[licenses.private]
+ignore = false
+
+[bans]
+multiple-versions = "deny"
+wildcards = "deny"
+deny = [
+    { crate = "portable-pty", reason = "PTY execution is excluded from the embedded core" },
+    { crate = "crossterm", reason = "Desktop terminal backend is excluded" },
+    { crate = "ratatui", reason = "Desktop rendering is excluded" },
+    { crate = "interprocess", reason = "Local socket bridge is excluded" },
+]
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []
