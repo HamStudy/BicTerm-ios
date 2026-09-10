@@ -297,4 +297,49 @@ final class HerdrSessionModelTests: XCTestCase {
             "every FFI client must be destroyed exactly once across the lifecycle"
         )
     }
+
+    // MARK: - Soak (informational)
+
+    /// Plan T16: snapshot churn x100 — 50 reconnect cycles x (2 snapshot
+    /// revisions + 1 surface attempt each). FFI ledger must balance; the
+    /// memory trend is INFORMATIONAL (logged, not pass/fail).
+    func testSnapshotChurnHundredApplicationsSoak() async throws {
+        let ledgerBefore = HerdrClient.liveFFIAllocations
+        let memoryBaseline = os_proc_available_memory()
+        let clock = ContinuousClock()
+        let started = clock.now
+
+        let welcome = try vendorGolden("server-20")
+        let first = try herdrGolden("snapshot-2x2")
+        let second = try herdrGolden("snapshot-2x2-rev2")
+        let surface = try herdrGolden("surface-2x2")
+
+        let model = makeModel()
+        let endpoint = HerdrEndpointID(rawValue: "soak")
+        var applications = 0
+
+        for cycle in 0..<50 {
+            let transport = HerdrReplayTransport(script: [welcome, first, second, surface])
+            model.connect(endpoint: endpoint, transport: transport)
+            let settled = await waitUntil(timeout: 10) {
+                model.endpoints[endpoint]?.snapshot?.revision == 2
+            }
+            XCTAssertTrue(settled, "cycle \(cycle): both revisions must apply")
+            applications += 2
+            await model.disconnect(endpoint: endpoint)
+        }
+
+        let elapsed = clock.now - started
+        let memoryDeltaKiB = (Int64(memoryBaseline) - Int64(os_proc_available_memory())) / 1024
+        XCTAssertEqual(applications, 100)
+        XCTAssertEqual(
+            HerdrClient.liveFFIAllocations, ledgerBefore,
+            "the FFI allocation ledger must balance across 100 snapshot applications"
+        )
+        print(
+            "[h16-soak] applications=\(applications) elapsed=\(elapsed.components.seconds)s "
+                + "memoryDeltaKiB=\(memoryDeltaKiB) (informational) "
+                + "ffiLiveAllocations=\(HerdrClient.liveFFIAllocations)"
+        )
+    }
 }
