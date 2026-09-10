@@ -1,0 +1,11 @@
+start: session created
+dial: tailnet coordination established agent_ipv6=fd7a:115c:a1e0:44c6:9cca:cf67:af36:bb2
+{"codernet_event":{"type":"networkPathChanged","source":"coord","handle":1,"path":"direct"}}
+dial: ssh proxy bound /Users/richard/code/BicTerm/Fixtures/run/g12s/coder-ssh-9e6fc6e9-7c1f-4099-abb9-33acb54f902c.sock
+[ERR] yamux: Failed to read header: failed to get reader: failed to read frame header: EOF
+failed to dial tailnet v2+ API: server replied invalid resume token; unsetting for next connection attempt
+failed to dial tailnet v2+ API
+[ERR] yamux: Failed to read header: failed to get reader: context canceled
+closing tailnet Conn
+closing tailnet Conn
+close: session torn down

@@ -1,0 +1,1283 @@
+{
+  "passed": true,
+  "positive_controls": {
+    "user_tokens": 6,
+    "resume_tokens": 8,
+    "private_keys": 165,
+    "terminal_contents": 6
+  },
+  "files_scanned": 254,
+  "leaks": [],
+  "files": [
+    {
+      "path": ".sisyphus/evidence/phase2-g12-a31-compat-probe.log",
+      "sha256": "535e5a1d494ece9dff12d365f78b8cc1d900fad461c8dbb0942d2c53c2b75ce7",
+      "bytes": 2071
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-a31-eow-green.log",
+      "sha256": "6c2d0c3153ad99320a9de2e9d7c42ba5e3a83b58dfb3131d5b53e51a958764df",
+      "bytes": 2287
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-a31-eow-red.log",
+      "sha256": "ea39d339f3cbdca272069f17b04883fca36c88b92ba60e8f83f3e5ca54acd739",
+      "bytes": 280
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-a31-go-final.log",
+      "sha256": "243bdae7927f1407ea166b55f7284be1e2b39d58bf07d3b0afaac3abff451414",
+      "bytes": 2489
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-a31-harness-after-write-fix.log",
+      "sha256": "988e7c2154f86d0da59f59b7534609eb8e1a8b9a594569878c7173a4496b20c7",
+      "bytes": 2106
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-a31-investigation.md",
+      "sha256": "ff18c0d47313943d5969894b5b149ad177e7b3bf26b4ba463b3929f7b2424b6d",
+      "bytes": 3730
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-a31-live-swift.log",
+      "sha256": "70114f80784d3cead3b758f21c95fd819483bd99397795b23c58811703bf974f",
+      "bytes": 277980
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-a31-matrix.log",
+      "sha256": "14bf1dfdf36bb655b37955ab088903b4d8d8f3f9d41a8a57da6f47c68b10eb04",
+      "bytes": 284
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-a31-native-green.log",
+      "sha256": "c086e986835b27ae9bb7760893090050a4f210103d9e9804be3312fb7f8f8b55",
+      "bytes": 2071
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-a31-native-probe.log",
+      "sha256": "d6194825182ec9ad3122e33bb3701303756a99bdbe5e53b5bfdf9d97faa463b6",
+      "bytes": 2106
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-a31-openssh-before.log",
+      "sha256": "4abc232634850aabfcb95fc374f2a569de347147c2c78e4a192245b8e9784687",
+      "bytes": 288540
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-a31-openssh.log",
+      "sha256": "8272664fb2a884161c87069384d77b005949f94ac95d2222b23bc676e3f95dcb",
+      "bytes": 11742
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-a31-relay-green.log",
+      "sha256": "197252771d3961f65f59d390720d6150ad9b2e593980e5f003d48f5072ef4246",
+      "bytes": 2072
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-a31-toggle-red.log",
+      "sha256": "ecd7db2ce207a3a12b4b97f65933e6ed7101ab1193961581aaa84cf40d9169d2",
+      "bytes": 2106
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-a31-write-green.log",
+      "sha256": "fd6e3963b53a7f1a96aab23e0cb5098478f539a13798ac54342ae77ddb326701",
+      "bytes": 2104
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-a31-write-red.log",
+      "sha256": "404aad4fa959aaecb58dc04aeba0e73ef9dd0689098f03559d36bbe8eab80e0c",
+      "bytes": 277
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-a31-xcframework.log",
+      "sha256": "b3e21fdc31ad51cf807ad88746bf0ed9abf9bd100e6ab2f79fc122d939cd25ff",
+      "bytes": 161
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-appstore-build.log",
+      "sha256": "d40f004424bd96fed60be89335c839c973a62f6dece24802df81987ce8e05bf6",
+      "bytes": 1481111
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-actions-brief.md",
+      "sha256": "3b7f93578bb057a700c1b3fcf7313098d2f1dd50c1b964732a33b98c8f07769e",
+      "bytes": 2330
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-actions-green.log",
+      "sha256": "f8bbbd787232bc29a4276bf9673a36a69e7634522d0172d5d93a8359e1f4efa2",
+      "bytes": 225574
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-actions-policy-regression.log",
+      "sha256": "f73d076f65f11cd26893c0607fa1c673fdf914c02472d64b50fb4b3c591fe889",
+      "bytes": 128516
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-actions-prepare.log",
+      "sha256": "184152a860aa297a5de717a461929f1b03d68b445abaee76526813e12818672a",
+      "bytes": 41296
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-actions-red.log",
+      "sha256": "32ab79e9da4465d9eb58d6ae5e5464f4bcd62bed0350679f5d856daf6aa64741",
+      "bytes": 257749
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-actions-start-regression.log",
+      "sha256": "bb2066284d7880f79db85671af8e9b85fe41316e5d3ce8fd1db1a11740d4450b",
+      "bytes": 130119
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-actions-unit-regression.log",
+      "sha256": "5552e17b410dad2afc060d4ff8e0eda997f858157926383b31a44ecc665141d4",
+      "bytes": 80641
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-agent-connected.log",
+      "sha256": "d13abadede529cddcb5e2bccdc2bb4981a873cf8225d1695d85e0bb2ea65db45",
+      "bytes": 700
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-agent-inventory-ready.log",
+      "sha256": "5244ccb3f71e751998dccb3f104aae510bca62c8be29ef73c190323081ca23ea",
+      "bytes": 706
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-agent-inventory.log",
+      "sha256": "77838b4f25d489d5435623f10e55a8c01c7a641e17f56e275983e79b09323f70",
+      "bytes": 153
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-auth-audit.log",
+      "sha256": "7223b8e27e1fa5f15b205595de60a4bf25cf2a7d1db3f725ecd1b09dcd9c62db",
+      "bytes": 90
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-auth-matrix.log",
+      "sha256": "9091376efac09203b557e7ff79ef9971462d5420f7d3f3764fb3b2d24e423717",
+      "bytes": 284
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-auth-native-green.log",
+      "sha256": "c7657e86eee617ab43f8f3836949215661c444a52481ce4d29563bfbeeb90580",
+      "bytes": 81050
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-auth-native.log",
+      "sha256": "d0f08ea5d53b70cc6c2ea680748dc7fe90d401035170c848f0487685ee7c01f4",
+      "bytes": 57587
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-auto-agent-ledger.log",
+      "sha256": "bd84042d18b26e5d0cce530fbc38b84d705e480a2775bed63e238ce42012250b",
+      "bytes": 113
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-auto-final.log",
+      "sha256": "bf59baa9e3c752508d91c842898dfbe6bd0c21ee80a368fe4171e293a792738d",
+      "bytes": 238557
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-auto-green.log",
+      "sha256": "70cf3d5cfec79fa1cd0378c259c8ff638ebc404f19a6e44c5d964668f5dbc0d7",
+      "bytes": 190047
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-auto-red.log",
+      "sha256": "3c07903cb50afa97a68778cee9c43740a0a27a88b652bf1282fbd3885eaed07d",
+      "bytes": 385545
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-control-brief.md",
+      "sha256": "44aeb5b644b40449429c85226391ed34d02ffafe802950dd2a7ee2c012a6dc56",
+      "bytes": 2268
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-control-reset-native.log",
+      "sha256": "e9797a129245afd55ff712feb084ab03b28ff62a2b14885e15141ce58c22b32c",
+      "bytes": 45627
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-control-reset-proxy.log",
+      "sha256": "a5f64609c20f25eba8c985df2ef5df96e2e5d005be0f8374ddfd7faccf1153fc",
+      "bytes": 163
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-control-reset-tests.log",
+      "sha256": "fe5ffd914d8a864d560b8d6afca31c0da9fa13ea4d3ea383c94c217896b88b8b",
+      "bytes": 26713
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-control-resume-bridge.log",
+      "sha256": "4a05d20471193b90dbec9ba300b30593356ae454d0757998bb54797eaf92dffd",
+      "bytes": 695
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-control-resume-native.log",
+      "sha256": "72898a34b2d5ceae53cb9557b9d77531898964ae0cb34390f719a241d417331b",
+      "bytes": 130981
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-control-resume-proxy.log",
+      "sha256": "22c03a8b6255b352914b2bf2c11a192e186b7eb2c2d4a98c7f7cb718c0b3a50b",
+      "bytes": 221
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-control-resume-tests.log",
+      "sha256": "88482077dee8f80a4532ccc5435a040f248b0ab791e4d10a5e7bff1529ffd14a",
+      "bytes": 112066
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-create-help.log",
+      "sha256": "ab12b987e0c2376a6fe12e469c488eb238304bdf857b0b0d1eca99f6953d5a39",
+      "bytes": 3171
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-derpmap-brief.md",
+      "sha256": "4a2eef44c02842f245333429269e277f4085c2a9be4e0aa9033a7cf2991aada2",
+      "bytes": 1328
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-derpmap-go-regression.log",
+      "sha256": "52a606b8f80bd302c39c6526e5f5cd4ba80c72721620549e765ca5293f272b8c",
+      "bytes": 41
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-derpmap-native.log",
+      "sha256": "a60ab88bb8b8adc2cb12434821f61c682cc4c5932aa84799a2c5dbabb01fe452",
+      "bytes": 393
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-derpmap-xcframework.log",
+      "sha256": "b3e21fdc31ad51cf807ad88746bf0ed9abf9bd100e6ab2f79fc122d939cd25ff",
+      "bytes": 161
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-permission-bridge.log",
+      "sha256": "4cad1c39e714c2bd71fcaf8c2a55000dd84163cf6a9288509ac319fc545afbd5",
+      "bytes": 306
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-permission.log",
+      "sha256": "13ab21ec2d0614add74923536732f58e52acfa853f665d0f71565e5b2e406aba",
+      "bytes": 660
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-profile-native.log",
+      "sha256": "d55524bdf3cd3273d9cec42ccfebc4c59f5ce38b9d3f218ee3c0e0649cfc3dec",
+      "bytes": 109854
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-profile-selection-regression-wrapper.log",
+      "sha256": "fa07542229087d0e3124b3e7e428d6ec500661ca956b9f7a36db7fbc950d5ea2",
+      "bytes": 28770
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-profile-selection-regression.log",
+      "sha256": "88ce1c0ebfd2e65b69421ce84f9b7c55af0eb1ac9f88dbb130956bca0ba96a32",
+      "bytes": 28636
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-profile-tests.log",
+      "sha256": "563a7fa7edd57b6a5605ae6c704ae25248e30764023b216d813a4f0b3a42a23e",
+      "bytes": 85913
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-profiles-brief.md",
+      "sha256": "a2f109328e49596aa2ecbc0c0195394209dec8c45e702126282b72dc878155b6",
+      "bytes": 1803
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-rebuild-agent.log",
+      "sha256": "d50dfdba3dd600cd9a4b77d5cac95c296304a8f7e4d1e2c4f7c2d7672a71918b",
+      "bytes": 18789
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-rebuild-brief.md",
+      "sha256": "60924a1190498c0b52920bee9405bd563cde1760e17103ee4bb9a00a7e6341b1",
+      "bytes": 1229
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-rebuild-native.log",
+      "sha256": "86bef281e41fa71140f2c6725920f3ac3cd3a4fdf719e77150c1250a2954eb26",
+      "bytes": 99098
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-rebuild-tests.log",
+      "sha256": "2569ef94a7eb59551dd28fe5c126cb64f3d4aabdc92d907e54e5483191f99c5a",
+      "bytes": 83421
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-resolver-regression.log",
+      "sha256": "6119cd7fff911600692076db0de85ba6072281e64f9df29211b3ff672d50922a",
+      "bytes": 29569
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-selection-acceptance.log",
+      "sha256": "db45940e02620fdb22e2b778d062fb4f9667fcca7f2305029c40af638f2abb5f",
+      "bytes": 28636
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-selection-after-rebuild.log",
+      "sha256": "46b86dfd8f8df6439e198cdb01910bb582fa0bc900aef3d95a4190e27443daeb",
+      "bytes": 706
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-selection-behavior-red.log",
+      "sha256": "7e7db0f8fe3fdf21db4d7d4534fde0159ad2d52272fa2d25bc4aa5a2d72133e6",
+      "bytes": 82533
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-selection-brief.md",
+      "sha256": "cadefb095802c12ddf9f272262901b2efe58436f79cae099ad131b36e6b5a7ba",
+      "bytes": 3346
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-selection-current.log",
+      "sha256": "80766eb4daaedbc52090d985be892ad098819455b03a9353bd17713ffc693a5e",
+      "bytes": 702
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-selection-final.log",
+      "sha256": "50edfcf78bbf3c27aa54878864c1513bbc0b6ab31171804f3c71b61c56e2171b",
+      "bytes": 81857
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-selection-fixture-green.log",
+      "sha256": "2c6345dea52717613e0fe1f48b4438c024dbe90aa50da701dcbc008c4abee946",
+      "bytes": 7080
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-selection-fixture-ready.log",
+      "sha256": "69d889cbbe36f024a97295ee61898bbca5e4b872c25e3ede09ec7cf6f6205de1",
+      "bytes": 19206
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-selection-fixture.log",
+      "sha256": "6cb47a1ac7a4f3c0de709f118117b0c8a9baa7dec0e056c708153aca73b813e1",
+      "bytes": 18926
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-selection-green.log",
+      "sha256": "49403bc4f18c2a3d95467138a239e6fc0cc5b8d06d65d920b5cd047946e38a4e",
+      "bytes": 155603
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-selection-matrix.log",
+      "sha256": "2abdab8fe76fd70f482fd2de23a810bdd53d862762bcb82d8b0a3edc04f175aa",
+      "bytes": 284
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-selection-previous.log",
+      "sha256": "b5789d0cd919ddac95e7ba717023587f126aed33971a5fbc5f1e338376c74228",
+      "bytes": 703
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-selection-rebuild-fixed.log",
+      "sha256": "0dc1e0acbec52e7a99db1eec847b035abb0e5af1fcd7fe9e4147e790c77eb416",
+      "bytes": 22140
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-selection-rebuild-readiness.log",
+      "sha256": "46b86dfd8f8df6439e198cdb01910bb582fa0bc900aef3d95a4190e27443daeb",
+      "bytes": 706
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-selection-rebuild.log",
+      "sha256": "a70245a79d264b33a618f05515bb9bad894c5f35a6d8e4da1d60fec9be4a6414",
+      "bytes": 22138
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-selection-red.log",
+      "sha256": "b7db75c738f18f1156e27dfcc019c3745ffe6404506ec9d9797bb24ce325b8ab",
+      "bytes": 57342
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-selection-wrapper-final.log",
+      "sha256": "ecd6735cb0d3f1d90836ccc75acc75d206e6aa27c71d56093314e9ba4defd058",
+      "bytes": 73044
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-selection-wrapper.log",
+      "sha256": "52b1f9761ce94be8f62d55dd5011bd7db356860c12bd34d1c9bcbe288dc63db1",
+      "bytes": 135944
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-selector-extraction.log",
+      "sha256": "63eac74741a24fa33bf15478208183d6752161c8c9ce0df30d7bf02c975217ff",
+      "bytes": 127170
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-start-acceptance.log",
+      "sha256": "98ea267d7775209a041f61db3cee1d6277282e34851494fd0deaba15eaa712f1",
+      "bytes": 114089
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-start-agent-ledger.log",
+      "sha256": "7395d0c543b7fb918e935192208639d33e6918f843789114f21c0aab07dffbe9",
+      "bytes": 108
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-start-brief.md",
+      "sha256": "cbcc01fed08a183631d771a2a60e7cedea3f8c9385ccaf48f55209a7b925d7bc",
+      "bytes": 2670
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-start-disabled.log",
+      "sha256": "184793143702b5d25494e90915632055fb97096cf7f633daa11f2b976fd64225",
+      "bytes": 84592
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-start-matrix.log",
+      "sha256": "6bedebe44d3b3889105373cbe8394f584be7b2d4e0f8aaa52d4722b88c3099c8",
+      "bytes": 283
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-start-native.log",
+      "sha256": "d83115adfdb5c56eb06fb9e187b0cfd641dbd04e85d41237ce7de252ff4136e3",
+      "bytes": 387082
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-startup-blocking-state.log",
+      "sha256": "3ff0ef6cb51ae90840bf883540ce93203fd77218269ca0a6b78069f2025656b0",
+      "bytes": 500
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-startup-cli-comparison.log",
+      "sha256": "f50d3acffd7faf32282741e1ccf7927f4320a0b0a7e525ec027edc1f259cbea2",
+      "bytes": 255
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-startup-cli-prepare.log",
+      "sha256": "7f7fd60087cee7a42f0b7a04d8ef959e0acee38f06ae73fb36b5763375356f28",
+      "bytes": 73816
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-startup-cli/blocking-stderr.log",
+      "sha256": "d3f9b6a57c69405617118bb6150aa8242ea263391cc14622014e4ea9151a7434",
+      "bytes": 222
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-startup-cli/coder-ssh-20260909-164958-iclmw.log",
+      "sha256": "72667cc2bd57dffc792decc322abd1b1c7f86cfd7aaeda38187e2d1703fa8cce",
+      "bytes": 221
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-startup-cli/coder-ssh-20260909-165001-skwwu.log",
+      "sha256": "2fd0aa54fa60fe907ab791eb4c07d0222f6a818040f0817e39f060784f66517f",
+      "bytes": 221
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-startup-cli/nonblocking-stderr.log",
+      "sha256": "f49c6cadeb7a78afeff49e95b22049048bd41cf8d5db2be964436c6eb786a1dc",
+      "bytes": 349
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-startup-error-state.log",
+      "sha256": "32d4ddfe92d1356703819a932cbb2e5c8993e7e3123578701729d1cbc1e7f3d9",
+      "bytes": 499
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-startup-final-wrapper.log",
+      "sha256": "ac57a6a6beea5e9edab06291d226fb6e52f76a36ca47b70d0b2bbda0a3d35026",
+      "bytes": 102435
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-startup-green-wrapper.log",
+      "sha256": "f20401cc62b7b4abc2681bfb7a99d31885dbacca8a739ab2710d1c1cbd615839",
+      "bytes": 241957
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-startup-green.log",
+      "sha256": "7e0cf9a88c33fe8af53d2c857cc2177c5527358823033dfb5014391b0599acae",
+      "bytes": 168089
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-startup-matrix.log",
+      "sha256": "f5b116cfbb7c8c41e45606787ef13185c764ad736abec7d6f9ad778c760f552e",
+      "bytes": 283
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-startup-nonblocking-state.log",
+      "sha256": "f5d675de1a21f77c7d7bb9809ede3b3864a6fa26900aa07f3c502603b236f901",
+      "bytes": 500
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-startup-red-wrapper.log",
+      "sha256": "78920937998d9472b545750edd68519f128b58f25ebf770b1a8267a2431046a7",
+      "bytes": 146206
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-startup-red.log",
+      "sha256": "dfda71c98e0d9e28d1e6a6d4d690e9ba1cf1813f5d8d5b6f75f87d1e36285c1c",
+      "bytes": 85206
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-startup-resolver-regression.log",
+      "sha256": "f6b055564d57ed2166ed1546a5e41841a4458a85a9a79f680271b864b92a7b94",
+      "bytes": 29569
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-startup-tests.log",
+      "sha256": "3394d82ddd9bf5591aec280808c412a843dcf26b64043a62d6e86478b980ba31",
+      "bytes": 28592
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-startup-timeout-state.log",
+      "sha256": "b94023adc046cdac2e31ccb8403f9c0b85d8674d513d89e4f8cb72ba5c778cc9",
+      "bytes": 499
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-startup-transport-regression-wrapper.log",
+      "sha256": "cc913246d87d80a8ac9886b5dd8a08d9ac72404705519c47133d66eb109e11e1",
+      "bytes": 31890
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-startup-transport-regression.log",
+      "sha256": "d630165ea8cb998218addb14ddb8d2bfae28756d811a3fdd14871009153d2235",
+      "bytes": 31756
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-startup-unknown-green-wrapper.log",
+      "sha256": "56c5f756d30a8207ae239fea83552fd4b83cca8c62335eff91227f01d3c9df29",
+      "bytes": 91943
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-startup-unknown-green.log",
+      "sha256": "e4af98aa51358bc0f041aec43ad5862cb4a60e901a35297108e92f69da37fbbb",
+      "bytes": 91816
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-startup-unknown-red-wrapper.log",
+      "sha256": "cc754f485b7f65e8fb3ef264bff7ae459c6aaf5f948a2f02be0d7fa2fc41826c",
+      "bytes": 83545
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-startup-unknown-red.log",
+      "sha256": "3485a696c065bff8813391a08002399e20da86db9493ab68314764fcb7f5e527",
+      "bytes": 83411
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-startup-verification.md",
+      "sha256": "142fd5e435a5026d26278c845e10f71c7f56bd177a820079b75c9eedb8a1172d",
+      "bytes": 3464
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-b-update-help.log",
+      "sha256": "9e349a718c2aba52b57219d44f0abb9bc9cbc96aabcb0bb42565957100f6bbcc",
+      "bytes": 1912
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-checkpoint-secret-audit.log",
+      "sha256": "4a732e3ec687a7cc6ed75173df9f2239e39104285c50e58fbcd6c94a63b163f9",
+      "bytes": 53
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-cli-help.log",
+      "sha256": "593752cb7bbd629bf0a3a7d7e3f42c1d909341c28cb271f1d9f17f475b91d585",
+      "bytes": 3564
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-cli-reference.log",
+      "sha256": "062127bc3b73222ce8f49e075197f66bc421545907ad21aaea9386d87fa0ca27",
+      "bytes": 730
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-coder-fixture.log",
+      "sha256": "46f4d6a7da6efa6ec449c6fa88d5b9be443bdb590e26b9e5ae1c276070f72f08",
+      "bytes": 6026
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-connection-editors-ipad.log",
+      "sha256": "ca0b43c138ee37d680a68f93e5514541b01a3571334d75c708645ab1cfda69f0",
+      "bytes": 228952
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-core-ipad.log",
+      "sha256": "4fe5639fdd32ac774fa1f305671645de3815ce075fa1cd7746f8cb6cff5b0733",
+      "bytes": 126707
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-core-iphone-retry.log",
+      "sha256": "55354465bc8cb97503c8d676a17f047c840f2e5ffcbf49dcb036506fa9d317fe",
+      "bytes": 128229
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-core-iphone.log",
+      "sha256": "6da3a656eaecd858f1995afc871099cd1ff576483df3131ac81e9ba52c405d6b",
+      "bytes": 1377862
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-default-arm64-build.log",
+      "sha256": "6046b308e6c28c213fdb7e8c6c4d9c6870ad5272298cce372216029bd6d7689c",
+      "bytes": 1227094
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-default-build.log",
+      "sha256": "cd736f195330fcbc0a6786b2b2e395e3a4c46cb0a627acd795999e9257a2e871",
+      "bytes": 2840185
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-editor-ipad-green.log",
+      "sha256": "2fd15f9c545d88dbe6b4b3df0c6528e0e31998042fc7dc89b8d50697c83b9ea0",
+      "bytes": 213746
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-final-CoderAgentPickerUITests.log",
+      "sha256": "dd9c101ec501d337b63d6d27cbcb5521c1de7cc0fb27294bc111bd073ba792df",
+      "bytes": 268444
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-final-ConnectionEditorUITests.log",
+      "sha256": "0cc1f7d2dfcb681cdfdeb830f60f6ea5240b535004b31088579e6778bc181aaa",
+      "bytes": 248136
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-final-PasswordAuthUITests.log",
+      "sha256": "36ebb8db6a3971a0bf1e0096d392911779ee8de1f0c2e783f888082076244d49",
+      "bytes": 137889
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-final-acceptance-brief.md",
+      "sha256": "819162642e301cf886a48a169239a4352cc357b0770223c43b584ed6083a0b03",
+      "bytes": 3076
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-final-agent-export.log",
+      "sha256": "daca6405ef197b8a0fda0f50acce9167378b9e9b962150b1a0267f87f6d134be",
+      "bytes": 6079
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-final-agent-green.log",
+      "sha256": "e022e81817c05d2853ddbe0c37346ea36a6fd8b4d3138246bc0fd65096753f8e",
+      "bytes": 243847
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-final-checkpoint-validation.log",
+      "sha256": "bd8ec7eeeeb045570efbfb9fa5605b0e099c3733ddaf72ab86ee88a910dcdd17",
+      "bytes": 284
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-final-core-ipad-wrapper.log",
+      "sha256": "2e5992c4b90a270aa9c2b3df79249e6132dcc947262ee80fb63038f115f64832",
+      "bytes": 246257
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-final-core-ipad.log",
+      "sha256": "c41a1d07ec09d8bea9f51c161512a0572aec94035200bafaeccb173dbc3ecd10",
+      "bytes": 134808
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-final-core-iphone-wrapper.log",
+      "sha256": "3990c6202c79b6e3b44ea84db4be170b26fc208b2ec271a0a137af9f694681ac",
+      "bytes": 244166
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-final-core-iphone.log",
+      "sha256": "f6131d2171cb27e918fb0438472c7eba56f3553baa87894b05d76a7dbe511810",
+      "bytes": 132649
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-final-derp-fallback-fixture.log",
+      "sha256": "2059fa71e179a6f8a7f130e2e9af64a0d2ec08d6254bea8890e1d8c4bc05479d",
+      "bytes": 5994
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-final-derp-fallback-proxy.log",
+      "sha256": "99cf37a8cc13275e5f3dcb49aa5ce6274200ac948e0d1b86935135d6cd6e5b7b",
+      "bytes": 262
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-final-derp-fallback-raw.log",
+      "sha256": "e89b2f2ea506cb60ca548d17da315554117d811e541b34308d8ab5047513be3d",
+      "bytes": 1816
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-final-derp-forced-fixture.log",
+      "sha256": "6e14768e155fe34515456dd4dd3430dc41c12dc9067b61579763915479cbab4b",
+      "bytes": 5994
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-final-derp-forced-proxy.log",
+      "sha256": "7870406d90e2899a1e6da6c7218cc2fcd3bc7a87d8d97beb10c7cea195dda974",
+      "bytes": 136
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-final-derp-forced-raw.log",
+      "sha256": "9f671e585035b8586b16ebabf2e48ccd311c91892e3288635eac086b6df60a9d",
+      "bytes": 1816
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-final-derp-restore.log",
+      "sha256": "7ea982c8616e92cb7504cb0e1abea167276ed02b97095790ead8c796a187b96e",
+      "bytes": 6010
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-final-derp-retry.log",
+      "sha256": "51c087d830c7f0ba6213c91d9536eecfdb41f2f6ba7e5a94a913396ba21e748c",
+      "bytes": 524
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-final-derp.log",
+      "sha256": "466e9dd43acdfef79ab788303d4ff9c4326ffbb0ec65beac3ffde96e0a9bbefa",
+      "bytes": 288
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-final-full-ipad.log",
+      "sha256": "621b023d0104b356ec51a844c37b9cecad13b1a3bd5dd42817dec0eae211c55a",
+      "bytes": 864661
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-final-full-iphone.log",
+      "sha256": "802055da9a232724b61709b91e5f81d14100d9ca876c731223df601ef5811e7d",
+      "bytes": 624768
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-final-go-tests.log",
+      "sha256": "a9d74c5ee60575f052ad2da0a7e59189d9c68468b69b4985226fabc7358817df",
+      "bytes": 1927
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-final-go-vet.log",
+      "sha256": "18f7f4f80844e39986d44a39347d177ddc247ac165cccab31b128540e34173ee",
+      "bytes": 72
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-final-ipad-control.log",
+      "sha256": "22c03a8b6255b352914b2bf2c11a192e186b7eb2c2d4a98c7f7cb718c0b3a50b",
+      "bytes": 221
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-final-ipad-rebuild.log",
+      "sha256": "723a1b649e7b5a33449a3751c85ccf9903c16f3fff52fd048ef12a545ead6f3f",
+      "bytes": 18790
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-final-iphone-control.log",
+      "sha256": "22c03a8b6255b352914b2bf2c11a192e186b7eb2c2d4a98c7f7cb718c0b3a50b",
+      "bytes": 221
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-final-iphone-rebuild.log",
+      "sha256": "f5faff90dd4d6b6d5333b809fbfc1970eaec788cee9e47c48ba0222afd0501f7",
+      "bytes": 18757
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-final-new-window-green.log",
+      "sha256": "f263317bfd5c55f43f03f70c0b5de676baccce95a054a9875b481c9bc4bd71c5",
+      "bytes": 188808
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-final-new-window-red.log",
+      "sha256": "f95e65f80dfcd04ada00eeeac30b63ab4eb36070c4e1492367c2369c3c17e762",
+      "bytes": 242489
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-final-new-window-red2.log",
+      "sha256": "e00e1731160f7ff01b073bf2ebf621b3aa3f718b90b47a1116533095e2a14501",
+      "bytes": 100924
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-final-port-export.log",
+      "sha256": "2dcaf8dca8c9f0d08e9cabcdc32a27f0e0d2182574ccb65cfac8f53a8e7a3e18",
+      "bytes": 786
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-final-port-keyboard.log",
+      "sha256": "70ef1dad19221a6af1931ca5245cdac6d079f463dcab941e1bef2b662f19bd2c",
+      "bytes": 179680
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-final-port-probe.log",
+      "sha256": "766efe711b65006989d324ca1dca8a62365562e399f8d050701264020de50b76",
+      "bytes": 103028
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-final-progress-brief.md",
+      "sha256": "5d8c13ba7fbd3b4f78c7ae514799bb678fa9d40c2984bb4457bfd3ff527c54d3",
+      "bytes": 10673
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-final-proxy-eof-red.log",
+      "sha256": "bd0aef29959dc8ebe37f794c7df4d4ecbaea8d5c3761e9dc487678406f042ace",
+      "bytes": 460
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-final-proxy-green.log",
+      "sha256": "38278abe08a21acb8a17a637d05a8019be70d23804cf3f89b6d66e8ebdae1054",
+      "bytes": 41
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-final-raw-bridge-direct.log",
+      "sha256": "fb1425d642414e6acd4090786b2ede21212f0d4958de9d703c4071192e412836",
+      "bytes": 537
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-final-raw-bridge-relay.log",
+      "sha256": "c4507bf198a4a1b86d5dca1592b45ce9fad59171549fcbc9e9fe94562e44d52d",
+      "bytes": 538
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-final-raw-bridge.log",
+      "sha256": "bff4b6d42f5e7ee4ee1d0f83d3820714d7dea3e7e0b262a3d7a4bfd255200fb6",
+      "bytes": 537
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-final-raw-cancellation.log",
+      "sha256": "76265415183f71b0c97b11646ceef670f6b519eef0e090cd981b2c20e65b6e75",
+      "bytes": 2106
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-final-raw-direct.log",
+      "sha256": "b5174ea8f7e78c254c1ef41745276ba9d6ff90ef391203a380401342d66d42e3",
+      "bytes": 1606
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-final-raw-green.log",
+      "sha256": "312dc586499538dbc8a4073fca1a6b9ae237b6c820bb2002d7f108ed3a0f9ef4",
+      "bytes": 1683
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-final-raw-probe.log",
+      "sha256": "c992a226acbc6c1bfb195f2ddcc40425d405eaff5f37701e02be3055461f020c",
+      "bytes": 812
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-final-raw-relay-current.log",
+      "sha256": "55eb365ffb7ccc058a99cfd6ee9e9a26d571c3d7bd0c3197f14db4bb979baefa",
+      "bytes": 2107
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-final-raw-relay.log",
+      "sha256": "07eb03a6bd0d5e3da4641957841ef0c05035b4e2ab9d6e26e5bf4a9b0dc0c0d5",
+      "bytes": 1721
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-final-raw-ssh-debug.log",
+      "sha256": "f71013ac3d76e307dcdf40219f1022533392504fff60657cc825d6d6c2f4c9d7",
+      "bytes": 11373
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-final-raw.log",
+      "sha256": "a7ed6906c2dbb81e07430d52313fc7bdcf881ded8883d72259b255769573d76e",
+      "bytes": 791
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-final-server-policy.log",
+      "sha256": "716a3f34713d26f7b3c4f0bd45f12303280b336525d041be491a132efaae7fb1",
+      "bytes": 7890
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-final-trust-clean.log",
+      "sha256": "86b170c41016656a71ecbabbd5bfd76dd9432eace2f7f0eafd13bdeeb3480609",
+      "bytes": 85229
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-final-xcframework.log",
+      "sha256": "b3e21fdc31ad51cf807ad88746bf0ed9abf9bd100e6ab2f79fc122d939cd25ff",
+      "bytes": 161
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-fixture-secret-audit.log",
+      "sha256": "4749d3a9a0ab3599fbb10cf4b3f5213bed29e3c53d2d0d72f97d9ea6049660e8",
+      "bytes": 61
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-fixtures.log",
+      "sha256": "0a540d523dacfa715da0ce91fbb311c5e7c5e88528f80362c882b8e0ff6895ec",
+      "bytes": 314
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-focus-green.log",
+      "sha256": "6fa5d20786a15847c18b76cfdceedbe3c922258b60070daf2f1b4452d9ab580f",
+      "bytes": 164391
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-focus-ipad.log",
+      "sha256": "3be9a4179d4d8449a93479a1bc1c279ca15f1c3cc7be4d5a52a2df2b869a1c7c",
+      "bytes": 94513
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-focus-project.log",
+      "sha256": "4dcce242b90f87bddde0e63c05f0cbe3c59c541f6f6fc173c78153a7d413e590",
+      "bytes": 151
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-focus-red.log",
+      "sha256": "2349651a8e81562a158568d5e7ee22d4d19b8c5b24942f1da7f5977059fac9a4",
+      "bytes": 251946
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-gate-brief.md",
+      "sha256": "20d0bf2cc9b4e44a963766c9f91ea8ebe81332652b3c5928e143fd2898d4ffd2",
+      "bytes": 12178
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-hop-export.log",
+      "sha256": "765529753ed2da9796710658fae7512b7398693fe9c1ea439b4a00ce93a81e88",
+      "bytes": 8932
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-ipad-export.log",
+      "sha256": "cd19b28c68d49916e1b3dd7eeb2f2b8a7e5c93f581b4d2df35eba0f877ce60ad",
+      "bytes": 381
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-ipad-focus-full.log",
+      "sha256": "2f21c284627fe0308fc219059020b50c3e131b48df067d515fb69b6c3ef9ffa3",
+      "bytes": 1015764
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-ipad-save-export.log",
+      "sha256": "b8cc562db4d559e3b1ac5c29033718f09dc297c81376aca562d3a2663278faf5",
+      "bytes": 2622
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-ipad-scene-repro.log",
+      "sha256": "f6f17ad1c445964ff2ba7680b3274c9d0e7d0be0394b7a8cbab34393cf843afd",
+      "bytes": 84707
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-ipad-servers-fix.log",
+      "sha256": "ad71b5583ed000531e40895c5d1009a61a6e108221e803203ae6e266c176c054",
+      "bytes": 167206
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-isolation.log",
+      "sha256": "d8d6952fef647eb1c2efb9df9f223cc89b8becdeeb1c6ae26fbc66c9bf3ca346",
+      "bytes": 209252
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-locality.log",
+      "sha256": "a2ecf0fa20003dc6e500d4b9a8f3afcfd904f561a480cf8ff7c06dd2060ef245",
+      "bytes": 3961
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-matrix-explanation-red.log",
+      "sha256": "38266981ef2531e9361a58ddb47f3d57a2ec24c51019ea9fcdcb76d452acfacc",
+      "bytes": 304
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-matrix-red.log",
+      "sha256": "42865c007c7845595d65294c50b820f7875088c437583dfbcf705b9902889d9d",
+      "bytes": 933
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-matrix-tests.log",
+      "sha256": "238b7a2807bc2bdf7f14e07ba7d8d38a7ee9ae73dd138f47a2015e97e8280759",
+      "bytes": 161
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-matrix.log",
+      "sha256": "b9412ee61d58436bcdc04b6d08ceb72884b2c8e23740273d010c4b4a95b40099",
+      "bytes": 562
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-port-clear.log",
+      "sha256": "70de26014c6c13f21f5ee1c8ac7ed04027f755d9b0b407a82f8f8fcdab21d958",
+      "bytes": 103569
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-port-green-suite.log",
+      "sha256": "389ada55730937f3866bd77a6a5ede82796c425396ee1846d113025203023880",
+      "bytes": 248791
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-port-red.log",
+      "sha256": "43e27bdddea9f134cdd8cbb8dc6a0b58f68d9c2a3565930449bbe3241f8356c8",
+      "bytes": 103291
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-port-triple.log",
+      "sha256": "afb1de6cd0176fd13571ee2fca25150b6d7be46f81eb1d97af0cfe9466e7c4c7",
+      "bytes": 102170
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-processes.log",
+      "sha256": "4d993001d75fea4ed7af141289098b13f66bd4f94990563a748ad4ca71b817b8",
+      "bytes": 156658
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-reauth-export.log",
+      "sha256": "6368448fa13fe416410f5ffd4345bb0c179eac316c2bcfebee20694dc09f0bcd",
+      "bytes": 3314
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-reauth-fixed.log",
+      "sha256": "bfd02cc09fa15fddbb19dbb27ec39a9bce2342a5f068a7b1e38986de3503c1d6",
+      "bytes": 92562
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-reauth-isolated.log",
+      "sha256": "45bd7d558671678363fac9f7972ff80d4ad0f6905ca78a22c9c23ddc0ffa67cd",
+      "bytes": 91643
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-regression-ipad.log",
+      "sha256": "a960dd222aae3e5800b8a7510596915f2ebf0f084007ea140e27864ae1fb1ef9",
+      "bytes": 1010661
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-regression-iphone.log",
+      "sha256": "b2d7dcb7f785745a876b006c68ac3afeb59bac268de52d08c4152f21f2107061",
+      "bytes": 2383610
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-repair-appstore-build.log",
+      "sha256": "862573dd6b1301bd5c862ea215f2297b875f5995007ba7ab7eb3dc9cdbb96536",
+      "bytes": 222904
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-repair-brief.md",
+      "sha256": "f9d680732917e8dcfa6fc8872f2b903cfc16c40effab448401743b917e7a6066",
+      "bytes": 8134
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-repair-core-ipad.log",
+      "sha256": "f6640e8ab1c730c679c3075f46b860a69ae560e889859419ce4228f5dbbbd16d",
+      "bytes": 128863
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-repair-core-iphone.log",
+      "sha256": "31d4e10412278d1739ac9fa4b377d332d256d301faa62bfa2daaa122b0f677c6",
+      "bytes": 117688
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-repair-default-build.log",
+      "sha256": "9bce07394d75bf19b39640e5de58f983b8e7ee95e700ed83fdef4a32a3122eb3",
+      "bytes": 218583
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-repair-full-ipad.log",
+      "sha256": "e85a0939e5728183620945942fc5aff58f020801ea97ec654c19a150a0cccf83",
+      "bytes": 839595
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-repair-full-iphone.log",
+      "sha256": "6bf29240d28777e277aeeaa5e182e990a23efb0f61cae83f68c7610348dbecd2",
+      "bytes": 619813
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-repair-isolation.log",
+      "sha256": "971b4b1c2b2c3daaa68fb0cb609d0599d77247800516be015aaead190bea6092",
+      "bytes": 6269
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-repair-unit-ipad.log",
+      "sha256": "29317dbb0d9bc1b5e41d6813b17d7efddd86275ef7e13bbf8221bed179f81265",
+      "bytes": 101074
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-repair-unit-iphone.log",
+      "sha256": "e5df4b444ee3ef49ed096d5eaa284101452644d5f6c64b4e2865363574ace8b5",
+      "bytes": 132840
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-row-hit-red.log",
+      "sha256": "2ab9812f1be19e4a3eea26c55d5ce8c88f0552bd46cfa03d0a77bb6847042355",
+      "bytes": 107121
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-save-ipad-fixed.log",
+      "sha256": "2455b50b6a4491e851c18b9d0a4f23859bfccd9a8e7dd7554b51c46100eeb0be",
+      "bytes": 77454
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-server-help.log",
+      "sha256": "c32f5ebf835b0a055906d21be545bd67f9ea45b27d1c410de2d8db7fa806ea9a",
+      "bytes": 52282
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-ui-acceptance.md",
+      "sha256": "d11638ceadd04f71f6d54ca67f4ce137f8a3d42c57f4b081c90d34dfddfaf3f6",
+      "bytes": 8829
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-ui-capture-validation.log",
+      "sha256": "30797cdb0402c50ca8eda02bcc15522beb925d3170c6a26358e6ed429d2a366f",
+      "bytes": 1383
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-ui-captures-ipad-agent/409F3075-FF1A-4868-A2E7-2348323836F5.txt",
+      "sha256": "964fca035fc565bacb9134affae5af136bf832dc58f2f4c5ce103ed63ea7d225",
+      "bytes": 268
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-ui-captures-ipad-agent/manifest.json",
+      "sha256": "7b770ffa77febcc20ed01a2a6bb71a632b956e12db0652757e63233525eff209",
+      "bytes": 1530
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-ui-captures-ipad-port/manifest.json",
+      "sha256": "306815700a33741e15d057256dfb9032d73fc0530102ad4e3ee681b45dc4c9ea",
+      "bytes": 1171
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-ui-captures-ipad-windows/manifest.json",
+      "sha256": "8c149a2b520b75546bedcfb97d716c5369987cbd305401c83871d664c177a1e1",
+      "bytes": 1201
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-ui-captures-iphone-agent/manifest.json",
+      "sha256": "2a775b8956d7c648566a37965a73aec03437162f908e49df5822d055947d2f31",
+      "bytes": 1149
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-ui-captures-iphone-port/manifest.json",
+      "sha256": "671eba5ab2b67ce59b3b8b85f0c7822a72920038eb891d6ba3375053f65627ef",
+      "bytes": 1154
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-ui-captures-iphone-windows/manifest.json",
+      "sha256": "170a3e6e54e8208f0f630fd775e8f59757342c501d1968a3e11b7bbfe7728031",
+      "bytes": 1184
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-ui-review-a.md",
+      "sha256": "6ef5519e345a577a6a9695edadb71839aa74a169dc94004e934649de410fc828",
+      "bytes": 1514
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-ui-review-b.md",
+      "sha256": "f787dd7ed01b557e2ab5ca6f6454eb61c928f52f5fa9e7d77163b2d9723a12dc",
+      "bytes": 1347
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-ui-scoped-export.log",
+      "sha256": "239ac46ad5a42e4a45ceb2e0fac41135b06993e3d1ed34a38ebcb6ee9bf68a3a",
+      "bytes": 3211
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-ui-scoped-ipad.log",
+      "sha256": "57509d2e2ca210098bd948889892e0cac2ad6a348e19cb7a15c1549c72794423",
+      "bytes": 864041
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-ui-scoped-iphone.log",
+      "sha256": "64aee4c2088b59cd523ab4d13c279fa5a8e7bb68a0537afce7588a4b8e3b7720",
+      "bytes": 1141808
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-validation.log",
+      "sha256": "5fc4bbb157381d6f42cd3fedf54df93b9a7b2676bb3847c9f3b09e9aae96b9b3",
+      "bytes": 45
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-verified-appstore-build.log",
+      "sha256": "5cc71987ea3bc0696b309a13ec1cfb82256b6aea6044b9a61859d92d181322c3",
+      "bytes": 213977
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-verified-core-ipad.log",
+      "sha256": "5171bd9724566185b04416dde665cadef98cb7e9001ffaa97e0ae022e21e78a8",
+      "bytes": 117691
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-verified-core-iphone.log",
+      "sha256": "b322e2d90e209ba6717d725acd988c383ffcd324ef8da1318d1cf15da67b652f",
+      "bytes": 205402
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-verified-default-build.log",
+      "sha256": "dddc37a44fdc982ba4e16e28f0ce736c0deeb53fd2ada6e13ef1b6c85dba1fe2",
+      "bytes": 267024
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-verified-go-tests.log",
+      "sha256": "7b93d3692937fb523674ca22b512afa8b916819de0593627ee293cd3964fb4a9",
+      "bytes": 2129
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-verified-isolation.log",
+      "sha256": "1f3156a4833503eefe78763acb81ced5d6791c101854912c324ee885921920f4",
+      "bytes": 6295
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-verified-ui-ipad.log",
+      "sha256": "58301cfebc0bb70734a9a05bebaf3e8ba94b6c70f86c660c5ad4537af33fe011",
+      "bytes": 849274
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-verified-ui-iphone.log",
+      "sha256": "4ea317c3970b46ae71ccb2495c3206e95c4a53e08a2a13e38c6bdefee58cf571",
+      "bytes": 610593
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-verified-unit-ipad.log",
+      "sha256": "d24cfa33fe09f92764db2703c982f2c2d6c1d49fe2404f4f50ced1da5af040a8",
+      "bytes": 102912
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-verified-unit-iphone.log",
+      "sha256": "2f3bbbd5220dcf2d5e7fac84eec88f2b4d023d27410d71c76f2c52a3befc8140",
+      "bytes": 316789
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-visual-export-ipad.log",
+      "sha256": "516d594df34629b6c29343c4eb2a6c02e0a00a4cc5919a41a682e15a1f03a59a",
+      "bytes": 344
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-visual-export-iphone.log",
+      "sha256": "2e9da00656ccb5bab8002ffc6bdef0356a51f6dc0ff117251dd72840226c3ad9",
+      "bytes": 265
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-visual-export.log",
+      "sha256": "62889908f0e920bdf1beacbad225ddafc3001b08eba485f60a6f745b3af42d40",
+      "bytes": 3181
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-visual-ipad-agent/39B96230-D4B5-49C4-BDA1-722EB531397B.txt",
+      "sha256": "964fca035fc565bacb9134affae5af136bf832dc58f2f4c5ce103ed63ea7d225",
+      "bytes": 268
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-visual-ipad-agent/manifest.json",
+      "sha256": "43df3839885a1cdffe8afc478cb41777e825a81306df2693d8fd77eeb7ffd27c",
+      "bytes": 1530
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-visual-ipad-port/manifest.json",
+      "sha256": "9b3ac5ca74d031a4bbbda3cb82228cdc805ee831b70c87bb0d600ae9e510fe6b",
+      "bytes": 1171
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-visual-ipad-windows/manifest.json",
+      "sha256": "175690edb9b59ce2072d7e7c352b486b57d167fdd61bab7583653814bccf0a64",
+      "bytes": 1201
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-visual-iphone-agent/manifest.json",
+      "sha256": "ed730ece429d676a49a735830e291b43d7679589f930d9211cfa2725b20132f1",
+      "bytes": 1149
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-visual-iphone-port/manifest.json",
+      "sha256": "aaae639b4f120cd6cf98feb7232532d1a2602cf80ccdabe2dabc016feebed832",
+      "bytes": 1155
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-visual-iphone-windows/manifest.json",
+      "sha256": "5bdcf60c903d61875ca7ce06902f49de6963faf331e8bff561f1b9abd30d92c1",
+      "bytes": 1185
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-window-green.log",
+      "sha256": "f44e10ded7bb3c3e2c88eef441f10e766507b0a0c67c69427bd386ebde080222",
+      "bytes": 195483
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-window-project.log",
+      "sha256": "4dcce242b90f87bddde0e63c05f0cbe3c59c541f6f6fc173c78153a7d413e590",
+      "bytes": 151
+    },
+    {
+      "path": ".sisyphus/evidence/phase2-g12-window-red.log",
+      "sha256": "0d9bd94af7ca202c71bff9cb118b9e21f8d8c9de0bb04551d9751c0c7519cbcd",
+      "bytes": 130631
+    }
+  ]
+}

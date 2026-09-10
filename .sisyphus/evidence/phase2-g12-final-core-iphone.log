@@ -1,0 +1,1192 @@
+Command line invocation:
+    /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild test -scheme BicTermCore -destination "platform=iOS Simulator,id=732CE8E1-F9EF-4020-BF93-5BA1AA365B0E" -derivedDataPath /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core
+
+Resolve Package Graph
+2026-09-09 18:22:22.150 xcodebuild[43349:32833889] [MT] IDERunDestination: Supported platforms for the buildables in the current scheme is empty.
+
+
+Resolved source packages:
+  swift-nio-ssh: /Users/richard/code/BicTerm/Vendor/swift-nio-ssh @ local
+  swift-asn1: https://github.com/apple/swift-asn1.git @ 1.7.2
+  BicTermCore: /Users/richard/code/BicTerm/BicTermCore
+  swift-crypto: https://github.com/apple/swift-crypto.git @ 4.5.2
+  swift-atomics: https://github.com/apple/swift-atomics.git @ 1.3.1
+  swift-collections: https://github.com/apple/swift-collections.git @ 1.6.0
+  swift-system: https://github.com/apple/swift-system.git @ 1.8.1
+  swift-nio: https://github.com/apple/swift-nio.git @ 2.102.0
+
+ComputePackagePrebuildTargetDependencyGraph
+
+Prepare packages
+
+CreateBuildRequest
+
+SendProjectDescription
+
+CreateBuildOperation
+
+ComputeTargetDependencyGraph
+note: Building targets in dependency order
+note: Target dependency graph (39 targets)
+    Target 'BicTermCore' in project 'BicTermCore'
+        ➜ Explicit dependency on target 'BicTermCore' in project 'BicTermCore'
+        ➜ Explicit dependency on target 'CBcryptPBKDF' in project 'BicTermCore'
+        ➜ Explicit dependency on target 'NIOSSH' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOPosix' in project 'swift-nio'
+    Target 'BicTermCoreTests' in project 'BicTermCore'
+        ➜ Explicit dependency on target 'CBcryptPBKDF' in project 'BicTermCore'
+        ➜ Explicit dependency on target 'BicTermCore' in project 'BicTermCore'
+        ➜ Explicit dependency on target 'NIOSSH' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOEmbedded' in project 'swift-nio'
+    Target 'NIOEmbedded' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOEmbedded' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics' in project 'swift-atomics'
+    Target 'BicTermCore' in project 'BicTermCore'
+        ➜ Explicit dependency on target 'CBcryptPBKDF' in project 'BicTermCore'
+        ➜ Explicit dependency on target 'NIOSSH' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOPosix' in project 'swift-nio'
+    Target 'NIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'swift-nio_NIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics' in project 'swift-atomics'
+    Target 'NIOSSH' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOSSH' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOFoundationCompat' in project 'swift-nio'
+        ➜ Explicit dependency on target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'Atomics' in project 'swift-atomics'
+    Target 'NIOSSH' in project 'swift-nio-ssh'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOFoundationCompat' in project 'swift-nio'
+        ➜ Explicit dependency on target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'Atomics' in project 'swift-atomics'
+    Target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'swift-crypto_Crypto' in project 'swift-crypto'
+    Target 'Crypto' in project 'swift-crypto'
+        ➜ Explicit dependency on target 'swift-crypto_Crypto' in project 'swift-crypto'
+    Target 'swift-crypto_Crypto' in project 'swift-crypto' (no dependencies)
+    Target 'NIOFoundationCompat' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOFoundationCompat' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOEmbedded' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIO' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOFoundationEssentialsCompat' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics' in project 'swift-atomics'
+    Target 'NIOFoundationCompat' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOEmbedded' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIO' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOFoundationEssentialsCompat' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics' in project 'swift-atomics'
+    Target 'NIOFoundationEssentialsCompat' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics' in project 'swift-atomics'
+    Target 'NIO' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOEmbedded' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics' in project 'swift-atomics'
+    Target 'NIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'swift-nio_NIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOPosix' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics' in project 'swift-atomics'
+    Target 'swift-nio_NIOPosix' in project 'swift-nio' (no dependencies)
+    Target 'CNIOPosix' in project 'swift-nio' (no dependencies)
+    Target 'NIOEmbedded' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics' in project 'swift-atomics'
+    Target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+    Target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics' in project 'swift-atomics'
+    Target 'NIOCore' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+        ➜ Explicit dependency on target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIOBase64' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOOpenBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOFreeBSD' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIODarwin' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOLinux' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWindows' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOWASI' in project 'swift-nio'
+        ➜ Explicit dependency on target '_NIODataStructures' in project 'swift-nio'
+        ➜ Explicit dependency on target 'DequeModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'Atomics' in project 'swift-atomics'
+    Target 'Atomics' in project 'swift-atomics'
+        ➜ Explicit dependency on target 'Atomics' in project 'swift-atomics'
+        ➜ Explicit dependency on target '_AtomicsShims' in project 'swift-atomics'
+    Target 'Atomics' in project 'swift-atomics'
+        ➜ Explicit dependency on target '_AtomicsShims' in project 'swift-atomics'
+    Target '_AtomicsShims' in project 'swift-atomics' (no dependencies)
+    Target 'DequeModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'DequeModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'InternalCollectionsUtilities' in project 'swift-collections'
+        ➜ Explicit dependency on target 'ContainersPreview' in project 'swift-collections'
+    Target 'DequeModule' in project 'swift-collections'
+        ➜ Explicit dependency on target 'InternalCollectionsUtilities' in project 'swift-collections'
+        ➜ Explicit dependency on target 'ContainersPreview' in project 'swift-collections'
+    Target 'ContainersPreview' in project 'swift-collections'
+        ➜ Explicit dependency on target 'InternalCollectionsUtilities' in project 'swift-collections'
+    Target 'InternalCollectionsUtilities' in project 'swift-collections' (no dependencies)
+    Target '_NIODataStructures' in project 'swift-nio' (no dependencies)
+    Target 'CNIOWASI' in project 'swift-nio' (no dependencies)
+    Target 'CNIOWindows' in project 'swift-nio' (no dependencies)
+    Target 'CNIOLinux' in project 'swift-nio' (no dependencies)
+    Target 'CNIODarwin' in project 'swift-nio' (no dependencies)
+    Target 'CNIOFreeBSD' in project 'swift-nio' (no dependencies)
+    Target 'CNIOOpenBSD' in project 'swift-nio' (no dependencies)
+    Target '_NIOBase64' in project 'swift-nio' (no dependencies)
+    Target 'NIOConcurrencyHelpers' in project 'swift-nio'
+        ➜ Explicit dependency on target 'CNIOAtomics' in project 'swift-nio'
+    Target 'CNIOAtomics' in project 'swift-nio' (no dependencies)
+    Target 'CBcryptPBKDF' in project 'BicTermCore' (no dependencies)
+
+GatherProvisioningInputs
+
+CreateBuildDescription
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -v -E -dM -arch arm64 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -x c -c /dev/null
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc --version
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -v -E -dM -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -x c -c /dev/null
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld -version_details
+
+ReadFileContents /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/share/docc/features.json
+
+Build description signature: 18583274b0b2addd8341caebf47688a6
+Build description path: /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/XCBuildData/18583274b0b2addd8341caebf47688a6.xcbuilddata
+ClangStatCache /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang-stat-cache /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/SDKStatCaches.noindex/iphonesimulator26.5-23F81a-688ef53f1462e2c8f657fdc38a81448f6cfe768891a92b912361537c460fe42b.sdkstatcache
+    cd /Users/richard/code/BicTerm/BicTermCore/.swiftpm/xcode
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang-stat-cache /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -o /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/SDKStatCaches.noindex/iphonesimulator26.5-23F81a-688ef53f1462e2c8f657fdc38a81448f6cfe768891a92b912361537c460fe42b.sdkstatcache
+
+ProcessInfoPlistFile /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/swift-nio_NIOPosix.bundle/Info.plist /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/swift-nio.build/Debug-iphonesimulator/swift-nio_NIOPosix.build/empty-swift-nio_NIOPosix.plist (in target 'swift-nio_NIOPosix' from project 'swift-nio')
+    cd /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/SourcePackages/checkouts/swift-nio
+    builtin-infoPlistUtility /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/swift-nio.build/Debug-iphonesimulator/swift-nio_NIOPosix.build/empty-swift-nio_NIOPosix.plist -producttype com.apple.product-type.bundle -expandbuildsettings -format binary -platform iphonesimulator -o /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/swift-nio_NIOPosix.bundle/Info.plist
+
+ProcessInfoPlistFile /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/swift-crypto_Crypto.bundle/Info.plist /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/swift-crypto.build/Debug-iphonesimulator/swift-crypto_Crypto.build/empty-swift-crypto_Crypto.plist (in target 'swift-crypto_Crypto' from project 'swift-crypto')
+    cd /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/SourcePackages/checkouts/swift-crypto
+    builtin-infoPlistUtility /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/swift-crypto.build/Debug-iphonesimulator/swift-crypto_Crypto.build/empty-swift-crypto_Crypto.plist -producttype com.apple.product-type.bundle -expandbuildsettings -format binary -platform iphonesimulator -o /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/swift-crypto_Crypto.bundle/Info.plist
+
+ProcessInfoPlistFile /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/BicTermCoreTests.xctest/Info.plist /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/BicTermCore.build/Debug-iphonesimulator/BicTermCoreTests.build/empty-BicTermCoreTests.plist (in target 'BicTermCoreTests' from project 'BicTermCore')
+    cd /Users/richard/code/BicTerm/BicTermCore
+    builtin-infoPlistUtility /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/BicTermCore.build/Debug-iphonesimulator/BicTermCoreTests.build/empty-BicTermCoreTests.plist -producttype com.apple.product-type.bundle.unit-test -expandbuildsettings -format binary -platform iphonesimulator -scanforprivacyfile /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/BicTermCoreTests.xctest/swift-crypto_Crypto.bundle -scanforprivacyfile /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/BicTermCoreTests.xctest/swift-nio_NIOPosix.bundle -o /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/BicTermCoreTests.xctest/Info.plist
+
+CopySwiftLibs /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/BicTermCoreTests.xctest (in target 'BicTermCoreTests' from project 'BicTermCore')
+    cd /Users/richard/code/BicTerm/BicTermCore
+    builtin-swiftStdLibTool --copy --verbose --sign - --scan-executable /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/BicTermCoreTests.xctest/BicTermCoreTests --scan-folder /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/BicTermCoreTests.xctest/Frameworks --scan-folder /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/BicTermCoreTests.xctest/PlugIns --scan-folder /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/BicTermCoreTests.xctest/SystemExtensions --scan-folder /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/BicTermCoreTests.xctest/Extensions --platform iphonesimulator --toolchain /var/run/com.apple.security.cryptexd/mnt/com.apple.MobileAsset.MetalToolchain-v17.6.109.0.ozHyXD/Metal.xctoolchain --toolchain /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain --destination /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Products/Debug-iphonesimulator/BicTermCoreTests.xctest/Frameworks --strip-bitcode --scan-executable /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib/libXCTestSwiftSupport.dylib --strip-bitcode-tool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/bitcode_strip --emit-dependency-info /Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Build/Intermediates.noindex/BicTermCore.build/Debug-iphonesimulator/BicTermCoreTests.build/SwiftStdLibToolInputDependencies.dep --filter-for-swift-os
+
+Test Suite 'All tests' started at 2026-09-09 18:22:25.453.
+Test Suite 'BicTermCoreTests.xctest' started at 2026-09-09 18:22:25.454.
+Test Suite 'CoderEventClassificationTests' started at 2026-09-09 18:22:25.454.
+Test Case '-[BicTermCoreTests.CoderEventClassificationTests testDispositionIsTypeDrivenWithoutResumeTokenMarker]' started.
+Test Case '-[BicTermCoreTests.CoderEventClassificationTests testDispositionIsTypeDrivenWithoutResumeTokenMarker]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.CoderEventClassificationTests testGenuineRest401MarksAuthRequiredExactlyOnce]' started.
+Test Case '-[BicTermCoreTests.CoderEventClassificationTests testGenuineRest401MarksAuthRequiredExactlyOnce]' passed (0.244 seconds).
+Test Case '-[BicTermCoreTests.CoderEventClassificationTests testHandleLessAuthRequiredEventIsNotRouted]' started.
+Test Case '-[BicTermCoreTests.CoderEventClassificationTests testHandleLessAuthRequiredEventIsNotRouted]' passed (0.218 seconds).
+Test Case '-[BicTermCoreTests.CoderEventClassificationTests testOtherValidationFieldsDoNotQuarantine]' started.
+Test Case '-[BicTermCoreTests.CoderEventClassificationTests testOtherValidationFieldsDoNotQuarantine]' passed (0.002 seconds).
+Test Case '-[BicTermCoreTests.CoderEventClassificationTests testParseCarriesHTTPStatusAndValidations]' started.
+Test Case '-[BicTermCoreTests.CoderEventClassificationTests testParseCarriesHTTPStatusAndValidations]' passed (0.002 seconds).
+Test Case '-[BicTermCoreTests.CoderEventClassificationTests testPlainDiagnosticLineIsNotAnEvent]' started.
+Test Case '-[BicTermCoreTests.CoderEventClassificationTests testPlainDiagnosticLineIsNotAnEvent]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.CoderEventClassificationTests testResumeToken401SequenceSurfacesNoAuthLoss]' started.
+Test Case '-[BicTermCoreTests.CoderEventClassificationTests testResumeToken401SequenceSurfacesNoAuthLoss]' passed (0.268 seconds).
+Test Case '-[BicTermCoreTests.CoderEventClassificationTests testResumeTokenValidationQuarantinesAnyTaggedType]' started.
+Test Case '-[BicTermCoreTests.CoderEventClassificationTests testResumeTokenValidationQuarantinesAnyTaggedType]' passed (0.002 seconds).
+Test Case '-[BicTermCoreTests.CoderEventClassificationTests testStaleHandleEventDoesNotCondemnReplacementGeneration]' started.
+Test Case '-[BicTermCoreTests.CoderEventClassificationTests testStaleHandleEventDoesNotCondemnReplacementGeneration]' passed (0.245 seconds).
+Test Case '-[BicTermCoreTests.CoderEventClassificationTests testTaggedBridgeLineParsesIntoTypedEvent]' started.
+Test Case '-[BicTermCoreTests.CoderEventClassificationTests testTaggedBridgeLineParsesIntoTypedEvent]' passed (0.004 seconds).
+Test Suite 'CoderEventClassificationTests' passed at 2026-09-09 18:22:26.449.
+	 Executed 10 tests, with 0 failures (0 unexpected) in 0.987 (0.995) seconds
+Test Suite 'CoderLifecycleObservationTests' started at 2026-09-09 18:22:26.450.
+Test Case '-[BicTermCoreTests.CoderLifecycleObservationTests testNetworkPathObservationIgnoresStaleGenerationAndAcceptsReplacementSession]' started.
+Test Case '-[BicTermCoreTests.CoderLifecycleObservationTests testNetworkPathObservationIgnoresStaleGenerationAndAcceptsReplacementSession]' passed (0.030 seconds).
+Test Case '-[BicTermCoreTests.CoderLifecycleObservationTests testNetworkPathObservationRoutesDirectAndRelayedToTheirActiveScenes]' started.
+Test Case '-[BicTermCoreTests.CoderLifecycleObservationTests testNetworkPathObservationRoutesDirectAndRelayedToTheirActiveScenes]' passed (0.027 seconds).
+Test Suite 'CoderLifecycleObservationTests' passed at 2026-09-09 18:22:26.509.
+	 Executed 2 tests, with 0 failures (0 unexpected) in 0.056 (0.059) seconds
+Test Suite 'CoderLifecycleTests' started at 2026-09-09 18:22:26.509.
+Test Case '-[BicTermCoreTests.CoderLifecycleTests testAuthRequiredEventMarksGenerationStopsHeartbeatAndNotifies]' started.
+Test Case '-[BicTermCoreTests.CoderLifecycleTests testAuthRequiredEventMarksGenerationStopsHeartbeatAndNotifies]' passed (0.059 seconds).
+Test Case '-[BicTermCoreTests.CoderLifecycleTests testAutoReconnectStopsOnAuthRequiredInsteadOfSpinning]' started.
+Test Case '-[BicTermCoreTests.CoderLifecycleTests testAutoReconnectStopsOnAuthRequiredInsteadOfSpinning]' passed (0.540 seconds).
+Test Case '-[BicTermCoreTests.CoderLifecycleTests testBackgroundSuspendsAndKeepsCoordinationAlive]' started.
+Test Case '-[BicTermCoreTests.CoderLifecycleTests testBackgroundSuspendsAndKeepsCoordinationAlive]' passed (0.009 seconds).
+Test Case '-[BicTermCoreTests.CoderLifecycleTests testConnectTimeRest401MarksTheGeneration]' started.
+Test Case '-[BicTermCoreTests.CoderLifecycleTests testConnectTimeRest401MarksTheGeneration]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.CoderLifecycleTests testForegroundAfterStreamDeathRedisalsWithoutReauth]' started.
+Test Case '-[BicTermCoreTests.CoderLifecycleTests testForegroundAfterStreamDeathRedisalsWithoutReauth]' passed (0.045 seconds).
+Test Case '-[BicTermCoreTests.CoderLifecycleTests testForegroundResumesWithRebindAndNoRedial]' started.
+Test Case '-[BicTermCoreTests.CoderLifecycleTests testForegroundResumesWithRebindAndNoRedial]' passed (0.007 seconds).
+Test Case '-[BicTermCoreTests.CoderLifecycleTests testMarkedGenerationRefusesNewDialBeforeAnyNetwork]' started.
+Test Case '-[BicTermCoreTests.CoderLifecycleTests testMarkedGenerationRefusesNewDialBeforeAnyNetwork]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.CoderLifecycleTests testReplacementGenerationAllocatesFreshHandleCarryingNewGeneration]' started.
+Test Case '-[BicTermCoreTests.CoderLifecycleTests testReplacementGenerationAllocatesFreshHandleCarryingNewGeneration]' passed (0.014 seconds).
+Test Case '-[BicTermCoreTests.CoderLifecycleTests testSSHClosedEventIsIgnoredAfterSessionClosed]' started.
+Test Case '-[BicTermCoreTests.CoderLifecycleTests testSSHClosedEventIsIgnoredAfterSessionClosed]' passed (0.172 seconds).
+Test Case '-[BicTermCoreTests.CoderLifecycleTests testSSHClosedEventParksSessionAtReconnectRequired]' started.
+Test Case '-[BicTermCoreTests.CoderLifecycleTests testSSHClosedEventParksSessionAtReconnectRequired]' passed (0.029 seconds).
+Test Suite 'CoderLifecycleTests' passed at 2026-09-09 18:22:27.391.
+	 Executed 10 tests, with 0 failures (0 unexpected) in 0.876 (0.882) seconds
+Test Suite 'CoderNativeAuthAcceptanceTests' started at 2026-09-09 18:22:27.391.
+Test Case '-[BicTermCoreTests.CoderNativeAuthAcceptanceTests testNativeInvalidTokenRequiresAuthenticationWithoutRetryOrTunnelDial]' started.
+A02 native HTTP statuses: [401]
+Test Case '-[BicTermCoreTests.CoderNativeAuthAcceptanceTests testNativeInvalidTokenRequiresAuthenticationWithoutRetryOrTunnelDial]' passed (0.015 seconds).
+Test Suite 'CoderNativeAuthAcceptanceTests' passed at 2026-09-09 18:22:27.406.
+	 Executed 1 test, with 0 failures (0 unexpected) in 0.015 (0.015) seconds
+Test Suite 'CoderNativeControlRecoveryTests' started at 2026-09-09 18:22:27.407.
+Test Case '-[BicTermCoreTests.CoderNativeControlRecoveryTests testNativeControlRecoveryPreservesStreamWithoutReplay]' started.
+NATIVE_CONTROL resume recovered; command counter remains one; SSH establishment count=1
+Test Case '-[BicTermCoreTests.CoderNativeControlRecoveryTests testNativeControlRecoveryPreservesStreamWithoutReplay]' passed (0.405 seconds).
+Test Suite 'CoderNativeControlRecoveryTests' passed at 2026-09-09 18:22:27.812.
+	 Executed 1 test, with 0 failures (0 unexpected) in 0.405 (0.406) seconds
+Test Suite 'CoderNativeProfileIsolationTests' started at 2026-09-09 18:22:27.813.
+Test Case '-[BicTermCoreTests.CoderNativeProfileIsolationTests testConcurrentDistinctUsersKeepTheirStreamsAndCloseIndependent]' started.
+NATIVE_PROFILE_ISOLATION concurrent distinct users; own outputs only; second stream survives first close
+Test Case '-[BicTermCoreTests.CoderNativeProfileIsolationTests testConcurrentDistinctUsersKeepTheirStreamsAndCloseIndependent]' passed (0.305 seconds).
+Test Suite 'CoderNativeProfileIsolationTests' passed at 2026-09-09 18:22:28.118.
+	 Executed 1 test, with 0 failures (0 unexpected) in 0.305 (0.305) seconds
+Test Suite 'CoderNativeRebuildAcceptanceTests' started at 2026-09-09 18:22:28.119.
+Test Case '-[BicTermCoreTests.CoderNativeRebuildAcceptanceTests testLiveRebuildEndsOldStreamAndFreshConnectionResolvesReplacement]' started.
+NATIVE_REBUILD old stream ended; old UUID rejected; fresh agent 1BBF18BE-3B06-4A9C-8CF7-7A18EF0A4519 connected
+Test Case '-[BicTermCoreTests.CoderNativeRebuildAcceptanceTests testLiveRebuildEndsOldStreamAndFreshConnectionResolvesReplacement]' passed (21.786 seconds).
+Test Suite 'CoderNativeRebuildAcceptanceTests' passed at 2026-09-09 18:22:49.906.
+	 Executed 1 test, with 0 failures (0 unexpected) in 21.786 (21.787) seconds
+Test Suite 'CoderNativeSelectionAcceptanceTests' started at 2026-09-09 18:22:49.907.
+Test Case '-[BicTermCoreTests.CoderNativeSelectionAcceptanceTests testNativeExactNameAndUUIDReachTheirCurrentBuildAgent]' started.
+Test Case '-[BicTermCoreTests.CoderNativeSelectionAcceptanceTests testNativeExactNameAndUUIDReachTheirCurrentBuildAgent]' passed (0.951 seconds).
+Test Case '-[BicTermCoreTests.CoderNativeSelectionAcceptanceTests testNativeMultipleAgentsRequireAnExplicitSelection]' started.
+Test Case '-[BicTermCoreTests.CoderNativeSelectionAcceptanceTests testNativeMultipleAgentsRequireAnExplicitSelection]' passed (0.072 seconds).
+Test Case '-[BicTermCoreTests.CoderNativeSelectionAcceptanceTests testNativeOldBuildUUIDRequiresReresolutionAfterRebuild]' started.
+Test Case '-[BicTermCoreTests.CoderNativeSelectionAcceptanceTests testNativeOldBuildUUIDRequiresReresolutionAfterRebuild]' passed (0.053 seconds).
+Test Case '-[BicTermCoreTests.CoderNativeSelectionAcceptanceTests testNativeUnknownUUIDDoesNotFallBackToTheSavedName]' started.
+Test Case '-[BicTermCoreTests.CoderNativeSelectionAcceptanceTests testNativeUnknownUUIDDoesNotFallBackToTheSavedName]' passed (0.054 seconds).
+Test Suite 'CoderNativeSelectionAcceptanceTests' passed at 2026-09-09 18:22:51.040.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 1.130 (1.133) seconds
+Test Suite 'CoderNativeStartPolicyAcceptanceTests' started at 2026-09-09 18:22:51.041.
+Test Case '-[BicTermCoreTests.CoderNativeStartPolicyAcceptanceTests testNativeStoppedWorkspaceWithStartDisabledSendsNoMutation]' started.
+A07 native request methods: ["GET", "GET"]
+Test Case '-[BicTermCoreTests.CoderNativeStartPolicyAcceptanceTests testNativeStoppedWorkspaceWithStartDisabledSendsNoMutation]' passed (0.054 seconds).
+Test Suite 'CoderNativeStartPolicyAcceptanceTests' passed at 2026-09-09 18:22:51.095.
+	 Executed 1 test, with 0 failures (0 unexpected) in 0.054 (0.055) seconds
+Test Suite 'CoderNativeStartupAcceptanceTests' started at 2026-09-09 18:22:51.096.
+Test Case '-[BicTermCoreTests.CoderNativeStartupAcceptanceTests testBlockingScriptDefersConnectionUntilReleased]' started.
+Test Case '-[BicTermCoreTests.CoderNativeStartupAcceptanceTests testBlockingScriptDefersConnectionUntilReleased]' passed (2.356 seconds).
+Test Case '-[BicTermCoreTests.CoderNativeStartupAcceptanceTests testFailedStartupIsAnInformativeConnectionFailure]' started.
+Test Case '-[BicTermCoreTests.CoderNativeStartupAcceptanceTests testFailedStartupIsAnInformativeConnectionFailure]' passed (0.074 seconds).
+Test Case '-[BicTermCoreTests.CoderNativeStartupAcceptanceTests testNonblockingScriptPermitsConnectionBeforeRelease]' started.
+Test Case '-[BicTermCoreTests.CoderNativeStartupAcceptanceTests testNonblockingScriptPermitsConnectionBeforeRelease]' passed (0.225 seconds).
+Test Case '-[BicTermCoreTests.CoderNativeStartupAcceptanceTests testTimedOutStartupIsAnInformativeConnectionFailure]' started.
+Test Case '-[BicTermCoreTests.CoderNativeStartupAcceptanceTests testTimedOutStartupIsAnInformativeConnectionFailure]' passed (0.053 seconds).
+Test Suite 'CoderNativeStartupAcceptanceTests' passed at 2026-09-09 18:22:53.807.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 2.708 (2.711) seconds
+Test Suite 'CoderTransportConformanceTests' started at 2026-09-09 18:22:53.807.
+Test Case '-[BicTermCoreTests.CoderTransportConformanceTests testAgentAddressMetadataMatchesServicePrefixMath]' started.
+Test Case '-[BicTermCoreTests.CoderTransportConformanceTests testAgentAddressMetadataMatchesServicePrefixMath]' passed (0.224 seconds).
+Test Case '-[BicTermCoreTests.CoderTransportConformanceTests testCloseIsTerminalIdempotentAndFinishesOutput]' started.
+Test Case '-[BicTermCoreTests.CoderTransportConformanceTests testCloseIsTerminalIdempotentAndFinishesOutput]' passed (6.248 seconds).
+Test Case '-[BicTermCoreTests.CoderTransportConformanceTests testConnectFailureSurfacesTypedTransportError]' started.
+2026-09-09 18:23:00.284699-0600 xctest[43733:32835814] [connection] nw_socket_handle_socket_event [C5:2] Socket SO_ERROR [61: Connection refused]
+2026-09-09 18:23:00.284904-0600 xctest[43733:32835814] [connection] nw_endpoint_flow_failed_with_error [C5 127.0.0.1:9 in_progress socket-flow (satisfied (Path is satisfied), interface: lo0)] already failing, returning
+2026-09-09 18:23:00.285093-0600 xctest[43733:32835814] [Default] Connection 5: received failure notification
+2026-09-09 18:23:00.285154-0600 xctest[43733:32835814] [Default] Connection 5: failed to connect 1:61, reason -1
+2026-09-09 18:23:00.285198-0600 xctest[43733:32835814] [Default] Connection 5: encountered error(1:61)
+2026-09-09 18:23:00.285316-0600 xctest[43733:32835814] [connection] nw_connection_copy_protocol_metadata_internal_block_invoke [C5] Client called nw_connection_copy_protocol_metadata_internal on unconnected nw_connection
+2026-09-09 18:23:00.285370-0600 xctest[43733:32835814] [connection] nw_connection_copy_protocol_metadata_internal_block_invoke [C5] Client called nw_connection_copy_protocol_metadata_internal on unconnected nw_connection
+2026-09-09 18:23:00.285403-0600 xctest[43733:32835814] [connection] nw_connection_copy_connected_local_endpoint_block_invoke [C5] Client called nw_connection_copy_connected_local_endpoint on unconnected nw_connection
+2026-09-09 18:23:00.285448-0600 xctest[43733:32835814] [connection] nw_connection_copy_connected_remote_endpoint_block_invoke [C5] Client called nw_connection_copy_connected_remote_endpoint on unconnected nw_connection
+2026-09-09 18:23:00.285698-0600 xctest[43733:32835814] [Default] Task <A646D997-0CBE-4604-85AA-EBD7A0B6EB46>.<42> HTTP load failed, 0/0 bytes (error code: -1004 [1:61])
+2026-09-09 18:23:00.286014-0600 xctest[43733:32835814] [Default] Task <A646D997-0CBE-4604-85AA-EBD7A0B6EB46>.<42> finished with error [-1004] Error Domain=NSURLErrorDomain Code=-1004 "Could not connect to the server." UserInfo={_kCFStreamErrorCodeKey=61, NSUnderlyingError=0x10b64b7e0 {Error Domain=kCFErrorDomainCFNetwork Code=-1004 "(null)" UserInfo={_NSURLErrorNWPathKey=satisfied (Path is satisfied), interface: lo0, _kCFStreamErrorCodeKey=61, _kCFStreamErrorDomainKey=1}}, _NSURLErrorFailingURLSessionTaskErrorKey=LocalDataTask <A646D997-0CBE-4604-85AA-EBD7A0B6EB46>.<42>, _NSURLErrorRelatedURLSessionTaskErrorKey=(
+    "LocalDataTask <A646D997-0CBE-4604-85AA-EBD7A0B6EB46>.<42>"
+), NSLocalizedDescription=Could not connect to the server., NSErrorFailingURLStringKey=http://127.0.0.1:9/api/v2/workspaces?q=owner:me&limit=100&offset=0, NSErrorFailingURLKey=http://127.0.0.1:9/api/v2/workspaces?q=owner:me&limit=100&offset=0, _kCFStreamErrorDomainKey=1}
+Test Case '-[BicTermCoreTests.CoderTransportConformanceTests testConnectFailureSurfacesTypedTransportError]' passed (0.006 seconds).
+Test Case '-[BicTermCoreTests.CoderTransportConformanceTests testConnectSucceedsAndOutputStreamIsLive]' started.
+Test Case '-[BicTermCoreTests.CoderTransportConformanceTests testConnectSucceedsAndOutputStreamIsLive]' passed (4.118 seconds).
+Test Case '-[BicTermCoreTests.CoderTransportConformanceTests testInputOutputRoundTrip]' started.
+Test Case '-[BicTermCoreTests.CoderTransportConformanceTests testInputOutputRoundTrip]' passed (4.129 seconds).
+Test Case '-[BicTermCoreTests.CoderTransportConformanceTests testLiveTunnelPrintfBictermOK]' started.
+Test Case '-[BicTermCoreTests.CoderTransportConformanceTests testLiveTunnelPrintfBictermOK]' passed (4.097 seconds).
+Test Case '-[BicTermCoreTests.CoderTransportConformanceTests testResizeIsObserved]' started.
+Test Case '-[BicTermCoreTests.CoderTransportConformanceTests testResizeIsObserved]' passed (4.053 seconds).
+Test Case '-[BicTermCoreTests.CoderTransportConformanceTests testSendBeforeConnectThrowsTypedChannelDenied]' started.
+Test Case '-[BicTermCoreTests.CoderTransportConformanceTests testSendBeforeConnectThrowsTypedChannelDenied]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.CoderTransportConformanceTests testSuspendResumeFollowsDeclaredStrategy]' started.
+Test Case '-[BicTermCoreTests.CoderTransportConformanceTests testSuspendResumeFollowsDeclaredStrategy]' passed (4.183 seconds).
+Test Suite 'CoderTransportConformanceTests' passed at 2026-09-09 18:23:20.871.
+	 Executed 9 tests, with 0 failures (0 unexpected) in 27.057 (27.064) seconds
+Test Suite 'CoderTransportTests' started at 2026-09-09 18:23:20.872.
+Test Case '-[BicTermCoreTests.CoderTransportTests testAgentGoneSurfacesReconnectRequired]' started.
+Test Case '-[BicTermCoreTests.CoderTransportTests testAgentGoneSurfacesReconnectRequired]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.CoderTransportTests testCloseIsTerminalIdempotentAndFinishesOutput]' started.
+Test Case '-[BicTermCoreTests.CoderTransportTests testCloseIsTerminalIdempotentAndFinishesOutput]' passed (0.071 seconds).
+Test Case '-[BicTermCoreTests.CoderTransportTests testCoderConnectionWithoutReferenceThrowsReconnectRequired]' started.
+Test Case '-[BicTermCoreTests.CoderTransportTests testCoderConnectionWithoutReferenceThrowsReconnectRequired]' passed (0.002 seconds).
+Test Case '-[BicTermCoreTests.CoderTransportTests testConnectFailureSurfacesTypedTransportError]' started.
+Test Case '-[BicTermCoreTests.CoderTransportTests testConnectFailureSurfacesTypedTransportError]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.CoderTransportTests testConnectRejectsNonCoderConnection]' started.
+Test Case '-[BicTermCoreTests.CoderTransportTests testConnectRejectsNonCoderConnection]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.CoderTransportTests testConnectSucceedsAndOutputStreamIsLive]' started.
+Test Case '-[BicTermCoreTests.CoderTransportTests testConnectSucceedsAndOutputStreamIsLive]' passed (0.037 seconds).
+Test Case '-[BicTermCoreTests.CoderTransportTests testDeadChannelDuringSuspendRedisalsOnResumeWithoutReauth]' started.
+Test Case '-[BicTermCoreTests.CoderTransportTests testDeadChannelDuringSuspendRedisalsOnResumeWithoutReauth]' passed (0.069 seconds).
+Test Case '-[BicTermCoreTests.CoderTransportTests testDialFailureSurfacesUnreachableAndClosesHandle]' started.
+Test Case '-[BicTermCoreTests.CoderTransportTests testDialFailureSurfacesUnreachableAndClosesHandle]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.CoderTransportTests testInputOutputRoundTrip]' started.
+Test Case '-[BicTermCoreTests.CoderTransportTests testInputOutputRoundTrip]' passed (0.066 seconds).
+Test Case '-[BicTermCoreTests.CoderTransportTests testRegistryHasNoCoderNetImports]' started.
+Test Case '-[BicTermCoreTests.CoderTransportTests testRegistryHasNoCoderNetImports]' passed (0.072 seconds).
+Test Case '-[BicTermCoreTests.CoderTransportTests testResizeIsObserved]' started.
+Test Case '-[BicTermCoreTests.CoderTransportTests testResizeIsObserved]' passed (0.063 seconds).
+Test Case '-[BicTermCoreTests.CoderTransportTests testResumeFailureSurfacesTypedTransportError]' started.
+Test Case '-[BicTermCoreTests.CoderTransportTests testResumeFailureSurfacesTypedTransportError]' passed (0.033 seconds).
+Test Case '-[BicTermCoreTests.CoderTransportTests testSendBeforeConnectThrowsTypedChannelDenied]' started.
+Test Case '-[BicTermCoreTests.CoderTransportTests testSendBeforeConnectThrowsTypedChannelDenied]' passed (0.002 seconds).
+Test Case '-[BicTermCoreTests.CoderTransportTests testSessionChannelHandleLifecycle]' started.
+Test Case '-[BicTermCoreTests.CoderTransportTests testSessionChannelHandleLifecycle]' passed (0.007 seconds).
+Test Case '-[BicTermCoreTests.CoderTransportTests testStartConfigCarriesResolutionVerbatim]' started.
+Test Case '-[BicTermCoreTests.CoderTransportTests testStartConfigCarriesResolutionVerbatim]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.CoderTransportTests testSuspendResumeFollowsDeclaredStrategy]' started.
+Test Case '-[BicTermCoreTests.CoderTransportTests testSuspendResumeFollowsDeclaredStrategy]' passed (0.058 seconds).
+Test Case '-[BicTermCoreTests.CoderTransportTests testSuspendWithoutConnectIsNoOpAndResumeIsChannelDenied]' started.
+Test Case '-[BicTermCoreTests.CoderTransportTests testSuspendWithoutConnectIsNoOpAndResumeIsChannelDenied]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.CoderTransportTests testUnauthorizedListingSurfacesAuthRequiredWithoutTouchingTunnel]' started.
+Test Case '-[BicTermCoreTests.CoderTransportTests testUnauthorizedListingSurfacesAuthRequiredWithoutTouchingTunnel]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.CoderTransportTests testWorkspaceMissingSurfacesReconnectRequired]' started.
+Test Case '-[BicTermCoreTests.CoderTransportTests testWorkspaceMissingSurfacesReconnectRequired]' passed (0.001 seconds).
+Test Suite 'CoderTransportTests' passed at 2026-09-09 18:23:21.371.
+	 Executed 19 tests, with 0 failures (0 unexpected) in 0.491 (0.500) seconds
+Test Suite 'CoderTrustPolicyTests' started at 2026-09-09 18:23:21.372.
+Test Case '-[BicTermCoreTests.CoderTrustPolicyTests testCoderTunnelSessionAgainstCredentialRequiringServerFailsTyped]' started.
+Test Case '-[BicTermCoreTests.CoderTrustPolicyTests testCoderTunnelSessionAgainstCredentialRequiringServerFailsTyped]' passed (0.050 seconds).
+Test Case '-[BicTermCoreTests.CoderTrustPolicyTests testCoderTunnelSessionComposesOverUDSWithoutTrustInteraction]' started.
+ERROR: Cannot schedule tasks on an EventLoop that has already shut down. This will be upgraded to a forced crash in future SwiftNIO versions.
+ERROR: Cannot schedule tasks on an EventLoop that has already shut down. This will be upgraded to a forced crash in future SwiftNIO versions.
+Test Case '-[BicTermCoreTests.CoderTrustPolicyTests testCoderTunnelSessionComposesOverUDSWithoutTrustInteraction]' passed (0.068 seconds).
+Test Case '-[BicTermCoreTests.CoderTrustPolicyTests testCoderTunnelTrustAcceptsChangedKeyUnconditionally]' started.
+Test Case '-[BicTermCoreTests.CoderTrustPolicyTests testCoderTunnelTrustAcceptsChangedKeyUnconditionally]' passed (0.002 seconds).
+Test Case '-[BicTermCoreTests.CoderTrustPolicyTests testCoderTunnelTrustAcceptsUnseenKeyWithoutPersisting]' started.
+Test Case '-[BicTermCoreTests.CoderTrustPolicyTests testCoderTunnelTrustAcceptsUnseenKeyWithoutPersisting]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.CoderTrustPolicyTests testCoderTunnelTrustIgnoresExistingStoreRecords]' started.
+Test Case '-[BicTermCoreTests.CoderTrustPolicyTests testCoderTunnelTrustIgnoresExistingStoreRecords]' passed (0.002 seconds).
+Test Case '-[BicTermCoreTests.CoderTrustPolicyTests testFactoryDefaultsToTOFUAndCoderFactoryIsSeparateMode]' started.
+Test Case '-[BicTermCoreTests.CoderTrustPolicyTests testFactoryDefaultsToTOFUAndCoderFactoryIsSeparateMode]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.CoderTrustPolicyTests testNoClientAuthDelegateOffersNoneExactlyOnceThenFailsTyped]' started.
+Test Case '-[BicTermCoreTests.CoderTrustPolicyTests testNoClientAuthDelegateOffersNoneExactlyOnceThenFailsTyped]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.CoderTrustPolicyTests testNormalSSHFactoryNeverReferencesCoderTrustMachinery]' started.
+Test Case '-[BicTermCoreTests.CoderTrustPolicyTests testNormalSSHFactoryNeverReferencesCoderTrustMachinery]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.CoderTrustPolicyTests testTofuPerspectiveOnCoderAcceptedIdentityStillRequiresTrust]' started.
+Test Case '-[BicTermCoreTests.CoderTrustPolicyTests testTofuPerspectiveOnCoderAcceptedIdentityStillRequiresTrust]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.CoderTrustPolicyTests testTofuVerifierStillGatesAnUnseenCoderServerHostKey]' started.
+Test Case '-[BicTermCoreTests.CoderTrustPolicyTests testTofuVerifierStillGatesAnUnseenCoderServerHostKey]' passed (0.006 seconds).
+Test Case '-[BicTermCoreTests.CoderTrustPolicyTests testTrustCallIsNoOpInCoderTunnelMode]' started.
+Test Case '-[BicTermCoreTests.CoderTrustPolicyTests testTrustCallIsNoOpInCoderTunnelMode]' passed (0.001 seconds).
+Test Suite 'CoderTrustPolicyTests' passed at 2026-09-09 18:23:21.509.
+	 Executed 11 tests, with 0 failures (0 unexpected) in 0.134 (0.138) seconds
+Test Suite 'CoderTunnelDescriptorTests' started at 2026-09-09 18:23:21.510.
+Test Case '-[BicTermCoreTests.CoderTunnelDescriptorTests testCoderDescriptorReportsNoTunnelSupportInAppStoreFlavor]' started.
+Test Case '-[BicTermCoreTests.CoderTunnelDescriptorTests testCoderDescriptorReportsNoTunnelSupportInAppStoreFlavor]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.CoderTunnelDescriptorTests testCoderDescriptorReportsTunnelSupportWhenFlavorShipsTunnel]' started.
+Test Case '-[BicTermCoreTests.CoderTunnelDescriptorTests testCoderDescriptorReportsTunnelSupportWhenFlavorShipsTunnel]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.CoderTunnelDescriptorTests testSSHAndDefaultDescriptorsNeverClaimTunnelSupport]' started.
+Test Case '-[BicTermCoreTests.CoderTunnelDescriptorTests testSSHAndDefaultDescriptorsNeverClaimTunnelSupport]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.CoderTunnelDescriptorTests testStartRejectsConfigTheBridgeRefuses]' started.
+Test Case '-[BicTermCoreTests.CoderTunnelDescriptorTests testStartRejectsConfigTheBridgeRefuses]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.CoderTunnelDescriptorTests testTunnelHandleLifecycleThroughExistential]' started.
+Test Case '-[BicTermCoreTests.CoderTunnelDescriptorTests testTunnelHandleLifecycleThroughExistential]' passed (0.001 seconds).
+Test Suite 'CoderTunnelDescriptorTests' passed at 2026-09-09 18:23:21.516.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.004 (0.006) seconds
+Test Suite 'CoderWorkspaceClientTests' started at 2026-09-09 18:23:21.516.
+Test Case '-[BicTermCoreTests.CoderWorkspaceClientTests testAllUpstreamWorkspaceStatesRemainDistinct]' started.
+Test Case '-[BicTermCoreTests.CoderWorkspaceClientTests testAllUpstreamWorkspaceStatesRemainDistinct]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.CoderWorkspaceClientTests testCoderProductionSourcesDoNotLogTokenBearingRequestData]' started.
+Test Case '-[BicTermCoreTests.CoderWorkspaceClientTests testCoderProductionSourcesDoNotLogTokenBearingRequestData]' passed (0.004 seconds).
+Test Case '-[BicTermCoreTests.CoderWorkspaceClientTests testExpiredTokenReturnsReauthenticationRequired]' started.
+Test Case '-[BicTermCoreTests.CoderWorkspaceClientTests testExpiredTokenReturnsReauthenticationRequired]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.CoderWorkspaceClientTests testForbiddenReturnsTypedError]' started.
+Test Case '-[BicTermCoreTests.CoderWorkspaceClientTests testForbiddenReturnsTypedError]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.CoderWorkspaceClientTests testFutureHTTPDateRetryAfterUsesInjectedCurrentDate]' started.
+Test Case '-[BicTermCoreTests.CoderWorkspaceClientTests testFutureHTTPDateRetryAfterUsesInjectedCurrentDate]' passed (0.002 seconds).
+Test Case '-[BicTermCoreTests.CoderWorkspaceClientTests testInvalidTokenDoesNotOverwriteExistingValidToken]' started.
+Test Case '-[BicTermCoreTests.CoderWorkspaceClientTests testInvalidTokenDoesNotOverwriteExistingValidToken]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.CoderWorkspaceClientTests testInvalidURLReturnsTypedError]' started.
+Test Case '-[BicTermCoreTests.CoderWorkspaceClientTests testInvalidURLReturnsTypedError]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.CoderWorkspaceClientTests testKeychainTokenStoreUsesCoderServerTokenKeychainTag]' started.
+/Users/richard/code/BicTerm/BicTermCore/Tests/BicTermCoreTests/CoderWorkspaceClientTests.swift:604: -[BicTermCoreTests.CoderWorkspaceClientTests testKeychainTokenStoreUsesCoderServerTokenKeychainTag] : Test skipped - SPM simulator test bundle has no Data Protection Keychain entitlement
+Test Case '-[BicTermCoreTests.CoderWorkspaceClientTests testKeychainTokenStoreUsesCoderServerTokenKeychainTag]' skipped (0.006 seconds).
+Test Case '-[BicTermCoreTests.CoderWorkspaceClientTests testMalformedRetryAfterRetriesOnceWithoutSleeping]' started.
+Test Case '-[BicTermCoreTests.CoderWorkspaceClientTests testMalformedRetryAfterRetriesOnceWithoutSleeping]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.CoderWorkspaceClientTests testMalformedWorkspacePayloadReturnsTypedError]' started.
+Test Case '-[BicTermCoreTests.CoderWorkspaceClientTests testMalformedWorkspacePayloadReturnsTypedError]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.CoderWorkspaceClientTests testMissingLatestBuildUsesForwardCompatibleUnknownState]' started.
+Test Case '-[BicTermCoreTests.CoderWorkspaceClientTests testMissingLatestBuildUsesForwardCompatibleUnknownState]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.CoderWorkspaceClientTests testMissingStoredTokenReturnsReauthenticationRequiredWithoutARequest]' started.
+Test Case '-[BicTermCoreTests.CoderWorkspaceClientTests testMissingStoredTokenReturnsReauthenticationRequiredWithoutARequest]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.CoderWorkspaceClientTests testNonConnectedAgentIsNotEligible]' started.
+Test Case '-[BicTermCoreTests.CoderWorkspaceClientTests testNonConnectedAgentIsNotEligible]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.CoderWorkspaceClientTests testPastHTTPDateRetryAfterRetriesImmediatelyWithoutNegativeSleep]' started.
+Test Case '-[BicTermCoreTests.CoderWorkspaceClientTests testPastHTTPDateRetryAfterRetriesImmediatelyWithoutNegativeSleep]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.CoderWorkspaceClientTests testRateLimitRetriesOnceAfterRetryAfterDelay]' started.
+Test Case '-[BicTermCoreTests.CoderWorkspaceClientTests testRateLimitRetriesOnceAfterRetryAfterDelay]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.CoderWorkspaceClientTests testSecondRateLimitReturnsTypedErrorWithoutAnotherRetry]' started.
+Test Case '-[BicTermCoreTests.CoderWorkspaceClientTests testSecondRateLimitReturnsTypedErrorWithoutAnotherRetry]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.CoderWorkspaceClientTests testServerFailureReturnsTypedError]' started.
+Test Case '-[BicTermCoreTests.CoderWorkspaceClientTests testServerFailureReturnsTypedError]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.CoderWorkspaceClientTests testStoppedWorkspaceIsNotConnectable]' started.
+Test Case '-[BicTermCoreTests.CoderWorkspaceClientTests testStoppedWorkspaceIsNotConnectable]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.CoderWorkspaceClientTests testSuccessfulTokenValidationSavesCandidateUnderServerTag]' started.
+Test Case '-[BicTermCoreTests.CoderWorkspaceClientTests testSuccessfulTokenValidationSavesCandidateUnderServerTag]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.CoderWorkspaceClientTests testTLSFailureReturnsTypedError]' started.
+Test Case '-[BicTermCoreTests.CoderWorkspaceClientTests testTLSFailureReturnsTypedError]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.CoderWorkspaceClientTests testTokenIsNeverDisclosedByErrorDescriptionsOrDebugOutput]' started.
+Test Case '-[BicTermCoreTests.CoderWorkspaceClientTests testTokenIsNeverDisclosedByErrorDescriptionsOrDebugOutput]' passed (0.002 seconds).
+Test Case '-[BicTermCoreTests.CoderWorkspaceClientTests testUnknownWorkspaceStateIsPreservedAndNotConnectable]' started.
+Test Case '-[BicTermCoreTests.CoderWorkspaceClientTests testUnknownWorkspaceStateIsPreservedAndNotConnectable]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.CoderWorkspaceClientTests testWorkspaceAgentsDecodeFromLatestBuildResources]' started.
+Test Case '-[BicTermCoreTests.CoderWorkspaceClientTests testWorkspaceAgentsDecodeFromLatestBuildResources]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.CoderWorkspaceClientTests testWorkspaceDiscoveryAggregatesPaginationUsingCoderRequestContract]' started.
+Test Case '-[BicTermCoreTests.CoderWorkspaceClientTests testWorkspaceDiscoveryAggregatesPaginationUsingCoderRequestContract]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.CoderWorkspaceClientTests testWorkspaceWithoutResourcesDecodesWithNoAgents]' started.
+Test Case '-[BicTermCoreTests.CoderWorkspaceClientTests testWorkspaceWithoutResourcesDecodesWithNoAgents]' passed (0.001 seconds).
+Test Suite 'CoderWorkspaceClientTests' passed at 2026-09-09 18:23:21.563.
+	 Executed 25 tests, with 1 test skipped and 0 failures (0 unexpected) in 0.039 (0.048) seconds
+Test Suite 'CoderWorkspaceResolverTests' started at 2026-09-09 18:23:21.564.
+Test Case '-[BicTermCoreTests.CoderWorkspaceResolverTests testBlockingUnknownLifecycleWaitsAndSurfacesStartupFailure]' started.
+Test Case '-[BicTermCoreTests.CoderWorkspaceResolverTests testBlockingUnknownLifecycleWaitsAndSurfacesStartupFailure]' passed (1.038 seconds).
+Test Case '-[BicTermCoreTests.CoderWorkspaceResolverTests testMissingTokenIsTyped]' started.
+Test Case '-[BicTermCoreTests.CoderWorkspaceResolverTests testMissingTokenIsTyped]' passed (0.002 seconds).
+Test Case '-[BicTermCoreTests.CoderWorkspaceResolverTests testMultipleConnectedAgentsAreTypedAmbiguity]' started.
+Test Case '-[BicTermCoreTests.CoderWorkspaceResolverTests testMultipleConnectedAgentsAreTypedAmbiguity]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.CoderWorkspaceResolverTests testRunningWorkspaceWithConnectedAgentResolvesEndpoint]' started.
+Test Case '-[BicTermCoreTests.CoderWorkspaceResolverTests testRunningWorkspaceWithConnectedAgentResolvesEndpoint]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.CoderWorkspaceResolverTests testRunningWorkspaceWithoutConnectedAgentIsTyped]' started.
+Test Case '-[BicTermCoreTests.CoderWorkspaceResolverTests testRunningWorkspaceWithoutConnectedAgentIsTyped]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.CoderWorkspaceResolverTests testStoppedWorkspaceIsTyped]' started.
+Test Case '-[BicTermCoreTests.CoderWorkspaceResolverTests testStoppedWorkspaceIsTyped]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.CoderWorkspaceResolverTests testUnauthorizedServerResponseIsTyped]' started.
+Test Case '-[BicTermCoreTests.CoderWorkspaceResolverTests testUnauthorizedServerResponseIsTyped]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.CoderWorkspaceResolverTests testUnknownServerIsTyped]' started.
+Test Case '-[BicTermCoreTests.CoderWorkspaceResolverTests testUnknownServerIsTyped]' passed (0.002 seconds).
+Test Case '-[BicTermCoreTests.CoderWorkspaceResolverTests testUnreachableServerResponseIsTyped]' started.
+Test Case '-[BicTermCoreTests.CoderWorkspaceResolverTests testUnreachableServerResponseIsTyped]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.CoderWorkspaceResolverTests testWorkspaceAbsentFromListingIsTyped]' started.
+Test Case '-[BicTermCoreTests.CoderWorkspaceResolverTests testWorkspaceAbsentFromListingIsTyped]' passed (0.001 seconds).
+Test Suite 'CoderWorkspaceResolverTests' passed at 2026-09-09 18:23:22.619.
+	 Executed 10 tests, with 0 failures (0 unexpected) in 1.050 (1.055) seconds
+Test Suite 'ConnectionModelTests' started at 2026-09-09 18:23:22.619.
+Test Case '-[BicTermCoreTests.ConnectionModelTests testCoderReferenceRoundTrips]' started.
+Test Case '-[BicTermCoreTests.ConnectionModelTests testCoderReferenceRoundTrips]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.ConnectionModelTests testCoderServerAllowsLoopbackHTTPForDevFixtures]' started.
+Test Case '-[BicTermCoreTests.ConnectionModelTests testCoderServerAllowsLoopbackHTTPForDevFixtures]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.ConnectionModelTests testCoderServerRejectsEmbeddedCredentials]' started.
+Test Case '-[BicTermCoreTests.ConnectionModelTests testCoderServerRejectsEmbeddedCredentials]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.ConnectionModelTests testCoderServerRejectsHTTPWithTypedError]' started.
+Test Case '-[BicTermCoreTests.ConnectionModelTests testCoderServerRejectsHTTPWithTypedError]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.ConnectionModelTests testCoderServerRejectsNonLoopbackHTTP]' started.
+Test Case '-[BicTermCoreTests.ConnectionModelTests testCoderServerRejectsNonLoopbackHTTP]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.ConnectionModelTests testCoderServerRoundTrips]' started.
+Test Case '-[BicTermCoreTests.ConnectionModelTests testCoderServerRoundTrips]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.ConnectionModelTests testConnectionAcceptsExactlyFiveHops]' started.
+Test Case '-[BicTermCoreTests.ConnectionModelTests testConnectionAcceptsExactlyFiveHops]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.ConnectionModelTests testConnectionDecodeRejectsSixHops]' started.
+Test Case '-[BicTermCoreTests.ConnectionModelTests testConnectionDecodeRejectsSixHops]' passed (0.004 seconds).
+Test Case '-[BicTermCoreTests.ConnectionModelTests testConnectionRejectsSixHopsWithTypedError]' started.
+Test Case '-[BicTermCoreTests.ConnectionModelTests testConnectionRejectsSixHopsWithTypedError]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.ConnectionModelTests testConnectionRoundTripsEveryField]' started.
+Test Case '-[BicTermCoreTests.ConnectionModelTests testConnectionRoundTripsEveryField]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.ConnectionModelTests testConnectionTypeRoundTrips]' started.
+Test Case '-[BicTermCoreTests.ConnectionModelTests testConnectionTypeRoundTrips]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.ConnectionModelTests testDomainValuesAreSendable]' started.
+Test Case '-[BicTermCoreTests.ConnectionModelTests testDomainValuesAreSendable]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.ConnectionModelTests testHopRoundTrips]' started.
+Test Case '-[BicTermCoreTests.ConnectionModelTests testHopRoundTrips]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.ConnectionModelTests testHostKeyRecordRoundTrips]' started.
+Test Case '-[BicTermCoreTests.ConnectionModelTests testHostKeyRecordRoundTrips]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.ConnectionModelTests testProtocolOptionsRejectSecretBearingKeys]' started.
+Test Case '-[BicTermCoreTests.ConnectionModelTests testProtocolOptionsRejectSecretBearingKeys]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.ConnectionModelTests testProtocolOptionsRoundTripPreservesEveryValueKind]' started.
+Test Case '-[BicTermCoreTests.ConnectionModelTests testProtocolOptionsRoundTripPreservesEveryValueKind]' passed (0.001 seconds).
+Test Suite 'ConnectionModelTests' passed at 2026-09-09 18:23:22.642.
+	 Executed 16 tests, with 0 failures (0 unexpected) in 0.018 (0.023) seconds
+Test Suite 'ExtensionGuideIntegrityTests' started at 2026-09-09 18:23:22.642.
+Test Case '-[BicTermCoreTests.ExtensionGuideIntegrityTests testEveryBacktickedSymbolAndLocalLinkResolves]' started.
+Test Case '-[BicTermCoreTests.ExtensionGuideIntegrityTests testEveryBacktickedSymbolAndLocalLinkResolves]' passed (2.760 seconds).
+Test Case '-[BicTermCoreTests.ExtensionGuideIntegrityTests testShellExamplesKeepArtifactsInsideRepository]' started.
+Test Case '-[BicTermCoreTests.ExtensionGuideIntegrityTests testShellExamplesKeepArtifactsInsideRepository]' passed (0.001 seconds).
+Test Suite 'ExtensionGuideIntegrityTests' passed at 2026-09-09 18:23:25.405.
+	 Executed 2 tests, with 0 failures (0 unexpected) in 2.762 (2.763) seconds
+Test Suite 'ExtensionGuideProofTests' started at 2026-09-09 18:23:25.405.
+Test Case '-[BicTermCoreTests.ExtensionGuideProofTests testCloseIsTerminalIdempotentAndFinishesOutput]' started.
+Test Case '-[BicTermCoreTests.ExtensionGuideProofTests testCloseIsTerminalIdempotentAndFinishesOutput]' passed (0.031 seconds).
+Test Case '-[BicTermCoreTests.ExtensionGuideProofTests testConnectFailureSurfacesTypedTransportError]' started.
+Test Case '-[BicTermCoreTests.ExtensionGuideProofTests testConnectFailureSurfacesTypedTransportError]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.ExtensionGuideProofTests testConnectSucceedsAndOutputStreamIsLive]' started.
+Test Case '-[BicTermCoreTests.ExtensionGuideProofTests testConnectSucceedsAndOutputStreamIsLive]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.ExtensionGuideProofTests testDescriptorRegistrationResolvesPersistedConnection]' started.
+Test Case '-[BicTermCoreTests.ExtensionGuideProofTests testDescriptorRegistrationResolvesPersistedConnection]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.ExtensionGuideProofTests testInputOutputRoundTrip]' started.
+Test Case '-[BicTermCoreTests.ExtensionGuideProofTests testInputOutputRoundTrip]' passed (0.031 seconds).
+Test Case '-[BicTermCoreTests.ExtensionGuideProofTests testResizeIsObserved]' started.
+Test Case '-[BicTermCoreTests.ExtensionGuideProofTests testResizeIsObserved]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.ExtensionGuideProofTests testResumeFailureSurfacesTypedTransportError]' started.
+Test Case '-[BicTermCoreTests.ExtensionGuideProofTests testResumeFailureSurfacesTypedTransportError]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.ExtensionGuideProofTests testSendBeforeConnectThrowsTypedChannelDenied]' started.
+Test Case '-[BicTermCoreTests.ExtensionGuideProofTests testSendBeforeConnectThrowsTypedChannelDenied]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.ExtensionGuideProofTests testSuspendResumeFollowsDeclaredStrategy]' started.
+Test Case '-[BicTermCoreTests.ExtensionGuideProofTests testSuspendResumeFollowsDeclaredStrategy]' passed (0.031 seconds).
+Test Suite 'ExtensionGuideProofTests' passed at 2026-09-09 18:23:25.509.
+	 Executed 9 tests, with 0 failures (0 unexpected) in 0.100 (0.104) seconds
+Test Suite 'FakeTransportConformanceTests' started at 2026-09-09 18:23:25.509.
+Test Case '-[BicTermCoreTests.FakeTransportConformanceTests testCloseIsTerminalIdempotentAndFinishesOutput]' started.
+Test Case '-[BicTermCoreTests.FakeTransportConformanceTests testCloseIsTerminalIdempotentAndFinishesOutput]' passed (0.031 seconds).
+Test Case '-[BicTermCoreTests.FakeTransportConformanceTests testConnectFailureSurfacesTypedTransportError]' started.
+Test Case '-[BicTermCoreTests.FakeTransportConformanceTests testConnectFailureSurfacesTypedTransportError]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.FakeTransportConformanceTests testConnectSucceedsAndOutputStreamIsLive]' started.
+Test Case '-[BicTermCoreTests.FakeTransportConformanceTests testConnectSucceedsAndOutputStreamIsLive]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.FakeTransportConformanceTests testInputOutputRoundTrip]' started.
+Test Case '-[BicTermCoreTests.FakeTransportConformanceTests testInputOutputRoundTrip]' passed (0.031 seconds).
+Test Case '-[BicTermCoreTests.FakeTransportConformanceTests testRehandshakeScriptSuspendsByClosingAndRejectsResume]' started.
+Test Case '-[BicTermCoreTests.FakeTransportConformanceTests testRehandshakeScriptSuspendsByClosingAndRejectsResume]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.FakeTransportConformanceTests testResizeIsObserved]' started.
+Test Case '-[BicTermCoreTests.FakeTransportConformanceTests testResizeIsObserved]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.FakeTransportConformanceTests testResumeFailureSurfacesTypedTransportError]' started.
+Test Case '-[BicTermCoreTests.FakeTransportConformanceTests testResumeFailureSurfacesTypedTransportError]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.FakeTransportConformanceTests testScriptedConnectLatencyAndFailureInjection]' started.
+Test Case '-[BicTermCoreTests.FakeTransportConformanceTests testScriptedConnectLatencyAndFailureInjection]' passed (0.164 seconds).
+Test Case '-[BicTermCoreTests.FakeTransportConformanceTests testSendBeforeConnectThrowsTypedChannelDenied]' started.
+Test Case '-[BicTermCoreTests.FakeTransportConformanceTests testSendBeforeConnectThrowsTypedChannelDenied]' passed (0.002 seconds).
+Test Case '-[BicTermCoreTests.FakeTransportConformanceTests testSuspendResumeFollowsDeclaredStrategy]' started.
+Test Case '-[BicTermCoreTests.FakeTransportConformanceTests testSuspendResumeFollowsDeclaredStrategy]' passed (0.032 seconds).
+Test Suite 'FakeTransportConformanceTests' passed at 2026-09-09 18:23:25.780.
+	 Executed 10 tests, with 0 failures (0 unexpected) in 0.266 (0.271) seconds
+Test Suite 'HostKeyVerifierTests' started at 2026-09-09 18:23:25.781.
+Test Case '-[BicTermCoreTests.HostKeyVerifierTests testAlgorithmMismatchIsRejected]' started.
+Test Case '-[BicTermCoreTests.HostKeyVerifierTests testAlgorithmMismatchIsRejected]' passed (0.002 seconds).
+Test Case '-[BicTermCoreTests.HostKeyVerifierTests testChangedHostKeyIsRejected]' started.
+changed-key-rejection: Host key changed for ssh.example.com:22 from SHA256:+r0XE2pE/ZCcOeGWrisHbWLLrEFKapNtuqH9LUZ7QqU to SHA256:R9XaxtlJKgrJE0AbFdKibF9+X1cPt0yWTzvTWUvh1r4.
+Test Case '-[BicTermCoreTests.HostKeyVerifierTests testChangedHostKeyIsRejected]' passed (0.002 seconds).
+Test Case '-[BicTermCoreTests.HostKeyVerifierTests testChangedKeyCannotReplaceTrustedRecord]' started.
+Test Case '-[BicTermCoreTests.HostKeyVerifierTests testChangedKeyCannotReplaceTrustedRecord]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.HostKeyVerifierTests testDifferentPortRequiresSeparateTrust]' started.
+Test Case '-[BicTermCoreTests.HostKeyVerifierTests testDifferentPortRequiresSeparateTrust]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.HostKeyVerifierTests testExplicitlyTrustedMatchingKeyIsTrusted]' started.
+Test Case '-[BicTermCoreTests.HostKeyVerifierTests testExplicitlyTrustedMatchingKeyIsTrusted]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.HostKeyVerifierTests testSwiftDataStorePersistsExplicitTrust]' started.
+Test Case '-[BicTermCoreTests.HostKeyVerifierTests testSwiftDataStorePersistsExplicitTrust]' passed (0.029 seconds).
+Test Case '-[BicTermCoreTests.HostKeyVerifierTests testTrustSourceHasNoBypass]' started.
+bypass-audit: PASS; public-trust-function-count=1; forbidden-patterns-absent
+Test Case '-[BicTermCoreTests.HostKeyVerifierTests testTrustSourceHasNoBypass]' passed (0.002 seconds).
+Test Case '-[BicTermCoreTests.HostKeyVerifierTests testUnknownHostRequiresExplicitTrust]' started.
+Test Case '-[BicTermCoreTests.HostKeyVerifierTests testUnknownHostRequiresExplicitTrust]' passed (0.001 seconds).
+Test Suite 'HostKeyVerifierTests' passed at 2026-09-09 18:23:25.824.
+	 Executed 8 tests, with 0 failures (0 unexpected) in 0.039 (0.042) seconds
+Test Suite 'KeyRepositoryTests' started at 2026-09-09 18:23:25.824.
+Test Case '-[BicTermCoreTests.KeyRepositoryTests testCreatesOpaqueNIOSSHAuthenticationKey]' started.
+/Users/richard/code/BicTerm/BicTermCore/Tests/BicTermCoreTests/KeyRepositoryTests.swift:23: -[BicTermCoreTests.KeyRepositoryTests testCreatesOpaqueNIOSSHAuthenticationKey] : Test skipped - SPM simulator test bundle has no Data Protection Keychain entitlement
+Test Case '-[BicTermCoreTests.KeyRepositoryTests testCreatesOpaqueNIOSSHAuthenticationKey]' skipped (0.002 seconds).
+Test Case '-[BicTermCoreTests.KeyRepositoryTests testGeneratedKeyUsesWhenUnlockedThisDeviceOnlyAccessibility]' started.
+/Users/richard/code/BicTerm/BicTermCore/Tests/BicTermCoreTests/KeyRepositoryTests.swift:23: -[BicTermCoreTests.KeyRepositoryTests testGeneratedKeyUsesWhenUnlockedThisDeviceOnlyAccessibility] : Test skipped - SPM simulator test bundle has no Data Protection Keychain entitlement
+Test Case '-[BicTermCoreTests.KeyRepositoryTests testGeneratedKeyUsesWhenUnlockedThisDeviceOnlyAccessibility]' skipped (0.002 seconds).
+Test Case '-[BicTermCoreTests.KeyRepositoryTests testGenerateListSignAndDeleteEd25519]' started.
+/Users/richard/code/BicTerm/BicTermCore/Tests/BicTermCoreTests/KeyRepositoryTests.swift:23: -[BicTermCoreTests.KeyRepositoryTests testGenerateListSignAndDeleteEd25519] : Test skipped - SPM simulator test bundle has no Data Protection Keychain entitlement
+Test Case '-[BicTermCoreTests.KeyRepositoryTests testGenerateListSignAndDeleteEd25519]' skipped (0.002 seconds).
+Test Case '-[BicTermCoreTests.KeyRepositoryTests testImportsFixtureThroughRepository]' started.
+/Users/richard/code/BicTerm/BicTermCore/Tests/BicTermCoreTests/KeyRepositoryTests.swift:23: -[BicTermCoreTests.KeyRepositoryTests testImportsFixtureThroughRepository] : Test skipped - SPM simulator test bundle has no Data Protection Keychain entitlement
+Test Case '-[BicTermCoreTests.KeyRepositoryTests testImportsFixtureThroughRepository]' skipped (0.002 seconds).
+Test Case '-[BicTermCoreTests.KeyRepositoryTests testPrivateKeyNeverAppearsInEncodedConnectionState]' started.
+/Users/richard/code/BicTerm/BicTermCore/Tests/BicTermCoreTests/KeyRepositoryTests.swift:23: -[BicTermCoreTests.KeyRepositoryTests testPrivateKeyNeverAppearsInEncodedConnectionState] : Test skipped - SPM simulator test bundle has no Data Protection Keychain entitlement
+Test Case '-[BicTermCoreTests.KeyRepositoryTests testPrivateKeyNeverAppearsInEncodedConnectionState]' skipped (0.002 seconds).
+Test Suite 'KeyRepositoryTests' passed at 2026-09-09 18:23:25.835.
+	 Executed 5 tests, with 5 tests skipped and 0 failures (0 unexpected) in 0.009 (0.011) seconds
+Test Suite 'KeychainPasswordStoreTests' started at 2026-09-09 18:23:25.835.
+Test Case '-[BicTermCoreTests.KeychainPasswordStoreTests testDeleteIsIdempotent]' started.
+/Users/richard/code/BicTerm/BicTermCore/Tests/BicTermCoreTests/PasswordAuthTests.swift:433: -[BicTermCoreTests.KeychainPasswordStoreTests testDeleteIsIdempotent] : Test skipped - SPM simulator test bundle has no Data Protection Keychain entitlement
+Test Case '-[BicTermCoreTests.KeychainPasswordStoreTests testDeleteIsIdempotent]' skipped (0.002 seconds).
+Test Case '-[BicTermCoreTests.KeychainPasswordStoreTests testMissingTagReturnsNil]' started.
+/Users/richard/code/BicTerm/BicTermCore/Tests/BicTermCoreTests/PasswordAuthTests.swift:433: -[BicTermCoreTests.KeychainPasswordStoreTests testMissingTagReturnsNil] : Test skipped - SPM simulator test bundle has no Data Protection Keychain entitlement
+Test Case '-[BicTermCoreTests.KeychainPasswordStoreTests testMissingTagReturnsNil]' skipped (0.002 seconds).
+Test Case '-[BicTermCoreTests.KeychainPasswordStoreTests testSaveLoadRoundTrip]' started.
+/Users/richard/code/BicTerm/BicTermCore/Tests/BicTermCoreTests/PasswordAuthTests.swift:433: -[BicTermCoreTests.KeychainPasswordStoreTests testSaveLoadRoundTrip] : Test skipped - SPM simulator test bundle has no Data Protection Keychain entitlement
+Test Case '-[BicTermCoreTests.KeychainPasswordStoreTests testSaveLoadRoundTrip]' skipped (0.002 seconds).
+Test Case '-[BicTermCoreTests.KeychainPasswordStoreTests testSaveOverwritesExistingEntry]' started.
+/Users/richard/code/BicTerm/BicTermCore/Tests/BicTermCoreTests/PasswordAuthTests.swift:433: -[BicTermCoreTests.KeychainPasswordStoreTests testSaveOverwritesExistingEntry] : Test skipped - SPM simulator test bundle has no Data Protection Keychain entitlement
+Test Case '-[BicTermCoreTests.KeychainPasswordStoreTests testSaveOverwritesExistingEntry]' skipped (0.003 seconds).
+Test Case '-[BicTermCoreTests.KeychainPasswordStoreTests testStoredItemUsesWhenUnlockedThisDeviceOnlyAccessibility]' started.
+/Users/richard/code/BicTerm/BicTermCore/Tests/BicTermCoreTests/PasswordAuthTests.swift:433: -[BicTermCoreTests.KeychainPasswordStoreTests testStoredItemUsesWhenUnlockedThisDeviceOnlyAccessibility] : Test skipped - SPM simulator test bundle has no Data Protection Keychain entitlement
+Test Case '-[BicTermCoreTests.KeychainPasswordStoreTests testStoredItemUsesWhenUnlockedThisDeviceOnlyAccessibility]' skipped (0.002 seconds).
+Test Suite 'KeychainPasswordStoreTests' passed at 2026-09-09 18:23:25.848.
+	 Executed 5 tests, with 5 tests skipped and 0 failures (0 unexpected) in 0.012 (0.014) seconds
+Test Suite 'OpenSSHPrivateKeyParserTests' started at 2026-09-09 18:23:25.849.
+Test Case '-[BicTermCoreTests.OpenSSHPrivateKeyParserTests testAES256CTRMatchesNISTVector]' started.
+Test Case '-[BicTermCoreTests.OpenSSHPrivateKeyParserTests testAES256CTRMatchesNISTVector]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.OpenSSHPrivateKeyParserTests testBCryptPBKDFMatchesOpenBSDVector]' started.
+Test Case '-[BicTermCoreTests.OpenSSHPrivateKeyParserTests testBCryptPBKDFMatchesOpenBSDVector]' passed (0.023 seconds).
+Test Case '-[BicTermCoreTests.OpenSSHPrivateKeyParserTests testDSAIsRejectedWithUnsupportedKeyType]' started.
+Test Case '-[BicTermCoreTests.OpenSSHPrivateKeyParserTests testDSAIsRejectedWithUnsupportedKeyType]' passed (0.002 seconds).
+Test Case '-[BicTermCoreTests.OpenSSHPrivateKeyParserTests testImportsPassphraseEncryptedEd25519]' started.
+Test Case '-[BicTermCoreTests.OpenSSHPrivateKeyParserTests testImportsPassphraseEncryptedEd25519]' passed (0.277 seconds).
+Test Case '-[BicTermCoreTests.OpenSSHPrivateKeyParserTests testImportsUnencryptedEd25519AndMatchesOpenSSHGoldenValues]' started.
+Test Case '-[BicTermCoreTests.OpenSSHPrivateKeyParserTests testImportsUnencryptedEd25519AndMatchesOpenSSHGoldenValues]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.OpenSSHPrivateKeyParserTests testRSAIsRejectedWithUnsupportedKeyType]' started.
+Test Case '-[BicTermCoreTests.OpenSSHPrivateKeyParserTests testRSAIsRejectedWithUnsupportedKeyType]' passed (0.002 seconds).
+Test Case '-[BicTermCoreTests.OpenSSHPrivateKeyParserTests testWrongPassphraseIsTyped]' started.
+Test Case '-[BicTermCoreTests.OpenSSHPrivateKeyParserTests testWrongPassphraseIsTyped]' passed (0.277 seconds).
+Test Suite 'OpenSSHPrivateKeyParserTests' passed at 2026-09-09 18:23:26.434.
+	 Executed 7 tests, with 0 failures (0 unexpected) in 0.583 (0.585) seconds
+Test Suite 'PasswordAuthTests' started at 2026-09-09 18:23:26.434.
+Test Case '-[BicTermCoreTests.PasswordAuthTests testAuthMethodIsSendableAndHashable]' started.
+Test Case '-[BicTermCoreTests.PasswordAuthTests testAuthMethodIsSendableAndHashable]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.PasswordAuthTests testConnectionDefaultsToPublicKeyAuthWhenOmitted]' started.
+Test Case '-[BicTermCoreTests.PasswordAuthTests testConnectionDefaultsToPublicKeyAuthWhenOmitted]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.PasswordAuthTests testConnectionRoundTripsPasswordAuthMethod]' started.
+Test Case '-[BicTermCoreTests.PasswordAuthTests testConnectionRoundTripsPasswordAuthMethod]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.PasswordAuthTests testFailsTypedWhenServerDoesNotAdvertisePassword]' started.
+Test Case '-[BicTermCoreTests.PasswordAuthTests testFailsTypedWhenServerDoesNotAdvertisePassword]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.PasswordAuthTests testHopDefaultsToPublicKeyAuthWhenOmitted]' started.
+Test Case '-[BicTermCoreTests.PasswordAuthTests testHopDefaultsToPublicKeyAuthWhenOmitted]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.PasswordAuthTests testKeyAuthPathUntouchedWhenAuthMethodIsPublicKey]' started.
+Test Case '-[BicTermCoreTests.PasswordAuthTests testKeyAuthPathUntouchedWhenAuthMethodIsPublicKey]' passed (0.003 seconds).
+Test Case '-[BicTermCoreTests.PasswordAuthTests testLegacyConnectionPayloadMissingAuthMethodDecodesAsPublicKey]' started.
+Test Case '-[BicTermCoreTests.PasswordAuthTests testLegacyConnectionPayloadMissingAuthMethodDecodesAsPublicKey]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.PasswordAuthTests testLogAuditMatcherRecognizesPlantedPositiveControls]' started.
+Test Case '-[BicTermCoreTests.PasswordAuthTests testLogAuditMatcherRecognizesPlantedPositiveControls]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.PasswordAuthTests testMissingStoredPasswordFailsTypedBeforeDialing]' started.
+Test Case '-[BicTermCoreTests.PasswordAuthTests testMissingStoredPasswordFailsTypedBeforeDialing]' passed (0.002 seconds).
+Test Case '-[BicTermCoreTests.PasswordAuthTests testNoCoreLogLineReferencesPasswordIdentifiers]' started.
+Test Case '-[BicTermCoreTests.PasswordAuthTests testNoCoreLogLineReferencesPasswordIdentifiers]' passed (0.122 seconds).
+Test Case '-[BicTermCoreTests.PasswordAuthTests testOffersStoredPasswordExactlyOnce]' started.
+Test Case '-[BicTermCoreTests.PasswordAuthTests testOffersStoredPasswordExactlyOnce]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.PasswordAuthTests testPasswordAuthConnectionAndHopEncodingContainsNoSecrets]' started.
+Test Case '-[BicTermCoreTests.PasswordAuthTests testPasswordAuthConnectionAndHopEncodingContainsNoSecrets]' passed (0.002 seconds).
+Test Case '-[BicTermCoreTests.PasswordAuthTests testPasswordConnectSendsAndReceivesThroughLoopbackServer]' started.
+Test Case '-[BicTermCoreTests.PasswordAuthTests testPasswordConnectSendsAndReceivesThroughLoopbackServer]' passed (0.119 seconds).
+Test Case '-[BicTermCoreTests.PasswordAuthTests testSecretScannerDetectsPasswordSentinelPositiveControl]' started.
+Test Case '-[BicTermCoreTests.PasswordAuthTests testSecretScannerDetectsPasswordSentinelPositiveControl]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.PasswordAuthTests testUnknownAuthMethodFailsDecoding]' started.
+Test Case '-[BicTermCoreTests.PasswordAuthTests testUnknownAuthMethodFailsDecoding]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.PasswordAuthTests testWrongPasswordSurfacesTypedAuthenticationFailed]' started.
+Test Case '-[BicTermCoreTests.PasswordAuthTests testWrongPasswordSurfacesTypedAuthenticationFailed]' passed (0.008 seconds).
+Test Suite 'PasswordAuthTests' passed at 2026-09-09 18:23:26.706.
+	 Executed 16 tests, with 0 failures (0 unexpected) in 0.265 (0.271) seconds
+Test Suite 'PersistenceTests' started at 2026-09-09 18:23:26.706.
+Test Case '-[BicTermCoreTests.PersistenceTests testCoderServerStoreSavesLoadsUpdatesAndDeletesDTOs]' started.
+Test Case '-[BicTermCoreTests.PersistenceTests testCoderServerStoreSavesLoadsUpdatesAndDeletesDTOs]' passed (0.013 seconds).
+Test Case '-[BicTermCoreTests.PersistenceTests testConnectionStoreSavesLoadsUpdatesAndDeletesDTOs]' started.
+Test Case '-[BicTermCoreTests.PersistenceTests testConnectionStoreSavesLoadsUpdatesAndDeletesDTOs]' passed (0.007 seconds).
+Test Case '-[BicTermCoreTests.PersistenceTests testDeletingSnapshotDoesNotAffectOtherScenes]' started.
+Test Case '-[BicTermCoreTests.PersistenceTests testDeletingSnapshotDoesNotAffectOtherScenes]' passed (0.009 seconds).
+Test Case '-[BicTermCoreTests.PersistenceTests testHostKeyIdentityIncludesPort]' started.
+Test Case '-[BicTermCoreTests.PersistenceTests testHostKeyIdentityIncludesPort]' passed (0.005 seconds).
+Test Case '-[BicTermCoreTests.PersistenceTests testHostKeySaveUpsertsMatchingHostAndPort]' started.
+Test Case '-[BicTermCoreTests.PersistenceTests testHostKeySaveUpsertsMatchingHostAndPort]' passed (0.004 seconds).
+Test Case '-[BicTermCoreTests.PersistenceTests testSnapshotsArePersistedAndUpsertedPerSceneID]' started.
+Test Case '-[BicTermCoreTests.PersistenceTests testSnapshotsArePersistedAndUpsertedPerSceneID]' passed (0.005 seconds).
+Test Suite 'PersistenceTests' passed at 2026-09-09 18:23:26.753.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 0.044 (0.047) seconds
+Test Suite 'ProxyJumpCompositionTests' started at 2026-09-09 18:23:26.753.
+Test Case '-[BicTermCoreTests.ProxyJumpCompositionTests testCycleAcrossJumpChainAndDestinationRejectedBeforeDialing]' started.
+Test Case '-[BicTermCoreTests.ProxyJumpCompositionTests testCycleAcrossJumpChainAndDestinationRejectedBeforeDialing]' passed (0.002 seconds).
+Test Case '-[BicTermCoreTests.ProxyJumpCompositionTests testCycleWithinJumpChainRejected]' started.
+Test Case '-[BicTermCoreTests.ProxyJumpCompositionTests testCycleWithinJumpChainRejected]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.ProxyJumpCompositionTests testFiveHopChainComposesAtBound]' started.
+Test Case '-[BicTermCoreTests.ProxyJumpCompositionTests testFiveHopChainComposesAtBound]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.ProxyJumpCompositionTests testFiveJumpsAcceptedAtBuilderLevel]' started.
+Test Case '-[BicTermCoreTests.ProxyJumpCompositionTests testFiveJumpsAcceptedAtBuilderLevel]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.ProxyJumpCompositionTests testForwardHandshakeClassErrorAttributesToOwnerHop]' started.
+Test Case '-[BicTermCoreTests.ProxyJumpCompositionTests testForwardHandshakeClassErrorAttributesToOwnerHop]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.ProxyJumpCompositionTests testForwardRefusalAttributesToTargetHop]' started.
+Test Case '-[BicTermCoreTests.ProxyJumpCompositionTests testForwardRefusalAttributesToTargetHop]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.ProxyJumpCompositionTests testHopFailureAtFirstHopNamesIndexOne]' started.
+Test Case '-[BicTermCoreTests.ProxyJumpCompositionTests testHopFailureAtFirstHopNamesIndexOne]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.ProxyJumpCompositionTests testHopFailureAtThirdHopNamesIndexAndClosesReverseOrder]' started.
+Test Case '-[BicTermCoreTests.ProxyJumpCompositionTests testHopFailureAtThirdHopNamesIndexAndClosesReverseOrder]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.ProxyJumpCompositionTests testSameHostDifferentPortsIsNotACycle]' started.
+Test Case '-[BicTermCoreTests.ProxyJumpCompositionTests testSameHostDifferentPortsIsNotACycle]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.ProxyJumpCompositionTests testSixJumpsRejectedAtBuilderLevel]' started.
+Test Case '-[BicTermCoreTests.ProxyJumpCompositionTests testSixJumpsRejectedAtBuilderLevel]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.ProxyJumpCompositionTests testThreeHopChainComposesSequentiallyWithPerHopCredentials]' started.
+Test Case '-[BicTermCoreTests.ProxyJumpCompositionTests testThreeHopChainComposesSequentiallyWithPerHopCredentials]' passed (0.001 seconds).
+Test Suite 'ProxyJumpCompositionTests' passed at 2026-09-09 18:23:26.769.
+	 Executed 11 tests, with 0 failures (0 unexpected) in 0.012 (0.016) seconds
+Test Suite 'ProxyJumpTests' started at 2026-09-09 18:23:26.769.
+Test Case '-[BicTermCoreTests.ProxyJumpTests testEmptyChainBuildsDirectSSHTransport]' started.
+Test Case '-[BicTermCoreTests.ProxyJumpTests testEmptyChainBuildsDirectSSHTransport]' passed (0.065 seconds).
+Test Case '-[BicTermCoreTests.ProxyJumpTests testFirstHopFailureReturnsTypedJumpErrorWithoutTeardownCrash]' started.
+Test Case '-[BicTermCoreTests.ProxyJumpTests testFirstHopFailureReturnsTypedJumpErrorWithoutTeardownCrash]' passed (0.004 seconds).
+Test Case '-[BicTermCoreTests.ProxyJumpTests testSecondHopFailureClosesPriorHopAndNamesFailingHost]' started.
+Test Case '-[BicTermCoreTests.ProxyJumpTests testSecondHopFailureClosesPriorHopAndNamesFailingHost]' passed (0.062 seconds).
+Test Case '-[BicTermCoreTests.ProxyJumpTests testTwoHopChainShellRoundTripAndProvenance]' started.
+Test Case '-[BicTermCoreTests.ProxyJumpTests testTwoHopChainShellRoundTripAndProvenance]' passed (11.754 seconds).
+Test Case '-[BicTermCoreTests.ProxyJumpTests testUntrustedSecondHopSurfacesRequiresTrustForThatHop]' started.
+Test Case '-[BicTermCoreTests.ProxyJumpTests testUntrustedSecondHopSurfacesRequiresTrustForThatHop]' passed (0.067 seconds).
+Test Suite 'ProxyJumpTests' passed at 2026-09-09 18:23:38.723.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 11.951 (11.954) seconds
+Test Suite 'SSHAgentAuthorizationTests' started at 2026-09-09 18:23:38.723.
+Test Case '-[BicTermCoreTests.SSHAgentAuthorizationTests testAllowForSessionSuppressesLaterPromptsForThatSessionOnly]' started.
+Test Case '-[BicTermCoreTests.SSHAgentAuthorizationTests testAllowForSessionSuppressesLaterPromptsForThatSessionOnly]' passed (0.002 seconds).
+Test Case '-[BicTermCoreTests.SSHAgentAuthorizationTests testAllowOncePermitsSingleRequestAndReprompts]' started.
+Test Case '-[BicTermCoreTests.SSHAgentAuthorizationTests testAllowOncePermitsSingleRequestAndReprompts]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.SSHAgentAuthorizationTests testBackgroundedAppRejectsSignRequest]' started.
+Test Case '-[BicTermCoreTests.SSHAgentAuthorizationTests testBackgroundedAppRejectsSignRequest]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.SSHAgentAuthorizationTests testBackgroundingInvalidatesSessionApproval]' started.
+Test Case '-[BicTermCoreTests.SSHAgentAuthorizationTests testBackgroundingInvalidatesSessionApproval]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.SSHAgentAuthorizationTests testConcurrentAllowForSessionPromptsAtMostOncePerKey]' started.
+Test Case '-[BicTermCoreTests.SSHAgentAuthorizationTests testConcurrentAllowForSessionPromptsAtMostOncePerKey]' passed (0.025 seconds).
+Test Case '-[BicTermCoreTests.SSHAgentAuthorizationTests testDenyNeverCaches]' started.
+Test Case '-[BicTermCoreTests.SSHAgentAuthorizationTests testDenyNeverCaches]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.SSHAgentAuthorizationTests testRequestFloodIsBounded]' started.
+Test Case '-[BicTermCoreTests.SSHAgentAuthorizationTests testRequestFloodIsBounded]' passed (0.118 seconds).
+Test Suite 'SSHAgentAuthorizationTests' passed at 2026-09-09 18:23:38.875.
+	 Executed 7 tests, with 0 failures (0 unexpected) in 0.149 (0.152) seconds
+Test Suite 'SSHAgentCodecTests' started at 2026-09-09 18:23:38.876.
+Test Case '-[BicTermCoreTests.SSHAgentCodecTests testDeclaredLengthExactlyAtCapIsAccepted]' started.
+Test Case '-[BicTermCoreTests.SSHAgentCodecTests testDeclaredLengthExactlyAtCapIsAccepted]' passed (0.002 seconds).
+Test Case '-[BicTermCoreTests.SSHAgentCodecTests testFragmentedSignRequestDecodesOnce]' started.
+Test Case '-[BicTermCoreTests.SSHAgentCodecTests testFragmentedSignRequestDecodesOnce]' passed (0.002 seconds).
+Test Case '-[BicTermCoreTests.SSHAgentCodecTests testIdentitiesAnswerRoundTripsThroughWireShape]' started.
+Test Case '-[BicTermCoreTests.SSHAgentCodecTests testIdentitiesAnswerRoundTripsThroughWireShape]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.SSHAgentCodecTests testKeyAddOpcodeRejected]' started.
+Test Case '-[BicTermCoreTests.SSHAgentCodecTests testKeyAddOpcodeRejected]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.SSHAgentCodecTests testOneGigabyteDeclaredLengthRejected]' started.
+Test Case '-[BicTermCoreTests.SSHAgentCodecTests testOneGigabyteDeclaredLengthRejected]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.SSHAgentCodecTests testRequestIdentitiesDecodes]' started.
+Test Case '-[BicTermCoreTests.SSHAgentCodecTests testRequestIdentitiesDecodes]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.SSHAgentCodecTests testRequestIdentitiesWithPayloadRejected]' started.
+Test Case '-[BicTermCoreTests.SSHAgentCodecTests testRequestIdentitiesWithPayloadRejected]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.SSHAgentCodecTests testSignatureBlobEncodesECDSAAsMpintPair]' started.
+Test Case '-[BicTermCoreTests.SSHAgentCodecTests testSignatureBlobEncodesECDSAAsMpintPair]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.SSHAgentCodecTests testSignRequestDecodesWithExactFields]' started.
+Test Case '-[BicTermCoreTests.SSHAgentCodecTests testSignRequestDecodesWithExactFields]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.SSHAgentCodecTests testSignRequestWithTrailingGarbageRejected]' started.
+Test Case '-[BicTermCoreTests.SSHAgentCodecTests testSignRequestWithTrailingGarbageRejected]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.SSHAgentCodecTests testSignRequestWithTruncatedPayloadRejected]' started.
+Test Case '-[BicTermCoreTests.SSHAgentCodecTests testSignRequestWithTruncatedPayloadRejected]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.SSHAgentCodecTests testSignRequestWithUnsupportedKeyAlgorithmRejected]' started.
+Test Case '-[BicTermCoreTests.SSHAgentCodecTests testSignRequestWithUnsupportedKeyAlgorithmRejected]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.SSHAgentCodecTests testSignResponseWrapsEd25519SignatureBlob]' started.
+Test Case '-[BicTermCoreTests.SSHAgentCodecTests testSignResponseWrapsEd25519SignatureBlob]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.SSHAgentCodecTests testTruncatedLengthPrefixThrowsOnFinish]' started.
+Test Case '-[BicTermCoreTests.SSHAgentCodecTests testTruncatedLengthPrefixThrowsOnFinish]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.SSHAgentCodecTests testTruncatedPayloadThrowsOnFinish]' started.
+Test Case '-[BicTermCoreTests.SSHAgentCodecTests testTruncatedPayloadThrowsOnFinish]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.SSHAgentCodecTests testTwoFramesInOneReadDecodeAsTwoMessages]' started.
+Test Case '-[BicTermCoreTests.SSHAgentCodecTests testTwoFramesInOneReadDecodeAsTwoMessages]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.SSHAgentCodecTests testUnknownOpcodeRejectedAndStreamTerminates]' started.
+Test Case '-[BicTermCoreTests.SSHAgentCodecTests testUnknownOpcodeRejectedAndStreamTerminates]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.SSHAgentCodecTests testZeroLengthFrameRejected]' started.
+Test Case '-[BicTermCoreTests.SSHAgentCodecTests testZeroLengthFrameRejected]' passed (0.001 seconds).
+Test Suite 'SSHAgentCodecTests' passed at 2026-09-09 18:23:38.901.
+	 Executed 18 tests, with 0 failures (0 unexpected) in 0.018 (0.025) seconds
+Test Suite 'SSHAgentForwardingBridgeTests' started at 2026-09-09 18:23:38.901.
+Test Case '-[BicTermCoreTests.SSHAgentForwardingBridgeTests testApprovedSignRequestProducesVerifiableSignature]' started.
+Test Case '-[BicTermCoreTests.SSHAgentForwardingBridgeTests testApprovedSignRequestProducesVerifiableSignature]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.SSHAgentForwardingBridgeTests testBackgroundedBridgeDeniesWithoutPrompting]' started.
+Test Case '-[BicTermCoreTests.SSHAgentForwardingBridgeTests testBackgroundedBridgeDeniesWithoutPrompting]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.SSHAgentForwardingBridgeTests testDeniedSignRequestReturnsFailureAndNeverSigns]' started.
+Test Case '-[BicTermCoreTests.SSHAgentForwardingBridgeTests testDeniedSignRequestReturnsFailureAndNeverSigns]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.SSHAgentForwardingBridgeTests testFragmentedSignRequestThroughChannelRespondsOnce]' started.
+ERROR: NIO API misuse: EmbeddedEventLoop is not thread-safe. You can only use it from the thread you created it on. This problem will be upgraded to a forced crash in future versions of SwiftNIO.
+ERROR: NIO API misuse: EmbeddedEventLoop is not thread-safe. You can only use it from the thread you created it on. This problem will be upgraded to a forced crash in future versions of SwiftNIO.
+ERROR: NIO API misuse: EmbeddedEventLoop is not thread-safe. You can only use it from the thread you created it on. This problem will be upgraded to a forced crash in future versions of SwiftNIO.
+ERROR: NIO API misuse: EmbeddedEventLoop is not thread-safe. You can only use it from the thread you created it on. This problem will be upgraded to a forced crash in future versions of SwiftNIO.
+ERROR: NIO API misuse: EmbeddedEventLoop is not thread-safe. You can only use it from the thread you created it on. This problem will be upgraded to a forced crash in future versions of SwiftNIO.
+ERROR: NIO API misuse: EmbeddedEventLoop is not thread-safe. You can only use it from the thread you created it on. This problem will be upgraded to a forced crash in future versions of SwiftNIO.
+ERROR: NIO API misuse: EmbeddedEventLoop is not thread-safe. You can only use it from the thread you created it on. This problem will be upgraded to a forced crash in future versions of SwiftNIO.
+ERROR: NIO API misuse: EmbeddedEventLoop is not thread-safe. You can only use it from the thread you created it on. This problem will be upgraded to a forced crash in future versions of SwiftNIO.
+ERROR: NIO API misuse: EmbeddedEventLoop is not thread-safe. You can only use it from the thread you created it on. This problem will be upgraded to a forced crash in future versions of SwiftNIO.
+ERROR: NIO API misuse: EmbeddedEventLoop is not thread-safe. You can only use it from the thread you created it on. This problem will be upgraded to a forced crash in future versions of SwiftNIO.
+ERROR: NIO API misuse: EmbeddedEventLoop is not thread-safe. You can only use it from the thread you created it on. This problem will be upgraded to a forced crash in future versions of SwiftNIO.
+ERROR: NIO API misuse: EmbeddedEventLoop is not thread-safe. You can only use it from the thread you created it on. This problem will be upgraded to a forced crash in future versions of SwiftNIO.
+ERROR: NIO API misuse: EmbeddedEventLoop is not thread-safe. You can only use it from the thread you created it on. This problem will be upgraded to a forced crash in future versions of SwiftNIO.
+ERROR: NIO API misuse: EmbeddedEventLoop is not thread-safe. You can only use it from the thread you created it on. This problem will be upgraded to a forced crash in future versions of SwiftNIO.
+ERROR: NIO API misuse: EmbeddedEventLoop is not thread-safe. You can only use it from the thread you created it on. This problem will be upgraded to a forced crash in future versions of SwiftNIO.
+ERROR: NIO API misuse: EmbeddedEventLoop is not thread-safe. You can only use it from the thread you created it on. This problem will be upgraded to a forced crash in future versions of SwiftNIO.
+ERROR: NIO API misuse: EmbeddedEventLoop is not thread-safe. You can only use it from the thread you created it on. This problem will be upgraded to a forced crash in future versions of SwiftNIO.
+ERROR: NIO API misuse: EmbeddedEventLoop is not thread-safe. You can only use it from the thread you created it on. This problem will be upgraded to a forced crash in future versions of SwiftNIO.
+ERROR: NIO API misuse: EmbeddedEventLoop is not thread-safe. You can only use it from the thread you created it on. This problem will be upgraded to a forced crash in future versions of SwiftNIO.
+ERROR: NIO API misuse: EmbeddedEventLoop is not thread-safe. You can only use it from the thread you created it on. This problem will be upgraded to a forced crash in future versions of SwiftNIO.
+ERROR: NIO API misuse: EmbeddedEventLoop is not thread-safe. You can only use it from the thread you created it on. This problem will be upgraded to a forced crash in future versions of SwiftNIO.
+ERROR: NIO API misuse: EmbeddedEventLoop is not thread-safe. You can only use it from the thread you created it on. This problem will be upgraded to a forced crash in future versions of SwiftNIO.
+ERROR: NIO API misuse: EmbeddedEventLoop is not thread-safe. You can only use it from the thread you created it on. This problem will be upgraded to a forced crash in future versions of SwiftNIO.
+ERROR: NIO API misuse: EmbeddedEventLoop is not thread-safe. You can only use it from the thread you created it on. This problem will be upgraded to a forced crash in future versions of SwiftNIO.
+ERROR: NIO API misuse: EmbeddedEventLoop is not thread-safe. You can only use it from the thread you created it on. This problem will be upgraded to a forced crash in future versions of SwiftNIO.
+ERROR: NIO API misuse: EmbeddedEventLoop is not thread-safe. You can only use it from the thread you created it on. This problem will be upgraded to a forced crash in future versions of SwiftNIO.
+ERROR: NIO API misuse: EmbeddedEventLoop is not thread-safe. You can only use it from the thread you created it on. This problem will be upgraded to a forced crash in future versions of SwiftNIO.
+ERROR: NIO API misuse: EmbeddedEventLoop is not thread-safe. You can only use it from the thread you created it on. This problem will be upgraded to a forced crash in future versions of SwiftNIO.
+ERROR: NIO API misuse: EmbeddedEventLoop is not thread-safe. You can only use it from the thread you created it on. This problem will be upgraded to a forced crash in future versions of SwiftNIO.
+ERROR: NIO API misuse: EmbeddedEventLoop is not thread-safe. You can only use it from the thread you created it on. This problem will be upgraded to a forced crash in future versions of SwiftNIO.
+ERROR: NIO API misuse: EmbeddedEventLoop is not thread-safe. You can only use it from the thread you created it on. This problem will be upgraded to a forced crash in future versions of SwiftNIO.
+ERROR: NIO API misuse: EmbeddedEventLoop is not thread-safe. You can only use it from the thread you created it on. This problem will be upgraded to a forced crash in future versions of SwiftNIO.
+ERROR: NIO API misuse: EmbeddedEventLoop is not thread-safe. You can only use it from the thread you created it on. This problem will be upgraded to a forced crash in future versions of SwiftNIO.
+ERROR: NIO API misuse: EmbeddedEventLoop is not thread-safe. You can only use it from the thread you created it on. This problem will be upgraded to a forced crash in future versions of SwiftNIO.
+ERROR: NIO API misuse: EmbeddedEventLoop is not thread-safe. You can only use it from the thread you created it on. This problem will be upgraded to a forced crash in future versions of SwiftNIO.
+ERROR: NIO API misuse: EmbeddedEventLoop is not thread-safe. You can only use it from the thread you created it on. This problem will be upgraded to a forced crash in future versions of SwiftNIO.
+ERROR: NIO API misuse: EmbeddedEventLoop is not thread-safe. You can only use it from the thread you created it on. This problem will be upgraded to a forced crash in future versions of SwiftNIO.
+ERROR: NIO API misuse: EmbeddedEventLoop is not thread-safe. You can only use it from the thread you created it on. This problem will be upgraded to a forced crash in future versions of SwiftNIO.
+ERROR: NIO API misuse: EmbeddedEventLoop is not thread-safe. You can only use it from the thread you created it on. This problem will be upgraded to a forced crash in future versions of SwiftNIO.
+ERROR: NIO API misuse: EmbeddedEventLoop is not thread-safe. You can only use it from the thread you created it on. This problem will be upgraded to a forced crash in future versions of SwiftNIO.
+ERROR: NIO API misuse: EmbeddedEventLoop is not thread-safe. You can only use it from the thread you created it on. This problem will be upgraded to a forced crash in future versions of SwiftNIO.
+ERROR: NIO API misuse: EmbeddedEventLoop is not thread-safe. You can only use it from the thread you created it on. This problem will be upgraded to a forced crash in future versions of SwiftNIO.
+ERROR: NIO API misuse: EmbeddedEventLoop is not thread-safe. You can only use it from the thread you created it on. This problem will be upgraded to a forced crash in future versions of SwiftNIO.
+ERROR: NIO API misuse: EmbeddedEventLoop is not thread-safe. You can only use it from the thread you created it on. This problem will be upgraded to a forced crash in future versions of SwiftNIO.
+ERROR: NIO API misuse: EmbeddedEventLoop is not thread-safe. You can only use it from the thread you created it on. This problem will be upgraded to a forced crash in future versions of SwiftNIO.
+ERROR: NIO API misuse: EmbeddedEventLoop is not thread-safe. You can only use it from the thread you created it on. This problem will be upgraded to a forced crash in future versions of SwiftNIO.
+ERROR: NIO API misuse: EmbeddedEventLoop is not thread-safe. You can only use it from the thread you created it on. This problem will be upgraded to a forced crash in future versions of SwiftNIO.
+ERROR: NIO API misuse: EmbeddedEventLoop is not thread-safe. You can only use it from the thread you created it on. This problem will be upgraded to a forced crash in future versions of SwiftNIO.
+ERROR: NIO API misuse: EmbeddedEventLoop is not thread-safe. You can only use it from the thread you created it on. This problem will be upgraded to a forced crash in future versions of SwiftNIO.
+Test Case '-[BicTermCoreTests.SSHAgentForwardingBridgeTests testFragmentedSignRequestThroughChannelRespondsOnce]' passed (0.018 seconds).
+Test Case '-[BicTermCoreTests.SSHAgentForwardingBridgeTests testIdentitiesAnswerListsPublicKeyOnly]' started.
+Test Case '-[BicTermCoreTests.SSHAgentForwardingBridgeTests testIdentitiesAnswerListsPublicKeyOnly]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.SSHAgentForwardingBridgeTests testMalformedFrameClosesChannel]' started.
+Test Case '-[BicTermCoreTests.SSHAgentForwardingBridgeTests testMalformedFrameClosesChannel]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.SSHAgentForwardingBridgeTests testRequestFloodIsBoundedAndChannelClosesAtCap]' started.
+ERROR: NIO API misuse: EmbeddedEventLoop is not thread-safe. You can only use it from the thread you created it on. This problem will be upgraded to a forced crash in future versions of SwiftNIO.
+ERROR: NIO API misuse: EmbeddedEventLoop is not thread-safe. You can only use it from the thread you created it on. This problem will be upgraded to a forced crash in future versions of SwiftNIO.
+ERROR: NIO API misuse: EmbeddedEventLoop is not thread-safe. You can only use it from the thread you created it on. This problem will be upgraded to a forced crash in future versions of SwiftNIO.
+Test Case '-[BicTermCoreTests.SSHAgentForwardingBridgeTests testRequestFloodIsBoundedAndChannelClosesAtCap]' passed (0.218 seconds).
+Test Case '-[BicTermCoreTests.SSHAgentForwardingBridgeTests testSessionApprovalCachesWithinSession]' started.
+Test Case '-[BicTermCoreTests.SSHAgentForwardingBridgeTests testSessionApprovalCachesWithinSession]' passed (0.002 seconds).
+Test Case '-[BicTermCoreTests.SSHAgentForwardingBridgeTests testSignRequestForUnknownKeyFailsWithoutPromptingOrSigning]' started.
+Test Case '-[BicTermCoreTests.SSHAgentForwardingBridgeTests testSignRequestForUnknownKeyFailsWithoutPromptingOrSigning]' passed (0.001 seconds).
+Test Suite 'SSHAgentForwardingBridgeTests' passed at 2026-09-09 18:23:39.151.
+	 Executed 9 tests, with 0 failures (0 unexpected) in 0.245 (0.249) seconds
+Test Suite 'SSHAgentForwardingIntegrationTests' started at 2026-09-09 18:23:39.151.
+Test Case '-[BicTermCoreTests.SSHAgentForwardingIntegrationTests testForwardedIdentitiesListMatchesFixtureKey]' started.
+Test Case '-[BicTermCoreTests.SSHAgentForwardingIntegrationTests testForwardedIdentitiesListMatchesFixtureKey]' passed (4.763 seconds).
+Test Case '-[BicTermCoreTests.SSHAgentForwardingIntegrationTests testForwardedSignRequestDeniedSeesAgentFailure]' started.
+Test Case '-[BicTermCoreTests.SSHAgentForwardingIntegrationTests testForwardedSignRequestDeniedSeesAgentFailure]' passed (4.553 seconds).
+Test Case '-[BicTermCoreTests.SSHAgentForwardingIntegrationTests testForwardedSignRequestWithApprovalVerifiesAgainstFixtureKey]' started.
+Test Case '-[BicTermCoreTests.SSHAgentForwardingIntegrationTests testForwardedSignRequestWithApprovalVerifiesAgainstFixtureKey]' passed (4.569 seconds).
+Test Suite 'SSHAgentForwardingIntegrationTests' passed at 2026-09-09 18:23:53.040.
+	 Executed 3 tests, with 0 failures (0 unexpected) in 13.886 (13.889) seconds
+Test Suite 'SSHTransportConformanceTests' started at 2026-09-09 18:23:53.041.
+Test Case '-[BicTermCoreTests.SSHTransportConformanceTests testCloseIsTerminalIdempotentAndFinishesOutput]' started.
+Test Case '-[BicTermCoreTests.SSHTransportConformanceTests testCloseIsTerminalIdempotentAndFinishesOutput]' passed (4.274 seconds).
+Test Case '-[BicTermCoreTests.SSHTransportConformanceTests testConnectFailureSurfacesTypedTransportError]' started.
+Test Case '-[BicTermCoreTests.SSHTransportConformanceTests testConnectFailureSurfacesTypedTransportError]' passed (0.003 seconds).
+Test Case '-[BicTermCoreTests.SSHTransportConformanceTests testConnectSucceedsAndOutputStreamIsLive]' started.
+Test Case '-[BicTermCoreTests.SSHTransportConformanceTests testConnectSucceedsAndOutputStreamIsLive]' passed (4.187 seconds).
+Test Case '-[BicTermCoreTests.SSHTransportConformanceTests testInputOutputRoundTrip]' started.
+Test Case '-[BicTermCoreTests.SSHTransportConformanceTests testInputOutputRoundTrip]' passed (4.216 seconds).
+Test Case '-[BicTermCoreTests.SSHTransportConformanceTests testResizeIsObserved]' started.
+Test Case '-[BicTermCoreTests.SSHTransportConformanceTests testResizeIsObserved]' passed (4.396 seconds).
+Test Case '-[BicTermCoreTests.SSHTransportConformanceTests testResumeFailureSurfacesTypedTransportError]' started.
+Test Case '-[BicTermCoreTests.SSHTransportConformanceTests testResumeFailureSurfacesTypedTransportError]' passed (4.194 seconds).
+Test Case '-[BicTermCoreTests.SSHTransportConformanceTests testSendBeforeConnectThrowsTypedChannelDenied]' started.
+Test Case '-[BicTermCoreTests.SSHTransportConformanceTests testSendBeforeConnectThrowsTypedChannelDenied]' passed (0.002 seconds).
+Test Case '-[BicTermCoreTests.SSHTransportConformanceTests testSuspendResumeFollowsDeclaredStrategy]' started.
+Test Case '-[BicTermCoreTests.SSHTransportConformanceTests testSuspendResumeFollowsDeclaredStrategy]' passed (4.263 seconds).
+Test Suite 'SSHTransportConformanceTests' passed at 2026-09-09 18:24:18.582.
+	 Executed 8 tests, with 0 failures (0 unexpected) in 25.535 (25.541) seconds
+Test Suite 'SSHTransportIntegrationTests' started at 2026-09-09 18:24:18.582.
+Test Case '-[BicTermCoreTests.SSHTransportIntegrationTests testChangedHostKeyProducesTypedRejection]' started.
+/Users/richard/code/BicTerm/BicTermCore/Tests/BicTermCoreTests/SSHTransportIntegrationTests.swift:287: -[BicTermCoreTests.SSHTransportIntegrationTests testChangedHostKeyProducesTypedRejection] : Test skipped - requires HOP1_ALT_KEY=1 fixtures-up
+Test Case '-[BicTermCoreTests.SSHTransportIntegrationTests testChangedHostKeyProducesTypedRejection]' skipped (0.002 seconds).
+Test Case '-[BicTermCoreTests.SSHTransportIntegrationTests testClosedPortIsUnreachable]' started.
+Test Case '-[BicTermCoreTests.SSHTransportIntegrationTests testClosedPortIsUnreachable]' passed (0.003 seconds).
+Test Case '-[BicTermCoreTests.SSHTransportIntegrationTests testDirectTCPIPCarriesByteStream]' started.
+Test Case '-[BicTermCoreTests.SSHTransportIntegrationTests testDirectTCPIPCarriesByteStream]' passed (0.104 seconds).
+Test Case '-[BicTermCoreTests.SSHTransportIntegrationTests testEd25519RoundTripProducesExactOutput]' started.
+Test Case '-[BicTermCoreTests.SSHTransportIntegrationTests testEd25519RoundTripProducesExactOutput]' passed (4.223 seconds).
+Test Case '-[BicTermCoreTests.SSHTransportIntegrationTests testResizePropagatesToServerPTY]' started.
+Test Case '-[BicTermCoreTests.SSHTransportIntegrationTests testResizePropagatesToServerPTY]' passed (4.634 seconds).
+Test Case '-[BicTermCoreTests.SSHTransportIntegrationTests testSecureEnclaveAuthRoundTrip]' started.
+/Users/richard/code/BicTerm/BicTermCore/Tests/BicTermCoreTests/SSHTransportIntegrationTests.swift:241: -[BicTermCoreTests.SSHTransportIntegrationTests testSecureEnclaveAuthRoundTrip] : Test skipped - SE keychain unavailable in this test environment: keychain(-34018)
+Test Case '-[BicTermCoreTests.SSHTransportIntegrationTests testSecureEnclaveAuthRoundTrip]' skipped (0.012 seconds).
+Test Case '-[BicTermCoreTests.SSHTransportIntegrationTests testSoftwareP256AuthRoundTrip]' started.
+Test Case '-[BicTermCoreTests.SSHTransportIntegrationTests testSoftwareP256AuthRoundTrip]' passed (4.282 seconds).
+Test Case '-[BicTermCoreTests.SSHTransportIntegrationTests testUnknownHostRequiresTrustWithKnownFingerprint]' started.
+Test Case '-[BicTermCoreTests.SSHTransportIntegrationTests testUnknownHostRequiresTrustWithKnownFingerprint]' passed (0.028 seconds).
+Test Case '-[BicTermCoreTests.SSHTransportIntegrationTests testWrongKeyFailsWithAuthenticationFailed]' started.
+Test Case '-[BicTermCoreTests.SSHTransportIntegrationTests testWrongKeyFailsWithAuthenticationFailed]' passed (3.151 seconds).
+Test Suite 'SSHTransportIntegrationTests' passed at 2026-09-09 18:24:35.027.
+	 Executed 9 tests, with 2 tests skipped and 0 failures (0 unexpected) in 16.439 (16.445) seconds
+Test Suite 'SSHTransportStaticGuardTests' started at 2026-09-09 18:24:35.028.
+Test Case '-[BicTermCoreTests.SSHTransportStaticGuardTests testConnectRejectsInvalidDimensions]' started.
+Test Case '-[BicTermCoreTests.SSHTransportStaticGuardTests testConnectRejectsInvalidDimensions]' passed (0.002 seconds).
+Test Case '-[BicTermCoreTests.SSHTransportStaticGuardTests testDefaultProviderThrowsForUnknownReference]' started.
+Test Case '-[BicTermCoreTests.SSHTransportStaticGuardTests testDefaultProviderThrowsForUnknownReference]' passed (0.004 seconds).
+Test Case '-[BicTermCoreTests.SSHTransportStaticGuardTests testNoGlobalRequestDelegateInstalledAndDefaultRejectsTCPForwarding]' started.
+Test Case '-[BicTermCoreTests.SSHTransportStaticGuardTests testNoGlobalRequestDelegateInstalledAndDefaultRejectsTCPForwarding]' passed (0.004 seconds).
+Test Case '-[BicTermCoreTests.SSHTransportStaticGuardTests testRejectAllInboundChildChannelInitializerFails]' started.
+Test Case '-[BicTermCoreTests.SSHTransportStaticGuardTests testRejectAllInboundChildChannelInitializerFails]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.SSHTransportStaticGuardTests testUnconnectedTransportSurfacesTypedErrors]' started.
+Test Case '-[BicTermCoreTests.SSHTransportStaticGuardTests testUnconnectedTransportSurfacesTypedErrors]' passed (0.001 seconds).
+Test Suite 'SSHTransportStaticGuardTests' passed at 2026-09-09 18:24:35.042.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.012 (0.015) seconds
+Test Suite 'SecureEnclaveKeyTests' started at 2026-09-09 18:24:35.042.
+Test Case '-[BicTermCoreTests.SecureEnclaveKeyTests testBiometricSecureEnclaveKeyWhenAvailableAndEnrolled]' started.
+/Users/richard/code/BicTerm/BicTermCore/Tests/BicTermCoreTests/SecureEnclaveKeyTests.swift:100: -[BicTermCoreTests.SecureEnclaveKeyTests testBiometricSecureEnclaveKeyWhenAvailableAndEnrolled] : Test skipped - SPM simulator test bundle has no Data Protection Keychain entitlement
+Test Case '-[BicTermCoreTests.SecureEnclaveKeyTests testBiometricSecureEnclaveKeyWhenAvailableAndEnrolled]' skipped (0.003 seconds).
+Test Case '-[BicTermCoreTests.SecureEnclaveKeyTests testGenerateSignAndPersistWhenSecureEnclaveAvailable]' started.
+/Users/richard/code/BicTerm/BicTermCore/Tests/BicTermCoreTests/SecureEnclaveKeyTests.swift:100: -[BicTermCoreTests.SecureEnclaveKeyTests testGenerateSignAndPersistWhenSecureEnclaveAvailable] : Test skipped - SPM simulator test bundle has no Data Protection Keychain entitlement
+Test Case '-[BicTermCoreTests.SecureEnclaveKeyTests testGenerateSignAndPersistWhenSecureEnclaveAvailable]' skipped (0.002 seconds).
+Test Case '-[BicTermCoreTests.SecureEnclaveKeyTests testP256PublicBlobUsesOpenSSHWireFormat]' started.
+Test Case '-[BicTermCoreTests.SecureEnclaveKeyTests testP256PublicBlobUsesOpenSSHWireFormat]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.SecureEnclaveKeyTests testSecureEnclavePreflight]' started.
+BicTerm Secure Enclave preflight: available=true
+Test Case '-[BicTermCoreTests.SecureEnclaveKeyTests testSecureEnclavePreflight]' passed (0.001 seconds).
+Test Suite 'SecureEnclaveKeyTests' passed at 2026-09-09 18:24:35.051.
+	 Executed 4 tests, with 2 tests skipped and 0 failures (0 unexpected) in 0.007 (0.009) seconds
+Test Suite 'SessionPresentationStateTests' started at 2026-09-09 18:24:35.051.
+Test Case '-[BicTermCoreTests.SessionPresentationStateTests testClosedSessionHasNoPresentationState]' started.
+Test Case '-[BicTermCoreTests.SessionPresentationStateTests testClosedSessionHasNoPresentationState]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.SessionPresentationStateTests testNewSessionStartsDetachedWithoutUnseenOutput]' started.
+Test Case '-[BicTermCoreTests.SessionPresentationStateTests testNewSessionStartsDetachedWithoutUnseenOutput]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.SessionPresentationStateTests testOutputWhileAttachedDoesNotMarkUnseen]' started.
+Test Case '-[BicTermCoreTests.SessionPresentationStateTests testOutputWhileAttachedDoesNotMarkUnseen]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.SessionPresentationStateTests testOutputWhileDetachedMarksUnseenUntilAttached]' started.
+Test Case '-[BicTermCoreTests.SessionPresentationStateTests testOutputWhileDetachedMarksUnseenUntilAttached]' passed (0.030 seconds).
+Test Case '-[BicTermCoreTests.SessionPresentationStateTests testUnknownSceneIDIsNoOpAndNil]' started.
+Test Case '-[BicTermCoreTests.SessionPresentationStateTests testUnknownSceneIDIsNoOpAndNil]' passed (0.001 seconds).
+Test Suite 'SessionPresentationStateTests' passed at 2026-09-09 18:24:35.088.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.035 (0.037) seconds
+Test Suite 'SessionRegistryIntegrationTests' started at 2026-09-09 18:24:35.088.
+Test Case '-[BicTermCoreTests.SessionRegistryIntegrationTests testConcurrentSessionsReconnectIndependently]' started.
+Test Case '-[BicTermCoreTests.SessionRegistryIntegrationTests testConcurrentSessionsReconnectIndependently]' passed (9.648 seconds).
+Test Case '-[BicTermCoreTests.SessionRegistryIntegrationTests testInBandKillTriggersReconnectAndStableOutputStreamSurvives]' started.
+Test Case '-[BicTermCoreTests.SessionRegistryIntegrationTests testInBandKillTriggersReconnectAndStableOutputStreamSurvives]' passed (8.865 seconds).
+Test Suite 'SessionRegistryIntegrationTests' passed at 2026-09-09 18:24:53.604.
+	 Executed 2 tests, with 0 failures (0 unexpected) in 18.514 (18.516) seconds
+Test Suite 'SessionRegistryTests' started at 2026-09-09 18:24:53.606.
+Test Case '-[BicTermCoreTests.SessionRegistryTests testBoundedBackoffExhaustionLandsInFailedStateAndStops]' started.
+Test Case '-[BicTermCoreTests.SessionRegistryTests testBoundedBackoffExhaustionLandsInFailedStateAndStops]' passed (0.253 seconds).
+Test Case '-[BicTermCoreTests.SessionRegistryTests testCloseSessionTransitionsToClosedAndFinishesStreams]' started.
+Test Case '-[BicTermCoreTests.SessionRegistryTests testCloseSessionTransitionsToClosedAndFinishesStreams]' passed (0.002 seconds).
+Test Case '-[BicTermCoreTests.SessionRegistryTests testConcurrentReconnectsCoalesceIntoSingleAttempt]' started.
+Test Case '-[BicTermCoreTests.SessionRegistryTests testConcurrentReconnectsCoalesceIntoSingleAttempt]' passed (0.112 seconds).
+Test Case '-[BicTermCoreTests.SessionRegistryTests testDidEnterBackgroundPersistsSnapshotAndClosesTransportEagerly]' started.
+Test Case '-[BicTermCoreTests.SessionRegistryTests testDidEnterBackgroundPersistsSnapshotAndClosesTransportEagerly]' passed (0.002 seconds).
+Test Case '-[BicTermCoreTests.SessionRegistryTests testDropDetectionTriggersAutoReconnectWithFreshTransportOnStableStream]' started.
+Test Case '-[BicTermCoreTests.SessionRegistryTests testDropDetectionTriggersAutoReconnectWithFreshTransportOnStableStream]' passed (0.145 seconds).
+Test Case '-[BicTermCoreTests.SessionRegistryTests testInitialConnectFailureThrowsTypedErrorAndLandsInFailedState]' started.
+Test Case '-[BicTermCoreTests.SessionRegistryTests testInitialConnectFailureThrowsTypedErrorAndLandsInFailedState]' passed (0.002 seconds).
+Test Case '-[BicTermCoreTests.SessionRegistryTests testManualReconnectRecoversFromFailedState]' started.
+Test Case '-[BicTermCoreTests.SessionRegistryTests testManualReconnectRecoversFromFailedState]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.SessionRegistryTests testManualReconnectWinsOverPendingAutoReconnect]' started.
+Test Case '-[BicTermCoreTests.SessionRegistryTests testManualReconnectWinsOverPendingAutoReconnect]' passed (0.975 seconds).
+Test Case '-[BicTermCoreTests.SessionRegistryTests testReconnectOnActiveSessionThrowsInvalidTransition]' started.
+Test Case '-[BicTermCoreTests.SessionRegistryTests testReconnectOnActiveSessionThrowsInvalidTransition]' passed (0.002 seconds).
+Test Case '-[BicTermCoreTests.SessionRegistryTests testReconnectOnUnknownSceneThrowsNoSession]' started.
+Test Case '-[BicTermCoreTests.SessionRegistryTests testReconnectOnUnknownSceneThrowsNoSession]' passed (0.002 seconds).
+Test Case '-[BicTermCoreTests.SessionRegistryTests testReconnectReplaysLatestTerminalSize]' started.
+Test Case '-[BicTermCoreTests.SessionRegistryTests testReconnectReplaysLatestTerminalSize]' passed (0.026 seconds).
+Test Case '-[BicTermCoreTests.SessionRegistryTests testRestoreForOccupiedSceneThrowsSceneOccupied]' started.
+Test Case '-[BicTermCoreTests.SessionRegistryTests testRestoreForOccupiedSceneThrowsSceneOccupied]' passed (0.002 seconds).
+Test Case '-[BicTermCoreTests.SessionRegistryTests testRestoreFromSnapshotLandsSuspendedAndReconnectsManually]' started.
+Test Case '-[BicTermCoreTests.SessionRegistryTests testRestoreFromSnapshotLandsSuspendedAndReconnectsManually]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.SessionRegistryTests testRoamingResumeFailureLandsInFailedState]' started.
+Test Case '-[BicTermCoreTests.SessionRegistryTests testRoamingResumeFailureLandsInFailedState]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.SessionRegistryTests testRoamingTransportSuspendsWithoutCloseAndResumesInPlace]' started.
+Test Case '-[BicTermCoreTests.SessionRegistryTests testRoamingTransportSuspendsWithoutCloseAndResumesInPlace]' passed (0.063 seconds).
+Test Case '-[BicTermCoreTests.SessionRegistryTests testSecondStartForOccupiedSceneThrowsSceneOccupied]' started.
+Test Case '-[BicTermCoreTests.SessionRegistryTests testSecondStartForOccupiedSceneThrowsSceneOccupied]' passed (0.002 seconds).
+Test Case '-[BicTermCoreTests.SessionRegistryTests testStaleReconnectResultIsDiscardedAfterClose]' started.
+Test Case '-[BicTermCoreTests.SessionRegistryTests testStaleReconnectResultIsDiscardedAfterClose]' passed (0.033 seconds).
+Test Case '-[BicTermCoreTests.SessionRegistryTests testStartSessionTransitionsThroughConnectingToActive]' started.
+Test Case '-[BicTermCoreTests.SessionRegistryTests testStartSessionTransitionsThroughConnectingToActive]' passed (0.002 seconds).
+Test Case '-[BicTermCoreTests.SessionRegistryTests testStateStreamReplaysHistoryThenYieldsLiveTransitions]' started.
+Test Case '-[BicTermCoreTests.SessionRegistryTests testStateStreamReplaysHistoryThenYieldsLiveTransitions]' passed (0.049 seconds).
+Test Case '-[BicTermCoreTests.SessionRegistryTests testWillEnterForegroundReconnectsSuspendedSession]' started.
+Test Case '-[BicTermCoreTests.SessionRegistryTests testWillEnterForegroundReconnectsSuspendedSession]' passed (0.002 seconds).
+Test Case '-[BicTermCoreTests.SessionRegistryTests testWillTerminatePersistsSnapshotsAndNeverReconnects]' started.
+Test Case '-[BicTermCoreTests.SessionRegistryTests testWillTerminatePersistsSnapshotsAndNeverReconnects]' passed (0.206 seconds).
+Test Suite 'SessionRegistryTests' passed at 2026-09-09 18:24:55.506.
+	 Executed 21 tests, with 0 failures (0 unexpected) in 1.885 (1.900) seconds
+Test Suite 'SessionRestorationTests' started at 2026-09-09 18:24:55.507.
+Test Case '-[BicTermCoreTests.SessionRestorationTests testSecretScannerDetectsPrivateKeyAndTokenPositiveControl]' started.
+Test Case '-[BicTermCoreTests.SessionRestorationTests testSecretScannerDetectsPrivateKeyAndTokenPositiveControl]' passed (0.002 seconds).
+Test Case '-[BicTermCoreTests.SessionRestorationTests testSnapshotContainsNoSecrets]' started.
+Test Case '-[BicTermCoreTests.SessionRestorationTests testSnapshotContainsNoSecrets]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.SessionRestorationTests testSnapshotRoundTripsAllRestorationMetadata]' started.
+Test Case '-[BicTermCoreTests.SessionRestorationTests testSnapshotRoundTripsAllRestorationMetadata]' passed (0.001 seconds).
+Test Case '-[BicTermCoreTests.SessionRestorationTests testTerminatedSessionRestoresAsReconnectRequired]' started.
+Test Case '-[BicTermCoreTests.SessionRestorationTests testTerminatedSessionRestoresAsReconnectRequired]' passed (0.001 seconds).
+Test Suite 'SessionRestorationTests' passed at 2026-09-09 18:24:55.513.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 0.004 (0.006) seconds
+Test Suite 'SmokeTests' started at 2026-09-09 18:24:55.513.
+Test Case '-[BicTermCoreTests.SmokeTests testHarnessWorks]' started.
+Test Case '-[BicTermCoreTests.SmokeTests testHarnessWorks]' passed (0.001 seconds).
+Test Suite 'SmokeTests' passed at 2026-09-09 18:24:55.514.
+	 Executed 1 test, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
+Test Suite 'TransportAbstractionTests' started at 2026-09-09 18:24:55.515.
+Test Case '-[BicTermCoreTests.TransportAbstractionTests testFakeTransportPassesConformanceSuite]' started.
+Test Case '-[BicTermCoreTests.TransportAbstractionTests testFakeTransportPassesConformanceSuite]' passed (0.051 seconds).
+Test Case '-[BicTermCoreTests.TransportAbstractionTests testSelectedProtocolNeverSilentlyDowngrades]' started.
+Test Case '-[BicTermCoreTests.TransportAbstractionTests testSelectedProtocolNeverSilentlyDowngrades]' passed (0.002 seconds).
+Test Case '-[BicTermCoreTests.TransportAbstractionTests testSessionRegistryHasNoSSHImports]' started.
+Test Case '-[BicTermCoreTests.TransportAbstractionTests testSessionRegistryHasNoSSHImports]' passed (0.005 seconds).
+Test Case '-[BicTermCoreTests.TransportAbstractionTests testSSHDescriptorResolvesEndToEndFromPersistedConnection]' started.
+Test Case '-[BicTermCoreTests.TransportAbstractionTests testSSHDescriptorResolvesEndToEndFromPersistedConnection]' passed (0.002 seconds).
+Test Case '-[BicTermCoreTests.TransportAbstractionTests testSSHFactoryRejectsNonSSHConnectionsWithTypedError]' started.
+Test Case '-[BicTermCoreTests.TransportAbstractionTests testSSHFactoryRejectsNonSSHConnectionsWithTypedError]' passed (0.001 seconds).
+Test Suite 'TransportAbstractionTests' passed at 2026-09-09 18:24:55.579.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.062 (0.064) seconds
+Test Suite 'UDSTransportTests' started at 2026-09-09 18:24:55.579.
+Test Case '-[BicTermCoreTests.UDSTransportTests testCleanupOnCancelRemovesSocketPath]' started.
+Test Case '-[BicTermCoreTests.UDSTransportTests testCleanupOnCancelRemovesSocketPath]' passed (0.058 seconds).
+Test Case '-[BicTermCoreTests.UDSTransportTests testConcurrentSessionsDistinctSocketsNoCrossTalk]' started.
+Test Case '-[BicTermCoreTests.UDSTransportTests testConcurrentSessionsDistinctSocketsNoCrossTalk]' passed (4.888 seconds).
+Test Case '-[BicTermCoreTests.UDSTransportTests testNoClientAuthSessionOverUDSReceivesGreetingAndEcho]' started.
+ERROR: Cannot schedule tasks on an EventLoop that has already shut down. This will be upgraded to a forced crash in future SwiftNIO versions.
+ERROR: Cannot schedule tasks on an EventLoop that has already shut down. This will be upgraded to a forced crash in future SwiftNIO versions.
+Test Case '-[BicTermCoreTests.UDSTransportTests testNoClientAuthSessionOverUDSReceivesGreetingAndEcho]' passed (0.131 seconds).
+Test Case '-[BicTermCoreTests.UDSTransportTests testPartialStartupFailureSurfacesTypedErrorAndNoSocketLeak]' started.
+Test Case '-[BicTermCoreTests.UDSTransportTests testPartialStartupFailureSurfacesTypedErrorAndNoSocketLeak]' passed (0.004 seconds).
+Test Case '-[BicTermCoreTests.UDSTransportTests testStalePathCollisionIsSweptBeforeBind]' started.
+Test Case '-[BicTermCoreTests.UDSTransportTests testStalePathCollisionIsSweptBeforeBind]' passed (4.374 seconds).
+Test Case '-[BicTermCoreTests.UDSTransportTests testUDSPTYRoundTripThroughFixtureForwarder]' started.
+Test Case '-[BicTermCoreTests.UDSTransportTests testUDSPTYRoundTripThroughFixtureForwarder]' passed (4.331 seconds).
+Test Suite 'UDSTransportTests' passed at 2026-09-09 18:25:09.370.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 13.787 (13.791) seconds
+Test Suite 'UsageHeartbeatTests' started at 2026-09-09 18:25:09.370.
+Test Case '-[BicTermCoreTests.UsageHeartbeatTests testBeginPostsImmediatelyThenOncePerReleasedInterval]' started.
+Test Case '-[BicTermCoreTests.UsageHeartbeatTests testBeginPostsImmediatelyThenOncePerReleasedInterval]' passed (0.081 seconds).
+Test Case '-[BicTermCoreTests.UsageHeartbeatTests testEndStopsPosting]' started.
+Test Case '-[BicTermCoreTests.UsageHeartbeatTests testEndStopsPosting]' passed (0.134 seconds).
+Test Case '-[BicTermCoreTests.UsageHeartbeatTests testEndWithoutBeginIsHarmlessAndBeginTwiceNeverDoublesCadence]' started.
+Test Case '-[BicTermCoreTests.UsageHeartbeatTests testEndWithoutBeginIsHarmlessAndBeginTwiceNeverDoublesCadence]' passed (0.178 seconds).
+Test Case '-[BicTermCoreTests.UsageHeartbeatTests testPostedRequestMatchesSpecShape]' started.
+Test Case '-[BicTermCoreTests.UsageHeartbeatTests testPostedRequestMatchesSpecShape]' passed (0.032 seconds).
+Test Case '-[BicTermCoreTests.UsageHeartbeatTests testRequestFailureIsRecordedAndLoopContinues]' started.
+Test Case '-[BicTermCoreTests.UsageHeartbeatTests testRequestFailureIsRecordedAndLoopContinues]' passed (0.091 seconds).
+Test Case '-[BicTermCoreTests.UsageHeartbeatTests testUnexpectedStatusIsRecordedAndNeverFatal]' started.
+Test Case '-[BicTermCoreTests.UsageHeartbeatTests testUnexpectedStatusIsRecordedAndNeverFatal]' passed (0.060 seconds).
+Test Case '-[BicTermCoreTests.UsageHeartbeatTests testUsage401IsNotAnAuthLossSignal]' started.
+Test Case '-[BicTermCoreTests.UsageHeartbeatTests testUsage401IsNotAnAuthLossSignal]' passed (0.049 seconds).
+Test Suite 'UsageHeartbeatTests' passed at 2026-09-09 18:25:10.002.
+	 Executed 7 tests, with 0 failures (0 unexpected) in 0.624 (0.632) seconds
+Test Suite 'BicTermCoreTests.xctest' passed at 2026-09-09 18:25:10.003.
+	 Executed 328 tests, with 15 tests skipped and 0 failures (0 unexpected) in 164.361 (164.549) seconds
+Test Suite 'All tests' passed at 2026-09-09 18:25:10.004.
+	 Executed 328 tests, with 15 tests skipped and 0 failures (0 unexpected) in 164.361 (164.551) seconds
+2026-09-09 18:25:10.298 xcodebuild[43349:32833889] [MT] IDETestOperationsObserverDebug: 165.835 elapsed -- Testing started completed.
+2026-09-09 18:25:10.298 xcodebuild[43349:32833889] [MT] IDETestOperationsObserverDebug: 0.000 sec, +0.000 sec -- start
+2026-09-09 18:25:10.298 xcodebuild[43349:32833889] [MT] IDETestOperationsObserverDebug: 165.835 sec, +165.835 sec -- end
+
+Test session results, code coverage, and logs:
+	/Users/richard/code/BicTerm/.build-artifacts/DerivedData/g12-core/Logs/Test/Test-BicTermCore-2026.09.09_18-22-22--0600.xcresult
+
+** TEST SUCCEEDED **
+
+Testing started

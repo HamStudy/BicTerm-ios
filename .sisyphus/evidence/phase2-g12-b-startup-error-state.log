@@ -1,11 +1,11 @@
 {
   "workspace_id": "b546af71-b9cd-4d7e-a779-d308f8f66438",
-  "build_id": "b2e1fe40-3fe8-49ba-83c1-1340188fc6c2",
+  "build_id": "38886116-50c0-4cc7-afec-1f9f56f40318",
   "status": "running",
   "agents": [
     {
       "resource": "main_script",
-      "id": "f636d5b9-21da-4b49-81c5-4988b9e43cbd",
+      "id": "1343294c-981f-42af-a062-4df4ec7d92cd",
       "name": "main",
       "status": "connected",
       "lifecycle": "created",

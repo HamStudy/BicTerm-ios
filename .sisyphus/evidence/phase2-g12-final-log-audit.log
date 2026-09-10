@@ -1,0 +1,6 @@
+PASS: 254 T12 scenario logs/documents scanned with SHA-256 manifest
+PASS user_tokens: 6 raw/URL/base64 patterns; positive controls passed
+PASS resume_tokens: 8 raw/URL/base64 patterns; positive controls passed
+PASS private_keys: 165 raw/URL/base64 patterns; positive controls passed
+PASS terminal_contents: 6 raw/URL/base64 patterns; positive controls passed
+PASS: no private-key headers or JWT-shaped values found
