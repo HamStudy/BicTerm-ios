@@ -37,6 +37,50 @@ targets:
         product: BicTermCore
       - framework: .build-artifacts/coder-net/CoderNet.xcframework
         embed: false
+  HerdrCoreC:
+    type: framework
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources:
+      - path: HerdrCoreC/include
+        headerVisibility: public
+      - path: HerdrCoreC/stub.c
+    settings:
+      base:
+        PRODUCT_NAME: HerdrCore
+        PRODUCT_MODULE_NAME: HerdrCore
+        DEFINES_MODULE: YES
+        SKIP_INSTALL: YES
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: "6.0"
+        # Pure clang-module host: no machine code of its own beyond the stub;
+        # the real archive is the headerless HerdrCore.xcframework.
+        MACH_O_TYPE: staticlib
+  HerdrClientCore:
+    type: framework
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources:
+      - path: HerdrClientCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.bicterm.HerdrClientCore
+        PRODUCT_MODULE_NAME: HerdrClientCore
+        DEFINES_MODULE: YES
+        SKIP_INSTALL: YES
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: "6.0"
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        # Static archive: the HerdrCore C ABI resolves once in the app image.
+        MACH_O_TYPE: staticlib
+    dependencies:
+      # Clang module for the ABI declarations; the machine code comes from
+      # the headerless HerdrCore.xcframework below (see build-herdr-core.sh
+      # for why it carries no headers).
+      - target: HerdrCoreC
+      - framework: .build-artifacts/herdr/HerdrCore.xcframework
+        embed: false
   BicTerm:
     type: application
     platform: iOS
@@ -56,6 +100,10 @@ targets:
         SWIFT_VERSION: "6.0"
         MARKETING_VERSION: "0.1.0"
         CURRENT_PROJECT_VERSION: "1"
+        # -u _herdr_client_create: the app target does not reference Herdr code
+        # yet (T16 wires the UI); the anchor keeps the HerdrCore objects in
+        # BOTH build flavors' binaries (Apache-2.0 is App Store-safe).
+        OTHER_LDFLAGS: "$(inherited) -u _herdr_client_create"
       configs:
         Debug:
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) CODER_TUNNEL"
@@ -65,17 +113,37 @@ targets:
           # CoderNetTunnel metatype touch. NOT -force_load/-all_load: Xcode
           # merges the SwiftPM product objects into CoderTunnel.a, and
           # wholesale extraction double-defines BicTermCore/NIO symbols.
-          OTHER_LDFLAGS: "$(inherited) -framework CoderTunnel -lresolv -u _CoderNetVersion"
+          OTHER_LDFLAGS: "$(inherited) -u _herdr_client_create -framework CoderTunnel -lresolv -u _CoderNetVersion"
           FRAMEWORK_SEARCH_PATHS: "$(inherited) $(BUILT_PRODUCTS_DIR)"
         Release:
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) CODER_TUNNEL"
-          OTHER_LDFLAGS: "$(inherited) -framework CoderTunnel -lresolv -u _CoderNetVersion"
+          OTHER_LDFLAGS: "$(inherited) -u _herdr_client_create -framework CoderTunnel -lresolv -u _CoderNetVersion"
           FRAMEWORK_SEARCH_PATHS: "$(inherited) $(BUILT_PRODUCTS_DIR)"
     dependencies:
       - package: BicTermCore
         product: BicTermCore
       - package: SwiftTerm
         product: SwiftTerm
+      # Static framework: link only, never embed (it merges into the app
+      # binary; an embedded stub framework would be a bundle-validation bug).
+      - target: HerdrClientCore
+        embed: false
+  HerdrClientCoreTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources:
+      - path: HerdrClientCoreTests
+      - path: Vendor/herdr/herdr-protocol/tests/fixtures/golden
+        buildPhase: resources
+        type: group
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SWIFT_VERSION: "6.0"
+    dependencies:
+      - target: HerdrClientCore
   BicTermUITests:
     type: bundle.ui-testing
     platform: iOS
@@ -159,3 +227,13 @@ schemes:
       config: AppStore-Debug
     archive:
       config: AppStore-Release
+  HerdrClientCore:
+    build:
+      targets:
+        HerdrClientCore: all
+        HerdrClientCoreTests:
+          - test
+    test:
+      config: Debug
+      targets:
+        - HerdrClientCoreTests
