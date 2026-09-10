@@ -34,11 +34,19 @@ final class HerdrClipboardUITests: XCTestCase {
         UIPasteboard.general.string = ""
     }
 
-    private func launchApp(hwkeys: String? = nil) -> XCUIApplication {
+    /// `seed` routes through `HERDR_UI_TEST_PASTEBOARD`: the app writes the
+    /// string at boot, so the gesture reads own-origin content and the
+    /// SpringBoard paste prompt (which a runner-written seed raises and
+    /// which blocks the app's main thread) never engages. Only the cmd+v
+    /// chord test seeds from the runner — it exercises the prompt path.
+    private func launchApp(hwkeys: String? = nil, seed: String? = nil) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["--uitest-herdr-replay", "--uitest-herdr-mode", "clipboard"]
         if let hwkeys {
             app.launchArguments += ["--uitest-hwkeys", hwkeys]
+        }
+        if let seed {
+            app.launchEnvironment["HERDR_UI_TEST_PASTEBOARD"] = seed
         }
         app.launchEnvironment["HERDR_FIXTURE_DIR"] = herdirFixtureDir
         app.launchEnvironment["HERDR_VENDOR_GOLDEN_DIR"] = vendorGoldenDir
@@ -95,8 +103,7 @@ final class HerdrClipboardUITests: XCTestCase {
     // MARK: - Local paste gestures (doc §8.2)
 
     func testPasteGestureReadsOnceAndSendsByteExact() throws {
-        UIPasteboard.general.string = "ui-paste-sentinel"
-        let app = launchApp()
+        let app = launchApp(seed: "ui-paste-sentinel")
         waitForReplayReady(app)
 
         XCTAssertEqual(
@@ -138,8 +145,7 @@ final class HerdrClipboardUITests: XCTestCase {
     }
 
     func testLargePasteConfirmsDestinationPane() throws {
-        UIPasteboard.general.string = String(repeating: "y", count: 100_000)
-        let app = launchApp()
+        let app = launchApp(seed: String(repeating: "y", count: 100_000))
         waitForReplayReady(app)
 
         app.descendants(matching: .any)["herdr-paste-control"].tap()

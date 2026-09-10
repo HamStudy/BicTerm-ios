@@ -2,6 +2,7 @@
 import BicTermCore
 import Foundation
 import HerdrClientCore
+import UIKit
 
 /// DEBUG launch-argument contract for the herdr workspace UI tests:
 ///
@@ -10,6 +11,15 @@ import HerdrClientCore
 ///                                 `input` (full presentation fence — the
 ///                                 input lane unfreezes)
 ///   HERDR_FIXTURE_DIR (env)       absolute fixture dir (committed frames)
+///   HERDR_UI_TEST_PASTEBOARD (env) seed string written to the system
+///                                 pasteboard BY THE APP at boot, so the
+///                                 gesture read that follows is an
+///                                 own-origin read and never raises the
+///                                 SpringBoard paste prompt (a
+///                                 runner-seeded pasteboard is cross-app
+///                                 and blocks the main thread on the
+///                                 prompt — see the cmd+v chord test for
+///                                 the deliberate prompt path)
 ///
 /// Compiles out of Release; the app's Release builds contain no replay
 /// entry point (audited like the other --uitest seams).
@@ -61,6 +71,17 @@ enum HerdrWorkspaceUITest {
         return (try? Data(contentsOf: URL(fileURLWithPath: directory).appendingPathComponent("\(name).bin"))) ?? Data()
     }
 
+    /// Writes the UI test's pasteboard seed from inside the app: an
+    /// own-origin string the later gesture reads without the system paste
+    /// prompt a cross-app (runner-written) seed would raise. Bypasses
+    /// ``HerdrPasteboard`` on purpose — the seed is scaffolding, and the
+    /// stats assertions must still observe r:0 w:0 before the gesture.
+    @MainActor
+    private static func seedPasteboardIfRequested() {
+        guard let seed = ProcessInfo.processInfo.environment["HERDR_UI_TEST_PASTEBOARD"] else { return }
+        UIPasteboard.general.string = seed
+    }
+
     /// Builds the replay script for the requested mode and connects a fresh
     /// model. Returns the endpoint label to show in the chrome.
     @MainActor
@@ -72,6 +93,7 @@ enum HerdrWorkspaceUITest {
         for raw in ["replay-2x2", "replay-gen99", "replay-input", "replay-clipboard"] {
             HerdrClipboardSettings().setAutoCopyRemoteClipboard(false, for: HerdrEndpointID(rawValue: raw))
         }
+        seedPasteboardIfRequested()
 
         if mode == "gen99" {
             let transport = HerdrReplayTransport(
