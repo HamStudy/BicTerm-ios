@@ -1,88 +1,328 @@
-Phase 2 / H18 — Herdr clipboard privacy audit (doc §8.2-§8.3)
+Command line invocation:
+    /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild test-without-building -project BicTerm.xcodeproj -scheme BicTerm -destination id=732CE8E1-F9EF-4020-BF93-5BA1AA365B0E -derivedDataPath .build-artifacts/deriveddata/t18-unit "-only-testing:BicTermUITests/HerdrClipboardUITests" -resultBundlePath .build-artifacts/xcresults/h18-clipboard-iphone.xcresult
 
-Target: zero automatic pasteboard reads; clipboard content never appears in
-the echo / log surface; explicit copy / per-host auto-copy is the only path
-that lets server clipboard bytes reach the system pasteboard.
+Resolve Package Graph
 
-Source: BicTermTests/Herdr/HerdrClipboardTests.swift (unit)
-        BicTermUITests/HerdrClipboardUITests.swift (UI)
-Runs:   xcodebuild test -scheme BicTerm -destination 'id=732CE8E1-F9EF-4020-BF93-5BA1AA365B0E' \
-           -derivedDataPath .build-artifacts/DerivedData/h17 \
-           -only-testing:BicTermTests/HerdrClipboardTests \
-           -resultBundlePath .build-artifacts/xcresults/h18-evidence-clipboard-iphone.xcresult
-        xcodebuild test -scheme BicTerm -destination 'id=732CE8E1-F9EF-4020-BF93-5BA1AA365B0E' \
-           -derivedDataPath .build-artifacts/DerivedData/h17 \
-           -only-testing:BicTermUITests/HerdrClipboardUITests \
-           -resultBundlePath .build-artifacts/xcresults/h18-clipboard-ui-iphone.xcresult
-        (same suites on iPad 3686DD9C-ACA2-4A79-8968-A9C3572C8276)
-Date:   2026-09-10 15:48
 
-==========================================================================
-Section 1 — Redaction (clipboard content never reaches the UI surface)
-==========================================================================
+Resolved source packages:
+  SwiftTerm: /Users/richard/code/BicTerm/Vendor/SwiftTerm
+  swift-nio-ssh: /Users/richard/code/BicTerm/Vendor/swift-nio-ssh @ local
+  swift-argument-parser: https://github.com/apple/swift-argument-parser @ 1.8.2
+  swift-asn1: https://github.com/apple/swift-asn1.git @ 1.7.2
+  swift-system: https://github.com/apple/swift-system.git @ 1.8.1
+  SwiftDocCPlugin: https://github.com/apple/swift-docc-plugin @ 1.5.0
+  swift-atomics: https://github.com/apple/swift-atomics.git @ 1.3.1
+  SymbolKit: https://github.com/swiftlang/swift-docc-symbolkit @ 1.0.0
+  swift-crypto: https://github.com/apple/swift-crypto.git @ 4.5.2
+  swift-collections: https://github.com/apple/swift-collections.git @ 1.6.0
+  swift-nio: https://github.com/apple/swift-nio.git @ 2.102.0
+  BicTermCore: /Users/richard/code/BicTerm/BicTermCore
 
-Unit assertions (xcodebuild output, verbatim):
+Writing result bundle at path:
+	/Users/richard/code/BicTerm/.build-artifacts/xcresults/h18-clipboard-iphone.xcresult
 
-Test Case '-[BicTermTests.HerdrClipboardTests testEchoNeverContainsClipboardContent]' passed (0.069 seconds).
-Test Case '-[BicTermTests.HerdrClipboardTests testMultilinePasteWritesGoldenFrameByteExact]' passed (0.045 seconds).
-Test Case '-[BicTermTests.HerdrClipboardTests testNonASCIIPasteWritesGoldenFrame]' passed (0.045 seconds).
-Test Case '-[BicTermTests.HerdrClipboardTests testOversizePasteRejectedBeforeTheFFI]' passed (0.034 seconds).
+2026-09-10 15:59:02.194517-0600 BicTermUITests-Runner[50008:39367374] [Default] Running tests...
+    t =      nans Interface orientation changed to Portrait
+Test Suite 'Selected tests' started at 2026-09-10 15:59:02.851.
+Test Suite 'BicTermUITests.xctest' started at 2026-09-10 15:59:02.852.
+Test Suite 'HerdrClipboardUITests' started at 2026-09-10 15:59:02.852.
+Test Case '-[BicTermUITests.HerdrClipboardUITests testAutoCopyOptInWritesOnArrival]' started.
+    t =     0.00s Start Test at 2026-09-10 15:59:02.853
+    t =     0.02s Set Up
+    t =     0.02s     Setting device orientation to Portrait
+    t =     0.03s         Wait for com.apple.springboard to idle
+    t =     0.03s Open com.bicterm.app
+    t =     0.03s     Launch com.bicterm.app
+2026-09-10 15:59:02.929 xcodebuild[49885:39366027] [MT] IDELaunchParametersSnapshot: The operation couldn’t be completed. (DebuggerLLDB.DebuggerVersionStore.StoreError error 0.)
+2026-09-10 15:59:02.929 xcodebuild[49885:39366027] [MT] IDELaunchParametersSnapshot: no debugger version
+objc[50008]: Class UIAccessibilityLoaderWebShared is implemented in both /Library/Developer/CoreSimulator/Volumes/iOS_23F77/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 26.5.simruntime/Contents/Resources/RuntimeRoot/System/Library/AccessibilityBundles/WebCore.axbundle/WebCore (0x10b4dc310) and /Library/Developer/CoreSimulator/Volumes/iOS_23F77/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 26.5.simruntime/Contents/Resources/RuntimeRoot/System/Library/AccessibilityBundles/WebKit.axbundle/WebKit (0x10a970398). This may cause spurious casting failures and mysterious crashes. One of the duplicates must be removed or renamed.
+    t =     0.89s         Setting up automation session
+    t =     1.84s         Wait for com.bicterm.app to idle
+    t =     3.69s Waiting 15.0s for "herdr-replay-ready" Any to exist
+    t =     4.76s     Checking `Expect predicate `existsNoRetry == 1` for object "herdr-replay-ready" Any`
+    t =     4.76s         Checking existence of `"herdr-replay-ready" Any`
+    t =     4.99s         Capturing element debug description
+    t =     5.72s     Checking `Expect predicate `existsNoRetry == 1` for object "herdr-replay-ready" Any`
+    t =     5.72s         Checking existence of `"herdr-replay-ready" Any`
+    t =     5.77s Waiting 5.0s for "herdr-remote-clipboard-banner" Any to exist
+    t =     6.81s     Checking `Expect predicate `existsNoRetry == 1` for object "herdr-remote-clipboard-banner" Any`
+    t =     6.82s         Checking existence of `"herdr-remote-clipboard-banner" Any`
+    t =     6.87s Tap "herdr-autocopy-remote" Any
+    t =     6.87s     Wait for com.bicterm.app to idle
+    t =     6.87s     Find the "herdr-autocopy-remote" Any
+    t =     6.92s     Check for interrupting elements affecting "herdr-autocopy-remote" Button
+    t =     6.96s     Synthesize event
+    t =     7.25s     Wait for com.bicterm.app to idle
+    t =     8.62s Checking `Expect predicate `label CONTAINS "autoCopyRemote(27B)"` for object "herdr-input-echo" StaticText`
+    t =     8.63s     Find the "herdr-input-echo" StaticText
+    t =     8.71s Find the "herdr-pasteboard-stats" StaticText
+    t =     8.75s Tear Down
+Test Case '-[BicTermUITests.HerdrClipboardUITests testAutoCopyOptInWritesOnArrival]' passed (9.007 seconds).
+Test Case '-[BicTermUITests.HerdrClipboardUITests testCommandVKeyboardChordPastes]' started.
+    t =     0.00s Start Test at 2026-09-10 15:59:11.860
+    t =     0.02s Set Up
+    t =     0.02s     Setting device orientation to Portrait
+    t =     0.02s         Wait for com.bicterm.app to idle
+    t =     0.03s Open com.bicterm.app
+    t =     0.03s     Launch com.bicterm.app
+    t =     0.03s         Terminate com.bicterm.app:50024
+2026-09-10 15:59:12.970 xcodebuild[49885:39366027] [MT] IDELaunchParametersSnapshot: The operation couldn’t be completed. (DebuggerLLDB.DebuggerVersionStore.StoreError error 0.)
+2026-09-10 15:59:12.970 xcodebuild[49885:39366027] [MT] IDELaunchParametersSnapshot: no debugger version
+    t =     1.32s         Setting up automation session
+    t =     2.31s         Wait for com.bicterm.app to idle
+    t =     4.11s Waiting 10.0s for "Allow Paste" Button to exist
+    t =     5.18s     Checking `Expect predicate `existsNoRetry == 1` for object "Allow Paste" Button`
+    t =     5.18s         Checking existence of `"Allow Paste" Button`
+    t =     5.21s Ignoring failure to get hierarchy for remote element in process 15604 (Error getting main window kAXErrorServerNotFound)
+    t =     5.21s Ignoring failure to get hierarchy for remote element in process 15604 (Error getting main window kAXErrorServerNotFound)
+    t =     5.21s         Capturing element debug description
+    t =     6.17s     Checking `Expect predicate `existsNoRetry == 1` for object "Allow Paste" Button`
+    t =     6.17s         Checking existence of `"Allow Paste" Button`
+    t =     6.19s Ignoring failure to get hierarchy for remote element in process 15604 (Error getting main window kAXErrorServerNotFound)
+    t =     6.19s Ignoring failure to get hierarchy for remote element in process 15604 (Error getting main window kAXErrorServerNotFound)
+    t =     6.20s         Capturing element debug description
+    t =     7.16s     Checking `Expect predicate `existsNoRetry == 1` for object "Allow Paste" Button`
+    t =     7.16s         Checking existence of `"Allow Paste" Button`
+    t =     7.18s Ignoring failure to get hierarchy for remote element in process 15604 (Error getting main window kAXErrorServerNotFound)
+    t =     7.18s Ignoring failure to get hierarchy for remote element in process 15604 (Error getting main window kAXErrorServerNotFound)
+    t =     7.19s         Capturing element debug description
+    t =     8.15s     Checking `Expect predicate `existsNoRetry == 1` for object "Allow Paste" Button`
+    t =     8.15s         Checking existence of `"Allow Paste" Button`
+    t =     8.18s Ignoring failure to get hierarchy for remote element in process 15604 (Error getting main window kAXErrorServerNotFound)
+    t =     8.18s Ignoring failure to get hierarchy for remote element in process 15604 (Error getting main window kAXErrorServerNotFound)
+    t =     8.18s         Capturing element debug description
+    t =     9.12s     Checking `Expect predicate `existsNoRetry == 1` for object "Allow Paste" Button`
+    t =     9.12s         Checking existence of `"Allow Paste" Button`
+    t =     9.15s Ignoring failure to get hierarchy for remote element in process 15604 (Error getting main window kAXErrorServerNotFound)
+    t =     9.15s Ignoring failure to get hierarchy for remote element in process 15604 (Error getting main window kAXErrorServerNotFound)
+    t =     9.15s         Capturing element debug description
+    t =    10.12s     Checking `Expect predicate `existsNoRetry == 1` for object "Allow Paste" Button`
+    t =    10.12s         Checking existence of `"Allow Paste" Button`
+    t =    10.14s Ignoring failure to get hierarchy for remote element in process 15604 (Error getting main window kAXErrorServerNotFound)
+    t =    10.14s Ignoring failure to get hierarchy for remote element in process 15604 (Error getting main window kAXErrorServerNotFound)
+    t =    10.14s         Capturing element debug description
+    t =    11.12s     Checking `Expect predicate `existsNoRetry == 1` for object "Allow Paste" Button`
+    t =    11.12s         Checking existence of `"Allow Paste" Button`
+    t =    11.14s Ignoring failure to get hierarchy for remote element in process 15604 (Error getting main window kAXErrorServerNotFound)
+    t =    11.14s Ignoring failure to get hierarchy for remote element in process 15604 (Error getting main window kAXErrorServerNotFound)
+    t =    11.14s         Capturing element debug description
+    t =    12.20s     Checking `Expect predicate `existsNoRetry == 1` for object "Allow Paste" Button`
+    t =    12.20s         Checking existence of `"Allow Paste" Button`
+    t =    12.23s Ignoring failure to get hierarchy for remote element in process 15604 (Error getting main window kAXErrorServerNotFound)
+    t =    12.23s Ignoring failure to get hierarchy for remote element in process 15604 (Error getting main window kAXErrorServerNotFound)
+    t =    12.23s         Capturing element debug description
+    t =    13.19s     Checking `Expect predicate `existsNoRetry == 1` for object "Allow Paste" Button`
+    t =    13.19s         Checking existence of `"Allow Paste" Button`
+    t =    13.22s Ignoring failure to get hierarchy for remote element in process 15604 (Error getting main window kAXErrorServerNotFound)
+    t =    13.22s Ignoring failure to get hierarchy for remote element in process 15604 (Error getting main window kAXErrorServerNotFound)
+    t =    13.22s         Capturing element debug description
+    t =    14.12s     Checking `Expect predicate `existsNoRetry == 1` for object "Allow Paste" Button`
+    t =    14.12s         Checking existence of `"Allow Paste" Button`
+    t =    14.14s Ignoring failure to get hierarchy for remote element in process 15604 (Error getting main window kAXErrorServerNotFound)
+    t =    14.15s Ignoring failure to get hierarchy for remote element in process 15604 (Error getting main window kAXErrorServerNotFound)
+    t =    14.15s         Capturing element debug description
+    t =    14.15s     Checking existence of `"Allow Paste" Button`
+    t =    14.17s Ignoring failure to get hierarchy for remote element in process 15604 (Error getting main window kAXErrorServerNotFound)
+    t =    14.17s Ignoring failure to get hierarchy for remote element in process 15604 (Error getting main window kAXErrorServerNotFound)
+    t =    14.17s Collecting debug information to assist test failure triage
+    t =    14.17s     Requesting snapshot of accessibility hierarchy for app with pid 13217
+    t =    14.22s Waiting 10.0s for "Allow" Button to exist
+    t =    15.28s     Checking `Expect predicate `existsNoRetry == 1` for object "Allow" Button`
+    t =    15.28s         Checking existence of `"Allow" Button`
+    t =    15.31s Ignoring failure to get hierarchy for remote element in process 15604 (Error getting main window kAXErrorServerNotFound)
+    t =    15.31s Ignoring failure to get hierarchy for remote element in process 15604 (Error getting main window kAXErrorServerNotFound)
+    t =    15.31s         Capturing element debug description
+    t =    16.27s     Checking `Expect predicate `existsNoRetry == 1` for object "Allow" Button`
+    t =    16.27s         Checking existence of `"Allow" Button`
+    t =    16.30s Ignoring failure to get hierarchy for remote element in process 15604 (Error getting main window kAXErrorServerNotFound)
+    t =    16.30s Ignoring failure to get hierarchy for remote element in process 15604 (Error getting main window kAXErrorServerNotFound)
+    t =    16.30s         Capturing element debug description
+    t =    17.25s     Checking `Expect predicate `existsNoRetry == 1` for object "Allow" Button`
+    t =    17.25s         Checking existence of `"Allow" Button`
+    t =    17.28s Ignoring failure to get hierarchy for remote element in process 15604 (Error getting main window kAXErrorServerNotFound)
+    t =    17.28s Ignoring failure to get hierarchy for remote element in process 15604 (Error getting main window kAXErrorServerNotFound)
+    t =    17.28s         Capturing element debug description
+    t =    18.24s     Checking `Expect predicate `existsNoRetry == 1` for object "Allow" Button`
+    t =    18.24s         Checking existence of `"Allow" Button`
+    t =    18.27s Ignoring failure to get hierarchy for remote element in process 15604 (Error getting main window kAXErrorServerNotFound)
+    t =    18.27s Ignoring failure to get hierarchy for remote element in process 15604 (Error getting main window kAXErrorServerNotFound)
+    t =    18.27s         Capturing element debug description
+    t =    19.23s     Checking `Expect predicate `existsNoRetry == 1` for object "Allow" Button`
+    t =    19.23s         Checking existence of `"Allow" Button`
+    t =    19.26s Ignoring failure to get hierarchy for remote element in process 15604 (Error getting main window kAXErrorServerNotFound)
+    t =    19.26s Ignoring failure to get hierarchy for remote element in process 15604 (Error getting main window kAXErrorServerNotFound)
+    t =    19.26s         Capturing element debug description
+    t =    20.23s     Checking `Expect predicate `existsNoRetry == 1` for object "Allow" Button`
+    t =    20.23s         Checking existence of `"Allow" Button`
+    t =    20.26s Ignoring failure to get hierarchy for remote element in process 15604 (Error getting main window kAXErrorServerNotFound)
+    t =    20.26s Ignoring failure to get hierarchy for remote element in process 15604 (Error getting main window kAXErrorServerNotFound)
+    t =    20.26s         Capturing element debug description
+    t =    21.32s     Checking `Expect predicate `existsNoRetry == 1` for object "Allow" Button`
+    t =    21.32s         Checking existence of `"Allow" Button`
+    t =    21.35s Ignoring failure to get hierarchy for remote element in process 15604 (Error getting main window kAXErrorServerNotFound)
+    t =    21.35s Ignoring failure to get hierarchy for remote element in process 15604 (Error getting main window kAXErrorServerNotFound)
+    t =    21.35s         Capturing element debug description
+    t =    22.30s     Checking `Expect predicate `existsNoRetry == 1` for object "Allow" Button`
+    t =    22.30s         Checking existence of `"Allow" Button`
+    t =    22.33s Ignoring failure to get hierarchy for remote element in process 15604 (Error getting main window kAXErrorServerNotFound)
+    t =    22.33s Ignoring failure to get hierarchy for remote element in process 15604 (Error getting main window kAXErrorServerNotFound)
+    t =    22.33s         Capturing element debug description
+    t =    23.28s     Checking `Expect predicate `existsNoRetry == 1` for object "Allow" Button`
+    t =    23.28s         Checking existence of `"Allow" Button`
+    t =    23.31s Ignoring failure to get hierarchy for remote element in process 15604 (Error getting main window kAXErrorServerNotFound)
+    t =    23.31s Ignoring failure to get hierarchy for remote element in process 15604 (Error getting main window kAXErrorServerNotFound)
+    t =    23.31s         Capturing element debug description
+    t =    24.23s     Checking `Expect predicate `existsNoRetry == 1` for object "Allow" Button`
+    t =    24.23s         Checking existence of `"Allow" Button`
+    t =    24.26s Ignoring failure to get hierarchy for remote element in process 15604 (Error getting main window kAXErrorServerNotFound)
+    t =    24.26s Ignoring failure to get hierarchy for remote element in process 15604 (Error getting main window kAXErrorServerNotFound)
+    t =    24.27s         Capturing element debug description
+    t =    24.27s     Checking existence of `"Allow" Button`
+    t =    24.29s Ignoring failure to get hierarchy for remote element in process 15604 (Error getting main window kAXErrorServerNotFound)
+    t =    24.29s Ignoring failure to get hierarchy for remote element in process 15604 (Error getting main window kAXErrorServerNotFound)
+    t =    24.29s Collecting debug information to assist test failure triage
+    t =    24.29s     Requesting snapshot of accessibility hierarchy for app with pid 13217
+    t =    24.34s Waiting 15.0s for "herdr-replay-ready" Any to exist
+    t =    25.40s     Checking `Expect predicate `existsNoRetry == 1` for object "herdr-replay-ready" Any`
+    t =    25.40s         Checking existence of `"herdr-replay-ready" Any`
+    t =    26.55s Checking `Expect predicate `label CONTAINS "paste(8B→w1:p2)"` for object "herdr-input-echo" StaticText`
+    t =    26.55s     Find the "herdr-input-echo" StaticText
+    t =    26.60s Find the "herdr-input-echo" StaticText
+    t =    26.64s Tear Down
+Test Case '-[BicTermUITests.HerdrClipboardUITests testCommandVKeyboardChordPastes]' passed (26.869 seconds).
+Test Case '-[BicTermUITests.HerdrClipboardUITests testLargePasteConfirmsDestinationPane]' started.
+    t =     0.00s Start Test at 2026-09-10 15:59:38.731
+    t =     0.02s Set Up
+    t =     0.02s     Setting device orientation to Portrait
+    t =     0.03s         Wait for com.bicterm.app to idle
+    t =     0.04s Open com.bicterm.app
+    t =     0.04s     Launch com.bicterm.app
+    t =     0.04s         Terminate com.bicterm.app:50070
+2026-09-10 15:59:39.834 xcodebuild[49885:39366027] [MT] IDELaunchParametersSnapshot: The operation couldn’t be completed. (DebuggerLLDB.DebuggerVersionStore.StoreError error 0.)
+2026-09-10 15:59:39.834 xcodebuild[49885:39366027] [MT] IDELaunchParametersSnapshot: no debugger version
+    t =     1.31s         Setting up automation session
+    t =     2.30s         Wait for com.bicterm.app to idle
+    t =     4.10s Waiting 15.0s for "herdr-replay-ready" Any to exist
+    t =     5.15s     Checking `Expect predicate `existsNoRetry == 1` for object "herdr-replay-ready" Any`
+    t =     5.15s         Checking existence of `"herdr-replay-ready" Any`
+    t =     5.42s         Capturing element debug description
+    t =     6.15s     Checking `Expect predicate `existsNoRetry == 1` for object "herdr-replay-ready" Any`
+    t =     6.15s         Checking existence of `"herdr-replay-ready" Any`
+    t =     6.20s Tap "herdr-paste-control" Any
+    t =     6.20s     Wait for com.bicterm.app to idle
+    t =     6.20s     Find the "herdr-paste-control" Any
+    t =     6.25s     Check for interrupting elements affecting "herdr-paste-control" Button
+    t =     6.29s     Synthesize event
+    t =     6.58s     Wait for com.bicterm.app to idle
+    t =     7.61s Waiting 5.0s for "Large Paste" Alert to exist
+    t =     8.67s     Checking `Expect predicate `existsNoRetry == 1` for object "Large Paste" Alert`
+    t =     8.67s         Checking existence of `"Large Paste" Alert`
+    t =     8.71s Checking existence of `StaticText (Elements matching predicate 'label CONTAINS "100000 bytes"')`
+    t =     8.80s Checking existence of `StaticText (Elements matching predicate 'label CONTAINS "w1:p2"')`
+    t =     8.84s Tap "Paste" Button
+    t =     8.84s     Wait for com.bicterm.app to idle
+    t =     8.84s     Find the "Paste" Button
+    t =     8.88s     Check for interrupting elements affecting "Paste" Button
+    t =     8.93s         Wait for com.apple.springboard to idle
+    t =     8.95s Ignoring failure to get hierarchy for remote element in process 15604 (Error getting main window kAXErrorServerNotFound)
+    t =     8.95s Ignoring failure to get hierarchy for remote element in process 15604 (Error getting main window kAXErrorServerNotFound)
+    t =     8.96s     Synthesize event
+    t =     9.25s     Wait for com.bicterm.app to idle
+    t =    11.62s Checking `Expect predicate `label CONTAINS "paste(100000B→w1:p2)"` for object "herdr-input-echo" StaticText`
+    t =    11.62s     Find the "herdr-input-echo" StaticText
+    t =    11.67s Tear Down
+Test Case '-[BicTermUITests.HerdrClipboardUITests testLargePasteConfirmsDestinationPane]' passed (11.906 seconds).
+Test Case '-[BicTermUITests.HerdrClipboardUITests testPasteGestureReadsOnceAndSendsByteExact]' started.
+    t =     0.00s Start Test at 2026-09-10 15:59:50.637
+    t =     0.02s Set Up
+    t =     0.02s     Setting device orientation to Portrait
+    t =     0.02s         Wait for com.bicterm.app to idle
+    t =     0.03s Open com.bicterm.app
+    t =     0.03s     Launch com.bicterm.app
+    t =     0.03s         Terminate com.bicterm.app:50194
+2026-09-10 15:59:51.741 xcodebuild[49885:39366027] [MT] IDELaunchParametersSnapshot: The operation couldn’t be completed. (DebuggerLLDB.DebuggerVersionStore.StoreError error 0.)
+2026-09-10 15:59:51.741 xcodebuild[49885:39366027] [MT] IDELaunchParametersSnapshot: no debugger version
+    t =     1.32s         Setting up automation session
+    t =     2.26s         Wait for com.bicterm.app to idle
+    t =     3.73s Waiting 15.0s for "herdr-replay-ready" Any to exist
+    t =     4.77s     Checking `Expect predicate `existsNoRetry == 1` for object "herdr-replay-ready" Any`
+    t =     4.77s         Checking existence of `"herdr-replay-ready" Any`
+    t =     5.34s         Capturing element debug description
+    t =     5.74s     Checking `Expect predicate `existsNoRetry == 1` for object "herdr-replay-ready" Any`
+    t =     5.74s         Checking existence of `"herdr-replay-ready" Any`
+    t =     5.89s Find the "herdr-pasteboard-stats" StaticText
+    t =     5.93s Tap "herdr-paste-control" Any
+    t =     5.93s     Wait for com.bicterm.app to idle
+    t =     5.93s     Find the "herdr-paste-control" Any
+    t =     5.98s     Check for interrupting elements affecting "herdr-paste-control" Button
+    t =     6.02s     Synthesize event
+    t =     6.31s     Wait for com.bicterm.app to idle
+    t =     7.69s Checking `Expect predicate `label CONTAINS "paste(17B→w1:p2)"` for object "herdr-input-echo" StaticText`
+    t =     7.69s     Find the "herdr-input-echo" StaticText
+    t =     7.74s Find the "herdr-pasteboard-stats" StaticText
+    t =     7.79s Find the "herdr-input-echo" StaticText
+    t =     7.83s Find the Target Application 'com.bicterm.app'
+    t =     7.98s Added attachment named 'herdr-clipboard-paste-gesture'
+    t =     7.98s Tear Down
+Test Case '-[BicTermUITests.HerdrClipboardUITests testPasteGestureReadsOnceAndSendsByteExact]' passed (8.207 seconds).
+Test Case '-[BicTermUITests.HerdrClipboardUITests testRemoteClipboardCopyGestureWritesAndRepastes]' started.
+    t =     0.00s Start Test at 2026-09-10 15:59:58.845
+    t =     0.02s Set Up
+    t =     0.02s     Setting device orientation to Portrait
+    t =     0.03s         Wait for com.bicterm.app to idle
+    t =     0.03s         Wait for com.apple.springboard to idle
+    t =     0.04s Open com.bicterm.app
+    t =     0.04s     Launch com.bicterm.app
+    t =     0.04s         Terminate com.bicterm.app:50254
+2026-09-10 15:59:59.963 xcodebuild[49885:39366027] [MT] IDELaunchParametersSnapshot: The operation couldn’t be completed. (DebuggerLLDB.DebuggerVersionStore.StoreError error 0.)
+2026-09-10 15:59:59.963 xcodebuild[49885:39366027] [MT] IDELaunchParametersSnapshot: no debugger version
+    t =     1.33s         Setting up automation session
+    t =     2.29s         Wait for com.bicterm.app to idle
+    t =     4.12s Waiting 15.0s for "herdr-replay-ready" Any to exist
+    t =     5.16s     Checking `Expect predicate `existsNoRetry == 1` for object "herdr-replay-ready" Any`
+    t =     5.17s         Checking existence of `"herdr-replay-ready" Any`
+    t =     5.40s         Capturing element debug description
+    t =     6.13s     Checking `Expect predicate `existsNoRetry == 1` for object "herdr-replay-ready" Any`
+    t =     6.13s         Checking existence of `"herdr-replay-ready" Any`
+    t =     6.44s Waiting 5.0s for "herdr-remote-clipboard-banner" Any to exist
+    t =     7.50s     Checking `Expect predicate `existsNoRetry == 1` for object "herdr-remote-clipboard-banner" Any`
+    t =     7.50s         Checking existence of `"herdr-remote-clipboard-banner" Any`
+    t =     7.55s Find the "herdr-pasteboard-stats" StaticText
+    t =     7.59s Tap "herdr-copy-remote" Any
+    t =     7.59s     Wait for com.bicterm.app to idle
+    t =     7.59s     Find the "herdr-copy-remote" Any
+    t =     7.63s     Check for interrupting elements affecting "herdr-copy-remote" Button
+    t =     7.67s     Synthesize event
+    t =     7.97s     Wait for com.bicterm.app to idle
+    t =     9.37s Checking `Expect predicate `label CONTAINS "copyRemote(27B)"` for object "herdr-input-echo" StaticText`
+    t =     9.37s     Find the "herdr-input-echo" StaticText
+    t =     9.41s Find the "herdr-pasteboard-stats" StaticText
+    t =     9.44s Tap "herdr-paste-control" Any
+    t =     9.44s     Wait for com.bicterm.app to idle
+    t =     9.45s     Find the "herdr-paste-control" Any
+    t =     9.49s     Check for interrupting elements affecting "herdr-paste-control" Button
+    t =     9.52s     Synthesize event
+    t =     9.82s     Wait for com.bicterm.app to idle
+    t =    11.28s Checking `Expect predicate `label CONTAINS "paste(27B→w1:p2)"` for object "herdr-input-echo" StaticText`
+    t =    11.28s     Find the "herdr-input-echo" StaticText
+    t =    11.32s Find the "herdr-input-echo" StaticText
+    t =    11.36s Find the Target Application 'com.bicterm.app'
+    t =    11.52s Added attachment named 'herdr-clipboard-remote-copy'
+    t =    11.52s Tear Down
+Test Case '-[BicTermUITests.HerdrClipboardUITests testRemoteClipboardCopyGestureWritesAndRepastes]' passed (11.784 seconds).
+Test Suite 'HerdrClipboardUITests' passed at 2026-09-10 16:00:10.629.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 67.772 (67.777) seconds
+Test Suite 'BicTermUITests.xctest' passed at 2026-09-10 16:00:10.630.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 67.772 (67.778) seconds
+Test Suite 'Selected tests' passed at 2026-09-10 16:00:10.631.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 67.772 (67.779) seconds
+2026-09-10 16:00:10.940 xcodebuild[49885:39366027] [MT] IDETestOperationsObserverDebug: 70.143 elapsed -- Testing started completed.
+2026-09-10 16:00:10.940 xcodebuild[49885:39366027] [MT] IDETestOperationsObserverDebug: 0.000 sec, +0.000 sec -- start
+2026-09-10 16:00:10.940 xcodebuild[49885:39366027] [MT] IDETestOperationsObserverDebug: 70.143 sec, +70.143 sec -- end
 
-The echo surface (herdr-input-echo / debugInputEcho) carries only:
-  paste(NB->pane)            — text paste, byte count + destination
-  image(NB.ext->pane)        — image send, byte count + extension + destination
-  remoteClipboard(NB)        — server clipboard arrival, byte count
-  copyRemote(NB)             — explicit copy gesture, byte count
-  autoCopyRemote(NB)         — per-host opt-in applied, byte count
-  clipboardDropped           — oversize / malformed server frame dropped
-  pasteTooLarge              — text over the 1 MiB cap, no frame sent
-  pasteTargetChanged         — pane / boot changed between read and send
-  frozen / offline / writeFailed — typed notes
-The strings pasted into the app, the base64 server payload, and the
-decoded remote text are NEVER added to the echo array, NEVER logged via
-os_log / NSLog at any point, and NEVER stored on HerdrEndpointState.
+Test session results, code coverage, and logs:
+	/Users/richard/code/BicTerm/.build-artifacts/xcresults/h18-clipboard-iphone.xcresult
 
-testOversizePasteRejectedBeforeTheFFI proves the 1 MiB cap (text) gates
-before the FFI is touched, so oversized pasted text never crosses the wire.
+** TEST EXECUTE SUCCEEDED **
 
-==========================================================================
-Section 2 — Zero automatic reads (pasteboard stats line, unit + UI)
-==========================================================================
-
-HerdrPasteboard (DEBUG-only counters, @MainActor):
-   readCount  — incremented only inside readText() / readImageData(),
-                 both called exclusively from beginPaste() — i.e. only
-                 from a user gesture (UIPasteControl tap / cmd+v).
-   writeCount — incremented only inside writeText(), called from
-                 copyRemoteClipboardToPasteboard / setAutoCopyRemoteClipboard.
-   lastWrittenText — debug-only record for the unit binding round trip.
-
-UI assertions (xcodebuild output, verbatim):
-
-Test Case '-[BicTermUITests.HerdrClipboardUITests testRemoteClipboardCopyGestureWritesOnExplicitCopy]' passed (8.813 seconds).
-   statsText() == "pasteboard r:0 w:0"  — before the Copy tap
-   after tap: "pasteboard r:0 w:1"       — exactly one write, zero reads
-   echo assertion: contains("copyRemote(27B)")
-   echo does NOT contain "hello remote"  — byte counts only, never content
-
-Test Case '-[BicTermUITests.HerdrClipboardUITests testAutoCopyOptInWritesOnArrival]' passed (8.628 seconds).
-   banner surfaces (remote arrived, not silently written)
-   statsText() == "pasteboard r:0 w:0"  — default OFF confirmed
-   after "Always for This Host" tap: echo autoCopyRemote(27B), stats "r:0 w:1"
-
-The UIPasteControl XCUI tap path is not exercised on the iOS 18 simulator
-this task targets (a known XCUI delivery limitation; see file header in
-HerdrClipboardUITests.swift). Gesture-level coverage of the read-once
-contract lives in the unit suite: testEmptyPasteIsSilent (no read on
-empty / null), testMalformedClipboardFrameDropsNonFatally (server-side
-drop, no client read), and the paste-vector tests (every paste path goes
-through enqueueInput -> applyInputEvent -> client.sendPaste, and the model
-records the byte-count echo only).
-
-==========================================================================
-Section 3 — iPad reruns
-==========================================================================
-
-iPad HerdrClipboardTests:        22 / 22 passed, ** TEST SUCCEEDED **
-iPad HerdrClipboardUITests:      2  / 2  passed, ** TEST SUCCEEDED **
-xcresults: .build-artifacts/xcresults/h18-clipboard-{unit,ui}-{iphone,ipad}.xcresult
+Testing started

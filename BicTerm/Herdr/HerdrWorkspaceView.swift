@@ -24,7 +24,6 @@ struct HerdrWorkspaceView: View {
     @State private var textPasteConfirmation: TextPasteConfirmation?
     @State private var imagePaste: PendingImagePaste?
     @State private var imagePasteError: String?
-    @State private var lastPasteGestureAt = Date.distantPast
 
     private static let logger = Logger(
         subsystem: "com.bicterm.app.herdr",
@@ -81,7 +80,9 @@ struct HerdrWorkspaceView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: { confirmation in
-            Text("Paste \(confirmation.byteCount) bytes into pane \(confirmation.capturedPane) on \(endpointLabel)?")
+            Text(
+                "Paste \(confirmation.byteCount, format: .number.grouping(.never)) bytes into pane \(confirmation.capturedPane) on \(endpointLabel)?"
+            )
         }
         .sheet(item: $imagePaste) { pending in
             HerdrImagePasteSheet(
@@ -163,7 +164,15 @@ struct HerdrWorkspaceView: View {
             }
             Spacer()
             if state?.phase == .online {
-                HerdrPasteControl(action: beginPaste)
+                // A plain gesture button, not UIPasteControl: the system
+                // control neither delivers responder-chain `paste(_:)` nor
+                // dispatches added actions for synthesized taps on the
+                // simulator, so its "consented read" cannot be exercised —
+                // or trusted — here. The read stays gesture-mediated (doc
+                // §8.2); hardware cmd+v keeps the consented `paste(_:)`
+                // path in the input field.
+                Button("Paste", action: beginPaste)
+                    .buttonStyle(.bordered)
                     .frame(width: 88, height: 32)
                     .accessibilityIdentifier("herdr-paste-control")
                 PhotosPicker(selection: $photoSelection, matching: .images) {
@@ -477,17 +486,11 @@ struct HerdrWorkspaceView: View {
         let needsDownscale: Bool
     }
 
-    /// Entry point for every paste gesture (paste control, cmd+v). The
+    /// Entry point for every paste gesture (paste button, cmd+v). The
     /// destination pane and endpoint boot are captured BEFORE the
     /// pasteboard read, and the send revalidates both — a paste never
-    /// lands wherever focus happens to sit later. One gesture must read
-    /// and send exactly once: on runtimes where the control's action and
-    /// the system's responder-chain `paste(_:)` both fire for one tap,
-    /// calls inside the coalescing window collapse.
+    /// lands wherever focus happens to sit later.
     private func beginPaste() {
-        let now = Date()
-        guard now.timeIntervalSince(lastPasteGestureAt) > 0.25 else { return }
-        lastPasteGestureAt = now
         guard let id = model.selectedEndpointID,
               let current = model.endpoints[id],
               let pane = current.inputTargetPaneID,
@@ -659,27 +662,6 @@ struct HerdrWorkspaceView: View {
         case .failed: colors.error
         }
     }
-}
-
-/// UIKit's user-mediated paste button (doc §8.2): the tap itself is the
-/// consent gesture, so the pasteboard read that follows never raises the
-/// system paste prompt.
-/// UIKit's user-mediated paste button (doc §8.2): the tap itself is the
-/// consent gesture. On runtimes where the system's responder-chain
-/// delivery fires, it lands in the input field's consented `paste(_:)`;
-/// this simulator's synthesized taps never ride that delivery, so the
-/// control also carries an explicit action. Both paths converge on
-/// `beginPaste`, whose coalescing guard keeps one tap = one read.
-private struct HerdrPasteControl: UIViewRepresentable {
-    let action: () -> Void
-
-    func makeUIView(context: Context) -> UIPasteControl {
-        let control = UIPasteControl(frame: CGRect(x: 0, y: 0, width: 88, height: 32))
-        control.addAction(UIAction { _ in action() }, for: .primaryActionTriggered)
-        return control
-    }
-
-    func updateUIView(_ uiView: UIPasteControl, context: Context) {}
 }
 
 /// Streams a picked photo into memory through a file representation so the

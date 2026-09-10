@@ -1,57 +1,86 @@
-Phase 2 / H18 — Herdr clipboard image bounds (doc §8.4)
+Command line invocation:
+    /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild test-without-building -project BicTerm.xcodeproj -scheme BicTerm -destination id=732CE8E1-F9EF-4020-BF93-5BA1AA365B0E -derivedDataPath .build-artifacts/deriveddata/t18-unit "-only-testing:BicTermTests/HerdrClipboardTests" -resultBundlePath .build-artifacts/xcresults/h18-unit-clipboard.xcresult
 
-Target: 16 MiB clipboard-image cap enforced at both the model pipeline
-(HerdrClipboard.prepareImage, accepts source bytes and re-encode output)
-and the FFI send (accept_clipboard / send_clipboard_image); corrupt EXIF
-stripped; re-encode never trusts the supplied extension.
+Resolve Package Graph
 
-Source: BicTermTests/Herdr/HerdrClipboardTests.swift
-Run:    xcodebuild test -scheme BicTerm -destination 'id=732CE8E1-F9EF-4020-BF93-5BA1AA365B0E' \
-           -derivedDataPath .build-artifacts/DerivedData/h17 \
-           -only-testing:BicTermTests/HerdrClipboardTests \
-           -resultBundlePath .build-artifacts/xcresults/h18-evidence-clipboard-iphone.xcresult
-Date:   2026-09-10 15:48
 
-Captured test cases (xcodebuild output, verbatim):
+Resolved source packages:
+  SwiftTerm: /Users/richard/code/BicTerm/Vendor/SwiftTerm
+  swift-atomics: https://github.com/apple/swift-atomics.git @ 1.3.1
+  swift-collections: https://github.com/apple/swift-collections.git @ 1.6.0
+  swift-nio-ssh: /Users/richard/code/BicTerm/Vendor/swift-nio-ssh @ local
+  swift-asn1: https://github.com/apple/swift-asn1.git @ 1.7.2
+  swift-crypto: https://github.com/apple/swift-crypto.git @ 4.5.2
+  SwiftDocCPlugin: https://github.com/apple/swift-docc-plugin @ 1.5.0
+  swift-argument-parser: https://github.com/apple/swift-argument-parser @ 1.8.2
+  SymbolKit: https://github.com/swiftlang/swift-docc-symbolkit @ 1.0.0
+  swift-nio: https://github.com/apple/swift-nio.git @ 2.102.0
+  swift-system: https://github.com/apple/swift-system.git @ 1.8.1
+  BicTermCore: /Users/richard/code/BicTerm/BicTermCore
 
-Test Case '-[BicTermTests.HerdrClipboardTests testClipboardImageAtCapMinusOneIsAccepted]' passed (0.044 seconds).
-Test Case '-[BicTermTests.HerdrClipboardTests testClipboardImageAtCapIsAccepted]' passed (0.046 seconds).
-Test Case '-[BicTermTests.HerdrClipboardTests testClipboardImageOverCapIsRejectedByTheFFI]' passed (0.046 seconds).
-Test Case '-[BicTermTests.HerdrClipboardTests testClipboardImageSendWritesTheGoldenFrame]' passed (0.046 seconds).
+Writing result bundle at path:
+	/Users/richard/code/BicTerm/.build-artifacts/xcresults/h18-unit-clipboard.xcresult
+
+Test Suite 'Selected tests' started at 2026-09-10 16:00:56.100.
+Test Suite 'BicTermTests.xctest' started at 2026-09-10 16:00:56.101.
+Test Suite 'HerdrClipboardTests' started at 2026-09-10 16:00:56.101.
+Test Case '-[BicTermTests.HerdrClipboardTests testAutoCopyOptInWritesOnArrival]' started.
+Test Case '-[BicTermTests.HerdrClipboardTests testAutoCopyOptInWritesOnArrival]' passed (0.076 seconds).
+Test Case '-[BicTermTests.HerdrClipboardTests testAutoCopySettingPersistsPerEndpoint]' started.
+Test Case '-[BicTermTests.HerdrClipboardTests testAutoCopySettingPersistsPerEndpoint]' passed (0.004 seconds).
+Test Case '-[BicTermTests.HerdrClipboardTests testBracketedSequencesPassThroughUnwrapped]' started.
+Test Case '-[BicTermTests.HerdrClipboardTests testBracketedSequencesPassThroughUnwrapped]' passed (0.047 seconds).
+Test Case '-[BicTermTests.HerdrClipboardTests testClipboardImageAtCapIsAccepted]' started.
+Test Case '-[BicTermTests.HerdrClipboardTests testClipboardImageAtCapIsAccepted]' passed (0.045 seconds).
+Test Case '-[BicTermTests.HerdrClipboardTests testClipboardImageAtCapMinusOneIsAccepted]' started.
+Test Case '-[BicTermTests.HerdrClipboardTests testClipboardImageAtCapMinusOneIsAccepted]' passed (0.043 seconds).
+Test Case '-[BicTermTests.HerdrClipboardTests testClipboardImageOverCapIsRejectedByTheFFI]' started.
+Test Case '-[BicTermTests.HerdrClipboardTests testClipboardImageOverCapIsRejectedByTheFFI]' passed (0.044 seconds).
+Test Case '-[BicTermTests.HerdrClipboardTests testClipboardImageSendWritesTheGoldenFrame]' started.
+Test Case '-[BicTermTests.HerdrClipboardTests testClipboardImageSendWritesTheGoldenFrame]' passed (0.044 seconds).
+Test Case '-[BicTermTests.HerdrClipboardTests testCommandVResolvesToThePasteGesture]' started.
+Test Case '-[BicTermTests.HerdrClipboardTests testCommandVResolvesToThePasteGesture]' passed (0.001 seconds).
+Test Case '-[BicTermTests.HerdrClipboardTests testEchoNeverContainsClipboardContent]' started.
+Test Case '-[BicTermTests.HerdrClipboardTests testEchoNeverContainsClipboardContent]' passed (0.068 seconds).
+Test Case '-[BicTermTests.HerdrClipboardTests testEmptyPasteIsSilent]' started.
+Test Case '-[BicTermTests.HerdrClipboardTests testEmptyPasteIsSilent]' passed (0.022 seconds).
+Test Case '-[BicTermTests.HerdrClipboardTests testExplicitCopyFromRemoteWritesPasteboard]' started.
+Test Case '-[BicTermTests.HerdrClipboardTests testExplicitCopyFromRemoteWritesPasteboard]' passed (0.050 seconds).
+Test Case '-[BicTermTests.HerdrClipboardTests testMalformedClipboardFrameDropsNonFatally]' started.
+Test Case '-[BicTermTests.HerdrClipboardTests testMalformedClipboardFrameDropsNonFatally]' passed (0.044 seconds).
+Test Case '-[BicTermTests.HerdrClipboardTests testMultilinePasteWritesGoldenFrameByteExact]' started.
+Test Case '-[BicTermTests.HerdrClipboardTests testMultilinePasteWritesGoldenFrameByteExact]' passed (0.046 seconds).
+Test Case '-[BicTermTests.HerdrClipboardTests testNonASCIIPasteWritesGoldenFrame]' started.
+Test Case '-[BicTermTests.HerdrClipboardTests testNonASCIIPasteWritesGoldenFrame]' passed (0.044 seconds).
+Test Case '-[BicTermTests.HerdrClipboardTests testOversizePasteRejectedBeforeTheFFI]' started.
+Test Case '-[BicTermTests.HerdrClipboardTests testOversizePasteRejectedBeforeTheFFI]' passed (0.034 seconds).
+Test Case '-[BicTermTests.HerdrClipboardTests testPipelineDownscalePath]' started.
+Test Case '-[BicTermTests.HerdrClipboardTests testPipelineDownscalePath]' passed (0.176 seconds).
+Test Case '-[BicTermTests.HerdrClipboardTests testPipelineRejectsOversizeSourceBeforeDecode]' started.
 Test Case '-[BicTermTests.HerdrClipboardTests testPipelineRejectsOversizeSourceBeforeDecode]' passed (0.001 seconds).
+Test Case '-[BicTermTests.HerdrClipboardTests testPipelineStripsCorruptEXIF]' started.
 Test Case '-[BicTermTests.HerdrClipboardTests testPipelineStripsCorruptEXIF]' passed (0.005 seconds).
+Test Case '-[BicTermTests.HerdrClipboardTests testPipelineStripsEXIFByDefault]' started.
 Test Case '-[BicTermTests.HerdrClipboardTests testPipelineStripsEXIFByDefault]' passed (0.003 seconds).
-Test Case '-[BicTermTests.HerdrClipboardTests testPipelineDownscalePath]' passed (0.183 seconds).
+Test Case '-[BicTermTests.HerdrClipboardTests testReadCappedEnforcesCapDuringLoad]' started.
 Test Case '-[BicTermTests.HerdrClipboardTests testReadCappedEnforcesCapDuringLoad]' passed (0.002 seconds).
+Test Case '-[BicTermTests.HerdrClipboardTests testRemoteClipboardArrivesAsPendingNotPasteboard]' started.
+Test Case '-[BicTermTests.HerdrClipboardTests testRemoteClipboardArrivesAsPendingNotPasteboard]' passed (0.044 seconds).
+Test Case '-[BicTermTests.HerdrClipboardTests testTakeClipboardBindingDrainsTheOneShotSlot]' started.
+Test Case '-[BicTermTests.HerdrClipboardTests testTakeClipboardBindingDrainsTheOneShotSlot]' passed (0.001 seconds).
+Test Suite 'HerdrClipboardTests' passed at 2026-09-10 16:00:56.953.
+	 Executed 22 tests, with 0 failures (0 unexpected) in 0.844 (0.852) seconds
+Test Suite 'BicTermTests.xctest' passed at 2026-09-10 16:00:56.953.
+	 Executed 22 tests, with 0 failures (0 unexpected) in 0.844 (0.853) seconds
+Test Suite 'Selected tests' passed at 2026-09-10 16:00:56.954.
+	 Executed 22 tests, with 0 failures (0 unexpected) in 0.844 (0.853) seconds
+2026-09-10 16:00:57.239 xcodebuild[50676:39375528] [MT] IDETestOperationsObserverDebug: 3.372 elapsed -- Testing started completed.
+2026-09-10 16:00:57.239 xcodebuild[50676:39375528] [MT] IDETestOperationsObserverDebug: 0.000 sec, +0.000 sec -- start
+2026-09-10 16:00:57.239 xcodebuild[50676:39375528] [MT] IDETestOperationsObserverDebug: 3.372 sec, +3.372 sec -- end
 
-Test Suite 'HerdrClipboardTests' passed at 2026-09-10 15:48:xx.xxx.
-	 Executed 22 tests, with 0 failures (0 unexpected) in ~2.5 seconds
-** TEST SUCCEEDED **
+Test session results, code coverage, and logs:
+	/Users/richard/code/BicTerm/.build-artifacts/xcresults/h18-unit-clipboard.xcresult
 
-What each bound proves:
+** TEST EXECUTE SUCCEEDED **
 
-- AtCapMinusOne (16 MiB - 1) accepted: echoes image(16777215B.png→w1:p2); no note.
-- AtCap (16 MiB exact) accepted: echoes image(16777216B.png→w1:p2); FFI enforces >, not >=.
-- OverCap (16 MiB + 1) rejected: inputNote = writeFailed("endpoint byte budget exceeded")
-  until outboundByteLimit lifted (see configuration note); nothing reaches the wire.
-- SendWritesTheGoldenFrame: FFI-captured golden frame is byte-exact vs the live send.
-- RejectsOversizeSourceBeforeDecode: readCapped aborts mid-read, never retains the file.
-- StripsEXIFByDefault: source UserComment + GPS absent on the PNG re-encode
-  (the synthesized dimension-only EXIF dict that ImageIO writes for PNG is
-  re-encoded-pixel metadata, not carried-over source metadata — asserted on
-  UserComment/GPS markers).
-- StripsCorruptEXIF: malformed APP1 segment → ImageIO drops it; no carry-over.
-- DownscalePath: 512-pixel noise PNG over the 300 KiB cap requests downscale;
-  256-pixel re-encode fits and is reported at the chosen pixel size.
-- ReadCappedEnforcesCapDuringLoad: 5 KiB file with 1 KiB cap → exceedsCap
-  the moment the running total crosses, not after a full read.
-
-The outbound byte budget is lifted to 24 MiB at model connect time
-(HerdrClientConfig.outboundByteLimit) so a max-size clipboard image plus its
-frame envelope fits the queue; the FFI default 4 MiB silently rejected them
-as "endpoint byte budget exceeded" before this configuration was added
-(see learnings: "Outbound byte budget blocks max-size clipboard images").
-
-iPad rerun (transient 16 MiB allocation on first iPad run, green on rerun):
-   HerdrClipboardTests — 22 / 22 passed, ** TEST SUCCEEDED **.
-xcresult: .build-artifacts/xcresults/h18-evidence-clipboard-iphone.xcresult
+Testing started
