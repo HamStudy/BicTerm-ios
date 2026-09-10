@@ -19,9 +19,7 @@ pub enum AgentStatus {
     Done,
     Unknown,
 }
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Default,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Default)]
 #[serde(rename_all = "kebab-case")]
 pub enum ToastHerdrPosition {
     TopLeft,

@@ -67,6 +67,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "herdr-client-core"
+version = "0.9.0"
+dependencies = [
+ "herdr-protocol",
+ "serde",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
 name = "herdr-protocol"
 version = "0.9.0"
 dependencies = [

@@ -49,3 +49,65 @@ Resolution sequence: initial extraction revealed two range-boundary errors,
 then missing std::io imports and test-only digest/chunked-reader helpers;
 correcting the recipe yielded 62 passing tests with no compiler warnings.
 No missing runtime module was replaced by a no-op implementation.
+
+## Client-core milestone
+
+All upstream references below use the same full baseline commit above. Local
+paths are under `herdr-client-core/`; endpoint paths abbreviate
+`src/client/endpoint/`. The recipe is `extract-client-core.sh`. The extraction
+widens crate-private public APIs, retains model-field encapsulation, and splits
+impls by transition responsibility rather than changing transition logic.
+
+| Local file | Upstream source / change | Reason |
+| --- | --- | --- |
+| `src/lib.rs`, `src/client.rs`, `src/client/endpoint.rs`, `Cargo.toml` | New library roots, reexports, dependency declarations | Public transport-neutral API; forbid unsafe code |
+| `endpoint/identity.rs` | `src/client/endpoint.rs:1-5,23-120`; Local -> Home | Preserve opaque profile identity; neutral home has no local server |
+| `endpoint/catalog.rs` | `catalog.rs:1,6-10,12-15,18-82,91-101,160-274` | Retain validation and catalog mutations; exclude filesystem discovery and persistence |
+| `endpoint/catalog_codec.rs` | Adapt `catalog.rs:276-303` to supplied byte buffers | Bound and validate imported catalog without reading desktop config paths |
+| `endpoint/validation.rs` | `src/remote/args.rs:118-126` | Pure target validation only; no SSH process/preparation code |
+| `endpoint/session_validation.rs` | `src/session.rs:425-446`, limit from line 13 | Preserve session grammar without process environment/discovery |
+| `endpoint/health.rs` | `health.rs:1-99` | Independent initial-snapshot and heartbeat deadlines, including upstream tests |
+| `endpoint/message_policy.rs` | `message_policy.rs:1-124` | Preserve inactive metadata/presentation separation and tests |
+| `endpoint/registry.rs` | `registry.rs:1-146,241-266,347-360` | Lifecycle root; default to Home, desktop constructor test-only |
+| `endpoint/registry_connections.rs` | `registry.rs:147-240` | Insert/generation/health behavior; reject a transport for Home |
+| `endpoint/registry_transport.rs` | `registry.rs:267-346` | Per-endpoint sends, disconnects and failure isolation |
+| `endpoint/registry_tests.rs` | `registry.rs:364-397` | Shared upstream transport fixtures; Local replaced with an actual SSH source profile |
+| `endpoint/registry_cases/isolation.rs` | `registry.rs:398-493` | Isolation/recovery tests; recovered source now correctly requires remote health |
+| `endpoint/registry_cases/health.rs` | `registry.rs:495-628` | Health, admission, stale-generation and drop tests |
+| `endpoint/activation.rs` | `activation.rs:1-14,1150-1152` | State-machine root and exports |
+| `endpoint/activation/begin.rs` | `activation.rs:17-142` | Preflight and source-off-first start |
+| `endpoint/activation/correlation.rs` | `activation.rs:144-294` | Lease/response matching, supersession and timeouts |
+| `endpoint/activation/response.rs` | `activation.rs:295-441` | Typed acknowledgment transitions |
+| `endpoint/activation/evidence.rs` | `activation.rs:443-678` | Snapshot/surface evidence, resize/focus/theme restart |
+| `endpoint/activation/rollback.rs` | `activation.rs:679-817` | Disconnect handling and acknowledged rollback |
+| `endpoint/activation/completion.rs` | `activation.rs:818-920` | Atomic selection and post-commit synchronization |
+| `endpoint/activation/commands.rs` | `activation.rs:921-1147` | Target/source activation writes, presentation fence and coherence progress |
+| `endpoint/activation/model.rs` | `activation/model.rs:1-174` | Preserve all phases, evidence and successor state |
+| `endpoint/activation/protocol.rs` | `activation/protocol.rs:1-219` | Preserve request shapes/correlation; additionally validate a completed surface before commit |
+| `endpoint/activation_tests.rs` | `activation_tests.rs:1-187,231-254` | Adapt fixtures to neutral state and explicit source/target generations; no UI config stub |
+| `endpoint/activation_cases/fixture_surface.rs` | `activation_tests.rs:188-230` | Supply valid cells for stronger frame validation |
+| `endpoint/activation_cases/begin.rs` | `activation_tests.rs:255-450` | Port start/order/coherence assertions |
+| `endpoint/activation_cases/identity.rs` | `activation_tests.rs:451-643` | Port generation/boot/focus assertions |
+| `endpoint/activation_cases/rollback.rs` | `activation_tests.rs:644-815` | Port fence restart/rollback/resize assertions |
+| `endpoint/activation_cases/successor.rs` | `activation_tests.rs:816-977` | Port rapid A-B-A successor assertions; preserve identity guards with SSH source |
+| `endpoint/activation_cases/recovery.rs` | `activation_tests.rs:978-1139` | Port disconnected-source and latest-intent assertions |
+| `endpoint/activation_cases/failure.rs` | `activation_tests.rs:1140-1305` | Port failed-release/deadline/healthy-target assertions |
+| `endpoint/supervisor.rs` | Adapt `supervisor.rs:11-229,333-341` | Pollable bounded attempts replace spawned native connectors; independent backoff and stale-generation retirement |
+| `src/client/shell.rs` | Adapt `shell/endpoints.rs:203-257,340-365,418-465` and `activation.rs` completion seam | Minimal qualified snapshot store; caller filters generations; no desktop chrome, keymaps or UI state |
+| `src/client/shell/input.rs` | Adapt pane targeting from `shell.rs:86-97` | Qualified semantic input with selected-surface, generation, boot and coherent-projection checks |
+| `src/client/surface_patch.rs` | `shell/surface_patch.rs:8-55,94-167` plus transactional commit | Preserve patch validation; clone before mutation; omit composed-ratatui fast path |
+| `src/surface.rs` | New checked validation of upstream frame invariants | Reject invalid cell counts, hyperlink indices, cursors, geometry and duplicate pane IDs |
+| `src/api.rs` | Projection of `api/schema.rs` activation methods and `api/schema/response.rs` result tags | Decode only activation-relevant JSON fields; reject unsupported result variants; not a bincode reimplementation |
+| `src/client/endpoint_commands.rs` | Adapt `endpoint_commands.rs:262-297` | Typed success/error envelope and exact request-id correlation; no desktop command queue |
+| `src/handshake.rs` | Adapt `client/handshake.rs:171-195,226-272`, timeout line 33 | Stable endpoint-only handshake, 60s remote deadline, full multi-machine admission predicate |
+| `src/outbound.rs` | Adapt queue accounting from `endpoint/writer.rs:83-117` | Caller-sized bounded frame queue; no local sockets/worker threads; disconnect revokes pending input |
+| `tests/lifecycle.rs` | New public-contract tests | Handshake admission/deadline, catalog invariants, independent supervisors and neutral Home |
+| `tests/outbound.rs` | New public-contract tests | Exact framed queue delivery, overflow and disconnect revocation |
+| `tests/selected_surface.rs`, `tests/support/activation_flow.rs` | New byte-transport scenario and regression tests | Complete presentation-fenced activation, atomic patches, and stale-projection input refusal |
+
+The selected-surface regression first failed because newer metadata still
+permitted input into an older surface. Adding exact snapshot/surface revision
+coherence at semantic input routing made it pass; the test was not weakened.
+Upstream's Local-only health test was intentionally changed to assert health
+expiry for the SSH source that replaces Local. All 22 upstream activation
+tests remain present, including rollback and successor-switch behavior.

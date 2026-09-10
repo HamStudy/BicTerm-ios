@@ -1,0 +1,16 @@
+[package]
+name = "herdr-client-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Transport-neutral Herdr endpoint state and activation"
+
+[dependencies]
+herdr-protocol = { path = "../herdr-protocol" }
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+
+[lints]
+workspace = true

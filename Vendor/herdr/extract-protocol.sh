@@ -70,3 +70,4 @@ for file in upstream_client upstream_messages upstream_surfaces upstream_server;
     printf '\nfn encoded_sha256(value: &impl Serialize) -> String { use sha2::{Digest, Sha256}; format!("{:x}", Sha256::digest(bincode::serde::encode_to_vec(value, bincode::config::standard()).unwrap())) }\n' >> "$base/herdr-protocol/tests/$file.rs"
 done
 GIT_MASTER=1 git -C "$base/upstream" archive HEAD tests/fixtures/endpoint-hello-v1.json tests/fixtures/endpoint-welcome-v1.json tests/fixtures/endpoint-snapshot-v1.json | tar -x -C "$base/herdr-protocol"
+cargo fmt --manifest-path "$base/Cargo.toml" --all

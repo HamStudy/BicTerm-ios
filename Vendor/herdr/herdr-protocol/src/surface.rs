@@ -1,7 +1,7 @@
 // Derived from herdr b99002ac99b09e00b4ca692436cb15a6b0d676f1 src/protocol/wire.rs (1078:1127 1138:1282). Apache-2.0.
 // Modified: desktop conversions excluded; shared data paths relocated.
-use serde::{Deserialize, Serialize};
 use super::*;
+use serde::{Deserialize, Serialize};
 
 /// Origin-relative geometry for one pane in a rendered pane surface.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -51,7 +51,6 @@ pub struct SurfaceRect {
     pub width: u16,
     pub height: u16,
 }
-
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SurfaceGraphicsTarget {

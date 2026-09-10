@@ -1,7 +1,7 @@
 // Derived from herdr b99002ac99b09e00b4ca692436cb15a6b0d676f1 src/protocol/wire.rs (465:631 652:694). Apache-2.0.
 // Modified: desktop conversions excluded; shared data paths relocated.
-use serde::{Deserialize, Serialize};
 use super::*;
+use serde::{Deserialize, Serialize};
 /// Messages sent from the client to the server over the client protocol socket.
 ///
 /// Variant order is frozen for endpoint generation 1. Add compatible endpoint

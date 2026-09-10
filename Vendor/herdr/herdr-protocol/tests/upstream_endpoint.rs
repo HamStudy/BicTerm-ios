@@ -1,7 +1,7 @@
 // Derived from herdr b99002ac99b09e00b4ca692436cb15a6b0d676f1 src/protocol/endpoint.rs (140:319). Apache-2.0.
 // Modified: desktop conversions excluded; shared data paths relocated.
-use herdr_protocol::*;
 use herdr_protocol::endpoint::*;
+use herdr_protocol::*;
 #[cfg(test)]
 mod tests {
     use super::*;

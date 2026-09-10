@@ -166,10 +166,6 @@ pub enum ClientPaneInputEvent {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ClientKeySource {
     Synthesized,
-    Vt {
-        bytes: Vec<u8>,
-    },
-    WindowsConsole {
-        record: crate::WindowsKeyRecord,
-    },
+    Vt { bytes: Vec<u8> },
+    WindowsConsole { record: crate::WindowsKeyRecord },
 }

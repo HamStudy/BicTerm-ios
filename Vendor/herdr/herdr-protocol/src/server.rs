@@ -1,7 +1,7 @@
 // Derived from herdr b99002ac99b09e00b4ca692436cb15a6b0d676f1 src/protocol/wire.rs (1284:1449). Apache-2.0.
 // Modified: desktop conversions excluded; shared data paths relocated.
-use serde::{Deserialize, Serialize};
 use super::*;
+use serde::{Deserialize, Serialize};
 /// Notification kind forwarded from server to client.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum NotifyKind {

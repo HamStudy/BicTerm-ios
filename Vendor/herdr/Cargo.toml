@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["herdr-protocol"]
+members = ["herdr-protocol", "herdr-client-core"]
 exclude = ["upstream"]
 
 [workspace.package]
