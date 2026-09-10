@@ -247,6 +247,14 @@ struct herdr_bytes herdr_client_drain_outbound(struct herdr_client *client,
                                                struct HerdrResult *error_out);
 
 /**
+ * Resizes the logical surface geometry (each dimension 1..=65535). While an
+ * activation transaction is in flight the resize routes through it so
+ * pending surface evidence is invalidated coherently; otherwise the resize
+ * frame is queued directly to the endpoint transport.
+ */
+struct HerdrResult herdr_client_resize(struct herdr_client *client, uint32_t cols, uint32_t rows);
+
+/**
  * Returns the latest accepted shell snapshot as stable JSON
  * (`shell.snapshot.v1` carrier), or empty when none has been accepted.
  */

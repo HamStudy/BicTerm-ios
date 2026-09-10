@@ -1,6 +1,10 @@
 //! Host-side FFI tests against the committed golden frames. These exercise
 //! the exact extern "C" surface the xcframework ships.
 use herdr_ios_ffi::*;
+use herdr_protocol::{
+    write_message, CellData, ClientMessage, FrameData, PaneSurfaceFrame, ServerMessage,
+    SurfaceGraphicsScene,
+};
 use std::ffi::CString;
 use std::ptr;
 use std::sync::{Mutex, MutexGuard, OnceLock};
@@ -329,4 +333,182 @@ fn version_string_is_static_and_nul_terminated() {
     let _guard = ledger_lock();
     let version = unsafe { std::ffi::CStr::from_ptr(herdr_core_version()) };
     assert_eq!(version.to_bytes(), b"0.9.0");
+}
+
+fn encode_server(message: &ServerMessage) -> Vec<u8> {
+    let mut frame = Vec::new();
+    write_message(&mut frame, message).expect("server frame encodes");
+    frame
+}
+
+fn decode_client(frame: &[u8]) -> ClientMessage {
+    let mut reader = std::io::Cursor::new(frame);
+    herdr_protocol::read_message(&mut reader, u32::MAX as usize).expect("outbound frame decodes")
+}
+
+fn coherent_surface(cols: u16, rows: u16) -> ServerMessage {
+    ServerMessage::PaneSurface(PaneSurfaceFrame {
+        boot_id: "boot-v1".into(),
+        projection_revision: 7,
+        surface_revision: 1,
+        frame: FrameData {
+            width: cols,
+            height: rows,
+            cells: vec![
+                CellData {
+                    symbol: " ".into(),
+                    fg: 0,
+                    bg: 0,
+                    modifier: 0,
+                    skip: false,
+                    hyperlink: None,
+                };
+                usize::from(cols) * usize::from(rows)
+            ],
+            cursor: None,
+            hyperlinks: vec![],
+            graphics: vec![],
+        },
+        panes: vec![],
+        splits: vec![],
+        popup: None,
+        graphics: SurfaceGraphicsScene::default(),
+    })
+}
+
+/// The activation transaction correlates its acknowledgement with the
+/// request id it actually queued, so recover it while draining the queue
+/// down to empty.
+fn drain_surface_set_request_id(client: *mut herdr_client) -> String {
+    let mut found = None;
+    for _ in 0..16 {
+        let frame = drain_one(client);
+        if frame.is_empty() {
+            break;
+        }
+        if let ClientMessage::ClientShellEndpointRequest { request, .. } = decode_client(&frame) {
+            let value: serde_json::Value = serde_json::from_str(&request).expect("request JSON");
+            if value["method"] == "client_shell.surface.set" && value["params"]["active"] == true {
+                found = value["id"].as_str().map(str::to_owned);
+            }
+        }
+    }
+    found.expect("activation never queued a surface.set(on) request")
+}
+
+#[test]
+fn activation_commits_the_surface_after_welcome_snapshot_and_surface() {
+    let _guard = ledger_lock();
+    let client = create_ok();
+    assert_eq!(
+        receive(client, &fixture("golden/server-20.bin")).code,
+        HERDR_CODE_OK
+    );
+    // The welcome-time begin cannot start yet (no snapshot metadata); the
+    // first accepted snapshot arms the transaction and queues its lifecycle
+    // frames (resize + surface.set(on) + focus baseline).
+    assert_eq!(
+        receive(client, &fixture("golden/server-21.bin")).code,
+        HERDR_CODE_OK
+    );
+    let request_id = drain_surface_set_request_id(client);
+    // A resize mid-transaction routes through the activation: the pending
+    // evidence is invalidated and the new geometry frame is re-queued.
+    assert_eq!(herdr_client_resize(client, 100, 30).code, HERDR_CODE_OK);
+    match decode_client(&drain_one(client)) {
+        ClientMessage::ClientShellResize { surface_size, .. } => {
+            assert_eq!((surface_size.cols, surface_size.rows), (100, 30));
+        }
+        other => panic!("expected the re-queued resize frame, got {other:?}"),
+    }
+    // Acknowledge surface interest at the snapshot's revision 7, then deliver
+    // a coherent surface at the acknowledged revision and resized geometry.
+    let ack = ServerMessage::ClientShellEndpointResponseChunk {
+        boot_id: "boot-v1".into(),
+        request_id: request_id.clone(),
+        final_chunk: true,
+        data: serde_json::to_vec(&herdr_client_core::api::schema::SuccessResponse {
+            id: request_id,
+            result: herdr_client_core::api::schema::ResponseResult::ClientShellSurfaceSet {
+                active: true,
+                projection_revision: 7,
+            },
+        })
+        .expect("ack JSON"),
+    };
+    assert_eq!(receive(client, &encode_server(&ack)).code, HERDR_CODE_OK);
+    assert_eq!(
+        receive(client, &encode_server(&coherent_surface(100, 30))).code,
+        HERDR_CODE_OK
+    );
+    assert_eq!(herdr_client_phase(client), HERDR_PHASE_ONLINE);
+    let mut error = HerdrResult {
+        code: -1,
+        detail: ptr::null(),
+    };
+    let bytes = herdr_client_surface(client, &mut error);
+    assert_eq!(error.code, HERDR_CODE_OK);
+    assert!(bytes.len > 0, "activation must commit the pane surface");
+    let json = unsafe { std::slice::from_raw_parts(bytes.data, bytes.len) }.to_vec();
+    herdr_bytes_free(bytes);
+    let surface: serde_json::Value =
+        serde_json::from_slice(&json).expect("surface accessor returns stable JSON");
+    assert_eq!(surface["boot_id"], "boot-v1");
+    assert_eq!(surface["projection_revision"], 7);
+    assert_eq!(surface["frame"]["width"], 100);
+    assert_eq!(surface["frame"]["height"], 30);
+    // The completion path queues the presentation-sync request; drain the
+    // remaining lifecycle frames before the steady-state check.
+    while !drain_one(client).is_empty() {}
+    // Steady state: the endpoint projection is active, so a later snapshot
+    // must not restart an activation transaction or queue lifecycle frames.
+    assert_eq!(
+        receive(client, &fixture("golden/server-21.bin")).code,
+        HERDR_CODE_OK
+    );
+    assert!(
+        drain_one(client).is_empty(),
+        "no re-activation after the endpoint is active"
+    );
+    herdr_client_destroy(client);
+}
+
+#[test]
+fn resize_rejects_out_of_bounds_and_queues_before_activation() {
+    let _guard = ledger_lock();
+    assert_eq!(
+        herdr_client_resize(ptr::null_mut(), 80, 24).code,
+        HERDR_CODE_INVALID_ARGUMENT
+    );
+    let client = create_ok();
+    drain_one(client); // the golden hello queued at create
+    assert_eq!(
+        herdr_client_resize(client, 0, 24).code,
+        HERDR_CODE_INVALID_ARGUMENT
+    );
+    assert_eq!(
+        herdr_client_resize(client, 80, 0).code,
+        HERDR_CODE_INVALID_ARGUMENT
+    );
+    assert_eq!(
+        herdr_client_resize(client, u32::MAX, 24).code,
+        HERDR_CODE_INVALID_ARGUMENT
+    );
+    assert_eq!(herdr_client_resize(client, 80, 24).code, HERDR_CODE_OK);
+    // No transaction is in flight, so the resize is queued directly.
+    match decode_client(&drain_one(client)) {
+        ClientMessage::ClientShellResize {
+            surface_size,
+            cell_width_px,
+            cell_height_px,
+            pixel_mouse,
+        } => {
+            assert_eq!((surface_size.cols, surface_size.rows), (80, 24));
+            assert_eq!((cell_width_px, cell_height_px), (8, 16));
+            assert!(pixel_mouse);
+        }
+        other => panic!("expected the queued resize frame, got {other:?}"),
+    }
+    assert!(drain_one(client).is_empty(), "exactly one queued frame");
+    herdr_client_destroy(client);
 }

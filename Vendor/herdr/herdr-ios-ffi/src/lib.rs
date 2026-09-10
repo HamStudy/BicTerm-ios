@@ -11,7 +11,9 @@
 //!   for create-time errors); callers must copy, never free them.
 //! * The client is NOT thread-safe: confine it to one serial executor/actor.
 mod abi;
+mod abi_query;
 mod client;
+mod client_activation;
 mod errors;
 mod factory;
 mod frame;
@@ -19,6 +21,7 @@ mod input_map;
 mod support;
 
 pub use abi::*;
+pub use abi_query::*;
 
 use std::ffi::CString;
 use std::os::raw::c_char;

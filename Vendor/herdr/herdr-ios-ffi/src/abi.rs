@@ -27,7 +27,7 @@ unsafe fn state_ptr(client: *mut herdr_client) -> *mut HerdrClient {
 /// # Safety in ABI context
 /// Same contract as `state_ptr`; returns a shared reference valid for the
 /// duration of the current ABI call only.
-unsafe fn state_ref<'a>(client: *mut herdr_client) -> &'a HerdrClient {
+pub(crate) unsafe fn state_ref<'a>(client: *mut herdr_client) -> &'a HerdrClient {
     &*state_ptr(client)
 }
 
@@ -207,103 +207,25 @@ pub extern "C" fn herdr_client_drain_outbound(
     }
 }
 
-/// Returns the latest accepted shell snapshot as stable JSON
-/// (`shell.snapshot.v1` carrier), or empty when none has been accepted.
+/// Resizes the logical surface geometry (each dimension 1..=65535). While an
+/// activation transaction is in flight the resize routes through it so
+/// pending surface evidence is invalidated coherently; otherwise the resize
+/// frame is queued directly to the endpoint transport.
 #[no_mangle]
-pub extern "C" fn herdr_client_snapshot(
+pub extern "C" fn herdr_client_resize(
     client: *mut herdr_client,
-    error_out: *mut HerdrResult,
-) -> herdr_bytes {
-    json_accessor(client, error_out, HerdrClient::snapshot_json)
-}
-
-/// Returns the latest committed pane surface as stable JSON, or empty.
-#[no_mangle]
-pub extern "C" fn herdr_client_surface(
-    client: *mut herdr_client,
-    error_out: *mut HerdrResult,
-) -> herdr_bytes {
-    json_accessor(client, error_out, HerdrClient::surface_json)
-}
-
-fn json_accessor(
-    client: *mut herdr_client,
-    error_out: *mut HerdrResult,
-    access: fn(&HerdrClient) -> Result<Option<String>, FfiError>,
-) -> herdr_bytes {
+    cols: u32,
+    rows: u32,
+) -> HerdrResult {
     let result = catch(|| {
         if client.is_null() {
             return Err(invalid("client pointer is null"));
         }
-        // SAFETY: non-null handle; shared borrow for the call's duration.
-        Ok(access(unsafe { state_ref(client) })?)
+        if cols == 0 || rows == 0 || cols > u16::MAX as u32 || rows > u16::MAX as u32 {
+            return Err(invalid("cols and rows must each be 1..=65535"));
+        }
+        // SAFETY: non-null, serially confined handle (ABI invariant).
+        Ok(unsafe { state_mut(client) }.resize(cols, rows)?)
     });
-    match result {
-        Ok(json) => {
-            write_error_out(error_out, ok_result());
-            leak_bytes(json.unwrap_or_default().into_bytes())
-        }
-        Err(error) => {
-            let detail = store_detail(client, error);
-            write_error_out(error_out, detail);
-            herdr_bytes {
-                data: ptr::null_mut(),
-                len: 0,
-            }
-        }
-    }
+    finish(client, result)
 }
-
-/// HERDR_PHASE_* value of the client.
-#[no_mangle]
-pub extern "C" fn herdr_client_phase(client: *mut herdr_client) -> u32 {
-    catch(|| {
-        if client.is_null() {
-            return Err(invalid("client pointer is null"));
-        }
-        // SAFETY: non-null handle; shared borrow for the call's duration.
-        Ok(unsafe { state_ref(client) }.phase())
-    })
-    .unwrap_or(u32::MAX)
-}
-
-/// Bytes buffered awaiting a complete inbound frame (diagnostic bound check).
-#[no_mangle]
-pub extern "C" fn herdr_client_pending_inbound(client: *mut herdr_client) -> u64 {
-    catch(|| {
-        if client.is_null() {
-            return Err(invalid("client pointer is null"));
-        }
-        // SAFETY: non-null handle; shared borrow for the call's duration.
-        Ok(unsafe { state_ref(client) }.pending_inbound())
-    })
-    .unwrap_or(u64::MAX)
-}
-
-/// Frees a buffer returned by this ABI exactly once; `{null, 0}` is a no-op.
-#[no_mangle]
-pub extern "C" fn herdr_bytes_free(bytes: herdr_bytes) {
-    if bytes.data.is_null() {
-        return;
-    }
-    track_free();
-    // SAFETY: reconstructs exactly the Box<[u8]> produced by leak_bytes —
-    // same pointer, same length, called exactly once per buffer (ABI contract).
-    let boxed: Box<[u8]> =
-        unsafe { Box::from_raw(std::slice::from_raw_parts_mut(bytes.data, bytes.len)) };
-    drop(boxed);
-}
-
-/// Live allocations currently owned by C callers (diagnostics; zero expected).
-#[no_mangle]
-pub extern "C" fn herdr_debug_live_allocations() -> u64 {
-    crate::debug_live_allocations()
-}
-
-/// Library provenance, e.g. "0.9.0" (static, never freed).
-#[no_mangle]
-pub extern "C" fn herdr_core_version() -> *const c_char {
-    ptr::addr_of!(VERSION_BYTES[0]).cast()
-}
-
-static VERSION_BYTES: [u8; 6] = *b"0.9.0\0";

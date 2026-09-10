@@ -8,6 +8,7 @@ use crate::{
     HERDR_CODE_PROTOCOL_VIOLATION, HERDR_CODE_SURFACE_REJECTED, HERDR_PHASE_AWAITING_WELCOME,
     HERDR_PHASE_FAILED, HERDR_PHASE_ONLINE,
 };
+use herdr_client_core::client::endpoint::PendingEndpointActivation;
 use herdr_client_core::client::shell::{SnapshotUpdate, SurfaceUpdate};
 use herdr_client_core::handshake::PendingHandshake;
 use herdr_client_core::outbound::OutboundQueue;
@@ -29,6 +30,13 @@ pub(crate) struct HerdrClient {
     pub(crate) shell: ClientShellState,
     pub(crate) max_frame_size: usize,
     pub(crate) snapshot: Option<ClientShellSnapshot>,
+    pub(crate) pending: Option<PendingEndpointActivation>,
+    pub(crate) cols: u16,
+    pub(crate) rows: u16,
+    pub(crate) cell_width_px: u32,
+    pub(crate) cell_height_px: u32,
+    pub(crate) pixel_mouse: bool,
+    pub(crate) activation_serial: u64,
     pub(crate) last_detail: std::ffi::CString,
 }
 
@@ -88,6 +96,9 @@ impl HerdrClient {
                 );
                 self.shell
                     .set_endpoint_status(&self.endpoint, ClientEndpointStatus::Online);
+                // Doc §7: begin usually cannot start until the first snapshot
+                // supplies lease metadata; begin_activation_if_idle retries.
+                self.begin_activation_if_idle();
                 Ok(())
             }
             Phase::Online => self.handle_online_message(message),
@@ -121,6 +132,13 @@ impl HerdrClient {
             }
             ServerMessage::ClientShellSnapshot(snapshot) => self.apply_snapshot(*snapshot),
             ServerMessage::PaneSurface(surface) => {
+                if let Some(mut pending) = self.pending.take() {
+                    let progress =
+                        pending.receive_surface(&self.endpoint, self.generation, surface);
+                    self.pending = Some(pending);
+                    self.try_complete_activation(progress);
+                    return Ok(());
+                }
                 let update = SurfaceUpdate {
                     endpoint: self.endpoint.clone(),
                     generation: self.generation,
@@ -129,6 +147,26 @@ impl HerdrClient {
                 self.shell
                     .receive_surface(&self.registry, update)
                     .map_err(|detail| FfiError::new(HERDR_CODE_SURFACE_REJECTED, detail))
+            }
+            ServerMessage::ClientShellEndpointResponseChunk {
+                boot_id,
+                request_id,
+                data,
+                ..
+            } => {
+                if let Some(mut pending) = self.pending.take() {
+                    let progress = pending.receive_response_for_boot(
+                        &self.endpoint,
+                        self.generation,
+                        &boot_id,
+                        &request_id,
+                        &data,
+                        &mut self.registry,
+                    );
+                    self.pending = Some(pending);
+                    self.try_complete_activation(progress);
+                }
+                Ok(())
             }
             _ => Ok(()),
         }
@@ -155,9 +193,15 @@ impl HerdrClient {
         };
         if self.shell.receive_snapshot(&self.registry, update) {
             let had_snapshot = self.snapshot.is_some();
-            self.snapshot = Some(snapshot);
+            self.snapshot = Some(snapshot.clone());
             if !had_snapshot {
                 self.registry.mark_ready(&self.endpoint, self.generation);
+            }
+            self.begin_activation_if_idle();
+            if let Some(mut pending) = self.pending.take() {
+                let progress = pending.receive_snapshot(&self.endpoint, self.generation, &snapshot);
+                self.pending = Some(pending);
+                self.try_complete_activation(progress);
             }
         }
         Ok(())

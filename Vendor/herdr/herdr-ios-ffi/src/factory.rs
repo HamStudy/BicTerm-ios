@@ -81,6 +81,13 @@ pub(crate) fn create(config: &herdr_client_config) -> Result<HerdrClient, FfiErr
         shell: ClientShellState::new(),
         max_frame_size,
         snapshot: None,
+        pending: None,
+        cols: config.cols as u16,
+        rows: config.rows as u16,
+        cell_width_px: config.cell_width_px,
+        cell_height_px: config.cell_height_px,
+        pixel_mouse: config.pixel_mouse,
+        activation_serial: 0,
         last_detail: std::ffi::CString::new("").expect("static"),
     })
 }
