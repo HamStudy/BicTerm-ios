@@ -136,5 +136,13 @@ struct BicTermApp: App {
             TerminalWindowRoot(store: sessionStore, windowSessionID: sessionID?.value)
             #endif
         }
+
+        WindowGroup("Herdr Workspace", id: "herdr", for: SessionID.self) { $sessionID in
+            HerdrWindowRoot(
+                store: sessionStore,
+                center: HerdrWorkspaceCenter.shared,
+                windowSessionID: sessionID?.value
+            )
+        }
     }
 }

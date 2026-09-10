@@ -1,0 +1,47 @@
+[
+  {
+    "attachments" : [
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "3686DD9C-ACA2-4A79-8968-A9C3572C8276",
+        "deviceName" : "iPad Pro 13-inch (M5)",
+        "exportedFileName" : "B64DA895-A040-414D-AEA8-BD42E72B2EB6.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "herdr-workspace-accessibility-type_0_72BBBCCC-1194-4F55-83DE-C42D81DDB8A6.png",
+        "timestamp" : 1789028303.889
+      }
+    ],
+    "testIdentifier" : "HerdrWorkspaceUITests/testPaneChromeSurvivesAccessibilityDynamicType()",
+    "testIdentifierURL" : "test://com.apple.xcode/BicTerm/BicTermUITests/HerdrWorkspaceUITests/testPaneChromeSurvivesAccessibilityDynamicType"
+  },
+  {
+    "attachments" : [
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "3686DD9C-ACA2-4A79-8968-A9C3572C8276",
+        "deviceName" : "iPad Pro 13-inch (M5)",
+        "exportedFileName" : "43EAD218-226D-47CA-B108-C3484BE022F3.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "herdr-version-gate-gen99_0_93CA9385-B2D2-4275-AF5E-99A403BE16D1.png",
+        "timestamp" : 1789028309.582
+      }
+    ],
+    "testIdentifier" : "HerdrWorkspaceUITests/testVersionGateDiagnosticScreenForWrongGenerationWelcome()",
+    "testIdentifierURL" : "test://com.apple.xcode/BicTerm/BicTermUITests/HerdrWorkspaceUITests/testVersionGateDiagnosticScreenForWrongGenerationWelcome"
+  },
+  {
+    "attachments" : [
+      {
+        "configurationName" : "Test Scheme Action",
+        "deviceId" : "3686DD9C-ACA2-4A79-8968-A9C3572C8276",
+        "deviceName" : "iPad Pro 13-inch (M5)",
+        "exportedFileName" : "FA2B7B44-5101-4B0C-AEBE-684014B26B67.png",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "herdr-workspace-2x2_0_79D0B108-8C3B-47E2-8611-4F7B43EF2633.png",
+        "timestamp" : 1789028316.333
+      }
+    ],
+    "testIdentifier" : "HerdrWorkspaceUITests/testWorkspaceRendersTwoByTwoPaneTreeFromCommittedFrames()",
+    "testIdentifierURL" : "test://com.apple.xcode/BicTerm/BicTermUITests/HerdrWorkspaceUITests/testWorkspaceRendersTwoByTwoPaneTreeFromCommittedFrames"
+  }
+]

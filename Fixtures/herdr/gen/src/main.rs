@@ -268,9 +268,18 @@ fn surface_2x2() -> PaneSurfaceFrame {
     }
 }
 
-fn cell_for(_x: u16, y: u16, border: bool) -> CellData {
+fn cell_for(x: u16, y: u16, border: bool) -> CellData {
+    let half_cols = COLS / 2;
+    let half_rows = ROWS / 2;
     let (symbol, fg, bg) = if border {
-        ("│".to_string(), herdr_rgb(0x30, 0x3A, 0x46), 0)
+        let glyph = if x == half_cols && y == half_rows {
+            "┼"
+        } else if y == half_rows {
+            "─"
+        } else {
+            "│"
+        };
+        (glyph.to_string(), herdr_rgb(0x30, 0x3A, 0x46), 0)
     } else if y == 0 {
         (" ".to_string(), 0, 0)
     } else {

@@ -126,6 +126,17 @@ final class HerdrSessionModel {
         }
     }
 
+    #if DEBUG
+    /// UI-test replay seam: feeds the renderer the fixture surface directly
+    /// because the committed FFI cannot commit one (probe evidence). The
+    /// value is byte-identical to what `herdr_client_surface` returns once
+    /// endpoint activation exists in the ABI. Compiled out of Release.
+    func debugInjectSurface(_ surface: HerdrPaneSurface, for endpoint: HerdrEndpointID) {
+        guard endpoints[endpoint] != nil else { return }
+        endpoints[endpoint]?.surface = surface
+    }
+    #endif
+
     // MARK: - Machine-qualified identity
 
     func paneRoutingKeys(for endpoint: HerdrEndpointID) -> [HerdrPaneRoutingKey] {

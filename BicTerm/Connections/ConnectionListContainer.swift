@@ -12,8 +12,13 @@ struct ConnectionListContainer: View {
     @State private var coderTunnelAlertConnection: Connection?
     @State private var coderConnectTarget: Connection?
     @State private var coverDescriptor: SessionStore.SessionDescriptor?
+    @State private var herdrCoverSession: HerdrCoverSession?
     @State private var restorableSessions: [SessionStore.RestorableSession] = []
     @State private var switcherPresented = false
+
+    private struct HerdrCoverSession: Identifiable {
+        let id: UUID
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -123,6 +128,22 @@ struct ConnectionListContainer: View {
                 )
             }
         }
+        .fullScreenCover(item: $herdrCoverSession) { cover in
+            if let entry = HerdrWorkspaceCenter.shared.entry(id: cover.id) {
+                HerdrWorkspaceView(
+                    model: entry.model,
+                    endpointLabel: entry.label,
+                    onClose: {
+                        Task {
+                            await HerdrWorkspaceCenter.shared.close(id: entry.id)
+                        }
+                        herdrCoverSession = nil
+                    }
+                )
+                .id(entry.id)
+                .terminalStyle()
+            }
+        }
         .task {
             await reloadRestorableSessions()
             #if DEBUG
@@ -132,6 +153,9 @@ struct ConnectionListContainer: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 Task { await reloadRestorableSessions() }
+                #if DEBUG
+                openHerdrFixtureReplayOnce()
+                #endif
             }
         }
     }
@@ -147,6 +171,34 @@ struct ConnectionListContainer: View {
         coderTunnelAlertConnection = connection
         #endif
     }
+
+    /// Herdr sessions present through the same path as SSH sessions: their
+    /// own window on iPad (T12 user directive), a full-screen cover on
+    /// iPhone. T16's entry replays committed fixture frames; T19's endpoint
+    /// profiles open real SSH-backed sessions through this same presenter.
+    private func presentHerdr(sessionID: UUID) {
+        if supportsMultipleWindows {
+            openWindow(id: "herdr", value: SessionID(value: sessionID))
+        } else {
+            herdrCoverSession = HerdrCoverSession(id: sessionID)
+        }
+    }
+
+    #if DEBUG
+    @MainActor private static var didOpenHerdrReplay = false
+
+    /// openWindow during scene STARTUP creates windows that never surface
+    /// (observed on iPad); the replay bootstrap therefore runs once, from
+    /// the first .active scene-phase transition.
+    private func openHerdrFixtureReplayOnce() {
+        guard HerdrWorkspaceUITest.isEnabled, !Self.didOpenHerdrReplay else { return }
+        Self.didOpenHerdrReplay = true
+        let id = HerdrWorkspaceCenter.shared.open { model in
+            HerdrWorkspaceUITest.connectReplay(model: model)
+        }
+        presentHerdr(sessionID: id)
+    }
+    #endif
 
     private func reconnectRestorable(_ entry: SessionStore.RestorableSession) {
         restorableSessions.removeAll { $0.id == entry.id }
