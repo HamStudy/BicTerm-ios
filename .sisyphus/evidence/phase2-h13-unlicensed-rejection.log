@@ -1,5 +1,6 @@
 warning[no-license-field]: license expression was not specified in manifest for crate 'herdr-client-core = 0.9.0'
  ├ herdr-client-core v0.9.0
+   └── herdr-ios-ffi v0.9.0
 
 warning[unlicensed]: a valid license expression could not be retrieved for the crate
   ┌─ path+file:///Users/richard/code/BicTerm/Vendor/herdr/herdr-client-core#0.9.0-synthesized.toml:2:9
