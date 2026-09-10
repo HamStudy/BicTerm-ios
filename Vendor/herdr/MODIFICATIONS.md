@@ -111,3 +111,26 @@ coherence at semantic input routing made it pass; the test was not weakened.
 Upstream's Local-only health test was intentionally changed to assert health
 expiry for the SSH source that replaces Local. All 22 upstream activation
 tests remain present, including rollback and successor-switch behavior.
+
+## Golden-frame milestone
+
+- `herdr-protocol/tests/support/client_samples.rs`: deterministic typed samples
+  for all 21 frozen client variants, including all four semantic pane input
+  variants. New test data using the extracted v0.9.0 types, not new wire types.
+- `herdr-protocol/tests/support/server_samples.rs`: deterministic typed samples
+  for all 21 frozen server variants plus the stable snapshot carrier. Reuses
+  the exact upstream JSON snapshot fixture.
+- `herdr-protocol/examples/capture_golden_frames.rs`: captures samples through
+  the extracted upstream `write_message` encode path; no handcrafted binary.
+- `herdr-protocol/tests/golden_frames.rs`: compares full encoded bytes against
+  committed fixtures, decodes losslessly, verifies wire tags, and rejects trailing
+  payload bytes. The fixture tests failed before capture and passed afterward.
+- `herdr-protocol/tests/fixtures/golden/client-00.bin` through `client-20.bin`
+  and `server-00.bin` through `server-21.bin`: 43 generated framed fixtures;
+  numbers 00-20 are the corresponding frozen outer enum tags, server-21 is a
+  second tag-20 control containing the stable JSON snapshot.
+- `herdr-protocol/tests/fixtures/golden/README.md`: capture method, exact scope,
+  and the distinction between encodable desktop records and executable behavior.
+
+Original upstream SHA256 digest and tag assertions remain unchanged. No test
+automatically updates fixtures when the codec changes.
