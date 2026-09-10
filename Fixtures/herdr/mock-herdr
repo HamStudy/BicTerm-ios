@@ -1,0 +1,5 @@
+#!/bin/bash
+# Test shim standing in for the remote herdr binary (T15): forwards argv to
+# the framed-protocol mock bridge. Invoked by the fixture sshd's exec shell
+# as `exec '<repo>/Fixtures/herdr/mock-herdr' [--session '<name>'] remote-client-bridge`.
+exec python3 "$(dirname "$0")/mock-bridge.py" "$@"
