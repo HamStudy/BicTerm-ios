@@ -51,9 +51,9 @@ plan); everything else 13–19 is complete.
 | Rapid switching/failed activation/late responses never misroute input | Partial (core-side stale-target rejection T17; switching-scenario app tests are OPEN with the switching UX) |
 | Modifiers/mouse/selection/image paste stay machine-qualified through switching | Partial (T18 clipboard attribution is endpoint-qualified; mouse/selection are OPEN) |
 | Independent bounded writes/health/retries with aggregate memory limits | Partial (per-endpoint reconnect budgets T19; the flooded/stalled/healthy three-endpoint soak is OPEN) |
-| Reconnect does not steal selection; stale panes visibly stale | OPEN (server-authoritative selection not yet shipped) |
+| Reconnect does not steal selection; stale panes visibly stale | OPEN (server-authoritative selection not yet shipped) — triage (2026-09-11): blocked-on-user-decision. Server-authoritative selection requires the live herdr-server path, which is blocked by the zig 0.15.x/libSystem link failure on macOS 26; options await a user decision. See `.omo/evidence/phase2-h16-server-fixture.md` (identical copy: `.sisyphus/evidence/phase2-h16-server-fixture.md`). |
 | Disable/remove disconnects only the chosen profile | Partial (T19 detach/disconnect per endpoint; profile-level disable UI is OPEN) |
-| Multiple clients per tab follow last-interaction resize ownership | OPEN |
+| Multiple clients per tab follow last-interaction resize ownership | OPEN — triage (2026-09-11): blocked-on-user-decision. Exercising multiple live clients per tab requires the live herdr server, blocked by the zig 0.15.x/libSystem link failure on macOS 26; options await a user decision. See `.omo/evidence/phase2-h16-server-fixture.md`. |
 | Background/foreground recovery for several endpoints without reconnect storms | Partial (single-endpoint bg/fg delivered T19; multi-endpoint variant is User QA + OPEN for the storm-budget part) |
 
 ## Terminal rendering and input
@@ -64,8 +64,8 @@ plan); everything else 13–19 is complete.
 | Frames/patches enforce boot, projection, base, and surface revisions | Delivered (T13/T16 coherence checks; T20 fuzz `patch_apply`) |
 | Grapheme clusters, wide cells, non-US text render without width recomputation | Partial (T16/T17 render committed cells verbatim incl. CJK UI tests; skip/tail cell edge coverage rides on surface bytes as delivered — systematic grapheme matrix is OPEN) |
 | Colors, style bits, cursor visibility/shape, alt-screen, hyperlinks | Partial (T16 cell colors + modifiers + cursor; hyperlink metadata renders as data — safe-open action is OPEN; blink/alt-screen behaviors are data-driven, untested) |
-| Graphics tests (RGB/RGBA/PNG/cropping/z-order/…) | OPEN (graphics scenes not rendered this phase; wire types are preserved) |
-| OSC 8 links require explicit safe open, no click stealing | OPEN |
+| Graphics tests (RGB/RGBA/PNG/cropping/z-order/…) | OPEN (graphics scenes not rendered this phase; wire types are preserved) — triage (2026-09-11): not-applicable-with-reason. Graphics scene rendering was not in any planned phase-2 task (T16-T18 shipped text surfaces only); wire types are preserved so no data is lost. Scheduling graphics rendering is a future-phase user decision, not a phase-2 gap. |
+| OSC 8 links require explicit safe open, no click stealing | OPEN — triage (2026-09-11): not-applicable-with-reason. Hyperlink metadata currently renders as inert data (T16), so no click stealing is possible this phase; the explicit safe-open action was not in any planned phase-2 task and is a future-phase user decision. |
 | Title, bell, toast, sound notifications follow local settings | Partial (T16 notification strip renders title/toasts; bell/sound local settings are OPEN) |
 | Hardware keyboard press/repeat/release, modifiers, navigation keys | Delivered (T17 key mapper + injector tests) |
 | Unsupported keypad/media/Caps Lock ignored, not mis-serialized | Delivered (T17: unmapped keys never reach the wire — mapper tests) |
@@ -82,12 +82,26 @@ passthrough/context menu, wheel routing, pane focus/drag selection,
 SGR pixel coordinates, pixel-to-cell downgrade, gesture dedup, auxiliary
 buttons, touch selection defaults.
 
+Triage (2026-09-11) — all 11 pointer/touch rows share one classification:
+not-applicable-with-reason. Pointer and touch routing was deliberately
+outside every planned phase-2 task; T17's "pointer" scope was input-mapping
+plumbing only (see T17 evidence `.sisyphus/evidence/phase2-h17-*` and the
+plan's task-17 section). Generation-1 shipped keyboard, paste, and
+rendering. These rows are not blocked by the zig/live-server issue (input
+routing is client-side); they are unscheduled future-phase work awaiting a
+user decision. Row-by-row: (1) left/middle/right sequences, (2) hover
+policy, (3) right-click passthrough/context menu, (4) wheel routing,
+(5) pane focus/drag selection, (6) SGR pixel coordinates, (7)
+pixel-to-cell downgrade, (8) gesture dedup, (9) auxiliary buttons,
+(10) touch selection defaults, (11) pointer/touch routing end-to-end —
+each not-applicable-with-reason as stated above.
+
 ## Clipboard and media
 
 | §15 row | Disposition |
 |---|---|
 | Pasteboard reads only after clear user intent | Delivered (T18 gesture-mediated reads; paste counts asserted zero pre-gesture) |
-| Selection copy via `pane.selection.read` across wraps/scrollback | OPEN (server-authoritative selection not shipped; the remote clipboard banner path is the delivered copy story) |
+| Selection copy via `pane.selection.read` across wraps/scrollback | OPEN (server-authoritative selection not shipped; the remote clipboard banner path is the delivered copy story) — triage (2026-09-11): blocked-on-user-decision. `pane.selection.read` is a server-authoritative method requiring the live herdr-server path, blocked by the zig 0.15.x/libSystem link failure on macOS 26; options await a user decision. See `.omo/evidence/phase2-h16-server-fixture.md`. The delivered copy story (T18 remote clipboard banner, evidence `.sisyphus/evidence/phase2-h18-paste-audit.log`) is unaffected. |
 | Empty, multiline, bracketed, non-ASCII, very large pastes tested | Delivered (T18 unit + UI vectors incl. 1 MiB cap classification) |
 | Text paste is a semantic Paste event, never double-wrapped | Delivered (T18 byte-exact paste frames) |
 | Paste into local overlays stays local | Delivered (T18 overlay-local paste tests) |
@@ -137,3 +151,26 @@ buttons, touch selection defaults.
 8 clipboard, 7 security, 5 iOS quality, 9 licensing). Delivered 40,
 Partial 16, User QA 4, OPEN 16 (the pointer/touch section plus the named
 future-phase items). Zero rows without a disposition.
+
+Triage addendum (2026-09-11): the 16 OPEN rows now carry inline `triage:`
+annotations (5 table rows) or a section-level triage list (11
+pointer/touch rows). Summary: 3 blocked-on-user-decision (live
+herdr-server path; zig 0.15.x/libSystem link failure, see
+`.omo/evidence/phase2-h16-server-fixture.md`), 13
+not-applicable-with-reason (deliberately unscheduled future-phase scope).
+None were reclassified as closed; no original row text was altered.
+
+## T19 replay-vs-live classification (2026-09-11)
+
+T19's detach/re-attach persistence evidence
+(`.sisyphus/evidence/phase2-h19-persistence-iphone.log`,
+`phase2-h19-persistence-ipad.log`) used committed-frame replay through the
+app's own surface pipeline (the `herdr-replay-ready` fixture path in the
+UI tests), not a live herdr server. Classification: this is the documented
+zig-blocked environment item, not a silently weakened test. The live
+herdr-server path is blocked by the zig 0.15.x/libSystem link failure on
+macOS 26, recorded with a minimal reproduction and user options in
+`.omo/evidence/phase2-h16-server-fixture.md`. Replay exercises the real
+persistence, reducer, and re-render code paths against committed frames;
+what it does not prove is live-server frame generation. Closing that gap
+is one of the user decisions listed in the h16 fixture doc.
