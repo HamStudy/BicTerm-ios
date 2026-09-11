@@ -106,6 +106,7 @@ struct ConnectionEditorView: View {
                     }
                 }
                 .presentationDetents([.large])
+                .presentationCompactAdaptation(.none)
             }
             .sheet(item: $coderServerToEdit) { server in
                 NavigationStack {
