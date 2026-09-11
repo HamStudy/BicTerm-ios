@@ -14,24 +14,27 @@ An iOS 18+ SSH terminal client for iPhone and iPad, built on
 
 ## What Works
 
-- **SSH connections** with key-only auth (ed25519 from Keychain, P-256 from Secure Enclave)
+- **SSH connections** with password auth (RFC 4252 `password`, secrets in Keychain) and public-key auth (ed25519 from Keychain, P-256 from Secure Enclave)
 - **ProxyJump / jump chains** up to 5 hops with per-hop host-key verification
 - **TOFU host-key trust** — fingerprint prompt on first connect, hard reject on changed keys
 - **In-app SSH agent** with per-request authorization, session cache, auto-deny when backgrounded
 - **Terminal UI** — SwiftTerm-based, hardware keyboard, IME/CJK composition, multi-window on iPad
+- **Multiple concurrent sessions** — session switcher with detach/reattach that preserves terminal state, on iPhone and iPad
 - **Graceful reconnect** — background suspends, foreground re-handshakes; no auto-reconnect after kill
-- **Coder REST integration** — multi-server config, workspace discovery, connect to running workspaces
+- **Coder REST integration** — multi-server config, workspace discovery, agent picker, start policy, connect to running workspaces
+- **Coder tailnet tunnel** (default flavor) — native `coder ssh`-style connectivity over the userspace tailnet core (`CoderNet.xcframework`, AGPL), compiled in behind the `CODER_TUNNEL` flag. The AppStore flavor excludes it entirely and uses direct SSH instead.
+- **Herdr client** — workspace handshake, native surface rendering, semantic keyboard/focus/resize input, clipboard text and bounded image paste, probe diagnostics, detach/reconnect
 - **Transport abstraction** — SSH is one conformer; ET/mosh can be added later without touching session layers
 
 ## What Doesn't Work Yet
 
-- **Special keys in tests** — Ctrl-C, Escape, Home, End, PageUp/PageDown can't be synthesized by the simulator's test harness. The terminal encoder handles them; the gap is XCUIApplication/Simulator HID injection, not the app itself.
-- **Coder WireGuard tunnel** — REST workspace discovery works, but the native `coder ssh` tunnel (WireGuard/DERP) is not implemented. Requires WireGuardKit, VPN entitlement, and legal review.
+- **Live herdr-server validation on this dev host** — building the herdr v0.9.0 server fixture needs zig 0.15.x, which fails to link libSystem on macOS 26 (toolchain-vs-host issue, not an app defect). Persistence and lifecycle tests currently run against committed-frame replay. See `.omo/evidence/phase2-h16-server-fixture.md`.
 - **No mosh or Eternal Terminal** — architecture supports adding them, but they are not implemented in v1.
+- **Pointer/touch routing for herdr panes, graphics scenes, OSC 8 safe-open** — triaged as future-phase work in `Docs/HERDR-RELEASE-TRACEABILITY.md`.
 
 ## What's Not In Scope (v1)
 
-- Password/keyboard-interactive auth
+- Keyboard-interactive auth (NIOSSH has no keyboard-interactive client; password and public-key only)
 - RSA keys / key export
 - SFTP/SCP or port forwarding
 - Terminal transcript/scrollback persistence
