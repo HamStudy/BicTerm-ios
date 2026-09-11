@@ -2,6 +2,7 @@ import HerdrClientCore
 import OSLog
 import PhotosUI
 import SwiftUI
+import UIKit
 
 /// Native herdr workspace chrome (integration doc §7 Option A): endpoint
 /// header + phase badge, tab bar for the focused workspace, pane area
@@ -15,6 +16,7 @@ struct HerdrWorkspaceView: View {
     @Environment(\.terminalTypography) private var typography
     @Environment(\.terminalSpacing) private var spacing
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.scenePhase) private var scenePhase
 
     let model: HerdrSessionModel
     let endpointLabel: String
@@ -40,23 +42,54 @@ struct HerdrWorkspaceView: View {
             inputField
             VStack(spacing: 0) {
                 header
-                if let state, state.phase == .failed || state.phase == .disconnected,
-                   let diagnostic = state.diagnostic {
-                    HerdrDiagnosticView(
-                        diagnostic: diagnostic,
-                        endpointLabel: endpointLabel,
-                        onDismiss: onClose
-                    )
+                if let state {
+                    if let probe = state.probe, !probe.isCompatible {
+                        HerdrProbeDiagnosticView(
+                            probe: probe,
+                            onDismiss: onClose
+                        )
+                    } else if state.phase == .reconnecting {
+                        reconnectingView(state: state)
+                    } else if state.phase == .failed || state.phase == .disconnected,
+                        let diagnostic = state.diagnostic {
+                        HerdrDiagnosticView(
+                            diagnostic: diagnostic,
+                            endpointLabel: endpointLabel,
+                            onReattach: reattachAction(for: diagnostic),
+                            onDismiss: onClose
+                        )
+                    } else {
+                        workspaceBody
+                    }
                 } else {
                     workspaceBody
                 }
             }
         }
         .background(colors.background.ignoresSafeArea())
+        // DEBUG evidence strip rides the ROOT overlay so input/lifecycle
+        // echo stays visible in the diagnostic and reconnecting states too.
+        .overlay(alignment: .bottom) {
+            inputFeedbackStrip
+                .allowsHitTesting(false)
+        }
         // The remote owns the grid: the soft keyboard overlays instead of
         // compressing the pane area, so keyboard appearance never reads as
         // a geometry change (rotation and window resize still do).
         .ignoresSafeArea(.keyboard)
+        .onChange(of: scenePhase) { _, phase in
+            switch phase {
+            case .active:
+                model.sceneBecameActive()
+                model.resumeFromSceneForeground()
+            case .inactive:
+                model.sceneResignedActive()
+            case .background:
+                beginBackgroundDetach()
+            @unknown default:
+                break
+            }
+        }
         .onAppear {
             // Informational (plan T16): record the chrome's Dynamic Type
             // context; survival itself is asserted by the UI test's
@@ -164,6 +197,10 @@ struct HerdrWorkspaceView: View {
             }
             Spacer()
             if state?.phase == .online {
+                Button("Detach", action: detach)
+                    .font(typography.body)
+                    .buttonStyle(.bordered)
+                    .accessibilityIdentifier("herdr-detach")
                 // A plain gesture button, not UIPasteControl: the system
                 // control neither delivers responder-chain `paste(_:)` nor
                 // dispatches added actions for synthesized taps on the
@@ -222,6 +259,36 @@ struct HerdrWorkspaceView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityIdentifier("herdr-connecting")
+    }
+
+    /// Doc §6.3 visible reconnect state: bounded jittered backoff in
+    /// progress, with the attempt count and a manual cancel. No retry
+    /// continues past the bound.
+    private func reconnectingView(state: HerdrEndpointState) -> some View {
+        VStack(spacing: spacing.sm) {
+            ProgressView()
+            Text("Reconnecting to Herdr")
+                .font(typography.body)
+                .foregroundStyle(colors.foreground)
+                .accessibilityIdentifier("herdr-reconnecting")
+            if let attempt = state.reconnectAttempt {
+                Text("Attempt \(attempt) of \(model.reconnectBackoff.maxAttempts)")
+                    .font(typography.caption)
+                    .foregroundStyle(colors.dimmed)
+                    .accessibilityIdentifier("herdr-reconnecting-attempt")
+            }
+            Text("The workspace keeps running on the host while reconnecting.")
+                .font(typography.caption)
+                .foregroundStyle(colors.dimmed)
+            Button("Cancel") {
+                guard let id = model.selectedEndpointID else { return }
+                model.cancelReconnect(endpoint: id)
+            }
+            .font(typography.body)
+            .buttonStyle(.bordered)
+            .accessibilityIdentifier("herdr-reconnect-cancel")
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func notificationStrip(snapshot: HerdrShellSnapshot) -> some View {
@@ -316,10 +383,6 @@ struct HerdrWorkspaceView: View {
                 snapshotPaneGrid(snapshot: snapshot)
             }
         }
-        .overlay(alignment: .bottom) {
-            inputFeedbackStrip
-                .allowsHitTesting(false)
-        }
         // The remote-copy banner needs tappable buttons, so it sits in its
         // own overlay rather than the hit-transparent feedback strip; as an
         // overlay it never compresses the pane grid into a phantom resize.
@@ -394,6 +457,12 @@ struct HerdrWorkspaceView: View {
                     .onChange(of: model.debugInputEcho, initial: true) {
                         HerdrWorkspaceUITest.currentInputEcho = model.debugInputEcho.joined(separator: "\n")
                     }
+                Text(model.debugLifecycleLog.joined(separator: "\n"))
+                    .font(.system(.caption2, design: .monospaced))
+                    .foregroundStyle(colors.dimmed)
+                    .frame(maxWidth: .infinity, maxHeight: 72, alignment: .leading)
+                    .padding(.horizontal, spacing.sm)
+                    .accessibilityIdentifier("herdr-lifecycle-echo")
                 if model.debugAppliedChunks >= HerdrWorkspaceUITest.currentScriptChunkCount ?? .max {
                     Text("ready")
                         .font(typography.caption)
@@ -613,6 +682,42 @@ struct HerdrWorkspaceView: View {
 
     // MARK: - Actions
 
+    private func detach() {
+        guard let id = model.selectedEndpointID else { return }
+        Task {
+            await model.detach(endpoint: id, reason: .user)
+        }
+    }
+
+    private func reattachAction(for diagnostic: HerdrDiagnostic) -> (() -> Void)? {
+        guard diagnostic.reattachOffered, let id = model.selectedEndpointID,
+              model.reconnectSources[id] != nil else { return nil }
+        return { model.reconnect(endpoint: id) }
+    }
+
+    /// Doc §10 background policy: the finite detach runs inside the system's
+    /// granted background window; the expiration handler only ends the task
+    /// (the detach itself is sub-second — the bound is the safety net).
+    private func beginBackgroundDetach() {
+        var taskID = UIBackgroundTaskIdentifier.invalid
+        taskID = UIApplication.shared.beginBackgroundTask(
+            withName: "herdr detach",
+            expirationHandler: {
+                let expired = taskID
+                Task { @MainActor in
+                    UIApplication.shared.endBackgroundTask(expired)
+                }
+            }
+        )
+        let granted = taskID
+        Task { @MainActor in
+            await model.suspendForSceneBackground()
+            if granted != .invalid {
+                UIApplication.shared.endBackgroundTask(granted)
+            }
+        }
+    }
+
     private func disconnect() {
         Task {
             await model.disconnectAll()
@@ -649,6 +754,7 @@ struct HerdrWorkspaceView: View {
         switch phase {
         case .connecting: "Connecting"
         case .online: "Online"
+        case .reconnecting: "Reconnecting"
         case .disconnected: "Disconnected"
         case .failed: "Failed"
         }
@@ -658,6 +764,7 @@ struct HerdrWorkspaceView: View {
         switch phase {
         case .connecting: colors.dimmed
         case .online: colors.success
+        case .reconnecting: colors.accent
         case .disconnected: colors.dimmed
         case .failed: colors.error
         }

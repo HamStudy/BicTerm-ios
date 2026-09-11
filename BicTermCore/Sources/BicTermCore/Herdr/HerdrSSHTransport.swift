@@ -95,6 +95,17 @@ public final class HerdrSSHTransport: HerdrByteTransport, @unchecked Sendable {
         try await session.closeWrite()
     }
 
+    /// Doc §6.3 taxonomy signal: maps the exec channel's exit status so the
+    /// session layer can distinguish clean EOF (exit 0) from an abnormal
+    /// remote end (non-zero) and from a status-less channel death.
+    public func termination() async -> HerdrTransportTermination {
+        switch await session.termination() {
+        case .exited(let status): .exited(status)
+        case .failed: .failed
+        case .closedLocally: .closedLocally
+        }
+    }
+
     public func close() async {
         let (shouldClose, task) = claimClose()
         guard shouldClose else { return }

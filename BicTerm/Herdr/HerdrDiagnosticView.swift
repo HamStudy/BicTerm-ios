@@ -3,7 +3,9 @@ import SwiftUI
 /// Version-gate / connection-end screen (integration doc §4/§6.3): reports
 /// the local protocol-core version, the endpoint generation this app
 /// implements, the typed failure detail, and — for compatibility failures —
-/// a remediation link. No private-protocol fallback is ever offered.
+/// a remediation link. Taxonomy kinds whose remote workspace survives offer
+/// an explicit re-attach (fresh hello, authoritative state). No
+/// private-protocol fallback is ever offered.
 struct HerdrDiagnosticView: View {
     @Environment(\.terminalColors) private var colors
     @Environment(\.terminalTypography) private var typography
@@ -11,6 +13,7 @@ struct HerdrDiagnosticView: View {
 
     let diagnostic: HerdrDiagnostic
     let endpointLabel: String
+    var onReattach: (() -> Void)?
     let onDismiss: () -> Void
 
     var body: some View {
@@ -62,6 +65,17 @@ struct HerdrDiagnosticView: View {
                     }
                 }
 
+                if let onReattach {
+                    Button("Re-attach", action: onReattach)
+                        .font(typography.body)
+                        .buttonStyle(.borderedProminent)
+                        .accessibilityIdentifier("herdr-reattach")
+                    Text("The workspace keeps running on the host. Re-attaching connects with a fresh hello and shows the server's current state.")
+                        .font(typography.caption)
+                        .foregroundStyle(colors.dimmed)
+                        .accessibilityIdentifier("herdr-reattach-note")
+                }
+
                 Button("Close", action: onDismiss)
                     .font(typography.body)
                     .buttonStyle(.bordered)
@@ -81,6 +95,9 @@ struct HerdrDiagnosticView: View {
         case .protocolViolation: "bolt.horizontal.circle"
         case .transportLost: "wifi.exclamationmark"
         case .remoteClosed: "checkmark.circle"
+        case .userDetach: "arrow.down.right.and.arrow.up.left"
+        case .serverShutdown: "powerplug"
+        case .authLost: "person.badge.key"
         }
     }
 

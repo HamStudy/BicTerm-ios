@@ -1,3 +1,4 @@
+import BicTermCore
 import Foundation
 import HerdrClientCore
 
@@ -26,6 +27,9 @@ struct HerdrPaneRoutingKey: Hashable, Sendable, Identifiable {
 enum HerdrEndpointPhase: Sendable, Equatable {
     case connecting
     case online
+    /// Bounded reconnect attempts are running (doc §6.3): input is disabled,
+    /// the state is visible, and a manual cancel is offered.
+    case reconnecting
     case disconnected
     case failed
 }
@@ -40,6 +44,15 @@ struct HerdrDiagnostic: Sendable, Equatable, Identifiable {
         case protocolViolation
         case transportLost
         case remoteClosed
+        /// Local detach (doc §6.3 taxonomy): the remote workspace persists;
+        /// re-attach sends a fresh hello and receives authoritative state.
+        case userDetach
+        /// The remote bridge ended abnormally (non-zero exit) — the server
+        /// stopped under us rather than closing the session cleanly.
+        case serverShutdown
+        /// Authentication/authorization was lost; re-auth is a user action,
+        /// never an automatic retry.
+        case authLost
     }
 
     /// Official upstream remediation target for compatibility failures.
@@ -65,6 +78,19 @@ struct HerdrDiagnostic: Sendable, Equatable, Identifiable {
         case .protocolViolation: "Herdr protocol error"
         case .transportLost: "Connection lost"
         case .remoteClosed: "Session ended"
+        case .userDetach: "Detached"
+        case .serverShutdown: "Herdr server stopped"
+        case .authLost: "Authentication lost"
+        }
+    }
+
+    /// Kinds whose remote workspace survives the local end: re-attach
+    /// (fresh hello, authoritative snapshot) is the offered action.
+    var reattachOffered: Bool {
+        switch kind {
+        case .userDetach, .remoteClosed, .serverShutdown, .transportLost: true
+        case .incompatibleGeneration, .handshakeRejected, .handshakeTimedOut,
+             .protocolViolation, .authLost: false
         }
     }
 
@@ -115,6 +141,9 @@ enum HerdrInputNote: Sendable, Equatable {
     case pasteTooLarge
     /// The pane or boot changed between pasteboard read and send (doc §8.2).
     case pasteTargetChanged
+    /// Scene-inactive suspension (doc §10): input is paused before the
+    /// background detach runs, so ordering is never ambiguous.
+    case suspended
 
     var message: String {
         switch self {
@@ -126,6 +155,7 @@ enum HerdrInputNote: Sendable, Equatable {
         case .pasteTooLarge:
             "Pasted text exceeds the \(HerdrClipboard.maxTextPasteBytes)-byte limit; nothing was sent"
         case .pasteTargetChanged: "Paste target changed before sending; paste cancelled"
+        case .suspended: "Input paused while the scene is inactive"
         }
     }
 }
@@ -160,6 +190,11 @@ struct HerdrEndpointState: Sendable, Equatable {
     var surface: HerdrPaneSurface?
     var surfaceUnavailable = false
     var diagnostic: HerdrDiagnostic?
+    /// Preflight probe outcome (doc §6.1/§11): a present-but-incompatible
+    /// result renders the probe diagnostic screen instead of the workspace.
+    var probe: HerdrProbe.Result?
+    /// 1-based attempt number while `.reconnecting`; nil otherwise.
+    var reconnectAttempt: Int?
     var desiredCols: UInt32 = 80
     var desiredRows: UInt32 = 24
     var inputTargetOverride: String?

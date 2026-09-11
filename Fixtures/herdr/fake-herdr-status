@@ -1,0 +1,10 @@
+#!/bin/bash
+# Stand-in herdr executable for probe tests (T19): answers the probe's
+# `status client --json` query with a fixed, generation-1 client status so
+# the found+compatible probe path is deterministic against the fixture sshd
+# regardless of what herdr versions happen to be installed on the host.
+if [ "${1:-}" = "status" ] && [ "${2:-}" = "client" ] && [ "${3:-}" = "--json" ]; then
+    printf '{"version":"0.9.0-fixture","channel":"stable","protocol":22,"endpoint_protocol_generation":1,"endpoint_capabilities":["surface_interest","presentation_effects_fence","health_check"],"binary":"%s","session":null}\n' "$0"
+    exit 0
+fi
+exit 2

@@ -7,9 +7,12 @@ import UIKit
 /// DEBUG launch-argument contract for the herdr workspace UI tests:
 ///
 ///   --uitest-herdr-replay         open a replay-backed herdr workspace
-///   --uitest-herdr-mode <mode>    `workspace` (default), `gen99`, or
+///   --uitest-herdr-mode <mode>    `workspace` (default), `gen99`,
 ///                                 `input` (full presentation fence — the
-///                                 input lane unfreezes)
+///                                 input lane unfreezes), `clipboard`,
+///                                 `lifecycle` (fence + re-attach source),
+///                                 or `probe-missing` (preflight probe
+///                                 diagnostic screen, no connection)
 ///   HERDR_FIXTURE_DIR (env)       absolute fixture dir (committed frames)
 ///   HERDR_UI_TEST_PASTEBOARD (env) seed string written to the system
 ///                                 pasteboard BY THE APP at boot, so the
@@ -90,7 +93,10 @@ enum HerdrWorkspaceUITest {
         keyInjector = TestHardwareKeyInjector(spec: hwkeysSpec)
         // Deterministic privacy state: every replay launch starts with the
         // auto-copy opt-in OFF for the endpoint it is about to use.
-        for raw in ["replay-2x2", "replay-gen99", "replay-input", "replay-clipboard"] {
+        for raw in [
+            "replay-2x2", "replay-gen99", "replay-input", "replay-clipboard",
+            "replay-lifecycle", "replay-probe-missing",
+        ] {
             HerdrClipboardSettings().setAutoCopyRemoteClipboard(false, for: HerdrEndpointID(rawValue: raw))
         }
         seedPasteboardIfRequested()
@@ -102,7 +108,44 @@ enum HerdrWorkspaceUITest {
             )
             currentScriptChunkCount = 1
             model.connect(endpoint: HerdrEndpointID(rawValue: "replay-gen99"), transport: transport)
-            return "replay gen-99"
+            return "replay gen99"
+        }
+
+        if mode == "probe-missing" {
+            // Preflight probe failure (doc §6.1/§11): no bridge channel ever
+            // opens; the probe diagnostic screen renders instead.
+            let result = HerdrProbe.Result(
+                host: "fixture-no-herdr",
+                rawOS: "Linux",
+                rawArch: "aarch64",
+                foundPath: nil,
+                version: nil,
+                endpointGeneration: nil,
+                capabilities: []
+            )
+            model.failProbe(endpoint: HerdrEndpointID(rawValue: "replay-probe-missing"), result: result)
+            currentScriptChunkCount = 0
+            return "replay probe-missing"
+        }
+
+        if mode == "lifecycle" {
+            // Full presentation fence plus a re-attach source: every
+            // reconnect builds a fresh transport scripted with the fence
+            // again and a revision-2 snapshot tail — the authoritative
+            // "output continued" state a persistent server would hand a
+            // re-attaching client. The INITIAL script must stay at the
+            // fence alone: the rev2 snapshot restarts the activation
+            // transaction, and mid-typing input would bounce StaleTarget.
+            let endpoint = HerdrEndpointID(rawValue: "replay-lifecycle")
+            let source = HerdrReconnectSource {
+                HerdrReplayTransport(script: fenceScript(directory: directory) + [
+                    load(from: directory, "snapshot-2x2-rev2"),
+                ])
+            }
+            let transport = HerdrReplayTransport(script: fenceScript(directory: directory))
+            currentScriptChunkCount = 8
+            model.connect(endpoint: endpoint, transport: transport, reconnectSource: source)
+            return "replay lifecycle"
         }
 
         if mode == "clipboard" {
@@ -130,16 +173,7 @@ enum HerdrWorkspaceUITest {
             // The full presentation fence: both surface-set acks, the
             // evidence resend, and the ready control. After the ready chunk
             // applies, the FFI input lane accepts sends.
-            let transport = HerdrReplayTransport(script: [
-                load(from: vendorGoldenDirectory, "server-20"),
-                load(from: directory, "snapshot-2x2"),
-                load(from: directory, "surface-ack-2x2"),
-                load(from: directory, "surface-2x2"),
-                load(from: directory, "surface-sync-ack-2x2"),
-                load(from: directory, "snapshot-2x2"),
-                load(from: directory, "surface-2x2"),
-                load(from: directory, "presentation-ready-2x2"),
-            ])
+            let transport = HerdrReplayTransport(script: fenceScript(directory: directory))
             currentScriptChunkCount = 8
             model.connect(endpoint: HerdrEndpointID(rawValue: "replay-input"), transport: transport)
             return "replay input"
@@ -154,6 +188,21 @@ enum HerdrWorkspaceUITest {
         currentScriptChunkCount = 4
         model.connect(endpoint: HerdrEndpointID(rawValue: "replay-2x2"), transport: transport)
         return "replay 2x2"
+    }
+
+    /// The full presentation-fence script (T17 learnings: two surface
+    /// commits + the re-sent evidence pair + the ready control — 8 chunks).
+    private static func fenceScript(directory: String) -> [Data] {
+        [
+            load(from: vendorGoldenDirectory, "server-20"),
+            load(from: directory, "snapshot-2x2"),
+            load(from: directory, "surface-ack-2x2"),
+            load(from: directory, "surface-2x2"),
+            load(from: directory, "surface-sync-ack-2x2"),
+            load(from: directory, "snapshot-2x2"),
+            load(from: directory, "surface-2x2"),
+            load(from: directory, "presentation-ready-2x2"),
+        ]
     }
 }
 #endif

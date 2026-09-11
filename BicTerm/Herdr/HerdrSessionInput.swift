@@ -94,6 +94,10 @@ extension HerdrSessionModel {
     /// that slips through comes back as `.inputFrozen` and is surfaced too).
     private func enqueueInput(endpoint id: HerdrEndpointID, _ make: (String) -> HerdrInputEvent) {
         guard let runtime = runtimes[id] else { return }
+        if sceneInputSuspended {
+            noteAtGate(.suspended, endpoint: id)
+            return
+        }
         guard let state = endpoints[id], state.phase == .online else {
             noteAtGate(.offline, endpoint: id)
             return
@@ -224,6 +228,7 @@ extension HerdrSessionModel {
         case .clipboardDropped: "clipboardDropped"
         case .pasteTooLarge: "pasteTooLarge"
         case .pasteTargetChanged: "pasteTargetChanged"
+        case .suspended: "suspended"
         }
     }
 

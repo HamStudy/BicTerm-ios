@@ -13,6 +13,9 @@ enum HerdrReplayTransportError: Error, Equatable {
 /// exercisable exactly like real SSH segmentation. `holdOpen` keeps the
 /// inbound stream alive after the script (a live server does not EOF right
 /// after its snapshot); pass `false` to replay a clean remote close.
+/// `exitStatus` shapes ``termination()`` so the doc §6.3 taxonomy can
+/// distinguish a clean EOF (0) from a server shutdown (non-zero).
+/// `failWith` finishes inbound with an error instead (network loss).
 /// `appendInbound` stages additional frames mid-session (frozen-window
 /// tests feed the presentation-fence tail only after probing input).
 final class HerdrReplayTransport: HerdrByteTransport, @unchecked Sendable {
@@ -22,15 +25,25 @@ final class HerdrReplayTransport: HerdrByteTransport, @unchecked Sendable {
     private let script: [Data]
     private let stall: Bool
     private let holdOpen: Bool
+    private let exitStatus: Int
+    private let failWith: (any Error)?
     private var writes: [Data] = []
     private var closed = false
     private let appends: AsyncStream<Data>
     private let appendContinuation: AsyncStream<Data>.Continuation
 
-    init(script: [Data], stall: Bool = false, holdOpen: Bool = true) {
+    init(
+        script: [Data],
+        stall: Bool = false,
+        holdOpen: Bool = true,
+        exitStatus: Int = 0,
+        failWith: (any Error)? = nil
+    ) {
         self.script = script
         self.stall = stall
         self.holdOpen = holdOpen
+        self.exitStatus = exitStatus
+        self.failWith = failWith
         let (stream, continuation) = AsyncStream<Data>.makeStream()
         appends = stream
         appendContinuation = continuation
@@ -62,11 +75,16 @@ final class HerdrReplayTransport: HerdrByteTransport, @unchecked Sendable {
         let chunks = script
         let shouldStall = stall
         let shouldHoldOpen = holdOpen
+        let finishError = failWith
         let staged = appends
         Task {
             if !shouldStall {
                 for chunk in chunks {
                     continuation.yield(chunk)
+                }
+                if !shouldHoldOpen, let finishError {
+                    continuation.finish(throwing: finishError)
+                    return
                 }
                 if !shouldHoldOpen {
                     continuation.finish()
@@ -76,12 +94,20 @@ final class HerdrReplayTransport: HerdrByteTransport, @unchecked Sendable {
             for await chunk in staged {
                 continuation.yield(chunk)
             }
-            continuation.finish()
+            if let finishError {
+                continuation.finish(throwing: finishError)
+            } else {
+                continuation.finish()
+            }
         }
         return stream
     }
 
     func closeWrite() async throws {}
+
+    func termination() async -> HerdrTransportTermination {
+        failWith != nil ? .failed : .exited(exitStatus)
+    }
 
     func close() async {
         markClosed()

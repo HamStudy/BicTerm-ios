@@ -2,6 +2,25 @@ import BicTermCore
 import Foundation
 import HerdrClientCore
 
+/// Lock-confined one-shot slot for the bounded termination wait.
+final class TerminationBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value: HerdrTransportTermination?
+
+    func set(_ value: HerdrTransportTermination) {
+        lock.lock()
+        self.value = value
+        lock.unlock()
+    }
+
+    func get() -> HerdrTransportTermination? {
+        lock.lock()
+        defer { lock.unlock() }
+        return value
+    }
+}
+
+
 /// Per-scene herdr coordinator (integration doc §3.5): one endpoint runtime
 /// per saved SSH target + session, machine-qualified published state above
 /// them, and a single selected endpoint whose surface feeds this scene.
@@ -19,7 +38,7 @@ import HerdrClientCore
 @Observable
 final class HerdrSessionModel {
     var endpoints: [HerdrEndpointID: HerdrEndpointState] = [:]
-    private(set) var selectedEndpointID: HerdrEndpointID?
+    var selectedEndpointID: HerdrEndpointID?
 
     #if DEBUG
     /// Test surface only (unit/UI suites): semantic input events and gate
@@ -28,6 +47,9 @@ final class HerdrSessionModel {
     /// Counts render-state applies so replay-driven UI tests can wait for
     /// exact script exhaustion instead of polling labels.
     private(set) var debugAppliedChunks = 0
+    /// Test surface only (unit/UI suites): lifecycle transitions in order
+    /// (detach, background close, reconnect attempts) for assertions.
+    var debugLifecycleLog: [String] = []
     #endif
 
     struct Runtime {
@@ -44,24 +66,52 @@ final class HerdrSessionModel {
 
     var runtimes: [HerdrEndpointID: Runtime] = [:]
     private var generations: [HerdrEndpointID: UInt] = [:]
+    /// Transport factory per endpoint for re-attach/foreground reconnects
+    /// (doc §6.3): nil for endpoints with no live source (unit fixtures
+    /// without one); the factory is the ONLY way a reconnect transport
+    /// comes into existence.
+    var reconnectSources: [HerdrEndpointID: HerdrReconnectSource] = [:]
+    /// Running reconnect loops; presence is the "no retry storm" latch.
+    var reconnectTasks: [HerdrEndpointID: Task<Void, Never>] = [:]
+    /// Bumped on every loop start/cancel so a finished loop never clears a
+    /// successor's task slot.
+    var reconnectEpochs: [HerdrEndpointID: UInt] = [:]
+    /// Endpoints the background policy detached and foreground must
+    /// reconnect (doc §10 step 4).
+    var awaitingForegroundReconnect: Set<HerdrEndpointID> = []
+    /// Scene-inactive input suspension (doc §10 step 1).
+    var sceneInputSuspended = false
+    let reconnectBackoff: HerdrReconnectBackoff
+    private var lastOnlineLoggedGeneration: [HerdrEndpointID: UInt] = [:]
     private let handshakeTimeout: Duration
     let clipboardSettings: HerdrClipboardSettings
 
     init(
         handshakeTimeout: Duration = .seconds(60),
-        clipboardSettings: HerdrClipboardSettings = HerdrClipboardSettings()
+        clipboardSettings: HerdrClipboardSettings = HerdrClipboardSettings(),
+        reconnectBackoff: HerdrReconnectBackoff = .standard
     ) {
         self.handshakeTimeout = handshakeTimeout
         self.clipboardSettings = clipboardSettings
+        self.reconnectBackoff = reconnectBackoff
     }
 
     // MARK: - Connection
 
-    func connect(endpoint id: HerdrEndpointID, transport: any HerdrByteTransport) {
+    func connect(
+        endpoint id: HerdrEndpointID,
+        transport: any HerdrByteTransport,
+        reconnectSource: HerdrReconnectSource? = nil
+    ) {
         teardown(endpoint: id)
 
         let generation = (generations[id] ?? 0) + 1
         generations[id] = generation
+        if let reconnectSource {
+            reconnectSources[id] = reconnectSource
+        } else {
+            reconnectSources.removeValue(forKey: id)
+        }
 
         var state = endpoints[id] ?? HerdrEndpointState()
         state.phase = .connecting
@@ -69,6 +119,13 @@ final class HerdrSessionModel {
         state.surface = nil
         state.surfaceUnavailable = false
         state.diagnostic = nil
+        state.probe = nil
+        state.reconnectAttempt = nil
+        // Fresh connection, fresh authoritative state (spec hard rule): a
+        // pane override chosen on a previous connection generation must not
+        // leak into the snapshot-driven target of this one.
+        state.inputTargetOverride = nil
+        state.inputNote = nil
         endpoints[id] = state
         selectedEndpointID = id
 
@@ -280,7 +337,8 @@ final class HerdrSessionModel {
                     )
                 }
             }
-            await model?.remoteClosed(endpoint: id, generation: generation)
+            let termination = await Self.termination(of: transport)
+            await model?.remoteClosed(endpoint: id, generation: generation, termination: termination)
         } catch let error as HerdrClientError {
             await model?.handleClientError(error, endpoint: id, generation: generation)
         } catch {
@@ -312,6 +370,14 @@ final class HerdrSessionModel {
         if phase == .online {
             endpoints[id]?.phase = .online
             runtimes[id]?.watchdog?.cancel()
+            #if DEBUG
+            if lastOnlineLoggedGeneration[id] != generation {
+                lastOnlineLoggedGeneration[id] = generation
+                debugLifecycleLog.append(
+                    "online:\(id.rawValue):gen:\(generation):rev:\(endpoints[id]?.snapshot?.revision ?? 0)"
+                )
+            }
+            #endif
         }
     }
 
@@ -410,11 +476,37 @@ final class HerdrSessionModel {
         )
     }
 
-    private func remoteClosed(endpoint id: HerdrEndpointID, generation: UInt) {
+    private func remoteClosed(
+        endpoint id: HerdrEndpointID,
+        generation: UInt,
+        termination: HerdrTransportTermination
+    ) {
         guard isActive(endpoint: id, generation: generation) else { return }
         teardown(endpoint: id)
+        // Doc §6.3 taxonomy, split by the only signal that distinguishes
+        // them: a clean EOF (exit 0) is a session end; a non-zero exit is
+        // the remote bridge dying under us; a status-less channel death is
+        // a network loss.
+        let diagnostic: HerdrDiagnostic
+        switch termination {
+        case .exited(let status) where status != 0:
+            diagnostic = .simple(
+                .serverShutdown,
+                detail: "remote bridge exited with status \(status)"
+            )
+        case .failed:
+            diagnostic = .simple(
+                .transportLost,
+                detail: "channel died without a remote exit status"
+            )
+        case .exited, .unknown, .closedLocally:
+            diagnostic = .simple(.remoteClosed, detail: "remote bridge closed the session")
+        }
         endpoints[id]?.phase = .disconnected
-        endpoints[id]?.diagnostic = .simple(.remoteClosed, detail: "remote bridge closed the session")
+        endpoints[id]?.diagnostic = diagnostic
+        #if DEBUG
+        debugLifecycleLog.append("closed:\(id.rawValue):\(diagnostic.kind)")
+        #endif
     }
 
     private func fail(endpoint: HerdrEndpointID, diagnostic: HerdrDiagnostic) {
@@ -434,7 +526,7 @@ final class HerdrSessionModel {
         runtimes[id]?.generation == generation
     }
 
-    private func teardown(endpoint id: HerdrEndpointID) {
+    func teardown(endpoint id: HerdrEndpointID) {
         guard let runtime = runtimes.removeValue(forKey: id) else { return }
         runtime.inboundTask?.cancel()
         runtime.inputTask?.cancel()
@@ -449,8 +541,26 @@ final class HerdrSessionModel {
         }
     }
 
-    static func detail(of error: HerdrClientError) -> String {
-        switch error {
+    /// Bounded wait for the transport's remote-exit observation: the status
+    /// normally arrives with the channel end, but a wedged conformer must
+    /// not pin the pump — after the bound the end is treated as `.unknown`
+    /// (clean-EOF taxonomy). Polling with an abandoned detached waiter is
+    /// deliberate: a task-group race would deadlock at scope exit, because
+    /// awaiting a non-cancellable continuation ignores child cancellation.
+    private static func termination(
+        of transport: any HerdrByteTransport
+    ) async -> HerdrTransportTermination {
+        let box = TerminationBox()
+        Task.detached { box.set(await transport.termination()) }
+        let deadline = ContinuousClock().now + .seconds(2)
+        while ContinuousClock().now < deadline {
+            try? await Task.sleep(for: .milliseconds(20))
+            if let value = box.get() { return value }
+        }
+        return .unknown
+    }
+
+    static func detail(of error: HerdrClientError) -> String {        switch error {
         case .invalidArgument(let detail),
              .panic(let detail),
              .disconnected(let detail),
