@@ -208,3 +208,22 @@ blocker and planning remaining acceptance work, **not for approval of the
 Coder phase**. Preserve the protected dirty files and untracked governing
 specs. Do not begin Herdr implementation as a workaround for missing Coder
 acceptance coverage.
+
+## Addendum (2026-09-11)
+
+Current factual status of the phase gate, recorded for the F1 re-audit.
+Nothing above is rewritten; this section only adds dated context.
+
+- The Coder acceptance matrix has since been completed:
+  `Docs/CODER-ACCEPTANCE-MATRIX.md` reports 31 PASS, 3 NOT-LOCAL, 0 FAIL,
+  and the current acceptance results are in
+  `phase2-g12-final-acceptance-brief.md` (referenced at the top of this
+  brief). The historical blocked checkpoint above is retained as recorded
+  evidence of the 2026-09-08 state, not as the current verdict.
+- The phase gate itself is still not approved. Per the plan's final-wave
+  policy (`.omo/plans/bicterm-phase2-coder-ssh.md`, "Final verification
+  wave" note, line 762), F1-F4 are marked only after all four review
+  agents approve and the user gives an explicit "okay". The F-wave
+  reviews are not complete and no user approval has been requested or
+  recorded. Any wording elsewhere implying approval would be false; the
+  correct status is "pending F-wave completion and explicit user okay".
