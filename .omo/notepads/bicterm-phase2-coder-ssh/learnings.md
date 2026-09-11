@@ -482,3 +482,24 @@ cargo +stable install --locked --root "$PWD/.build-artifacts/tools" cargo-deny
 - `herdr status client --json` (upstream cli/status.rs) is the structured probe surface: compact single-line JSON with version/endpoint_protocol_generation/endpoint_capabilities/binary. The probe one-liner prefixes lines with `bpo:` sentinels and bounds the status read with `head -c 4096`.
 - Model teardown's `transport.close()` is fire-and-forget (a detached Task) — `isClosed` assertions need bounded waits right after `.failed` transitions, or they race.
 - Pre-existing working-tree state a task inherits: ProxyJumpTests/CoderServersUITests modified Sep 9 (prior session), the two read-only spec docs untracked-but-present, and several g12 evidence logs dirty. None are ours — stage only the task's own files and report the rest.
+
+## T4 repair (2026-09-11) — ProxyJump first-hop failure regression
+
+- JumpChainBuilder's failure teardown was ALREADY index-safe: every failure
+  path closes `established` by array iteration (empty array → zero
+  iterations), candidates append only after success, and the single indexed
+  access `endpoints[failingIndex - 1]` is bounded by construction
+  (ownerIndex = loop index, targetIndex = index + 1). Hardening requests
+  against it should be answered with an audit + regression test, not edits.
+- Guaranteed-refused first hop for jump-chain tests: dial 127.0.0.1:1
+  (loopback ECONNREFUSED is instant, ~4ms test). It touches no fixture port,
+  so it cannot perturb the PerSourcePenalty cadence between the hop2 auth
+  tests — safe to slot anywhere alphabetically.
+- A first-hop TCP refusal surfaces as `.hopFailed(hopIndex: 1, ...,
+  underlying: .unreachable)` AFTER exactly one key resolution
+  (makeUserAuthDelegate runs before bootstrap.connect in NIOJumpDialer.
+  connectTCP) — `RecordingKeyProvider.calls` is the chain-abort oracle.
+- ProxyJumpTests runs under the SPM package scheme (`scripts/test-core.sh`
+  style, target BicTermCoreTests), NOT the app's BicTermTests bundle; the
+  task-template xcodebuild command's `-only-testing:BicTermTests/...` would
+  silently match zero tests.

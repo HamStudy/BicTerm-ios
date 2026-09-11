@@ -42,6 +42,53 @@ final class ProxyJumpTests: XCTestCase {
         _ = try await transport.sessionChannelHandle()
     }
 
+    func testFirstHopFailureReturnsTypedJumpErrorWithoutTeardownCrash() async throws {
+        // REAL refusal, not a mocked one: the first hop dials 127.0.0.1:1,
+        // where nothing listens (fixture sshds bind 12222/12223 only), so
+        // NIOJumpDialer's TCP connect fails and buildChained's
+        // zero-established-hops failure branch runs for real. The chain
+        // aborts before any hop exists, exercising the teardown invariant
+        // (closing an empty established set must be a no-op, never an index
+        // crash). Ordering note: this test never touches either fixture
+        // port, so it cannot perturb the PerSourcePenalty cadence between
+        // the hop2 auth tests below.
+        let (builder, provider) = try await makeBuilder()
+        let refusedFirstHop = Hop(
+            host: JumpFixture.host,
+            port: 1,
+            username: SSHTestFixture.username,
+            keyReference: JumpFixture.goodKeyReference
+        )
+        let connection = try Connection(
+            name: "first-hop-refused",
+            type: .ssh,
+            host: JumpFixture.host,
+            port: JumpFixture.hop2Port,
+            username: SSHTestFixture.username,
+            keyReference: JumpFixture.goodKeyReference,
+            jumpChain: [refusedFirstHop]
+        )
+
+        do {
+            _ = try await builder.build(connection: connection, cols: 80, rows: 24)
+            XCTFail("the refused first hop must fail the build")
+        } catch let error as JumpError {
+            XCTAssertEqual(
+                error,
+                .hopFailed(hopIndex: 1, host: JumpFixture.host, port: 1, underlying: .unreachable)
+            )
+        }
+
+        // Key resolution precedes the dial, so hop 1's key was consulted
+        // exactly once; the chain aborted before the destination's
+        // credential was ever requested.
+        XCTAssertEqual(
+            provider.calls.map(\.reference),
+            [JumpFixture.goodKeyReference],
+            "only the refused first hop may resolve a key"
+        )
+    }
+
     func testSecondHopFailureClosesPriorHopAndNamesFailingHost() async throws {
         let hop1LogOffset = fixtureLogSize("hop1.log")
         let (builder, provider) = try await makeBuilder()
