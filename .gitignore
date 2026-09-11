@@ -13,3 +13,11 @@ DerivedData/
 .DS_Store
 Fixtures/run/
 tmp/
+
+# herdr: re-downloadable upstream reference copies (see Vendor/herdr/PROVENANCE.md)
+Vendor/herdr/upstream/
+Vendor/herdr/UPSTREAM_SOURCE.tar
+# herdr: Rust build outputs under the FFI crate and fuzz harness
+Vendor/herdr/**/target/
+# herdr: accumulated cargo-fuzz corpus (generated fuzzing input, ~64 MB)
+Vendor/herdr/herdr-ios-ffi/fuzz/corpus/
