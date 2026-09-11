@@ -503,3 +503,11 @@ cargo +stable install --locked --root "$PWD/.build-artifacts/tools" cargo-deny
   style, target BicTermCoreTests), NOT the app's BicTermTests bundle; the
   task-template xcodebuild command's `-only-testing:BicTermTests/...` would
   silently match zero tests.
+
+## 2026-09-11 — F1 doc-repair findings
+
+- F1 rejected on documentation staleness only (guardrails 7/7). Fixes were addenda/annotations, never rewrites of recorded evidence: gate-brief addendum, per-row `triage:` annotations in HERDR-RELEASE-TRACEABILITY.md, README status refresh.
+- The T12 gate brief's top summary already pointed at the final matrix, but its title said "approval pending" without the F-wave/user-okay policy context — a dated addendum citing plan line 762 resolved it without touching history.
+- 16 OPEN traceability rows triage to: 3 blocked-on-user-decision (live herdr server; zig 0.15.x libSystem link failure, `.omo/evidence/phase2-h16-server-fixture.md`), 13 not-applicable-with-reason (unscheduled future-phase scope). `.omo/evidence/` and `.sisyphus/evidence/` h16 fixture docs are identical copies.
+- `cargo audit` is not installed for this toolchain and cannot be installed globally; the compensating control is cargo-deny advisories-ok plus the RUSTSEC-2025-0141 triage in `Vendor/herdr/deny.toml`. Recapture attempt and pointer recorded in `.sisyphus/evidence/phase2-h20-sbom-cargo-audit-recapture.md`.
+- `.sisyphus/` is gitignored: the gate-brief addendum and recapture note are working-tree records only, same as all other evidence.
