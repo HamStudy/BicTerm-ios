@@ -226,4 +226,5 @@ private struct NullHostKeyStore: HostKeyStoreProtocol {
     func loadAll() async throws(PersistenceError) -> [HostKeyRecord] { [] }
     func lookup(host: String, port: Int) async throws(PersistenceError) -> HostKeyRecord? { nil }
     func save(_ record: HostKeyRecord) async throws(PersistenceError) {}
+    func forget(host: String, port: Int) async throws(PersistenceError) {}
 }

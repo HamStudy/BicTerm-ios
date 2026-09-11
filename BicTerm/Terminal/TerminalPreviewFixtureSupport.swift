@@ -80,5 +80,11 @@ actor InMemoryOnlyHostKeyStore: HostKeyStoreProtocol {
     func save(_ newRecord: HostKeyRecord) throws(PersistenceError) {
         record = newRecord
     }
+
+    func forget(host: String, port: Int) throws(PersistenceError) {
+        if record?.host == host, record?.port == port {
+            record = nil
+        }
+    }
 }
 #endif

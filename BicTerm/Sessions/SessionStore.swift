@@ -76,6 +76,11 @@ final class SessionStore {
     private let hostKeyStore: (any HostKeyStoreProtocol)?
     private let connectionLookup: ConnectionLookup
     private let snapshotStore: (any SessionSnapshotStoreProtocol)?
+
+    /// The backing key store this SessionStore's verifier reads and writes;
+    /// the per-host forget action must clear trust through the same store,
+    /// never a second instance.
+    var activeHostKeyStore: (any HostKeyStoreProtocol)? { hostKeyStore }
     private var connectionNameCache: [UUID: String] = [:]
     private(set) var descriptors: [UUID: SessionDescriptor] = [:]
     private var orderedIDs: [UUID] = []
@@ -294,6 +299,22 @@ final class SessionStore {
         return result.sorted { $0.snapshot.createdAt < $1.snapshot.createdAt }
     }
 
+    /// Per-host forget (T20 security sweep): deletes the restorable session
+    /// snapshots of every connection that resolves to `host:port`. Returns
+    /// the number of snapshots removed; live scenes are untouched.
+    func forgetRestorableSessions(host: String, port: Int) async -> Int {
+        guard let snapshots = try? await registry.restorableSnapshots() else { return 0 }
+        var removed = 0
+        for snapshot in snapshots {
+            guard let connection = await connectionLookup(snapshot.connectionID),
+                  connection.host == host, connection.port == port
+            else { continue }
+            try? await snapshotStore?.deleteSnapshot(sceneID: snapshot.sceneID)
+            removed += 1
+        }
+        return removed
+    }
+
     // MARK: - Window restoration
 
     /// Resolves a state-restored terminal window whose SessionID has no
@@ -438,7 +459,7 @@ final class SessionStore {
         return (forwarding, coordinator)
     }
 
-    private static func defaultHostKeyStoreForLiveUse() -> any HostKeyStoreProtocol {
+    static func defaultHostKeyStoreForLiveUse() -> any HostKeyStoreProtocol {
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--uitest-pretrust-fixtures") {
             // UITEST hook: trust the committed loopback fixture host keys in
@@ -555,6 +576,12 @@ final class InMemoryHostKeyStoreFallback: HostKeyStoreProtocol, @unchecked Senda
             defer { lock.unlock() }
             records["\(record.host):\(record.port)"] = record
         }
+
+        func forget(host: String, port: Int) {
+            lock.lock()
+            defer { lock.unlock() }
+            records["\(host):\(port)"] = nil
+        }
     }
 
     func loadAll() async throws(PersistenceError) -> [HostKeyRecord] {
@@ -567,6 +594,10 @@ final class InMemoryHostKeyStoreFallback: HostKeyStoreProtocol, @unchecked Senda
 
     func save(_ record: HostKeyRecord) async throws(PersistenceError) {
         storage.save(record)
+    }
+
+    func forget(host: String, port: Int) async throws(PersistenceError) {
+        storage.forget(host: host, port: port)
     }
 
     /// Synchronous save for the DEBUG pre-trust seeding path.

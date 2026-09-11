@@ -76,6 +76,29 @@ pub fn write_message<W: Write, M: Serialize>(writer: &mut W, msg: &M) -> Result<
     Ok(())
 }
 
+/// Decode configuration for every framing-path payload decode.
+///
+/// bincode 2.0.1 reserves container capacity from the decoded length
+/// varint BEFORE reading elements, and only rejects the claim when the
+/// configuration carries a limit. With the default no-limit configuration
+/// a hostile frame can therefore drive an allocation request orders of
+/// magnitude beyond the frame itself (observed petabyte-scale claims
+/// under fuzzing). The graphics-frame ceiling is the largest payload any
+/// conforming frame can carry, so it bounds every claim an honest frame
+/// makes while capping hostile transients at one bounded allocation.
+pub type FramingDecodeConfig = bincode::config::Configuration<
+    bincode::config::LittleEndian,
+    bincode::config::Varint,
+    bincode::config::Limit<MAX_GRAPHICS_FRAME_SIZE>,
+>;
+
+/// The framing decode configuration shared by the wire path and its fuzz
+/// targets (they must exercise the production configuration, not a laxer
+/// one).
+pub fn framing_decode_config() -> FramingDecodeConfig {
+    bincode::config::standard().with_limit::<MAX_GRAPHICS_FRAME_SIZE>()
+}
+
 /// Reads and deserializes a length-prefixed frame from a reader.
 ///
 /// Reassembles partial reads correctly. Rejects frames whose declared
@@ -101,7 +124,7 @@ pub fn read_message<R: Read, M: for<'de> Deserialize<'de>>(
     let mut payload = vec![0u8; claimed_len];
     read_exact_or_eof(reader, &mut payload)?;
 
-    let (msg, consumed) = bincode::serde::decode_from_slice(&payload, bincode::config::standard())
+    let (msg, consumed) = bincode::serde::decode_from_slice(&payload, framing_decode_config())
         .map_err(|e| FramingError::Bincode(e.to_string()))?;
 
     // Enforce that the decoder consumed the full payload.

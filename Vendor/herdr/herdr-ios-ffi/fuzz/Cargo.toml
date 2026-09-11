@@ -1,0 +1,57 @@
+[package]
+name = "herdr-ios-ffi-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+[dependencies.herdr-protocol]
+path = "../../herdr-protocol"
+
+[dependencies.herdr-client-core]
+path = "../../herdr-client-core"
+
+[dependencies.serde_json]
+version = "1"
+
+[dependencies.bincode]
+version = "=2.0.1"
+default-features = false
+features = ["std", "serde"]
+
+# Separate workspace: the herdr workspace pins production members explicitly
+# and this harness builds only under nightly cargo-fuzz.
+[workspace]
+
+[[bin]]
+name = "length_parse"
+path = "fuzz_targets/length_parse.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "bincode_decode"
+path = "fuzz_targets/bincode_decode.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "endpoint_json"
+path = "fuzz_targets/endpoint_json.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "patch_apply"
+path = "fuzz_targets/patch_apply.rs"
+test = false
+doc = false
+bench = false

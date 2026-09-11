@@ -1,0 +1,1 @@
+endpoint.welcome.v1û-{"generation":1,"server_version":"0.9.0","snapshot_codec":"shell.snapshot.v1","surface_codec":"shell.surface.v1","input_codec":"shell.input.semantic.v1","blob_codec":"shell.blob.v1","methods":["client_shell.surface.set"],"capabilities":["surface_interest","presentation_effects_fence","health_check"]}

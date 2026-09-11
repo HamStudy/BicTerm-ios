@@ -87,6 +87,9 @@ targets:
     deploymentTarget: "18.0"
     sources:
       - path: BicTerm
+      - path: Vendor/herdr/THIRD_PARTY_NOTICES.md
+        buildPhase: resources
+        type: file
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.bicterm.app

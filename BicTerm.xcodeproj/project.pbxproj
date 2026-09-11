@@ -25,6 +25,7 @@
 		244AA1996D13F23B2AD54ED6 /* UITestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 774076500A1CEBAD4453F492 /* UITestSupport.swift */; };
 		26D612FE9F3DFA4C5E29E1E1 /* server-15.bin in Resources */ = {isa = PBXBuildFile; fileRef = D55C3C7A24871E7F3630271F /* server-15.bin */; };
 		2788FE84A55384A45C33B2CA /* server-01.bin in Resources */ = {isa = PBXBuildFile; fileRef = 28D1F5FAB1DC38F47AAEDF2F /* server-01.bin */; };
+		2815FADD7562B40760F5ED7D /* HerdrMalformedServerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F005B127B2DF46C5B957D558 /* HerdrMalformedServerTests.swift */; };
 		284B69C2FF8771B0240D09BC /* TerminalPreviewScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0033EA0A4C01195E5AABDB2D /* TerminalPreviewScreen.swift */; };
 		29B39DB27868EFEB15E191B3 /* AppShellUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C2517EC025088B5225948CC /* AppShellUITests.swift */; };
 		29EA00839B6F856C96130B9C /* HerdrSessionInputTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F76FD41694F4CDAAE862263B /* HerdrSessionInputTests.swift */; };
@@ -86,10 +87,12 @@
 		81FF5FBAF865D15EABA7FA87 /* HerdrClientCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 155D9DC6976F97066896E306 /* HerdrClientCore.framework */; };
 		824F61A6357A615EA718334F /* server-00.bin in Resources */ = {isa = PBXBuildFile; fileRef = 50929EADF5128F6AFBAA9620 /* server-00.bin */; };
 		8411D08733A95ACFDCC2F85D /* client-05.bin in Resources */ = {isa = PBXBuildFile; fileRef = D76CAF14351F3309A881DFBC /* client-05.bin */; };
+		843DF60B552B5DAD6ED8CC7B /* THIRD_PARTY_NOTICES.md in Resources */ = {isa = PBXBuildFile; fileRef = BDCE48AFC56E912B09E49BE5 /* THIRD_PARTY_NOTICES.md */; };
 		86D1F06915B8AAA328FD0E14 /* KeyDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A3DF18491E166F316B32504 /* KeyDetailView.swift */; };
 		8705B8938C4F8B4BF82853AD /* server-13.bin in Resources */ = {isa = PBXBuildFile; fileRef = 3C17DF7217BC6FA7410E1094 /* server-13.bin */; };
 		878E193DE22D369FEFA62660 /* HerdrInputUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BAF8DFE67308855B08BAF21 /* HerdrInputUITests.swift */; };
 		87FBD29E62AAB2698CCE2E44 /* client-14.bin in Resources */ = {isa = PBXBuildFile; fileRef = 1FDC610E7748140A8B937E4E /* client-14.bin */; };
+		88DF8424519F0BF4589423E5 /* AcknowledgementsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 814F0F0067B34FDA08E14624 /* AcknowledgementsView.swift */; };
 		89AFD58B092FB8D1F0CC48C2 /* server-11.bin in Resources */ = {isa = PBXBuildFile; fileRef = 07AA80C3C4F31E359D3D6006 /* server-11.bin */; };
 		8BE8274B81D01A758870189C /* client-20.bin in Resources */ = {isa = PBXBuildFile; fileRef = 257C31E65B92EEF5A19976DA /* client-20.bin */; };
 		8DA59D87EB32B3B5A36C5E7D /* CoderServersModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC2E5698ED63478D6A4779A2 /* CoderServersModel.swift */; };
@@ -114,6 +117,7 @@
 		B050F58E822076402366C793 /* HerdrImagePasteSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D9D1C2F71B0437CD9DB34EA /* HerdrImagePasteSheet.swift */; };
 		B2F30F2A1DE9B2D8645E2820 /* HopEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B329C25FF010C9C1415CE0A6 /* HopEditorView.swift */; };
 		B419F8734D7F2CA1F99062B3 /* client-19.bin in Resources */ = {isa = PBXBuildFile; fileRef = 2A110C5CC583DD5241C8F07D /* client-19.bin */; };
+		B477D033555069A32F2F6F68 /* AcknowledgementsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24F354D58DDAB72A9A314802 /* AcknowledgementsTests.swift */; };
 		B52A6A352501AE8BE38840A4 /* client-11.bin in Resources */ = {isa = PBXBuildFile; fileRef = CD9D45467468BCF8149B5313 /* client-11.bin */; };
 		B52D7BF58356B2CB92351886 /* client-17.bin in Resources */ = {isa = PBXBuildFile; fileRef = 0A5C34A49EA403DF84B5C7CC /* client-17.bin */; };
 		B5D3FF46EFA9AB2C152C5F81 /* client-00.bin in Resources */ = {isa = PBXBuildFile; fileRef = B9437CC2065169EC6CDA4829 /* client-00.bin */; };
@@ -130,6 +134,7 @@
 		BFD0E87933CAD28170EE3830 /* server-18.bin in Resources */ = {isa = PBXBuildFile; fileRef = 3EE6DA99528CDB23BE2DE987 /* server-18.bin */; };
 		BFF410723B947099D87CFC8B /* TerminalViewCacheTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6CDD916B160E5DD532DFF9D /* TerminalViewCacheTests.swift */; };
 		C39BB67D50505F4C26C05DAF /* HerdrSessionClipboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DE0F02C76841051A5413E85 /* HerdrSessionClipboard.swift */; };
+		C3E6A74E792DE732C69700E0 /* HerdrHostForget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24F7E941949207626421732D /* HerdrHostForget.swift */; };
 		C491ADF000F33B0FE5F70535 /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = 744C943BA87E582A01A0FCCB /* README.md */; };
 		C62B72F16941F7176ABFE74E /* CoderNativeLifecycleActionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFBADDA4497B5CD072146656 /* CoderNativeLifecycleActionTests.swift */; };
 		C7892BFCEC4610D03B6487D4 /* TerminalViewCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBABDE7A48843489C4AC9F70 /* TerminalViewCache.swift */; };
@@ -145,6 +150,7 @@
 		DBE5F719BE13CF17290487B7 /* client-03.bin in Resources */ = {isa = PBXBuildFile; fileRef = B73355AB161C393F4D5F5C8D /* client-03.bin */; };
 		DDFA24DCB2B95090D51B0B69 /* CoderAgentPickerUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC2331AD9A6DB3FC646B0E0E /* CoderAgentPickerUITests.swift */; };
 		E0BB72CAB9B4E878FE961FD1 /* server-06.bin in Resources */ = {isa = PBXBuildFile; fileRef = 3E1B481EBC756664B4065E00 /* server-06.bin */; };
+		E0BDDD3026AC5B397EC8EB3F /* HerdrHostForgetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74F60D37FEBDD455D91D4E13 /* HerdrHostForgetTests.swift */; };
 		E10EE573D6ED3C15B44076A5 /* SessionID.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C8A861A10E23A356696C807 /* SessionID.swift */; };
 		E1166441A7CE6F85ABDFF801 /* SessionUITestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75FF453C00FD5311FA3B84AB /* SessionUITestSupport.swift */; };
 		E140DE83E75D6B42B570860A /* HerdrInputField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 620FE45C0746A13B4FEE9E45 /* HerdrInputField.swift */; };
@@ -159,6 +165,7 @@
 		F2CDE607A85E5F027346F383 /* HerdrClientCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 155D9DC6976F97066896E306 /* HerdrClientCore.framework */; };
 		F3FCEAE5AE6CDFDE6490643A /* HerdrWorkspaceUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A09839D020B8378BB2602B1B /* HerdrWorkspaceUITests.swift */; };
 		F3FE3FBADE8BD18959DBB69E /* KeyStoreImportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07569DAAA0643D6C78D17A7F /* KeyStoreImportTests.swift */; };
+		F6A0BDED0EF1E2824AC41B62 /* LogRedactionAuditTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05BA9618271D51D6B1E7C14A /* LogRedactionAuditTests.swift */; };
 		F9A71FFD151FFF156CE2880F /* server-02.bin in Resources */ = {isa = PBXBuildFile; fileRef = 832EB2D9782B1B8FD1E6357B /* server-02.bin */; };
 		FB203DFE41BF6F6A5EB1B693 /* HerdrKeyMapper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73E6D2E46020F9CE2CD29B5E /* HerdrKeyMapper.swift */; };
 		FBBAA8B1E534537D742913FB /* KeyPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF3525BCE2B2B3E65AE0887C /* KeyPickerView.swift */; };
@@ -227,6 +234,7 @@
 		00605FD9075E4BAE76FDF2A0 /* HerdrReplayTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HerdrReplayTransport.swift; sourceTree = "<group>"; };
 		02CF095769E90C688C448D67 /* HerdrPaneSurfaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HerdrPaneSurfaceView.swift; sourceTree = "<group>"; };
 		054DCF5F33FF8629D5368C44 /* server-17.bin */ = {isa = PBXFileReference; lastKnownFileType = archive.macbinary; path = "server-17.bin"; sourceTree = "<group>"; };
+		05BA9618271D51D6B1E7C14A /* LogRedactionAuditTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LogRedactionAuditTests.swift; sourceTree = "<group>"; };
 		0746BFF2E488F243F50E0AAA /* AgentApprovalFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentApprovalFlowTests.swift; sourceTree = "<group>"; };
 		07569DAAA0643D6C78D17A7F /* KeyStoreImportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyStoreImportTests.swift; sourceTree = "<group>"; };
 		07AA80C3C4F31E359D3D6006 /* server-11.bin */ = {isa = PBXFileReference; lastKnownFileType = archive.macbinary; path = "server-11.bin"; sourceTree = "<group>"; };
@@ -248,6 +256,8 @@
 		1FDC610E7748140A8B937E4E /* client-14.bin */ = {isa = PBXFileReference; lastKnownFileType = archive.macbinary; path = "client-14.bin"; sourceTree = "<group>"; };
 		2021A3E870796F577B2977B9 /* CoderServerDraftTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoderServerDraftTests.swift; sourceTree = "<group>"; };
 		24A31C48CAEA2E4FF1ABFA3A /* KeyManagementView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyManagementView.swift; sourceTree = "<group>"; };
+		24F354D58DDAB72A9A314802 /* AcknowledgementsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AcknowledgementsTests.swift; sourceTree = "<group>"; };
+		24F7E941949207626421732D /* HerdrHostForget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HerdrHostForget.swift; sourceTree = "<group>"; };
 		257C31E65B92EEF5A19976DA /* client-20.bin */ = {isa = PBXFileReference; lastKnownFileType = archive.macbinary; path = "client-20.bin"; sourceTree = "<group>"; };
 		27C46506F4DE74D8B8073DFC /* HerdrLifecycleUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HerdrLifecycleUITests.swift; sourceTree = "<group>"; };
 		2806EBB251EA9E376858A9A2 /* server-16.bin */ = {isa = PBXFileReference; lastKnownFileType = archive.macbinary; path = "server-16.bin"; sourceTree = "<group>"; };
@@ -297,6 +307,7 @@
 		73E6D2E46020F9CE2CD29B5E /* HerdrKeyMapper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HerdrKeyMapper.swift; sourceTree = "<group>"; };
 		744C943BA87E582A01A0FCCB /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		749A8968DD13EB1606F56882 /* server-07.bin */ = {isa = PBXFileReference; lastKnownFileType = archive.macbinary; path = "server-07.bin"; sourceTree = "<group>"; };
+		74F60D37FEBDD455D91D4E13 /* HerdrHostForgetTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HerdrHostForgetTests.swift; sourceTree = "<group>"; };
 		75FF453C00FD5311FA3B84AB /* SessionUITestSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionUITestSupport.swift; sourceTree = "<group>"; };
 		774076500A1CEBAD4453F492 /* UITestSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITestSupport.swift; sourceTree = "<group>"; };
 		774BAE1A56321B1E9ED444E0 /* HerdrWorkspaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HerdrWorkspaceView.swift; sourceTree = "<group>"; };
@@ -307,6 +318,7 @@
 		7DB01171DB587FF0E09526DE /* CoderWorkspaceStarter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoderWorkspaceStarter.swift; sourceTree = "<group>"; };
 		80D61CD02E38CACD44121359 /* HerdrClientCoreSmokeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HerdrClientCoreSmokeTests.swift; sourceTree = "<group>"; };
 		81441524708395D7D99F5371 /* ConnectionListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionListView.swift; sourceTree = "<group>"; };
+		814F0F0067B34FDA08E14624 /* AcknowledgementsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AcknowledgementsView.swift; sourceTree = "<group>"; };
 		8235C520441261DAB3066FB7 /* CoderTunnel.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = CoderTunnel.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		82CD52AB017DD864410499AD /* client-04.bin */ = {isa = PBXFileReference; lastKnownFileType = archive.macbinary; path = "client-04.bin"; sourceTree = "<group>"; };
 		832EB2D9782B1B8FD1E6357B /* server-02.bin */ = {isa = PBXFileReference; lastKnownFileType = archive.macbinary; path = "server-02.bin"; sourceTree = "<group>"; };
@@ -347,6 +359,7 @@
 		BBABDE7A48843489C4AC9F70 /* TerminalViewCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalViewCache.swift; sourceTree = "<group>"; };
 		BC36ED99843A2E4B873D0239 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		BD0287D2E8B08AEF4C6E1573 /* SessionSceneView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionSceneView.swift; sourceTree = "<group>"; };
+		BDCE48AFC56E912B09E49BE5 /* THIRD_PARTY_NOTICES.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = THIRD_PARTY_NOTICES.md; sourceTree = "<group>"; };
 		BF3525BCE2B2B3E65AE0887C /* KeyPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyPickerView.swift; sourceTree = "<group>"; };
 		C14EE8935B2B5C8632A97382 /* HerdrCoreC.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = HerdrCoreC.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		C289650F4565C1664160B8C7 /* BicTermApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BicTermApp.swift; sourceTree = "<group>"; };
@@ -380,6 +393,7 @@
 		E20F350306A27C4DDBF8F31F /* CoderNet.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = CoderNet.xcframework; path = ".build-artifacts/coder-net/CoderNet.xcframework"; sourceTree = "<group>"; };
 		E351F531CA62BBB288D95D35 /* HerdrSessionModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HerdrSessionModelTests.swift; sourceTree = "<group>"; };
 		E76A6A24C5E64A49A72CDFDB /* BicTermCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = BicTermCore; path = BicTermCore; sourceTree = SOURCE_ROOT; };
+		F005B127B2DF46C5B957D558 /* HerdrMalformedServerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HerdrMalformedServerTests.swift; sourceTree = "<group>"; };
 		F123077951861D07B7A320ED /* HerdrShellSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HerdrShellSnapshot.swift; sourceTree = "<group>"; };
 		F17222FD7A4A8601CA498A49 /* client-08.bin */ = {isa = PBXFileReference; lastKnownFileType = archive.macbinary; path = "client-08.bin"; sourceTree = "<group>"; };
 		F4E11EA37839E114E930D8F5 /* CoderSessionInfoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoderSessionInfoView.swift; sourceTree = "<group>"; };
@@ -432,9 +446,11 @@
 			isa = PBXGroup;
 			children = (
 				6FCE349EC6A2A7D8747E3083 /* HerdrClipboardTests.swift */,
+				74F60D37FEBDD455D91D4E13 /* HerdrHostForgetTests.swift */,
 				CB3D657AB793560BEC6BD2B6 /* HerdrInstallBoundaryTests.swift */,
 				F68C1CF12D96AB8237975F22 /* HerdrKeyMapperTests.swift */,
 				D598EBB94B7574768E429DF3 /* HerdrLifecycleTests.swift */,
+				F005B127B2DF46C5B957D558 /* HerdrMalformedServerTests.swift */,
 				F76FD41694F4CDAAE862263B /* HerdrSessionInputTests.swift */,
 				E351F531CA62BBB288D95D35 /* HerdrSessionModelTests.swift */,
 			);
@@ -521,6 +537,7 @@
 				8A0F63FC52F713493041C7A4 /* HerdrClipboard.swift */,
 				32362DF061AC1CDA84057050 /* HerdrDiagnosticView.swift */,
 				9B748D518099038B17138289 /* HerdrEndpointModels.swift */,
+				24F7E941949207626421732D /* HerdrHostForget.swift */,
 				8D9D1C2F71B0437CD9DB34EA /* HerdrImagePasteSheet.swift */,
 				620FE45C0746A13B4FEE9E45 /* HerdrInputField.swift */,
 				73E6D2E46020F9CE2CD29B5E /* HerdrKeyMapper.swift */,
@@ -611,6 +628,7 @@
 		6005CA223B54958E02A8C6BC /* herdr */ = {
 			isa = PBXGroup;
 			children = (
+				BDCE48AFC56E912B09E49BE5 /* THIRD_PARTY_NOTICES.md */,
 				9D45BCDB097034E60A6172A6 /* herdr-protocol */,
 			);
 			path = herdr;
@@ -748,6 +766,7 @@
 		C261689BC13A8E654E78BB21 /* Settings */ = {
 			isa = PBXGroup;
 			children = (
+				814F0F0067B34FDA08E14624 /* AcknowledgementsView.swift */,
 				0D8D44A83957AC7F36D0CD8C /* SettingsView.swift */,
 			);
 			path = Settings;
@@ -756,6 +775,7 @@
 		CB1A3EB086A39058084CF601 /* BicTermTests */ = {
 			isa = PBXGroup;
 			children = (
+				24F354D58DDAB72A9A314802 /* AcknowledgementsTests.swift */,
 				0746BFF2E488F243F50E0AAA /* AgentApprovalFlowTests.swift */,
 				65A141C1EDE720FBAB0B6BE1 /* AppearanceRegressionTests.swift */,
 				2CA12AC5326AC0D61660DFA8 /* BuildFlavorTests.swift */,
@@ -768,6 +788,7 @@
 				3E697BC1DA79131B6ABEB364 /* ConnectionsModelRefreshTests.swift */,
 				3DCE34F57437B73C807EAA1F /* HostTrustFlowTests.swift */,
 				07569DAAA0643D6C78D17A7F /* KeyStoreImportTests.swift */,
+				05BA9618271D51D6B1E7C14A /* LogRedactionAuditTests.swift */,
 				47A9CE4CDE7BEF960A702E76 /* SessionSceneModelTests.swift */,
 				B6CDD916B160E5DD532DFF9D /* TerminalViewCacheTests.swift */,
 				143BB85C1338B366A0F8E113 /* Herdr */,
@@ -1079,6 +1100,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				91B95DF6B15808EED01E416B /* Assets.xcassets in Resources */,
+				843DF60B552B5DAD6ED8CC7B /* THIRD_PARTY_NOTICES.md in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1115,6 +1137,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B477D033555069A32F2F6F68 /* AcknowledgementsTests.swift in Sources */,
 				AE1EF5FE88AF38169C4DD554 /* AgentApprovalFlowTests.swift in Sources */,
 				4A45D7D97DCA09FAAF2B2948 /* AppearanceRegressionTests.swift in Sources */,
 				BC6DA94E2FF97089695962DA /* BuildFlavorTests.swift in Sources */,
@@ -1126,13 +1149,16 @@
 				9ADA2273199A30AF8983F9DC /* CoderStartPolicyTests.swift in Sources */,
 				6F7EE096E6DB447C83442D62 /* ConnectionsModelRefreshTests.swift in Sources */,
 				BAB6F7BA3234E1B0572B199A /* HerdrClipboardTests.swift in Sources */,
+				E0BDDD3026AC5B397EC8EB3F /* HerdrHostForgetTests.swift in Sources */,
 				2336288CC6BECF6AD19BBEF4 /* HerdrInstallBoundaryTests.swift in Sources */,
 				2FA93DCBF9724533AB178CD5 /* HerdrKeyMapperTests.swift in Sources */,
 				7DE2E79DEFAF2218B9E91050 /* HerdrLifecycleTests.swift in Sources */,
+				2815FADD7562B40760F5ED7D /* HerdrMalformedServerTests.swift in Sources */,
 				29EA00839B6F856C96130B9C /* HerdrSessionInputTests.swift in Sources */,
 				7CA3A16BB75FD6B3DC89BF59 /* HerdrSessionModelTests.swift in Sources */,
 				5B79C8BEA538915C4262F089 /* HostTrustFlowTests.swift in Sources */,
 				F3FE3FBADE8BD18959DBB69E /* KeyStoreImportTests.swift in Sources */,
+				F6A0BDED0EF1E2824AC41B62 /* LogRedactionAuditTests.swift in Sources */,
 				2B421D6B4B2B91F3A8CB2AD5 /* SessionSceneModelTests.swift in Sources */,
 				BFF410723B947099D87CFC8B /* TerminalViewCacheTests.swift in Sources */,
 			);
@@ -1142,6 +1168,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				88DF8424519F0BF4589423E5 /* AcknowledgementsView.swift in Sources */,
 				E6ABAFEEC96C0E7062B95DC5 /* AgentApprovalPresenter.swift in Sources */,
 				2BA02D5A778F36FBF9572667 /* AgentForwardingTransport.swift in Sources */,
 				A00B8FAF70580F7FF98A180E /* AppServices.swift in Sources */,
@@ -1167,6 +1194,7 @@
 				C79986612FDF4363FAB2D949 /* HerdrClipboard.swift in Sources */,
 				0434A321A011739A5791EF54 /* HerdrDiagnosticView.swift in Sources */,
 				FF936AEC1FF264B1DC7019F0 /* HerdrEndpointModels.swift in Sources */,
+				C3E6A74E792DE732C69700E0 /* HerdrHostForget.swift in Sources */,
 				B050F58E822076402366C793 /* HerdrImagePasteSheet.swift in Sources */,
 				E140DE83E75D6B42B570860A /* HerdrInputField.swift in Sources */,
 				FB203DFE41BF6F6A5EB1B693 /* HerdrKeyMapper.swift in Sources */,

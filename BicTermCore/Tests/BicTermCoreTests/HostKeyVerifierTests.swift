@@ -260,4 +260,8 @@ private actor InMemoryHostKeyStore: HostKeyStoreProtocol {
     func save(_ record: HostKeyRecord) async throws(PersistenceError) {
         records[record.identity] = record
     }
+
+    func forget(host: String, port: Int) async throws(PersistenceError) {
+        records[HostKeyIdentity(host: host, port: port)] = nil
+    }
 }

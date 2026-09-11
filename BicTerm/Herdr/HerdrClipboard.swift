@@ -22,6 +22,12 @@ struct HerdrClipboardSettings {
         defaults.set(enabled, forKey: key(for: endpoint))
     }
 
+    /// Per-host forget: removes the endpoint's stored opt-in so a re-added
+    /// host starts from the privacy-preserving default (OFF).
+    func forgetEndpoint(_ endpoint: HerdrEndpointID) {
+        defaults.removeObject(forKey: key(for: endpoint))
+    }
+
     private func key(for endpoint: HerdrEndpointID) -> String {
         "herdr.clipboard.autocopy.\(endpoint.rawValue)"
     }

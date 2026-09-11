@@ -257,6 +257,27 @@ fn oversized_input_rejected_custom_max() {
     );
 }
 
+#[test]
+fn hostile_container_length_claim_is_rejected_not_allocated() {
+    // Regression (fuzz `length_parse`): a small frame whose first String
+    // field claims a near-u64::MAX varint length must surface a Bincode
+    // error. The framing decode configuration's claim limit rejects the
+    // claim BEFORE bincode reserves container capacity — with the default
+    // no-limit configuration this input instead drove an out-of-range
+    // allocation request (petabyte-scale) inside the decoder.
+    let mut buf = 11u32.to_le_bytes().to_vec();
+    buf.push(20); // EndpointControl tag: first field is a String
+    buf.extend_from_slice(&[0xFF; 9]);
+    buf.push(0x01); // 10-byte varint claiming ~2^63 bytes
+
+    let result: Result<ServerMessage, FramingError> =
+        read_message(&mut buf.as_slice(), MAX_FRAME_SIZE);
+    assert!(
+        matches!(result, Err(FramingError::Bincode(_))),
+        "expected a Bincode error, got: {result:?}"
+    );
+}
+
 // ---- FrameData ↔ ratatui Buffer conversion ----
 
 /// A `Read` wrapper that yields at most `chunk_size` bytes per `read()` call,

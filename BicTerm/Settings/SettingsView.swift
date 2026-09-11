@@ -71,6 +71,18 @@ struct SettingsView: View {
                 .listRowBackground(colors.background)
                 .accessibilityIdentifier("settings-coder-servers")
             }
+
+            Section("About") {
+                NavigationLink {
+                    AcknowledgementsView()
+                } label: {
+                    Text("Acknowledgements")
+                        .font(typography.body)
+                        .foregroundColor(colors.foreground)
+                }
+                .listRowBackground(colors.background)
+                .accessibilityIdentifier("settings-acknowledgements")
+            }
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)

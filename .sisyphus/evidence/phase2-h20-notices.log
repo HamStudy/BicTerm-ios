@@ -1,0 +1,48 @@
+# THIRD_PARTY_NOTICES verification — T20 (build f9ac202-20260910-2030)
+Date: 2026-09-11T02:30:16Z
+
+## Generation
+command: cargo about generate --workspace about.hbs -o THIRD_PARTY_NOTICES.md (from Vendor/herdr)
+config: Vendor/herdr/about.toml (accepted licenses mirror deny.toml: Apache-2.0, MIT, Unicode-3.0, Unlicense)
+
+## Linked-crate diff (human-confirmed)
+cargo tree --locked --target aarch64-apple-ios --edges normal,build (external crates):
+25
+cargo about external crates:
+24
+about-only (acknowledged but not linked): NONE
+linked-only (linked but unacknowledged): NONE
+sim vs device graphs identical: yes
+local herdr crates in notices: herdr-protocol, herdr-client-core, herdr-ios-ffi (Apache-2.0)
+
+## Crate list acknowledged (cargo about, 27 entries)
+## base64 v0.22.1
+## bincode v2.0.1
+## block-buffer v0.10.4
+## cfg-if v1.0.4
+## cpufeatures v0.2.17
+## crypto-common v0.1.7
+## digest v0.10.7
+## generic-array v0.14.7
+## herdr-client-core v0.9.0
+## herdr-ios-ffi v0.9.0
+## herdr-protocol v0.9.0
+## itoa v1.0.18
+## libc v0.2.189
+## memchr v2.8.3
+## proc-macro2 v1.0.107
+## quote v1.0.47
+## serde v1.0.229
+## serde_core v1.0.229
+## serde_derive v1.0.229
+## serde_json v1.0.151
+## sha2 v0.10.9
+## syn v3.0.5
+## typenum v1.20.1
+## unicode-ident v1.0.24
+## unty v0.0.4
+## version_check v0.9.5
+## zmij v1.0.23
+
+## Conclusion
+Every crate resolved into either iOS production graph is acknowledged; zero unknown-license crates; cargo-about crate set == linked-crate set.

@@ -47,6 +47,22 @@ public actor SwiftDataHostKeyStore: HostKeyStoreProtocol {
         }
     }
 
+    public func forget(host: String, port: Int) async throws(PersistenceError) {
+        let identityKey = HostKeyIdentity(host: host, port: port).persistenceKey
+        do {
+            var descriptor = FetchDescriptor<StoredHostKeyRecord>(
+                predicate: #Predicate { $0.identityKey == identityKey }
+            )
+            descriptor.fetchLimit = 1
+            for stored in try modelContext.fetch(descriptor) {
+                modelContext.delete(stored)
+            }
+            try modelContext.save()
+        } catch {
+            throw .operationFailed("forget host key")
+        }
+    }
+
     private static func domainRecord(
         _ record: StoredHostKeyRecord
     ) throws(PersistenceError) -> HostKeyRecord {

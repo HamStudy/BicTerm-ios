@@ -7,18 +7,22 @@ struct ConnectionListView: View {
     @Environment(\.terminalSpacing) var spacing
     @State private var model = ConnectionsModel()
     @State private var editorTarget: EditorTarget?
+    @State private var forgetTarget: Connection?
     let onConnectRequested: (Connection) -> Void
     var onOpenSessions: (() -> Void)?
     var onClose: (() -> Void)?
+    var onForgetHost: ((Connection) -> Void)?
 
     init(
         onConnectRequested: @escaping (Connection) -> Void = { _ in },
         onOpenSessions: (() -> Void)? = nil,
-        onClose: (() -> Void)? = nil
+        onClose: (() -> Void)? = nil,
+        onForgetHost: ((Connection) -> Void)? = nil
     ) {
         self.onConnectRequested = onConnectRequested
         self.onOpenSessions = onOpenSessions
         self.onClose = onClose
+        self.onForgetHost = onForgetHost
     }
 
     struct EditorTarget: Identifiable {
@@ -76,6 +80,27 @@ struct ConnectionListView: View {
                     connect(connection)
                 }
                 .presentationDetents([.large])
+            }
+            .confirmationDialog(
+                "Forget host data for “\(forgetTarget?.name ?? "")”?",
+                isPresented: Binding(
+                    get: { forgetTarget != nil },
+                    set: { if !$0 { forgetTarget = nil } }
+                ),
+                titleVisibility: .visible
+            ) {
+                Button("Forget Host Data", role: .destructive) {
+                    if let target = forgetTarget {
+                        onForgetHost?(target)
+                    }
+                    forgetTarget = nil
+                }
+                .accessibilityIdentifier("confirm-forget-host")
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text(
+                    "This removes the saved host key (destination and jump hops), stored passwords for this connection, restorable sessions, and herdr settings for this host. The connection entry itself is kept; nothing on the remote host is changed."
+                )
             }
             .task {
                 await model.bootstrap()
@@ -160,6 +185,14 @@ struct ConnectionListView: View {
             }
             .tint(colors.accent)
             .accessibilityIdentifier("edit-\(sanitized(connection.name))")
+
+            Button {
+                forgetTarget = connection
+            } label: {
+                Label("Forget Host", systemImage: "eraser")
+            }
+            .tint(colors.dimmed)
+            .accessibilityIdentifier("forget-host-\(sanitized(connection.name))")
 
             if let coderStatus, coderStatus.isUnauthorized, let serverID = coderStatus.serverID {
                 Button {

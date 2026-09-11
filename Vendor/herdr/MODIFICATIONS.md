@@ -173,3 +173,17 @@ its external dependencies are ledgered here.
   transitive dependencies) for OSC 52 clipboard decoding in the client FFI.
   Re-run `check.sh` cargo-deny gates after any change here; the generated
   `LICENSE_INVENTORY.json` is the shipping inventory of record.
+
+## Framing decode claim limit (T20 hardening)
+
+- `herdr-protocol/src/framing.rs`: the framing-path payload decode now uses
+  `bincode::config::standard().with_limit::<MAX_GRAPHICS_FRAME_SIZE>()`
+  (exported as `framing_decode_config`/`FramingDecodeConfig`) instead of the
+  no-limit `standard()`. bincode 2.0.1 reserves container capacity from the
+  decoded length varint before reading elements and only enforces that
+  claim under a limiting configuration; without the limit, a hostile frame
+  could drive an out-of-range allocation request (found by the T20
+  `length_parse` fuzz target under ASAN). Wire format is unchanged — the
+  limit only rejects claims larger than the largest conforming frame.
+  Regression: `tests/upstream_framing.rs::
+  hostile_container_length_claim_is_rejected_not_allocated`.

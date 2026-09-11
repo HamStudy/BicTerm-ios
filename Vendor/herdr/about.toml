@@ -1,0 +1,9 @@
+# cargo-about configuration for the embedded Herdr core. The accepted list
+# mirrors Vendor/herdr/deny.toml's licenses.allow exactly: a license new to
+# the graph must be added to BOTH or the release audit fails.
+accepted = [
+    "Apache-2.0",
+    "MIT",
+    "Unicode-3.0",
+    "Unlicense",
+]

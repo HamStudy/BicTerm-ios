@@ -30,7 +30,10 @@ struct ConnectionListContainer: View {
 
             ConnectionListView(
                 onConnectRequested: handleConnect,
-                onOpenSessions: { switcherPresented = true }
+                onOpenSessions: { switcherPresented = true },
+                onForgetHost: { connection in
+                    Task { await forgetHostData(connection) }
+                }
             )
                 .sheet(item: $reauthenticationTarget) { target in
                     NavigationStack {
@@ -207,6 +210,17 @@ struct ConnectionListContainer: View {
             connection: entry.connection,
             initiatesReconnect: true
         ))
+    }
+
+    /// Per-host forget (T20): clears trust, stored passwords, restorable
+    /// sessions, and herdr settings for one host through the same stores
+    /// this container reads; the connection entry itself is kept.
+    private func forgetHostData(_ connection: Connection) async {
+        let service = HerdrHostForgetService(
+            dependencies: .live(sessionStore: store)
+        )
+        _ = await service.forget(connection: connection)
+        await reloadRestorableSessions()
     }
 
     /// On iPad every new session opens its own window, including narrow
