@@ -65,7 +65,68 @@ BicTerm (iOS app)
 └── Design/       Tokens, dark-first appearance
 ```
 
+## Dependencies
+
+External tools the build, test, and fixture chain needs. SwiftTerm 1.20.0 and
+swift-nio-ssh 0.15.0 are vendored under `Vendor/` and need no separate install;
+do not brew anything for them.
+
+| Tool | Minimum version | Why it's needed | Install (macOS) |
+|------|-----------------|-----------------|-----------------|
+| Xcode | 26, plus the iOS 26.3 simulator runtime | Builds the app; provides `xcodebuild`, `xcrun`, `clang`, `dsymutil`, and the simulators every script targets | Mac App Store or developer.apple.com, then `xcode-select --install` |
+| XcodeGen | 2.x | Generates `BicTerm.xcodeproj` from `project.yml`; required before any Xcode or `xcodebuild` run | `brew install xcodegen` |
+| Go | any recent release (the `CoderNet/go.mod` toolchain directive pins go1.26.5 and Go auto-downloads it) | Builds `CoderNet.xcframework` via `scripts/build-coder-net.sh` (`go build -buildmode=c-archive`); also builds the derp-proxy in `scripts/test-coder-derp.sh` | `brew install go` |
+| Python 3 | 3.9+ (stdlib only) | Runs the Coder API stub and UDS forwarder (`Fixtures/coder/stub.py`, `Fixtures/bin/uds-forward.py`) and the JSON/token helpers inside `fixtures-up.sh` and `coder-dev-up.sh` | Ships with the Xcode Command Line Tools; Homebrew alternative: `brew install python` |
+| Rust (rustup + cargo) | stable, with targets `aarch64-apple-ios` and `aarch64-apple-ios-sim` | Builds the herdr FFI core in `scripts/build-herdr-core.sh` and `Vendor/herdr/check.sh`. Both scripts override `RUSTUP_HOME` to the repo-local `.build-artifacts/rustup`, so add the targets with that env set: `RUSTUP_HOME=.build-artifacts/rustup rustup target add aarch64-apple-ios aarch64-apple-ios-sim` | `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \| sh` (or `brew install rustup-init` + `rustup-init`) |
+| cbindgen | pinned by `cargo install --locked` | Generates `HerdrCore.h`; `build-herdr-core.sh` installs it repo-locally into `.build-artifacts/tools/` on first run | No action needed |
+| cargo-deny | latest | License and advisory policy checks in `Vendor/herdr/check.sh` | `cargo install cargo-deny` |
+| jq | 1.6+ | License inventory assembly in `Vendor/herdr/check.sh` | `brew install jq` |
+| OpenSSH (`/usr/sbin/sshd`, `ssh`, `ssh-keygen`), `nc`, `curl`, `openssl`, `unzip` | system versions | SSH fixtures on ports 12222/12223, Coder binary download and password generation | Preinstalled on macOS; nothing to install |
+| Ruby | system Ruby (stdlib only) | Coder acceptance helpers (`scripts/*.rb`) | Preinstalled on macOS; nothing to install |
+| xcbeautify | any (optional) | Prettier `xcodebuild` output in `build-appstore.sh`, `test-core.sh`, `test-ui.sh`; all three fall back to raw logs when absent | `brew install xcbeautify` |
+| cargo-audit, cargo-fuzz | latest (optional, hardening only) | Advisory audits and the herdr fuzz targets under `Vendor/herdr/herdr-ios-ffi/fuzz/` (fuzz needs a nightly toolchain). Neither is installed on the current dev machine, and nothing in the normal build/test chain requires them | `cargo install cargo-audit cargo-fuzz` |
+
+### What each feature needs
+
+| Feature | Required tools |
+|---------|----------------|
+| Basic app build (`xcodegen generate`, open Xcode, build) | Xcode, XcodeGen |
+| Default flavor, scheme `BicTerm` (CoderNet tailnet tunnel) | Above, plus Go, then `scripts/build-coder-net.sh` |
+| AppStore flavor (`scripts/build-appstore.sh`) | Xcode, XcodeGen (xcbeautify optional). No Go, no tunnel core |
+| Test fixtures (`scripts/fixtures-up.sh`) | Python 3 and the preinstalled OpenSSH/curl tools |
+| Coder native dev fixture (`scripts/coder-dev-up.sh`) | Python 3, curl, openssl, unzip, system Ruby. The script downloads and sha256-verifies the pinned coder v2.36.4 binary itself; PostgreSQL is embedded in `coder server`, so there is no database to install |
+| herdr FFI build (`scripts/build-herdr-core.sh`) | Rust with both iOS targets (cbindgen self-installs) |
+| Hardening / SBOM (`Vendor/herdr/check.sh`, fuzz targets) | cargo-deny, jq; cargo-audit and cargo-fuzz for the optional audit/fuzz passes |
+
+Not required: Docker (no container is used anywhere in the fixture flow), and
+zig. The live herdr server fixture would need zig 0.15.x, which fails to link on
+macOS 26 (see "What Doesn't Work Yet"), but no build or test script invokes zig.
+
+### Common-case install
+
+```bash
+brew install xcodegen go python jq
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+RUSTUP_HOME=.build-artifacts/rustup rustup target add aarch64-apple-ios aarch64-apple-ios-sim
+cargo install cargo-deny   # only needed for Vendor/herdr/check.sh
+```
+
+### Verify your setup
+
+```bash
+xcodebuild -version      # Xcode 26+
+xcodegen --version       # 2.x
+go version               # any recent Go; go.mod pins the exact toolchain
+python3 --version        # 3.9+
+cargo --version          # rustup-managed stable
+RUSTUP_HOME=.build-artifacts/rustup rustup target list --installed | grep apple-ios   # both iOS targets
+jq --version
+/usr/sbin/sshd -? 2>&1 | head -1   # system sshd present
+```
+
 ## Building
+
+Install the tools above first: see [Dependencies](#dependencies).
 
 ```bash
 # Prerequisites: Xcode 26+, iOS 26.3 simulator runtime
@@ -79,6 +140,8 @@ scripts/build-appstore.sh    # AppStore-Release by default; pass AppStore-Debug 
 ```
 
 ## Testing
+
+The fixtures and suites below need the tools listed under [Dependencies](#dependencies).
 
 ```bash
 # Start local fixtures (sshd on 12222/12223, Coder stub on 18080)
@@ -94,7 +157,7 @@ scripts/test-ui.sh
 scripts/fixtures-down.sh
 ```
 
-## Dependencies
+## Vendored Libraries
 
 - [swift-nio-ssh](https://github.com/apple/swift-nio-ssh) 0.15.0 (Apache 2.0) — vendored fork with agent-forwarding patches
 - [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) 1.20.0 (MIT) — vendored fork
