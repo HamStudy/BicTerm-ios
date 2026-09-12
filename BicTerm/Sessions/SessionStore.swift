@@ -63,6 +63,11 @@ final class SessionStore {
     /// from the hardware keyboard, sticky explicit choice). One instance
     /// shared by every scene so a toggle applies to all windows at once.
     let terminalToolbar = TerminalToolbarModel()
+    /// App-global terminal font-size preference (default 14pt, persisted
+    /// explicit choice, 9–32pt in 0.5 steps). One instance shared by every
+    /// scene: pinch-to-zoom on any surface, or the Settings slider, resizes
+    /// every cached terminal at once (wired to the view cache in `init`).
+    let terminalFont = TerminalFontModel()
 
     private let hostKeyStore: (any HostKeyStoreProtocol)?
     private let connectionLookup: ConnectionLookup
@@ -142,6 +147,14 @@ final class SessionStore {
         } else {
             let store = AppServices.shared.connectionStore
             self.connectionLookup = { id in (try? await store.connection(id: id)) ?? nil }
+        }
+
+        // Font size: surfaces are created at the model's current size, and
+        // every applied change (pinch, Settings slider, reset) re-fonts all
+        // cached surfaces. Weak capture — both are store-lifetime objects.
+        viewCache.fontModel = terminalFont
+        terminalFont.onApplied = { [weak viewCache] size in
+            viewCache?.applyFontSize(size)
         }
 
         presenter.configureRouting { [weak self] bridgeSessionID in

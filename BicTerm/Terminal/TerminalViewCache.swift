@@ -21,7 +21,9 @@ final class TerminalSurface: NSObject, TerminalViewDelegate {
     init(
         output: AsyncStream<Data>,
         send: @escaping @Sendable (Data) -> Void,
-        onResize: @escaping @Sendable (_ cols: Int, _ rows: Int) -> Void
+        onResize: @escaping @Sendable (_ cols: Int, _ rows: Int) -> Void,
+        fontSize: Double = TerminalFontSettings.defaultSize,
+        fontModel: TerminalFontModel? = nil
     ) {
         self.sendBytes = send
         self.resizeTo = onResize
@@ -32,7 +34,9 @@ final class TerminalSurface: NSObject, TerminalViewDelegate {
             cursorStyle: .steadyBlock,
             scrollback: TerminalScrollback.maxLines
         )
-        let font = UIFont.monospacedSystemFont(ofSize: 14, weight: .regular)
+        // `fontSize` arrives pre-resolved by the (MainActor) cache: this
+        // initializer is nonisolated and cannot read the model directly.
+        let font = UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
         let view = TerminalContainerView(frame: .zero, font: font, options: options)
         self.view = view
         let hostView = TerminalToolbarHostView(terminalView: view)
@@ -50,6 +54,9 @@ final class TerminalSurface: NSObject, TerminalViewDelegate {
         view.hostedAccessory = hostView.accessoryView
         view.terminalDelegate = self
         view.accessibilityIdentifier = "terminalView"
+        // Installs pinch-to-zoom when a model is present (nil in tests that
+        // construct the cache directly).
+        view.fontModel = fontModel
 
         feedTask = Task { [weak view] in
             for await chunk in output {
@@ -68,6 +75,15 @@ final class TerminalSurface: NSObject, TerminalViewDelegate {
         feedTask = nil
         view.terminalDelegate = nil
         view.updateUiClosed()
+    }
+
+    /// Live font-size application: SwiftTerm's `font` setter rebuilds the
+    /// FontSet, recomputes the cell metrics (`resetFont`), resizes the
+    /// grid, and reports through `sizeChanged` — which reaches the remote
+    /// pty as an SSH window-change via this surface's `resizeTo` closure.
+    func applyFont(size: Double) {
+        guard view.font.pointSize != size else { return }
+        view.font = UIFont.monospacedSystemFont(ofSize: size, weight: .regular)
     }
 
     // MARK: - TerminalViewDelegate
@@ -130,6 +146,12 @@ final class TerminalViewCache {
     private var attachGenerations: [UUID: UInt64] = [:]
     private var evictedSessionIDs: Set<UUID> = []
 
+    /// Shared font-size model, set once by `SessionStore`: new surfaces are
+    /// created at its size with its pinch handler installed, and its
+    /// `onApplied` hook calls ``applyFontSize(_:)`` so a change from any
+    /// scene re-fonts every cached surface across all windows.
+    var fontModel: TerminalFontModel?
+
     let capacity: Int
 
     init(capacity: Int = 8) {
@@ -137,6 +159,16 @@ final class TerminalViewCache {
     }
 
     var cachedCount: Int { entries.count }
+
+    /// Re-fonts every live surface (attached or detached). SwiftTerm's font
+    /// setter recomputes cell metrics and resizes the grid, so each
+    /// surface's `sizeChanged` → `onResize` chain emits an SSH
+    /// window-change to its remote pty.
+    func applyFontSize(_ size: Double) {
+        for entry in entries.values {
+            entry.surface.applyFont(size: size)
+        }
+    }
 
     @discardableResult
     func attachSurface(for sessionID: UUID, model: SessionSceneModel) -> SurfaceAttachment {
@@ -153,7 +185,9 @@ final class TerminalViewCache {
         let surface = TerminalSurface(
             output: model.beginOutputStream(),
             send: { model.send($0) },
-            onResize: { cols, rows in model.resize(cols: cols, rows: rows) }
+            onResize: { cols, rows in model.resize(cols: cols, rows: rows) },
+            fontSize: fontModel?.size ?? TerminalFontSettings.defaultSize,
+            fontModel: fontModel
         )
         entries[sessionID] = Entry(
             surface: surface,

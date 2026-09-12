@@ -1,0 +1,96 @@
+import Foundation
+
+/// UserDefaults-backed persistence for the terminal font point size (same
+/// struct-over-UserDefaults convention as `HerdrClipboardSettings` /
+/// `TerminalToolbarSettings`). An absent key means the default size; every
+/// stored value is normalized (clamped, quantized) on write AND on read so
+/// a stale or foreign value can never produce a fractional-cell terminal.
+struct TerminalFontSettings {
+    static let defaultSize: Double = 14
+    static let minimumSize: Double = 9
+    static let maximumSize: Double = 32
+    /// Point-size granularity for pinch zoom and the Settings slider.
+    static let step: Double = 0.5
+
+    private let defaults: UserDefaults
+    private let key = "bicterm.terminal.fontSize"
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+    }
+
+    var size: Double {
+        guard let stored = defaults.object(forKey: key) as? Double else {
+            return Self.defaultSize
+        }
+        return Self.normalize(stored)
+    }
+
+    func setSize(_ size: Double) {
+        defaults.set(Self.normalize(size), forKey: key)
+    }
+
+    /// Drops the stored size; the next read returns the default.
+    func reset() {
+        defaults.removeObject(forKey: key)
+    }
+
+    /// Clamps to 9...32 and quantizes to 0.5pt steps (nearest, halves away
+    /// from zero). Pure — shared by the pinch handler, the Settings slider,
+    /// and persistence reads/writes.
+    static func normalize(_ size: Double) -> Double {
+        guard size.isFinite else { return defaultSize }
+        let clamped = min(max(size, minimumSize), maximumSize)
+        return (clamped / step).rounded() * step
+    }
+}
+
+/// App-global terminal font-size preference: the single write path behind
+/// pinch-to-zoom (UIKit gesture on the terminal surface) and the Settings
+/// slider (SwiftUI). One instance shared by every scene, so a change applies
+/// to all open terminal surfaces at once via `onApplied` (wired to
+/// ``TerminalViewCache/applyFontSize(_:)`` by `SessionStore`). On iPad,
+/// several windows may pinch independently — they all write this one
+/// persisted pref, so concurrent gestures resolve last-write-wins.
+///
+/// Deliberately INDEPENDENT of Dynamic Type: the terminal is a fixed
+/// character grid, not body text — the user's point-size choice must not be
+/// re-scaled by the system text-size preference.
+@MainActor
+@Observable
+final class TerminalFontModel {
+    private var settings: TerminalFontSettings
+
+    /// Current point size (always normalized). SwiftUI observes this;
+    /// UIKit reads it at pinch-gesture start.
+    private(set) var size: Double
+
+    /// Fires after every APPLIED change (already normalized) so the view
+    /// cache can re-font live surfaces. Untracked by Observation: it is a
+    /// wiring hook, not view state.
+    @ObservationIgnored var onApplied: ((Double) -> Void)?
+
+    init(settings: TerminalFontSettings = TerminalFontSettings()) {
+        self.settings = settings
+        self.size = settings.size
+    }
+
+    /// Normalizes, persists, publishes, and notifies the cache. No-op when
+    /// the normalized value equals the current size (pinch `.changed` events
+    /// between 0.5pt steps land here constantly).
+    func setSize(_ newSize: Double) {
+        let normalized = TerminalFontSettings.normalize(newSize)
+        guard normalized != size else { return }
+        size = normalized
+        settings.setSize(normalized)
+        onApplied?(normalized)
+    }
+
+    /// Back to the default size; clears the persisted value.
+    func reset() {
+        settings.reset()
+        guard size != TerminalFontSettings.defaultSize else { return }
+        size = TerminalFontSettings.defaultSize
+        onApplied?(size)
+    }
+}

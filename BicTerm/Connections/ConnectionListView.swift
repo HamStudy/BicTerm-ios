@@ -12,13 +12,18 @@ struct ConnectionListView: View {
     var onOpenSessions: (() -> Void)?
     var onClose: (() -> Void)?
     var onForgetHost: ((Connection) -> Void)?
+    /// Shared font-size preference handed to the Settings screen (the
+    /// Appearance row shows its live value; the detail screen edits it).
+    let fontModel: TerminalFontModel
 
     init(
+        fontModel: TerminalFontModel,
         onConnectRequested: @escaping (Connection) -> Void = { _ in },
         onOpenSessions: (() -> Void)? = nil,
         onClose: (() -> Void)? = nil,
         onForgetHost: ((Connection) -> Void)? = nil
     ) {
+        self.fontModel = fontModel
         self.onConnectRequested = onConnectRequested
         self.onOpenSessions = onOpenSessions
         self.onClose = onClose
@@ -68,7 +73,7 @@ struct ConnectionListView: View {
                     }
                 }
                 ToolbarItem(placement: .topBarLeading) {
-                    NavigationLink(destination: SettingsView()) {
+                    NavigationLink(destination: SettingsView(fontModel: fontModel)) {
                         Image(systemName: "gear")
                             .foregroundColor(colors.accent)
                     }

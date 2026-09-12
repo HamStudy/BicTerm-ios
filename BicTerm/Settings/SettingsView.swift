@@ -5,6 +5,10 @@ struct SettingsView: View {
     @Environment(\.terminalTypography) var typography
     @Environment(\.terminalSpacing) var spacing
 
+    /// The shared terminal font-size preference; the Appearance row shows
+    /// its live value and the detail screen edits it.
+    let fontModel: TerminalFontModel
+
     var body: some View {
         List {
             Section("Appearance") {
@@ -19,16 +23,21 @@ struct SettingsView: View {
                 }
                 .listRowBackground(colors.background)
 
-                HStack {
-                    Text("Font Size")
-                        .font(typography.body)
-                        .foregroundColor(colors.foreground)
-                    Spacer()
-                    Text("14pt")
-                        .font(typography.body)
-                        .foregroundColor(colors.dimmed)
+                NavigationLink {
+                    FontSizeSettingsView(fontModel: fontModel)
+                } label: {
+                    HStack {
+                        Text("Font Size")
+                            .font(typography.body)
+                            .foregroundColor(colors.foreground)
+                        Spacer()
+                        Text(FontSizeSettingsView.label(for: fontModel.size))
+                            .font(typography.body)
+                            .foregroundColor(colors.dimmed)
+                    }
                 }
                 .listRowBackground(colors.background)
+                .accessibilityIdentifier("settings-font-size")
             }
 
             Section("Security") {

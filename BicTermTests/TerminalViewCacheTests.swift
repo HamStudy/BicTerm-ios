@@ -158,6 +158,32 @@ final class TerminalViewCacheTests: XCTestCase {
         XCTAssertFalse(gamma.model.scrollbackReleased, "newest entry must survive")
     }
 
+    /// Font-size live-apply: the store's `terminalFont` model is wired to
+    /// the cache, so an applied change re-fonts every cached surface and
+    /// newly attached surfaces start at the current size. (The store's
+    /// model persists to `.standard`; reset before and after so simulator
+    /// state can never leak between runs.)
+    func testFontSizeChangeRefontsCachedAndNewSurfaces() throws {
+        let store = makeStore()
+        store.terminalFont.reset()
+        defer { store.terminalFont.reset() }
+
+        let alpha = try makeAttachedModel(store: store, name: "Alpha")
+        let beta = try makeAttachedModel(store: store, name: "Beta")
+        XCTAssertEqual(alpha.surface.view.font.pointSize, 14)
+        XCTAssertEqual(beta.surface.view.font.pointSize, 14)
+
+        store.terminalFont.setSize(20)
+        XCTAssertEqual(alpha.surface.view.font.pointSize, 20, "attached surface must re-font live")
+        XCTAssertEqual(beta.surface.view.font.pointSize, 20, "every cached surface must re-font")
+
+        let gamma = try makeAttachedModel(store: store, name: "Gamma")
+        XCTAssertEqual(gamma.surface.view.font.pointSize, 20, "new surfaces start at the current size")
+
+        store.terminalFont.reset()
+        XCTAssertEqual(alpha.surface.view.font.pointSize, 14, "reset must re-font back to default")
+    }
+
     /// The switcher's stable listing: sessions appear in opening order and
     /// disappear on close.
     func testOrderedDescriptorsTrackOpenAndClose() async throws {

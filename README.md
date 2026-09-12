@@ -58,6 +58,16 @@ An iOS 18+ SSH terminal client for iPhone and iPad, built on
 - When shown, the strip participates in layout — the terminal shrinks by the
   strip's height, so it never covers the terminal's bottom row.
 
+### Terminal font size
+
+- **Pinch-to-zoom on any terminal surface** rescales the font live (9–32pt
+  in 0.5pt steps), and **Settings → Appearance → Font Size** offers the same
+  range via slider with a monospace preview and Reset to Default. The choice
+  is persisted and applies immediately to every open session in every window
+  (the font change recomputes the grid and emits an SSH window-change to the
+  remote pty). Terminal font size is deliberately independent of Dynamic
+  Type — the terminal is a fixed character grid, not body text.
+
 ## What Doesn't Work Yet
 
 - **Live herdr-server validation on this dev host** — building the herdr v0.9.0 server fixture needs zig 0.15.x, which fails to link libSystem on macOS 26 (toolchain-vs-host issue, not an app defect). Persistence and lifecycle tests currently run against committed-frame replay. See `.omo/evidence/phase2-h16-server-fixture.md`.

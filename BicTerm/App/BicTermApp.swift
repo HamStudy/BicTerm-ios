@@ -61,6 +61,7 @@ private struct TerminalWindowRoot: View {
         .terminalStyle()
         .sheet(isPresented: $listPresented) {
             ConnectionListView(
+                fontModel: store.terminalFont,
                 onConnectRequested: { connection in
                     listPresented = false
                     let descriptor = store.openSession(for: connection)

@@ -47,8 +47,15 @@ struct TerminalRepresentable: UIViewRepresentable {
     let onResize: @Sendable (_ cols: Int, _ rows: Int) -> Void
 
     /// Font point size for the terminal (SF Mono via monospacedSystemFont,
-    /// matching the T6 `TerminalTypography` monospaced design).
+    /// matching the T6 `TerminalTypography` monospaced design). Overridden
+    /// by ``fontModel``'s live size when a model is attached.
     var fontSize: CGFloat = 14
+
+    /// Live font-size model: when set, the view starts at the model's size
+    /// and a pinch gesture on the terminal zooms the font (persisted,
+    /// applied to every surface through the model). Nil in previews/tests
+    /// that don't opt in.
+    var fontModel: TerminalFontModel? = nil
 
     var cursorStyle: CursorStyle = .blinkBlock
 
@@ -63,8 +70,10 @@ struct TerminalRepresentable: UIViewRepresentable {
             cursorStyle: cursorStyle,
             scrollback: TerminalScrollback.maxLines
         )
-        let font = UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
+        let resolvedSize = fontModel.map { CGFloat($0.size) } ?? fontSize
+        let font = UIFont.monospacedSystemFont(ofSize: resolvedSize, weight: .regular)
         let view = TerminalContainerView(frame: .zero, font: font, options: options)
+        view.fontModel = fontModel
 
         // Hardware keyboard: Option acts as Meta (ESC-prefix) — the T12
         // contract. (SwiftTerm defaults this to true; set explicitly.)
@@ -182,11 +191,54 @@ final class TerminalCoordinator: NSObject, TerminalViewDelegate {
 /// - Grabs first responder status when attached to a window so a
 ///   hardware keyboard (UIKey presses) are delivered to the terminal
 ///   without requiring a tap first.
+/// - Pinch-to-zoom on the surface rescales the font through
+///   ``TerminalFontModel`` (installed via ``fontModel``; nil keeps the
+///   surface fixed-size). SwiftTerm ships no pinch gesture, so nothing
+///   conflicts; the vendored fork is untouched.
 final class TerminalContainerView: TerminalView {
+    /// The shared font-size model this surface pinches into. Setting it
+    /// installs the pinch recognizer; the surface also re-fonts live when
+    /// the model changes through any OTHER path (Settings slider, another
+    /// window's pinch) via the cache's `applyFontSize`.
+    var fontModel: TerminalFontModel? {
+        didSet {
+            guard fontModel != nil, pinchRecognizer == nil else { return }
+            let pinch = UIPinchGestureRecognizer(target: self, action: #selector(handleFontPinch(_:)))
+            addGestureRecognizer(pinch)
+            pinchRecognizer = pinch
+        }
+    }
+
+    private var pinchRecognizer: UIPinchGestureRecognizer?
+    /// Point size captured at pinch start; the gesture's absolute scale
+    /// multiplies it, so quantization steps the size in 0.5pt increments
+    /// as the pinch grows (no per-event re-anchoring needed).
+    private var pinchStartSize = TerminalFontSettings.defaultSize
+
     override func didMoveToWindow() {
         super.didMoveToWindow()
         if window != nil, !isFirstResponder {
             becomeFirstResponder()
+        }
+    }
+
+    /// Main thread (gesture delivery), same actor as the model. Only the
+    /// normalized result is written, so inter-step `.changed` events are
+    /// cheap no-ops.
+    @objc private func handleFontPinch(_ recognizer: UIPinchGestureRecognizer) {
+        // TerminalContainerView sits under SwiftTerm's preconcurrency
+        // TerminalView, so this @objc callback is statically nonisolated;
+        // UIKit delivers gesture actions on the main thread.
+        MainActor.assumeIsolated {
+            guard let fontModel else { return }
+            switch recognizer.state {
+            case .began:
+                pinchStartSize = fontModel.size
+            case .changed:
+                fontModel.setSize(pinchStartSize * Double(recognizer.scale))
+            default:
+                break
+            }
         }
     }
 

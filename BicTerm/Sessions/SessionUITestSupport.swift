@@ -13,6 +13,7 @@ import SwiftUI
 ///   --uitest-open-session-after <n>:<sec>  open a second-wave session after a delay
 ///   --uitest-session-command <cmd>         send cmd to each opened session once active ({NAME} substituted)
 ///   --uitest-keep-toolbar-pref             keep the persisted toolbar visibility choice (relaunch tests)
+///   --uitest-keep-font-pref                keep the persisted terminal font size (persistence tests)
 enum TerminalSceneUITest {
     static var seamsEnabled: Bool {
         ProcessInfo.processInfo.arguments.contains("--uitest-sessions")
@@ -65,6 +66,12 @@ enum SessionUITestDriver {
         // unless the test deliberately exercises persistence.
         if !arguments.contains("--uitest-keep-toolbar-pref") {
             store.terminalToolbar.clearExplicitChoice()
+        }
+
+        // Same for the app-global terminal font size: back to the 14pt
+        // default unless the test deliberately exercises persistence.
+        if !arguments.contains("--uitest-keep-font-pref") {
+            store.terminalFont.reset()
         }
 
         let command = TerminalSceneUITest.value(after: "--uitest-session-command")
