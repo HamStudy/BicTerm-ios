@@ -94,7 +94,7 @@ final class HerdSessionCoordinatorTests: XCTestCase {
     private func endpoint(
         _ herd: Herd, _ connection: Connection
     ) -> HerdrEndpointID {
-        BicTerm.HerdSessionCoordinator.HerdDescriptor.endpointID(
+        BicTerm.HerdDescriptor.endpointID(
             herdID: herd.id, connectionID: connection.id
         )
     }
@@ -252,7 +252,7 @@ final class HerdSessionCoordinatorTests: XCTestCase {
 
         defaults.set(
             beta.id.uuidString,
-            forKey: HerdSessionCoordinator.selectionKey(herdID: herd.id)
+            forKey: BicTerm.HerdDescriptor.selectionKey(herdID: herd.id)
         )
 
         let connect: HerdSessionCoordinator.MachineConnect = { connection, _ in
@@ -296,7 +296,7 @@ final class HerdSessionCoordinatorTests: XCTestCase {
         coordinator.select(alphaMachine, in: model)
         XCTAssertEqual(model.selectedEndpointID, alphaEndpoint)
         XCTAssertEqual(
-            defaults.string(forKey: HerdSessionCoordinator.selectionKey(herdID: herd.id)),
+            defaults.string(forKey: BicTerm.HerdDescriptor.selectionKey(herdID: herd.id)),
             alpha.id.uuidString,
             "the user's switch persists as the herd's last-selected machine"
         )
@@ -489,5 +489,54 @@ private actor SpyConnectionStore: ConnectionStoreProtocol {
     func deleteConnection(id: UUID) async throws(PersistenceError) {
         deleteCalls += 1
         storage[id] = nil
+    }
+}
+
+extension HerdSessionCoordinatorTests {
+    /// Two endpoints through the real FFI in one model: input must be
+    /// accepted on BOTH endpoints once each surface commits (the live E2E
+    /// observed `inputFrozen` on the first-connected machine).
+    func testTwoEndpointsBothAcceptInputAfterFence() async throws {
+        let alpha = try makeConnection(name: "Alpha")
+        let beta = try makeConnection(name: "Beta")
+        let herd = try makeHerd(connections: [alpha, beta])
+        let script = try fenceScript()
+
+        let coordinator = HerdSessionCoordinator(
+            center: center,
+            defaults: defaults,
+            connectMachine: { _, _ in
+                HerdrReplayTransport(script: script)
+            },
+            lookupConnection: { id in
+                [alpha, beta].first { $0.id == id }
+            }
+        )
+        coordinator.open(herd, hostKeyVerifier: nil) { _ in }
+        let entry = try await firstEntry()
+        let model = entry.model
+        let alphaEndpoint = endpoint(herd, alpha)
+        let betaEndpoint = endpoint(herd, beta)
+
+        let ready = await waitUntil(timeout: 10) {
+            (model.endpoints[alphaEndpoint]?.surface != nil
+                && model.endpoints[alphaEndpoint]?.phase == .online
+                && model.endpoints[betaEndpoint]?.surface != nil
+                && model.endpoints[betaEndpoint]?.phase == .online)
+        }
+        XCTAssertTrue(ready)
+        try? await Task.sleep(for: .milliseconds(300))
+
+        model.sendText("a", endpoint: alphaEndpoint)
+        model.sendText("b", endpoint: betaEndpoint)
+        try? await Task.sleep(for: .milliseconds(600))
+
+        for line in model.debugInputEcho {
+            print("ECHO-LINE: \(line)")
+        }
+        XCTAssertFalse(
+            model.debugInputEcho.contains { $0.contains("frozen") },
+            "neither endpoint's input lane may stay frozen after its fence: \(model.debugInputEcho)"
+        )
     }
 }

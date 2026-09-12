@@ -108,18 +108,9 @@ struct ConnectionListContainer: View {
         }
         .fullScreenCover(item: $herdrCoverSession) { cover in
             if let entry = HerdrWorkspaceCenter.shared.entry(id: cover.id) {
-                HerdrWorkspaceView(
-                    model: entry.model,
-                    endpointLabel: entry.label,
-                    onClose: {
-                        Task {
-                            await HerdrWorkspaceCenter.shared.close(id: entry.id)
-                        }
-                        herdrCoverSession = nil
-                    }
-                )
-                .id(entry.id)
-                .terminalStyle()
+                herdrWorkspace(for: entry)
+                    .id(entry.id)
+                    .terminalStyle()
             }
         }
         .sheet(
@@ -223,6 +214,36 @@ struct ConnectionListContainer: View {
             hostKeyVerifier: store.hostKeyVerifier,
             present: { sessionID in presentHerdr(sessionID: sessionID) }
         )
+    }
+
+    @ViewBuilder
+    private func herdrWorkspace(for entry: HerdrWorkspaceCenter.Entry) -> some View {
+        if let herd = entry.herd {
+            HerdWorkspaceChromeView(
+                model: entry.model,
+                herd: herd,
+                onClose: {
+                    Task {
+                        await HerdrWorkspaceCenter.shared.close(id: entry.id)
+                    }
+                    herdrCoverSession = nil
+                },
+                onSelectMachine: { machine in
+                    herdConnect.select(machine, in: entry.model)
+                }
+            )
+        } else {
+            HerdrWorkspaceView(
+                model: entry.model,
+                endpointLabel: entry.label,
+                onClose: {
+                    Task {
+                        await HerdrWorkspaceCenter.shared.close(id: entry.id)
+                    }
+                    herdrCoverSession = nil
+                }
+            )
+        }
     }
 
     /// Herdr sessions present through the same path as SSH sessions: their

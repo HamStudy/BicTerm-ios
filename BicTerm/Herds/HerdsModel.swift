@@ -128,7 +128,7 @@ final class HerdsModel {
             await seedHerd(
                 name: "Fixture Herd",
                 machineConnectionNames: ["Herd Alpha", "Herd Beta"],
-                sessionNames: ["alpha", "beta"]
+                sessionNames: [nil, nil]
             )
         }
 

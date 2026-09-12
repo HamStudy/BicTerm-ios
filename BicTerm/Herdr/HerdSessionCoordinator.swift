@@ -12,26 +12,7 @@ import Observation
 @MainActor
 @Observable
 final class HerdSessionCoordinator {
-    struct MachineDescriptor: Identifiable, Sendable, Equatable {
-        let endpointID: HerdrEndpointID
-        let connectionID: UUID
-        let label: String
-        let sessionName: String?
-
-        var id: String { endpointID.rawValue }
-    }
-
-    struct HerdDescriptor: Sendable, Equatable {
-        let herdID: UUID
-        let herdName: String
-        let machines: [MachineDescriptor]
-
-        static func endpointID(herdID: UUID, connectionID: UUID) -> HerdrEndpointID {
-            HerdrEndpointID(
-                rawValue: "herd/\(herdID.uuidString)/machine/\(connectionID.uuidString)"
-            )
-        }
-    }
+    typealias MachineDescriptor = HerdMachineDescriptor
 
     struct TrustPrompt: Identifiable {
         let id = UUID()
@@ -94,11 +75,11 @@ final class HerdSessionCoordinator {
         inFlightHerds.insert(herd.id)
 
         Task { @MainActor in
-            var machines: [MachineDescriptor] = []
+            var machines: [HerdMachineDescriptor] = []
             var resolvable: [(machine: HerdMachine, connection: Connection)] = []
             for machine in herd.machines {
                 let connection = await lookupConnection(machine.connectionID)
-                machines.append(MachineDescriptor(
+                machines.append(HerdMachineDescriptor(
                     endpointID: HerdDescriptor.endpointID(
                         herdID: herd.id, connectionID: machine.connectionID
                     ),
@@ -120,10 +101,21 @@ final class HerdSessionCoordinator {
                 return
             }
             let model = entry.model
-            let restored = restoredSelection(for: herd.id, machines: machines)
+            let restored = descriptor.restoredSelection(defaults: defaults)
             model.selectedEndpointID = restored?.endpointID
             if let endpoint = restored?.endpointID {
                 selections[herd.id] = endpoint
+            }
+            // Connectable machines read Connecting from the moment the
+            // workspace opens; only orphaned machines (no resolvable
+            // connection) render Offline with no endpoint state at all.
+            for item in resolvable {
+                let endpointID = HerdDescriptor.endpointID(
+                    herdID: herd.id, connectionID: item.machine.connectionID
+                )
+                if model.endpoints[endpointID] == nil {
+                    model.endpoints[endpointID] = HerdrEndpointState()
+                }
             }
             present(sessionID)
 
@@ -223,38 +215,12 @@ final class HerdSessionCoordinator {
     /// User-driven machine switch: updates surface interest immediately and
     /// persists the choice as this herd's last-selected machine.
     func select(_ machine: MachineDescriptor, in model: HerdrSessionModel) {
-        guard let herdID = herdID(for: model) else { return }
-        selections[herdID] = machine.endpointID
-        model.selectedEndpointID = machine.endpointID
-        defaults.set(
-            machine.connectionID.uuidString,
-            forKey: Self.selectionKey(herdID: herdID)
-        )
-        #if DEBUG
-        model.debugRecordEcho("chip:\(machine.label)")
-        #endif
+        guard let herd = center.entries.first(where: { $0.model === model })?.herd
+        else { return }
+        selections[herd.herdID] = machine.endpointID
+        herd.apply(machine, in: model, defaults: defaults)
     }
 
-    private func herdID(for model: HerdrSessionModel) -> UUID? {
-        center.entries.first { $0.model === model }?.herd?.herdID
-    }
-
-    private func restoredSelection(
-        for herdID: UUID,
-        machines: [MachineDescriptor]
-    ) -> MachineDescriptor? {
-        let persisted = defaults.string(forKey: Self.selectionKey(herdID: herdID))
-            .flatMap(UUID.init(uuidString:))
-        if let persisted,
-           let machine = machines.first(where: { $0.connectionID == persisted }) {
-            return machine
-        }
-        return machines.first
-    }
-
-    static func selectionKey(herdID: UUID) -> String {
-        "herd.selectedMachine.\(herdID.uuidString)"
-    }
 
     /// The machine's herd-local session name fully overrides whatever the
     /// underlying connection carries; nil falls back to the connection's.

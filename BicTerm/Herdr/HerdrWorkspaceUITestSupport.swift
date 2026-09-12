@@ -282,7 +282,10 @@ enum HerdrWorkspaceUITest {
     /// model's SELECTED endpoint, so the spec's first text token lands on
     /// the machine the herd restored as selected. Later tokens can gate on
     /// `await:echo:chip:<label>` — selection switches record into the same
-    /// echo surface the injector polls.
+    /// echo surface the injector polls. The settle window keeps the first
+    /// text token out of the FFI's presentation-fence freeze (input opens
+    /// with the ready control, well after the first online+surface
+    /// observation).
     @MainActor
     static func startHerdInjectionWhenReady(model: HerdrSessionModel) {
         guard liveConnectEnabled, keyInjector == nil else { return }
@@ -291,12 +294,18 @@ enum HerdrWorkspaceUITest {
         keyInjector = injector
         Task { @MainActor in
             let deadline = Date().addingTimeInterval(90)
+            var settledSince: Date?
             while Date() < deadline {
                 if let id = model.selectedEndpointID,
                    let state = model.endpoints[id],
                    state.phase == .online, state.surface != nil {
-                    injector.startNow()
-                    return
+                    if let since = settledSince, Date().timeIntervalSince(since) >= 3.5 {
+                        injector.startNow()
+                        return
+                    }
+                    if settledSince == nil { settledSince = Date() }
+                } else {
+                    settledSince = nil
                 }
                 try? await Task.sleep(for: .milliseconds(200))
             }

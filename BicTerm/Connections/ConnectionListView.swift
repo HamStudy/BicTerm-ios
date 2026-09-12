@@ -266,9 +266,7 @@ struct ConnectionListView: View {
             }
             .padding(.vertical, spacing.xxs)
         }
-        .buttonStyle(.plain)
         .accessibilityIdentifier("herd-\(sanitized(herd.name))")
-        .accessibilityLabel("\(herd.name), \(herds.statusSummary(for: herd))")
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             Button(role: .destructive) {
                 Task { await herds.delete(herd) }

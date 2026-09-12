@@ -173,6 +173,8 @@ final class ConnectionsModel {
     //   --uitest-unavailable-connection  seed a known but unregistered protocol
     //   --uitest-herdr-connection        seed a herdr-enabled fixture connection
     //                                     (port via --uitest-herdr-connection-port)
+    //   --uitest-herd-e2e                seed the Herd Alpha/Beta machine
+    //                                     connections for the herd live E2E
 
     #if DEBUG
     private func runUITestHooksIfRequested() async {
@@ -183,6 +185,7 @@ final class ConnectionsModel {
             || arguments.contains("--uitest-demo-editor")
             || arguments.contains("--uitest-unavailable-connection")
             || arguments.contains("--uitest-herdr-connection")
+            || arguments.contains("--uitest-herd-e2e")
         else { return }
 
         if arguments.contains("--uitest-reset") || arguments.contains("--uitest-unavailable-connection") {
@@ -203,6 +206,9 @@ final class ConnectionsModel {
         }
         if arguments.contains("--uitest-herdr-connection") {
             await seedHerdrConnection()
+        }
+        if arguments.contains("--uitest-herd-e2e") {
+            await seedHerdE2EConnections()
         }
     }
 
@@ -298,6 +304,28 @@ final class ConnectionsModel {
             protocolOptions: options
         ) else { return }
         try? await services.connectionStore.save(connection)
+    }
+
+    /// Seeds the two plain SSH connections the herd live E2E uses as
+    /// machines: one per fixture sshd port (herd machines do not need the
+    /// per-connection herdr toggle — the herd path always opens herdr).
+    private func seedHerdE2EConnections() async {
+        let existing = (try? await services.connectionStore.loadConnections()) ?? []
+        let keys = (try? await services.keyRepository.list()) ?? []
+        let keyReference = keys.first { $0.label == "Fixture Ed25519" }?.reference
+            ?? keys.first?.reference ?? "seed-key-missing"
+        for (name, port) in [("Herd Alpha", 12222), ("Herd Beta", 12223)] {
+            guard !existing.contains(where: { $0.name == name }) else { continue }
+            guard let connection = try? Connection(
+                name: name,
+                type: .ssh,
+                host: "127.0.0.1",
+                port: port,
+                username: SessionFixtureSeeder.fixtureUsername(),
+                keyReference: keyReference
+            ) else { continue }
+            try? await services.connectionStore.save(connection)
+        }
     }
 
     private func fixtureKeyRepository() -> KeychainKeyRepository? {

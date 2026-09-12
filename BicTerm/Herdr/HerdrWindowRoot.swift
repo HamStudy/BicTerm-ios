@@ -15,20 +15,40 @@ struct HerdrWindowRoot: View {
         Group {
             if let windowSessionID,
                let entry = center.entry(id: windowSessionID) {
-                HerdrWorkspaceView(
-                    model: entry.model,
-                    endpointLabel: entry.label,
-                    onClose: {
-                        Task {
-                            await center.close(id: entry.id)
-                        }
-                    }
-                )
-                .id(entry.id)
+                herdrWorkspace(for: entry)
+                    .id(entry.id)
             } else {
                 ConnectionListContainer(store: store)
             }
         }
         .terminalStyle()
+    }
+
+    @ViewBuilder
+    private func herdrWorkspace(for entry: HerdrWorkspaceCenter.Entry) -> some View {
+        if let herd = entry.herd {
+            HerdWorkspaceChromeView(
+                model: entry.model,
+                herd: herd,
+                onClose: {
+                    Task {
+                        await center.close(id: entry.id)
+                    }
+                },
+                onSelectMachine: { machine in
+                    herd.apply(machine, in: entry.model)
+                }
+            )
+        } else {
+            HerdrWorkspaceView(
+                model: entry.model,
+                endpointLabel: entry.label,
+                onClose: {
+                    Task {
+                        await center.close(id: entry.id)
+                    }
+                }
+            )
+        }
     }
 }
