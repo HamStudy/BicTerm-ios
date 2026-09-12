@@ -18,11 +18,43 @@ An iOS 18+ SSH terminal client for iPhone and iPad, built on
 - **ProxyJump / jump chains** up to 5 hops with per-hop host-key verification
 - **TOFU host-key trust** — fingerprint prompt on first connect, hard reject on changed keys
 - **In-app SSH agent** with per-request authorization, session cache, auto-deny when backgrounded
-- **Terminal UI** — SwiftTerm-based, hardware keyboard, IME/CJK composition, multi-window on iPad
+- **Terminal UI** — SwiftTerm-based, hardware keyboard, IME/CJK composition, multi-window on iPad with freeform resizing (iPadOS 26 classifies the app as continuously resizable — drag the window's corner grip to any size or aspect ratio; declared via the orientation arrays in the xcodegen-generated `BicTerm/Info.plist`, guarded by `BicTermUITests/FreeformResizeUITests.swift`)
 - **Multiple concurrent sessions** — session switcher with detach/reattach that preserves terminal state, on iPhone and iPad
 - **Graceful reconnect** — background suspends, foreground re-handshakes; no auto-reconnect after kill
 - **Herdr client** — workspace handshake, native surface rendering, semantic keyboard/focus/resize input, clipboard text and bounded image paste, probe diagnostics, detach/reconnect
 - **Transport abstraction** — SSH is one conformer; ET/mosh can be added later without touching session layers
+
+### Terminal mouse and clipboard
+
+- Mouse-aware SSH applications can request X10, normal (1000), button-motion
+  (1002), or any-motion (1003) reporting, including SGR (1006). Primary
+  touch/pointer presses, drags, and releases use the existing terminal input
+  path. Pointer hover is reported only in any-motion mode. Vertical wheel and
+  two-finger scrolling are translated into wheel-button reports.
+- With mouse reporting off, double-tap a word or long-press and choose **Select**,
+  then drag the selection and choose **Copy**; the selection survives streaming
+  output while reporting stays off. A mouse/trackpad primary-button drag starts
+  a local selection. Hold **Option** to always force local selection — it is
+  never passed through to the remote application, even one that captures the
+  mouse. Shift also bypasses capture, unless the remote application explicitly
+  requests Shift capture.
+- **Paste** is a local user action again, with bracketed-paste framing when the
+  remote application requests it. Remote OSC 52 clipboard writes remain denied.
+- Simulator acceptance covers selection/copy/paste over SSH, SGR drag bytes,
+  Option-forced local selection, and moving a real Vim cursor by tapping. Physical trackpad hover, wheel, and
+  two-finger gestures still need device validation. Secondary/middle-button
+  reporting and horizontal wheel reporting are not implemented. These changes
+  apply to the SSH terminal, not the separate herdr pane surface.
+
+### Terminal toolbar
+
+- The esc/ctrl/tab/arrows accessory strip defaults **OFF** when a hardware
+  keyboard is attached (the common iPad case, detected via
+  `GCKeyboard.coalesced`) and **ON** when only the on-screen keyboard is
+  available. The keyboard icon in the scene's top-right chrome toggles it;
+  the explicit choice is persisted and wins over the heuristic.
+- When shown, the strip participates in layout — the terminal shrinks by the
+  strip's height, so it never covers the terminal's bottom row.
 
 ## What Doesn't Work Yet
 
