@@ -14,6 +14,21 @@ DerivedData/
 Fixtures/run/
 tmp/
 
+# XcodeGen: generated project, regenerated via `xcodegen generate` (see project.yml)
+*.xcodeproj/
+# ...except the SwiftPM resolution pin, the only workspace-level reproducibility
+# lock for the vendored swift-nio-ssh fork (its Package.swift uses version ranges).
+# git cannot re-include a file whose parent dir is excluded, so unignore each level.
+!BicTerm.xcodeproj/
+BicTerm.xcodeproj/*
+!BicTerm.xcodeproj/project.xcworkspace/
+BicTerm.xcodeproj/project.xcworkspace/*
+!BicTerm.xcodeproj/project.xcworkspace/xcshareddata/
+BicTerm.xcodeproj/project.xcworkspace/xcshareddata/*
+!BicTerm.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
+BicTerm.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/*
+!BicTerm.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+
 # herdr: re-downloadable upstream reference copies (see Vendor/herdr/PROVENANCE.md)
 Vendor/herdr/upstream/
 Vendor/herdr/UPSTREAM_SOURCE.tar
