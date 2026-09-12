@@ -22,6 +22,14 @@ kill_pidfile "$RUN/hop2.pid" hop2
 kill_pidfile "$RUN/uds_forward.pid" uds-forwarder
 rm -f "$RUN/sshd-uds.sock"
 
+# herdr fixture servers (one pidfile per fixture port; never pkill herdr —
+# a real user herdr must be untouched).
+for spid in "$RUN"/herdr/server-*/server.pid; do
+  [ -f "$spid" ] || continue
+  kill_pidfile "$spid" "$(basename "$(dirname "$spid")")"
+done
+rm -f "$RUN"/herdr/server-*/herdr.sock "$RUN"/herdr/server-*/herdr-client.sock
+
 # Belt-and-suspenders: kill anything still bound to fixture ports.
 for port in 12222 12223; do
   pids=$(lsof -nP -ti ":$port" 2>/dev/null || true)

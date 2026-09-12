@@ -1,11 +1,15 @@
 #!/bin/bash
-# BicTerm fixtures: bring up hop-1 sshd (12222), hop-2 sshd (12223), and a
-# UDS forwarder on loopback. Idempotent. Self-checks run at the end;
+# BicTerm fixtures: bring up hop-1 sshd (12222), hop-2 sshd (12223), a
+# UDS forwarder on loopback, and (when fetched) one headless herdr server
+# per fixture port. Idempotent. Self-checks run at the end;
 # exits non-zero if any check fails.
 #
 # Env knobs:
 #   HOP1_ALT_KEY=1   start hop-1 with the ALTERNATE host key (hop1_config.alt)
 #                    — used by T7's changed-host-key test.
+#   HERDR_SERVERS    space-separated fixture ports that get a herdr server
+#                    (default "12222 12223"; set EMPTY to start none — the
+#                    missing-server diagnostic scenarios).
 set -u
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 FIX="$ROOT/Fixtures"
@@ -100,6 +104,80 @@ else
     </dev/null >>"$RUN/uds_forward.log" 2>&1 &
   echo $! > "$UDS_PIDFILE"
   disown 2>/dev/null || true
+fi
+
+# ---- 4.5 herdr servers (one per fixture sshd port; isolated state) -----------
+# Headless start command, discovered from the binary's own help output:
+#   herdr --help   -> "herdr server    Run as headless server"
+#   herdr server --help lists the subcommands (stop, reload-config, ...);
+#   bare `herdr server` is exactly what herdr's own daemon spawner execs.
+# Each instance runs with its own HERDR_SOCKET_PATH and HOME under
+# Fixtures/run/herdr/server-<port>/ so the two fixture servers cannot
+# collide with each other (or with a real user herdr). The sshd fixture
+# configs SetEnv the same HERDR_SOCKET_PATH so the FIXED bridge command
+# (`exec '<path>' remote-client-bridge`, HerdrCommandBuilder) resolves the
+# per-port fixture server without any env prefix in the command string.
+HERDR_BIN="$RUN/herdr/herdr"
+# `${VAR-default}` (not `:-`): an explicitly EMPTY HERDR_SERVERS starts zero
+# servers — the missing-server diagnostic scenarios.
+HERDR_SERVERS="${HERDR_SERVERS-12222 12223}"
+# Stop any fixture herdr server whose port is NOT selected this run, so the
+# knob is deterministic ("exactly these ports have servers"). Only pidfiles
+# under Fixtures/run/herdr/server-*/ are ever touched — never a user herdr.
+if [ -x "$HERDR_BIN" ] || [ -d "$RUN/herdr" ]; then
+  for spid in "$RUN"/herdr/server-*/server.pid; do
+    [ -f "$spid" ] || continue
+    port="$(basename "$(dirname "$spid")")"
+    port="${port#server-}"
+    case " $HERDR_SERVERS " in
+      *" $port "*) continue ;;
+    esac
+    kill "$(cat "$spid")" 2>/dev/null || true
+    rm -f "$spid"
+    echo "herdr server :$port not in HERDR_SERVERS; stopped"
+  done
+fi
+if [ ! -x "$HERDR_BIN" ]; then
+  echo "WARNING: herdr fixture binary absent ($HERDR_BIN); herdr servers NOT started."
+  echo "         Fetch it with scripts/herdr-server-fetch.sh to enable herdr fixture tests;"
+  echo "         sshd fixtures remain fully usable without it."
+else
+  for port in $HERDR_SERVERS; do
+    sdir="$RUN/herdr/server-$port"
+    spid="$sdir/server.pid"
+    if [ -f "$spid" ] && kill -0 "$(cat "$spid")" 2>/dev/null; then
+      echo "herdr server :$port already running (pid $(cat "$spid"))"
+      continue
+    fi
+    rm -f "$spid"
+    mkdir -p "$sdir/home"
+    # nohup + subshell-exit detaches the daemon (reparented to launchd);
+    # no disown needed — the job never enters this shell's job table.
+    (
+      cd "$sdir"
+      HERDR_SOCKET_PATH="$sdir/herdr.sock" HOME="$sdir/home" \
+        nohup "$HERDR_BIN" server >server.log 2>&1 </dev/null &
+      echo $! >server.pid
+    )
+    # Readiness: poll the client socket the same way herdr's own autodetect
+    # does — connect() succeeds iff a server is listening on it.
+    herdr_ready=0
+    for _ in $(seq 1 150); do
+      if python3 -c 'import socket, sys
+s = socket.socket(socket.AF_UNIX)
+s.settimeout(1)
+s.connect(sys.argv[1])' "$sdir/herdr-client.sock" 2>/dev/null; then
+        herdr_ready=1; break
+      fi
+      sleep 0.1
+    done
+    if [ "$herdr_ready" != "1" ]; then
+      echo "FAIL: herdr server :$port did not listen on $sdir/herdr-client.sock within 15s"
+      tail -5 "$sdir/server.log" 2>/dev/null
+      exit 1
+    fi
+    echo "herdr server :$port ready (client socket $sdir/herdr-client.sock)"
+  done
 fi
 
 # pids manifest (for fixtures-down.sh)

@@ -31,3 +31,8 @@ LogLevel DEBUG3
 
 AcceptEnv BICTERM_*
 PrintMotd no
+
+# herdr fixture: the FIXED remote-client-bridge command built by
+# HerdrCommandBuilder cannot carry an env prefix, so the per-port fixture
+# herdr server socket is injected here (see scripts/fixtures-up.sh §herdr).
+SetEnv HERDR_SOCKET_PATH=/Users/richard/code/BicTerm/Fixtures/run/herdr/server-12223/herdr.sock
