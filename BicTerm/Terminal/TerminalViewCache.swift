@@ -10,6 +10,10 @@ import UIKit
 /// the scrollback accumulating; only eviction or session close destroys it.
 final class TerminalSurface: NSObject, TerminalViewDelegate {
     let view: TerminalContainerView
+    /// Stacks the terminal above the accessory toolbar when the user shows
+    /// it — the surface's SwiftUI placements embed THIS view, never `view`
+    /// directly, so the strip is a layout participant rather than an overlay.
+    let hostView: TerminalToolbarHostView
     private var feedTask: Task<Void, Never>?
     private let sendBytes: @Sendable (Data) -> Void
     private let resizeTo: @Sendable (_ cols: Int, _ rows: Int) -> Void
@@ -31,11 +35,19 @@ final class TerminalSurface: NSObject, TerminalViewDelegate {
         let font = UIFont.monospacedSystemFont(ofSize: 14, weight: .regular)
         let view = TerminalContainerView(frame: .zero, font: font, options: options)
         self.view = view
+        let hostView = TerminalToolbarHostView(terminalView: view)
+        self.hostView = hostView
         super.init()
 
         view.optionAsMetaKey = true
         view.nativeBackgroundColor = UIColor(red: 0x0D / 255, green: 0x11 / 255, blue: 0x17 / 255, alpha: 1)
         view.nativeForegroundColor = UIColor(red: 0xE6 / 255, green: 0xED / 255, blue: 0xF3 / 255, alpha: 1)
+        // UIKit's inputAccessoryView dock overlays the terminal's bottom rows
+        // when a hardware keyboard is attached; the accessory lives in the
+        // host view's layout instead. The hosted instance keeps feeding
+        // sticky-ctrl state into SwiftTerm's key encoding (fork hunk 8).
+        view.inputAccessoryView = nil
+        view.hostedAccessory = hostView.accessoryView
         view.terminalDelegate = self
         view.accessibilityIdentifier = "terminalView"
 
@@ -201,6 +213,9 @@ final class TerminalViewCache {
 struct SessionTerminalRepresentable: UIViewRepresentable {
     let cache: TerminalViewCache
     let model: SessionSceneModel
+    /// Whether the accessory toolbar strip participates in the layout below
+    /// the terminal (app-global pref from `SessionStore.terminalToolbar`).
+    var toolbarVisible: Bool = false
 
     final class Coordinator {
         let cache: TerminalViewCache
@@ -217,15 +232,19 @@ struct SessionTerminalRepresentable: UIViewRepresentable {
         Coordinator(cache: cache, sessionID: model.id)
     }
 
-    func makeUIView(context: Context) -> TerminalContainerView {
+    func makeUIView(context: Context) -> TerminalToolbarHostView {
         let attachment = cache.attachSurface(for: model.id, model: model)
         context.coordinator.attachGeneration = attachment.generation
-        return attachment.surface.view
+        let hostView = attachment.surface.hostView
+        hostView.setAccessoryVisible(toolbarVisible)
+        return hostView
     }
 
-    func updateUIView(_ uiView: TerminalContainerView, context: Context) {}
+    func updateUIView(_ uiView: TerminalToolbarHostView, context: Context) {
+        uiView.setAccessoryVisible(toolbarVisible)
+    }
 
-    static func dismantleUIView(_ uiView: TerminalContainerView, coordinator: Coordinator) {
+    static func dismantleUIView(_ uiView: TerminalToolbarHostView, coordinator: Coordinator) {
         coordinator.cache.detachSurface(
             for: coordinator.sessionID,
             generation: coordinator.attachGeneration

@@ -12,6 +12,7 @@ import SwiftUI
 ///   --uitest-open-session-detached <name>  open + start WITHOUT presenting (switcher tests; repeatable)
 ///   --uitest-open-session-after <n>:<sec>  open a second-wave session after a delay
 ///   --uitest-session-command <cmd>         send cmd to each opened session once active ({NAME} substituted)
+///   --uitest-keep-toolbar-pref             keep the persisted toolbar visibility choice (relaunch tests)
 enum TerminalSceneUITest {
     static var seamsEnabled: Bool {
         ProcessInfo.processInfo.arguments.contains("--uitest-sessions")
@@ -57,6 +58,13 @@ enum SessionUITestDriver {
 
         if !arguments.contains("--uitest-expect-restore") {
             await store.clearSnapshotsForUITests()
+        }
+
+        // The toolbar visibility pref is app-global UserDefaults state that
+        // survives relaunches: reset it to the hardware-keyboard heuristic
+        // unless the test deliberately exercises persistence.
+        if !arguments.contains("--uitest-keep-toolbar-pref") {
+            store.terminalToolbar.clearExplicitChoice()
         }
 
         let command = TerminalSceneUITest.value(after: "--uitest-session-command")

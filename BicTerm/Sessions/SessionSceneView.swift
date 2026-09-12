@@ -38,8 +38,12 @@ struct SessionSceneView: View {
                 statusBanner
             }
             if model.isTerminalVisible {
-                SessionTerminalRepresentable(cache: store.viewCache, model: model)
-                    .background(colors.background)
+                SessionTerminalRepresentable(
+                    cache: store.viewCache,
+                    model: model,
+                    toolbarVisible: store.terminalToolbar.isVisible
+                )
+                .background(colors.background)
             } else {
                 closedPlaceholder
             }
@@ -120,6 +124,16 @@ struct SessionSceneView: View {
             }
 
             Spacer()
+
+            Button {
+                store.terminalToolbar.toggle()
+            } label: {
+                Image(systemName: "keyboard")
+                    .font(.title3)
+            }
+            .accessibilityLabel("Terminal toolbar")
+            .accessibilityIdentifier("terminal-toolbar-toggle")
+            .foregroundColor(store.terminalToolbar.isVisible ? colors.accent : colors.dimmed)
 
             Button {
                 switcherPresented = true

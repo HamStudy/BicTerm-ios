@@ -59,6 +59,10 @@ final class SessionStore {
     /// Live terminal surfaces for every attached-or-detached session —
     /// the buffer-preservation layer behind the session switcher.
     let viewCache = TerminalViewCache()
+    /// App-global terminal toolbar visibility preference (heuristic default
+    /// from the hardware keyboard, sticky explicit choice). One instance
+    /// shared by every scene so a toggle applies to all windows at once.
+    let terminalToolbar = TerminalToolbarModel()
 
     private let hostKeyStore: (any HostKeyStoreProtocol)?
     private let connectionLookup: ConnectionLookup
