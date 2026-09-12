@@ -57,6 +57,7 @@ actor FakeSessionTransport: SessionTransport {
     private var outputAlive = true
     private var gateReleased = false
     private var connectWaiters: [CheckedContinuation<Void, Never>] = []
+    private var dropObserver: (@Sendable () -> Void)?
 
     init(behavior: ConnectBehavior = .succeed, roaming: Bool = false) {
         self.behavior = behavior
@@ -133,6 +134,16 @@ actor FakeSessionTransport: SessionTransport {
         closeReason = reason
         outputAlive = false
         continuation.finish()
+    }
+
+    func reportInboundDrop() {
+        dropObserver?()
+    }
+}
+
+extension FakeSessionTransport: InboundDropObserving {
+    func setInboundDropObserver(_ observer: (@Sendable () -> Void)?) async {
+        dropObserver = observer
     }
 }
 

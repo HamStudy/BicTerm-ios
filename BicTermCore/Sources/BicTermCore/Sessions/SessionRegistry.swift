@@ -88,7 +88,7 @@ public actor SessionRegistry {
             await transport.close()
             return
         }
-        await adopt(record, transport: transport, generation: generation)
+        await adopt(record, transport: transport, generation: generation, replacedServerSession: false)
     }
 
     /// Registers a terminated-app session from its snapshot WITHOUT
@@ -221,22 +221,35 @@ public actor SessionRegistry {
             await transport.close()
             return
         }
-        await adopt(record, transport: transport, generation: generation)
+        await adopt(record, transport: transport, generation: generation, replacedServerSession: true)
     }
 
     /// Installs the fresh transport and bridges its output into the
     /// session's stable stream. The stale snapshot (if any) is dropped:
     /// the session is live again.
+    ///
+    /// - Parameter replacedServerSession: true when the adoption follows a
+    ///   rehandshake (the remote shell/pty was replaced, so local VT state
+    ///   is stale). Emits ``SessionSyncEvent/sessionReplaced`` and pokes a
+    ///   remote redraw. False for a session's first transport; `.nativeRoaming`
+    ///   resumes never re-adopt.
     private func adopt(
         _ record: SessionRecord,
         transport: any SessionTransport,
-        generation: UInt64
+        generation: UInt64,
+        replacedServerSession: Bool
     ) async {
         record.transport = transport
         record.remoteExited = false
         startBridge(record, transport: transport)
+        installDropObserver(record, transport: transport)
         if let attachable = transport as? any SessionSceneAttachable {
             await attachable.sessionAttachedToScene(record.sceneID)
+        }
+        if replacedServerSession {
+            record.isInboundSuspect = false
+            emitSyncEvent(record, .sessionReplaced)
+            pokeRedraw(record)
         }
         setState(record, .active)
         try? await snapshotStore.deleteSnapshot(sceneID: record.sceneID)
@@ -359,6 +372,10 @@ public actor SessionRegistry {
             continuation.finish()
         }
         record.stateContinuations.removeAll()
+        for continuation in record.syncContinuations.values {
+            continuation.finish()
+        }
+        record.syncContinuations.removeAll()
         if let transport {
             await transport.close()
         }
@@ -447,7 +464,9 @@ public actor SessionRegistry {
 
     private func bridgeYield(_ chunk: Data, for record: SessionRecord, transport: any SessionTransport) {
         guard isCurrentTransport(record, transport: transport) else { return }
-        record.outputContinuation.yield(chunk)
+        if case .dropped = record.outputContinuation.yield(chunk) {
+            noteInboundDrop(record)
+        }
         if !record.isAttached {
             record.hasUnseenOutput = true
         }
@@ -467,6 +486,80 @@ public actor SessionRegistry {
         records[record.sceneID] === record
             && record.state != .closed
             && record.transport === transport
+    }
+
+    // MARK: - Sync integrity (T12)
+
+    /// Per-session sync-integrity events. Transient signals (no history
+    /// replay): subscribers attach at scene start, and every event is
+    /// also derivable from observable state for late attachers.
+    public func syncEvents(sceneID: String) -> AsyncStream<SessionSyncEvent>? {
+        guard let record = records[sceneID] else { return nil }
+        let id = UUID()
+        let (stream, continuation) = AsyncStream<SessionSyncEvent>.makeStream(
+            bufferingPolicy: .bufferingNewest(8)
+        )
+        record.syncContinuations[id] = continuation
+        return stream
+    }
+
+    /// Wires the transport's own bounded-overflow signal (if it has one)
+    /// into this session's suspect flag. The observer hops back into the
+    /// actor; transport identity is re-checked so a superseded
+    /// transport's drop cannot flag the current session.
+    private func installDropObserver(_ record: SessionRecord, transport: any SessionTransport) {
+        guard let observable = transport as? any InboundDropObserving else { return }
+        let sceneID = record.sceneID
+        Task { [self] in
+            await observable.setInboundDropObserver { [weak self] in
+                guard let self else { return }
+                Task { await self.transportReportedInboundDrop(sceneID: sceneID, transport: transport) }
+            }
+        }
+    }
+
+    private func transportReportedInboundDrop(sceneID: String, transport: any SessionTransport) {
+        guard let record = records[sceneID] else { return }
+        guard isCurrentTransport(record, transport: transport) else { return }
+        noteInboundDrop(record)
+    }
+
+    /// A drop anywhere in the inbound chain marks the session's VT stream
+    /// suspect and surfaces ``SessionSyncEvent/inboundDropped`` exactly
+    /// once per suspicion window (re-armed by ``resync(sceneID:)`` or a
+    /// session replacement).
+    private func noteInboundDrop(_ record: SessionRecord) {
+        guard !record.isInboundSuspect else { return }
+        record.isInboundSuspect = true
+        emitSyncEvent(record, .inboundDropped)
+    }
+
+    private func emitSyncEvent(_ record: SessionRecord, _ event: SessionSyncEvent) {
+        for continuation in record.syncContinuations.values {
+            continuation.yield(event)
+        }
+    }
+
+    /// User-triggered resync: clears the suspect flag (the screen is
+    /// about to be rebuilt) and pokes the remote into a full redraw.
+    public func resync(sceneID: String) async {
+        guard let record = records[sceneID], record.state != .closed else { return }
+        record.isInboundSuspect = false
+        pokeRedraw(record)
+    }
+
+    /// Forces a remote repaint: a same-size window-change does NOT
+    /// SIGWINCH (the kernel compares sizes), so bounce the row count by
+    /// one and back. Reading `record.cols`/`record.rows` again after the
+    /// gap keeps a user resize during the bounce authoritative.
+    private func pokeRedraw(_ record: SessionRecord) {
+        Task { [self] in
+            guard let transport = record.transport else { return }
+            await transport.resize(cols: record.cols, rows: record.rows + 1)
+            try? await Task.sleep(for: .milliseconds(120))
+            guard records[record.sceneID] === record, record.transport === transport else { return }
+            await transport.resize(cols: record.cols, rows: record.rows)
+        }
     }
 
     // MARK: - Bounded auto-reconnect
@@ -585,10 +678,12 @@ final class SessionRecord: @unchecked Sendable {
 
     var isAttached = false
     var hasUnseenOutput = false
+    var isInboundSuspect = false
 
     let outputStream: AsyncStream<Data>
     let outputContinuation: AsyncStream<Data>.Continuation
     var stateContinuations: [UUID: AsyncStream<SessionState>.Continuation] = [:]
+    var syncContinuations: [UUID: AsyncStream<SessionSyncEvent>.Continuation] = [:]
 
     init(sceneID: String, connection: Connection, cols: Int, rows: Int) {
         self.sceneID = sceneID

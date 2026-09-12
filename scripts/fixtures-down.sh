@@ -20,6 +20,13 @@ kill_pidfile() { # kill_pidfile <pidfile> <name>
 kill_pidfile "$RUN/hop1.pid" hop1
 kill_pidfile "$RUN/hop2.pid" hop2
 kill_pidfile "$RUN/uds_forward.pid" uds-forwarder
+
+# lossy proxies (T12): one pidfile/control per listen port.
+for lpid in "$RUN"/lossy-proxy-*.pid; do
+  [ -f "$lpid" ] || continue
+  kill_pidfile "$lpid" "$(basename "$lpid" .pid)"
+done
+rm -f "$RUN"/lossy-proxy-*.ctl
 rm -f "$RUN/sshd-uds.sock"
 
 # herdr fixture servers (one pidfile per fixture port; never pkill herdr —

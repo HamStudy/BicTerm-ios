@@ -14,6 +14,7 @@ public actor JumpTerminalTransport: TerminalTransport {
     private var inner: (any SSHSessionTransport)?
     private var bridgeTask: Task<Void, Never>?
     private let outputContinuation: AsyncStream<Data>.Continuation
+    private let inboundDropSignal = InboundDropSignal()
     public private(set) var output: AsyncStream<Data>
     private var isClosed = false
     public var closeReason: TransportCloseReason {
@@ -45,10 +46,16 @@ public actor JumpTerminalTransport: TerminalTransport {
             throw .channelDenied
         }
         inner = built
+        if let observable = built as? any InboundDropObserving {
+            let dropSignal = inboundDropSignal
+            await observable.setInboundDropObserver { dropSignal.fire() }
+        }
         let stream = await built.output
-        bridgeTask = Task { [outputContinuation] in
+        bridgeTask = Task { [outputContinuation, inboundDropSignal] in
             for await chunk in stream {
-                outputContinuation.yield(chunk)
+                if case .dropped = outputContinuation.yield(chunk) {
+                    inboundDropSignal.fire()
+                }
             }
             outputContinuation.finish()
         }
@@ -85,6 +92,16 @@ public actor JumpTerminalTransport: TerminalTransport {
             underlying
         case .cycleDetected, .tooManyHops:
             .channelDenied
+        }
+    }
+}
+
+extension JumpTerminalTransport: InboundDropObserving {
+    public func setInboundDropObserver(_ observer: (@Sendable () -> Void)?) async {
+        inboundDropSignal.setObserver(observer)
+        if let inner, let observable = inner as? any InboundDropObserving {
+            let dropSignal = inboundDropSignal
+            await observable.setInboundDropObserver { dropSignal.fire() }
         }
     }
 }

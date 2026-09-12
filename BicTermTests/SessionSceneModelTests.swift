@@ -18,6 +18,7 @@ actor ScriptedSessionTransport: TerminalTransport {
     private(set) var connectCalls = 0
     private(set) var closeCalls = 0
     private(set) var sent: [Data] = []
+    private(set) var resizes: [(cols: Int, rows: Int)] = []
 
     init(behavior: ConnectBehavior) {
         self.behavior = behavior
@@ -39,7 +40,9 @@ actor ScriptedSessionTransport: TerminalTransport {
         sent.append(bytes)
     }
 
-    func resize(cols: Int, rows: Int) async {}
+    func resize(cols: Int, rows: Int) async {
+        resizes.append((cols: cols, rows: rows))
+    }
 
     func close() async {
         closeCalls += 1
@@ -54,6 +57,12 @@ actor ScriptedSessionTransport: TerminalTransport {
 
     func remoteExit() {
         closeReason = .remoteExit
+        continuation.finish()
+    }
+
+    /// Simulates a remote drop WITHOUT a close call (the registry reads
+    /// this as a connection death and auto-reconnects).
+    func finishOutput() {
         continuation.finish()
     }
 }

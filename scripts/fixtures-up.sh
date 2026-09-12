@@ -10,6 +10,9 @@
 #   HERDR_SERVERS    space-separated fixture ports that get a herdr server
 #                    (default "12222 12223"; set EMPTY to start none — the
 #                    missing-server diagnostic scenarios).
+#   HERDR_LOSSY      space-separated lossy-proxy entries "LISTEN[@TARGET]:opts"
+#                    (opts: drop=<n>pct,delay=<n>ms,dupe=<n>pct; target defaults
+#                    to 12222). Default: no proxy. See Fixtures/bin/lossy-proxy.py.
 set -u
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 FIX="$ROOT/Fixtures"
@@ -180,11 +183,51 @@ s.connect(sys.argv[1])' "$sdir/herdr-client.sock" 2>/dev/null; then
   done
 fi
 
+# ---- 4.6 lossy proxy (terminal sync-integrity fixture, T12) ------------------
+# HERDR_LOSSY: space-separated entries "LISTEN[@TARGET]:opt,opt,..." — a
+# userspace impairment proxy (Fixtures/bin/lossy-proxy.py; NO pf/dummynet)
+# listening on 127.0.0.1:LISTEN and forwarding to the fixture sshd on
+# TARGET (default 12222). opts: drop=<n>pct delay=<n>ms dupe=<n>pct.
+# Runtime steering: append lines (drop=5pct / delay=200ms / dupe=1pct /
+# kill / reset) to Fixtures/run/lossy-proxy-<port>.ctl. Default: none.
+LOSSY_PIDS=""
+for entry in ${HERDR_LOSSY:-}; do
+  spec="${entry%%:*}"
+  opts="${entry#*:}"
+  [ "$opts" = "$entry" ] && opts=""
+  listen="${spec%%@*}"
+  target="${spec#*@}"
+  [ "$target" = "$spec" ] && target=12222
+  proxy_args=""
+  for opt in $(echo "$opts" | tr ',' ' '); do
+    case "$opt" in
+      drop=*|delay=*|dupe=*) proxy_args="$proxy_args --${opt%%=*} ${opt#*=}" ;;
+      "") ;;
+      *) echo "FAIL: bad HERDR_LOSSY option '$opt' in entry '$entry'"; exit 1 ;;
+    esac
+  done
+  lpid="$RUN/lossy-proxy-$listen.pid"
+  if [ -f "$lpid" ] && kill -0 "$(cat "$lpid")" 2>/dev/null; then
+    echo "lossy proxy :$listen already running (pid $(cat "$lpid"))"
+  else
+    rm -f "$lpid" "$RUN/lossy-proxy-$listen.ctl"
+    touch "$RUN/lossy-proxy-$listen.ctl"
+    nohup python3 "$FIX/bin/lossy-proxy.py" --listen "$listen" \
+      --target "127.0.0.1:$target" --control "$RUN/lossy-proxy-$listen.ctl" \
+      --log "$RUN/lossy-proxy-$listen.log" $proxy_args \
+      </dev/null >>"$RUN/lossy-proxy-$listen.log" 2>&1 &
+    echo $! > "$lpid"
+    disown 2>/dev/null || true
+  fi
+  LOSSY_PIDS="$LOSSY_PIDS $lpid"
+done
+
 # pids manifest (for fixtures-down.sh)
 {
   cat "$RUN/hop1.pid" 2>/dev/null
   cat "$RUN/hop2.pid" 2>/dev/null
   cat "$UDS_PIDFILE" 2>/dev/null
+  for lpid in $LOSSY_PIDS; do cat "$lpid" 2>/dev/null; done
 } > "$RUN/pids"
 
 # ---- 5. Wait for ports -------------------------------------------------------
@@ -199,6 +242,12 @@ wait_port() { # wait_port <port> <name>
 }
 wait_port 12222 hop1
 wait_port 12223 hop2
+
+for entry in ${HERDR_LOSSY:-}; do
+  listen="${entry%%:*}"
+  listen="${listen%%@*}"
+  wait_port "$listen" "lossy-proxy-$listen"
+done
 
 # Wait for the UDS forwarder to accept connections on its socket path.
 UDS_SOCK="$RUN/sshd-uds.sock"
@@ -273,6 +322,23 @@ check "UDS-bridged ssh prints bicterm-uds-ok" "bicterm-uds-ok" "$out"
 
 perms=$(stat -f %Lp "$UDS_SOCK" 2>/dev/null)
 check "UDS socket permissions are 600" "600" "$perms"
+
+# Lossy proxy must carry a full SSH session end-to-end (impairments only
+# stall TCP, which retransmits). Retry: a burst-y drop setting can make a
+# single attempt slow enough to hit the outer probe timeout.
+for entry in ${HERDR_LOSSY:-}; do
+  listen="${entry%%:*}"
+  listen="${listen%%@*}"
+  proxy_ok=""
+  for _ in 1 2 3; do
+    out=$(/usr/bin/ssh $SSH_OPTS -o BatchMode=yes -o ConnectTimeout=15 \
+      -i "$KEYS/bicterm-fixture-ed25519" -p "$listen" "$WHO@127.0.0.1" \
+      'printf bicterm-lossy-ok' </dev/null 2>/dev/null)
+    if [ "$out" = "bicterm-lossy-ok" ]; then proxy_ok=1; break; fi
+    sleep 1
+  done
+  check "lossy proxy :$listen carries an ssh session" "1" "${proxy_ok:-0}"
+done
 
 echo "---"
 if [ "$FAILURES" -gt 0 ]; then

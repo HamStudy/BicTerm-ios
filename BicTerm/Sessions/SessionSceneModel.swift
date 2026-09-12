@@ -34,12 +34,24 @@ final class SessionSceneModel: Identifiable {
     /// re-attach built a fresh one — the scene shows the one-line
     /// "scrollback released" notice until the user dismisses it.
     private(set) var scrollbackReleased = false
+    /// True when an inbound-chain anomaly (silent-drop detection) left the
+    /// local VT suspect — the scene shows the "Screen may be out of sync"
+    /// banner until the user resyncs.
+    private(set) var syncSuspect = false
+    /// Briefly true after a reconnect-driven screen refresh.
+    private(set) var showReconnectedToast = false
 
     let viewOutput: AsyncStream<Data>
     private var viewOutputContinuation: AsyncStream<Data>.Continuation
+    /// Local VT reset commands for the session's terminal surface (one
+    /// consumer: the surface's resync task).
+    let resyncCommands: AsyncStream<Void>
+    private var resyncCommandContinuation: AsyncStream<Void>.Continuation
 
     private var stateTask: Task<Void, Never>?
     private var pumpTask: Task<Void, Never>?
+    private var syncTask: Task<Void, Never>?
+    private var toastTask: Task<Void, Never>?
     nonisolated(unsafe) private var lifecycleObservers: [NSObjectProtocol] = []
     private var started = false
     private var didUserConnect = false
@@ -64,6 +76,11 @@ final class SessionSceneModel: Identifiable {
         let (stream, continuation) = AsyncStream<Data>.makeStream(bufferingPolicy: .bufferingNewest(256))
         self.viewOutput = stream
         self.viewOutputContinuation = continuation
+        let (resyncStream, resyncContinuation) = AsyncStream<Void>.makeStream(
+            bufferingPolicy: .bufferingNewest(4)
+        )
+        self.resyncCommands = resyncStream
+        self.resyncCommandContinuation = resyncContinuation
 
         let (commands, commandContinuation) = AsyncStream<SurfacePresentation>.makeStream(
             bufferingPolicy: .bufferingNewest(16)
@@ -195,7 +212,9 @@ final class SessionSceneModel: Identifiable {
             guard let stream = await self.registry.output(sceneID: self.sceneID) else { return }
             var tailBytes = Data()
             for await chunk in stream {
-                self.viewOutputContinuation.yield(chunk)
+                if case .dropped = self.viewOutputContinuation.yield(chunk) {
+                    self.syncSuspect = true
+                }
                 tailBytes.append(chunk)
                 if tailBytes.count > 8_192 {
                     tailBytes.removeFirst(tailBytes.count - 8_192)
@@ -203,6 +222,48 @@ final class SessionSceneModel: Identifiable {
                 self.tail = String(decoding: tailBytes, as: UTF8.self)
             }
         }
+        syncTask = Task { [weak self] in
+            guard let self else { return }
+            guard let stream = await self.registry.syncEvents(sceneID: self.sceneID) else { return }
+            for await event in stream {
+                switch event {
+                case .sessionReplaced:
+                    self.refreshTerminalAfterReconnect()
+                case .inboundDropped:
+                    self.syncSuspect = true
+                }
+            }
+        }
+    }
+
+    /// A rehandshaked session was adopted: the remote shell was replaced,
+    /// so the local surface is reset and the remote poked into a redraw.
+    /// Normal reconnects surface as a brief toast; a suspect stream keeps
+    /// the louder banner up instead.
+    private func refreshTerminalAfterReconnect() {
+        resyncCommandContinuation.yield()
+        if syncSuspect {
+            return
+        }
+        showReconnectedToast = true
+        toastTask?.cancel()
+        toastTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(3))
+            guard !Task.isCancelled else { return }
+            self?.showReconnectedToast = false
+        }
+    }
+
+    /// One-tap resync from the out-of-sync banner: local VT reset plus a
+    /// remote redraw poke. Clears the suspicion — the screen is being
+    /// rebuilt from fresh remote state.
+    func resyncNow() {
+        guard !isClosed else { return }
+        syncSuspect = false
+        resyncCommandContinuation.yield()
+        let registry = self.registry
+        let sceneID = self.sceneID
+        Task { await registry.resync(sceneID: sceneID) }
     }
 
     /// Manual reconnect (user action). Marks the scene user-connected, which
@@ -387,7 +448,12 @@ final class SessionSceneModel: Identifiable {
         stateTask = nil
         pumpTask?.cancel()
         pumpTask = nil
+        syncTask?.cancel()
+        syncTask = nil
+        toastTask?.cancel()
+        toastTask = nil
         viewOutputContinuation.finish()
+        resyncCommandContinuation.finish()
         presentationCommands.finish()
         await onClose(id)
         state = .closed
@@ -406,6 +472,12 @@ extension SessionSceneModel {
         case .failed(let failure): "status:failed:\(failure.localizedDescription)"
         case .closed: "status:closed"
         }
+    }
+
+    var uitestSyncDescription: String {
+        if syncSuspect { "sync:suspect" }
+        else if showReconnectedToast { "sync:refreshed" }
+        else { "sync:clean" }
     }
 }
 #endif

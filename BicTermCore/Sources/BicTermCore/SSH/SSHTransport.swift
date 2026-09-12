@@ -19,7 +19,9 @@ import NIOSSH
 /// Output buffering policy: the stream holds at most 32 chunks of at most
 /// 32 KiB (≈1 MiB). On overflow the OLDEST queued chunks are dropped
 /// (`.bufferingNewest`) — a slow consumer loses scrollback, never blocks
-/// the network read path.
+/// the network read path. A drop is NEVER silent for the terminal path:
+/// the installed ``InboundDropObserving`` observer fires so the session
+/// layer can flag the VT stream as suspect (T12).
 ///
 /// Inbound security posture: every server-initiated channel open is
 /// rejected and no `GlobalRequestDelegate` is installed — see
@@ -48,6 +50,11 @@ public actor SSHTransport {
     /// into the inbound child channel initializer when the NIOSSHHandler is
     /// built. Every other server-initiated channel type stays rejected.
     private var agentChannelInitializer: (@Sendable (any Channel) -> EventLoopFuture<Void>)?
+
+    /// T12 (sync integrity): fires when the bounded output bridge drops a
+    /// chunk. Boxed because the yield runs on the channel's EventLoop while
+    /// the observer is swapped from actor context.
+    private let inboundDropSignal = InboundDropSignal()
 
     /// Internal additive hook (T8) — not part of the public API surface.
     internal func installAgentChannelInitializer(
@@ -199,10 +206,15 @@ public actor SSHTransport {
         )
         let termination = SessionTermination()
         self.termination = termination
+        let dropSignal = inboundDropSignal
         let handler = SessionChannelHandler(
-            onOutput: { continuation.yield($0) },
-            onClosed: {
-                termination.record($0)
+            onOutput: { chunk in
+                if case .dropped = continuation.yield(chunk) {
+                    dropSignal.fire()
+                }
+            },
+            onClosed: { error in
+                termination.record(error)
                 continuation.finish()
             }
         )
@@ -364,3 +376,29 @@ public actor SSHTransport {
 /// No NIO type crosses the cast — `SSHChannelHandle`'s channel is
 /// module-internal.
 extension SSHTransport: TerminalTransport {}
+
+extension SSHTransport: InboundDropObserving {
+    public func setInboundDropObserver(_ observer: (@Sendable () -> Void)?) async {
+        inboundDropSignal.setObserver(observer)
+    }
+}
+
+/// Lock-confined optional closure: written from `SSHTransport`'s actor
+/// context, fired from the session channel's EventLoop.
+final class InboundDropSignal: @unchecked Sendable {
+    private let lock = NSLock()
+    private var observer: (@Sendable () -> Void)?
+
+    func setObserver(_ observer: (@Sendable () -> Void)?) {
+        lock.lock()
+        self.observer = observer
+        lock.unlock()
+    }
+
+    func fire() {
+        lock.lock()
+        let current = observer
+        lock.unlock()
+        current?()
+    }
+}

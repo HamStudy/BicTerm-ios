@@ -35,6 +35,9 @@ struct SessionSceneView: View {
             if model.scrollbackReleased {
                 scrollbackReleasedNotice
             }
+            if model.syncSuspect {
+                syncSuspectBanner
+            }
             if model.state != .active || model.launchErrorMessage != nil {
                 statusBanner
             }
@@ -54,6 +57,13 @@ struct SessionSceneView: View {
             debugStrip
             #endif
         }
+        .overlay(alignment: .top) {
+            if model.showReconnectedToast {
+                reconnectedToast
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: model.showReconnectedToast)
         .background(colors.background.ignoresSafeArea())
         .sceneAppearance(store.effectiveTheme(model.sceneID))
         .task {
@@ -192,6 +202,49 @@ struct SessionSceneView: View {
         .background(colors.selection.opacity(TerminalMetric.bannerFill))
     }
 
+    /// Anomaly surface: shown when the inbound chain detected dropped
+    /// bytes (the screen may render garbage). One tap rebuilds the screen
+    /// from fresh remote state.
+    private var syncSuspectBanner: some View {
+        HStack(spacing: spacing.xs) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundColor(colors.error)
+            Text("Screen may be out of sync")
+                .font(typography.caption)
+                .foregroundColor(colors.error)
+            Spacer()
+            Button {
+                model.resyncNow()
+            } label: {
+                Text("Resync")
+            }
+            .buttonStyle(.bordered)
+            .tint(colors.accent)
+            .accessibilityIdentifier("scene-resync-\(sanitized)")
+        }
+        .padding(.horizontal, spacing.sm)
+        .padding(.vertical, spacing.xxxs)
+        .background(colors.selection.opacity(0.4))
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Screen may be out of sync. Resync available.")
+        .accessibilityIdentifier("scene-sync-banner-\(sanitized)")
+    }
+
+    private var reconnectedToast: some View {
+        HStack(spacing: spacing.xs) {
+            Image(systemName: "arrow.clockwise.circle.fill")
+                .foregroundColor(colors.success)
+            Text("Reconnected — screen refreshed")
+                .font(typography.caption)
+                .foregroundColor(colors.foreground)
+        }
+        .padding(.horizontal, spacing.sm)
+        .padding(.vertical, spacing.xs)
+        .background(colors.selection.opacity(0.9), in: Capsule())
+        .accessibilityIdentifier("scene-reconnected-toast")
+        .padding(.top, spacing.xs)
+    }
+
     private var statusChip: some View {
         TerminalBadge(model.statusText, tint: statusColor)
             .accessibilityIdentifier("scene-statuschip-\(sanitized)")
@@ -273,6 +326,8 @@ struct SessionSceneView: View {
                     .accessibilityIdentifier("scene-status-\(sanitized)")
                 Text("font:\(store.effectiveFontSize(model.sceneID)) theme:\(colorScheme == .dark ? "dark" : "light") margin:\(store.effectiveMargin(model.sceneID).rawValue)")
                     .accessibilityIdentifier("scene-appearance-\(sanitized)")
+                Text(model.uitestSyncDescription)
+                    .accessibilityIdentifier("scene-sync-\(sanitized)")
                 Text(model.tail.isEmpty ? " " : model.tail)
                     .lineLimit(2)
                     .truncationMode(.head)

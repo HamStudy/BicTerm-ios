@@ -100,6 +100,33 @@ policy; no zig anywhere in the fixture chain):
   T8/T9 (herd fan-out and two-machine live switching E2E, including the
   kill-one-server dimmed-machine scenario).
 
+### Lossy proxy (`Fixtures/bin/lossy-proxy.py`)
+
+Userspace impairment proxy for terminal sync-integrity work (herdr-support
+T12): listens on loopback and forwards to a fixture sshd, applying
+per-chunk impairments in both directions. **No pf/dummynet or any other
+system network configuration is touched** — it is pure userspace TCP.
+
+- **Start**: `HERDR_LOSSY="<LISTEN>[@TARGET]:opt,opt,..." scripts/fixtures-up.sh`
+  (space-separated for several). `TARGET` defaults to hop-1 (12222).
+  Options: `drop=<n>pct` (drop read chunks — TCP retransmits, so the stream
+  stalls but stays intact in-band), `delay=<n>ms`, `dupe=<n>pct`.
+  Default: no proxy. Example: `HERDR_LOSSY=12322:drop=2pct,delay=80ms`.
+- **Files**: pid `Fixtures/run/lossy-proxy-<port>.pid`, log
+  `Fixtures/run/lossy-proxy-<port>.log` (every impairment and control
+  command, timestamped — the characterization evidence source), control
+  file `Fixtures/run/lossy-proxy-<port>.ctl`. `fixtures-down.sh` tears it
+  down with the rest.
+- **Runtime steering**: APPEND lines to the control file (`kill` aborts
+  every active connection with RST — the packet-loss endgame that drives
+  drop→reconnect; `drop=5pct` / `delay=200ms` / `dupe=1pct` change knobs;
+  `reset` restores startup knobs). The proxy tails by byte offset — an
+  overwrite-style write desyncs it, always append (`FileHandle.seekToEnd()`).
+- **Consumers**: herdr-support T12 (`BicTermCoreTests/LossyProxySyncIntegrationTests`
+  — kill-induced reconnect resync, sustained-latency integrity) and the
+  pre-fix desync characterization recorded in
+  `.sisyphus/evidence/herdr-support-t12.log`.
+
 ## The `ssh -J` wrapper (macOS quirk)
 
 The acceptance two-hop command `ssh -o ... -J user@127.0.0.1:12222 ...`

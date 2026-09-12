@@ -15,11 +15,13 @@ final class TerminalSurface: NSObject, TerminalViewDelegate {
     /// directly, so the strip is a layout participant rather than an overlay.
     let hostView: TerminalToolbarHostView
     private var feedTask: Task<Void, Never>?
+    private var resyncTask: Task<Void, Never>?
     private let sendBytes: @Sendable (Data) -> Void
     private let resizeTo: @Sendable (_ cols: Int, _ rows: Int) -> Void
 
     init(
         output: AsyncStream<Data>,
+        resync: AsyncStream<Void>,
         send: @escaping @Sendable (Data) -> Void,
         onResize: @escaping @Sendable (_ cols: Int, _ rows: Int) -> Void,
         fontSize: Double = TerminalFontSettings.defaultSize,
@@ -65,6 +67,18 @@ final class TerminalSurface: NSObject, TerminalViewDelegate {
                 }
             }
         }
+
+        // Full VT reset (RIS semantics: screen, modes, buffers). Used after
+        // a rehandshake (server-side session replaced) and after a detected
+        // inbound drop (stream suspect); the registry's redraw poke then
+        // refills the fresh screen.
+        resyncTask = Task { [weak view] in
+            for await _ in resync {
+                await MainActor.run {
+                    view?.getTerminal().resetToInitialState()
+                }
+            }
+        }
     }
 
     /// Permanent teardown (session closed or cache eviction): stop the
@@ -72,6 +86,8 @@ final class TerminalSurface: NSObject, TerminalViewDelegate {
     func stop() {
         feedTask?.cancel()
         feedTask = nil
+        resyncTask?.cancel()
+        resyncTask = nil
         view.terminalDelegate = nil
         view.updateUiClosed()
     }
@@ -191,6 +207,7 @@ final class TerminalViewCache {
         let wasEvicted = evictedSessionIDs.remove(sessionID) != nil
         let surface = TerminalSurface(
             output: model.beginOutputStream(),
+            resync: model.resyncCommands,
             send: { model.send($0) },
             onResize: { cols, rows in model.resize(cols: cols, rows: rows) },
             fontSize: resolveFontSize?(model.sceneID) ?? fontModel?.size ?? TerminalFontSettings.defaultSize,
