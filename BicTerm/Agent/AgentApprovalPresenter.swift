@@ -209,7 +209,6 @@ struct AgentApprovalSheetView: View {
             .navigationTitle("Agent Request")
             .navigationBarTitleDisplayMode(.inline)
         }
-        .preferredColorScheme(.dark)
     }
 
     private func metadataRow(title: String, value: String, identifier: String) -> some View {

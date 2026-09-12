@@ -68,6 +68,11 @@ final class SessionStore {
     /// scene: pinch-to-zoom on any surface, or the Settings slider, resizes
     /// every cached terminal at once (wired to the view cache in `init`).
     let terminalFont = TerminalFontModel()
+    /// App-global appearance preference (System default, persisted explicit
+    /// Dark/Light choice). One instance shared by every scene: `BicTermApp`
+    /// applies the color-scheme override at each WindowGroup root, so a
+    /// Settings change re-themes every window at once.
+    let theme = ThemeModel()
 
     private let hostKeyStore: (any HostKeyStoreProtocol)?
     private let connectionLookup: ConnectionLookup

@@ -1,10 +1,14 @@
 import SwiftUI
+import UIKit
 
 // MARK: - Design Tokens
 
-/// Dark-first terminal aesthetic color palette
+/// Terminal aesthetic color palette, in two fixed variants — ``dark`` (the
+/// original dark-first set) and ``light``. The palette is selected from the
+/// effective color scheme at the `terminalStyle()` injection point, so
+/// token call sites never branch on appearance.
 struct TerminalColors: EnvironmentKey {
-    static let defaultValue = TerminalColors()
+    static let defaultValue = TerminalColors.dark
 
     let background: Color
     let foreground: Color
@@ -31,6 +35,42 @@ struct TerminalColors: EnvironmentKey {
         self.error = error
         self.success = success
     }
+
+    /// The dark palette (GitHub-dark-derived). Also the fallback when no
+    /// scheme is known (environment default, `.unspecified` traits).
+    static let dark = TerminalColors()
+
+    /// The light palette (GitHub-light-derived): white canvas with dark
+    /// text; accent/semantic hues chosen for WCAG-AA contrast on white.
+    static let light = TerminalColors(
+        background: Color(hex: 0xFFFFFF),
+        foreground: Color(hex: 0x1F2328),
+        accent: Color(hex: 0x0969DA),
+        selection: Color(hex: 0xC8E1FA),
+        dimmed: Color(hex: 0x59636E),
+        error: Color(hex: 0xD1242F),
+        success: Color(hex: 0x1A7F37)
+    )
+
+    /// The palette for a SwiftUI color scheme.
+    static func palette(for scheme: ColorScheme) -> TerminalColors {
+        scheme == .dark ? .dark : .light
+    }
+
+    /// The palette for a UIKit interface style; `.unspecified` stays dark
+    /// (the dark-first default).
+    static func palette(for style: UIUserInterfaceStyle) -> TerminalColors {
+        style == .light ? .light : .dark
+    }
+
+    /// Native (UIKit) surface colors for SwiftTerm. SwiftTerm snapshots
+    /// UIColors into its `Terminal` model at assignment time (and copies
+    /// the background into the view layer in `setupOptions`), so
+    /// `UIColor(dynamicProvider:)` values would NOT re-resolve on a scheme
+    /// change — these are static per-palette colors, re-applied on trait
+    /// changes by `TerminalContainerView.applyNativeTerminalColors()`.
+    var nativeBackground: UIColor { UIColor(background) }
+    var nativeForeground: UIColor { UIColor(foreground) }
 }
 
 /// SF Mono typography scale for terminal UI
@@ -89,7 +129,7 @@ extension EnvironmentValues {
 }
 
 private struct TerminalColorsKey: EnvironmentKey {
-    static let defaultValue = TerminalColors()
+    static let defaultValue = TerminalColors.dark
 }
 
 private struct TerminalTypographyKey: EnvironmentKey {
@@ -115,18 +155,28 @@ extension Color {
 
 // MARK: - View Extension for Easy Token Access
 
-extension View {
-    /// Injects terminal design tokens and pins the subtree to the dark color
-    /// scheme: dark-palette token text over SwiftUI's appearance-driven
-    /// materials is legible only while the scheme is dark.
-    func terminalStyle() -> some View {
-        self
-            .environment(\.terminalColors, TerminalColors())
+/// Injects the terminal design tokens, selecting the light or dark color
+/// palette from the EFFECTIVE color scheme — the app-level appearance
+/// override (`ThemeModel`) when one is set, otherwise the device
+/// appearance. A preference change re-themes every styled view; token call
+/// sites never branch on scheme.
+private struct TerminalStyleModifier: ViewModifier {
+    @Environment(\.colorScheme) private var colorScheme
+
+    func body(content: Content) -> some View {
+        content
+            .environment(\.terminalColors, .palette(for: colorScheme))
             .environment(\.terminalTypography, TerminalTypography())
             .environment(\.terminalSpacing, TerminalSpacing())
-            .preferredColorScheme(.dark)
             #if DEBUG
             .modifier(UITestKeyManagementOverlay())
             #endif
+    }
+}
+
+extension View {
+    /// Injects terminal design tokens with the scheme-appropriate palette.
+    func terminalStyle() -> some View {
+        modifier(TerminalStyleModifier())
     }
 }

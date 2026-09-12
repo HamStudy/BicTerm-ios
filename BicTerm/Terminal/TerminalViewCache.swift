@@ -44,8 +44,7 @@ final class TerminalSurface: NSObject, TerminalViewDelegate {
         super.init()
 
         view.optionAsMetaKey = true
-        view.nativeBackgroundColor = UIColor(red: 0x0D / 255, green: 0x11 / 255, blue: 0x17 / 255, alpha: 1)
-        view.nativeForegroundColor = UIColor(red: 0xE6 / 255, green: 0xED / 255, blue: 0xF3 / 255, alpha: 1)
+        view.applyNativeTerminalColors()
         // UIKit's inputAccessoryView dock overlays the terminal's bottom rows
         // when a hardware keyboard is attached; the accessory lives in the
         // host view's layout instead. The hosted instance keeps feeding

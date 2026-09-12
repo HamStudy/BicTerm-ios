@@ -90,8 +90,7 @@ struct TerminalRepresentable: UIViewRepresentable {
         }
         #endif
 
-        view.nativeBackgroundColor = UIColor(red: 0x0D / 255, green: 0x11 / 255, blue: 0x17 / 255, alpha: 1)
-        view.nativeForegroundColor = UIColor(red: 0xE6 / 255, green: 0xED / 255, blue: 0xF3 / 255, alpha: 1)
+        view.applyNativeTerminalColors()
 
         view.terminalDelegate = context.coordinator
         view.accessibilityIdentifier = "terminalView"
@@ -220,6 +219,31 @@ final class TerminalContainerView: TerminalView {
         if window != nil, !isFirstResponder {
             becomeFirstResponder()
         }
+    }
+
+    /// An appearance change (the app-level theme override applied at the
+    /// scene root, or — under System — the device appearance) arrives as a
+    /// trait change; re-resolve the native chrome colors for the new style.
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        guard traitCollection.userInterfaceStyle != previousTraitCollection?.userInterfaceStyle else { return }
+        applyNativeTerminalColors()
+    }
+
+    /// Re-resolves the surface's native chrome colors (default cell
+    /// background/foreground) for the current traits. SwiftTerm snapshots
+    /// UIColors into its `Terminal` model on assignment, and `setupOptions`
+    /// copied the creation-time background into the view's layer — so
+    /// neither follows a scheme change on its own and both are re-applied
+    /// here. Foreground first, then background: the background setter is
+    /// the one that triggers SwiftTerm's full repaint (`colorsChanged`).
+    /// The 16 ANSI palette colors and the cursor are content colors
+    /// (remote output semantics) and are deliberately untouched.
+    func applyNativeTerminalColors() {
+        let palette = TerminalColors.palette(for: traitCollection.userInterfaceStyle)
+        nativeForegroundColor = palette.nativeForeground
+        nativeBackgroundColor = palette.nativeBackground
+        layer.backgroundColor = palette.nativeBackground.cgColor
     }
 
     /// Main thread (gesture delivery), same actor as the model. Only the

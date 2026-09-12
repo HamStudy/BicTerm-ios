@@ -14,6 +14,7 @@ import SwiftUI
 ///   --uitest-session-command <cmd>         send cmd to each opened session once active ({NAME} substituted)
 ///   --uitest-keep-toolbar-pref             keep the persisted toolbar visibility choice (relaunch tests)
 ///   --uitest-keep-font-pref                keep the persisted terminal font size (persistence tests)
+///   --uitest-keep-theme-pref               keep the persisted appearance preference (persistence tests)
 enum TerminalSceneUITest {
     static var seamsEnabled: Bool {
         ProcessInfo.processInfo.arguments.contains("--uitest-sessions")
@@ -72,6 +73,12 @@ enum SessionUITestDriver {
         // default unless the test deliberately exercises persistence.
         if !arguments.contains("--uitest-keep-font-pref") {
             store.terminalFont.reset()
+        }
+
+        // Same for the app-global appearance preference: back to System
+        // unless the test deliberately exercises persistence.
+        if !arguments.contains("--uitest-keep-theme-pref") {
+            store.theme.reset()
         }
 
         let command = TerminalSceneUITest.value(after: "--uitest-session-command")

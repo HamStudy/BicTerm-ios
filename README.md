@@ -68,6 +68,15 @@ An iOS 18+ SSH terminal client for iPhone and iPad, built on
   remote pty). Terminal font size is deliberately independent of Dynamic
   Type — the terminal is a fixed character grid, not body text.
 
+### Appearance theme
+
+- **Settings → Appearance → Theme** offers **System** (the default — follows
+  the device appearance), **Dark**, and **Light**. The choice is persisted
+  and applies to every window immediately, including sheets. Dark and Light
+  are both first-class design-token palettes; the terminal surface's native
+  background/foreground re-resolve live on any appearance change, while the
+  16 ANSI content colors keep their remote-output semantics untouched.
+
 ## What Doesn't Work Yet
 
 - **Live herdr-server validation on this dev host** — building the herdr v0.9.0 server fixture needs zig 0.15.x, which fails to link libSystem on macOS 26 (toolchain-vs-host issue, not an app defect). Persistence and lifecycle tests currently run against committed-frame replay. See `.omo/evidence/phase2-h16-server-fixture.md`.
@@ -101,7 +110,7 @@ BicTerm (iOS app)
 ├── Connections/  Connection list + editor
 ├── Keys/         Key management UI
 ├── Agent/        Agent authorization UI
-└── Design/       Tokens, dark-first appearance
+└── Design/       Tokens, dual dark/light palettes
 ```
 
 ## Dependencies

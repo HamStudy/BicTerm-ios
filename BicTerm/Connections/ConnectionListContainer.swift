@@ -27,6 +27,7 @@ struct ConnectionListContainer: View {
 
             ConnectionListView(
                 fontModel: store.terminalFont,
+                themeModel: store.theme,
                 onConnectRequested: handleConnect,
                 onOpenSessions: { switcherPresented = true },
                 onForgetHost: { connection in

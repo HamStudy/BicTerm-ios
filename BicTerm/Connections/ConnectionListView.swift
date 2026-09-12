@@ -15,15 +15,20 @@ struct ConnectionListView: View {
     /// Shared font-size preference handed to the Settings screen (the
     /// Appearance row shows its live value; the detail screen edits it).
     let fontModel: TerminalFontModel
+    /// Shared appearance preference handed to the Settings screen (the
+    /// Theme row shows its live value; the detail screen edits it).
+    let themeModel: ThemeModel
 
     init(
         fontModel: TerminalFontModel,
+        themeModel: ThemeModel,
         onConnectRequested: @escaping (Connection) -> Void = { _ in },
         onOpenSessions: (() -> Void)? = nil,
         onClose: (() -> Void)? = nil,
         onForgetHost: ((Connection) -> Void)? = nil
     ) {
         self.fontModel = fontModel
+        self.themeModel = themeModel
         self.onConnectRequested = onConnectRequested
         self.onOpenSessions = onOpenSessions
         self.onClose = onClose
@@ -73,7 +78,7 @@ struct ConnectionListView: View {
                     }
                 }
                 ToolbarItem(placement: .topBarLeading) {
-                    NavigationLink(destination: SettingsView(fontModel: fontModel)) {
+                    NavigationLink(destination: SettingsView(fontModel: fontModel, themeModel: themeModel)) {
                         Image(systemName: "gear")
                             .foregroundColor(colors.accent)
                     }

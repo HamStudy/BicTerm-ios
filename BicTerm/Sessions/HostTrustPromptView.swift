@@ -75,7 +75,6 @@ struct HostTrustPromptView: View {
             .navigationTitle("Verify Host")
             .navigationBarTitleDisplayMode(.inline)
         }
-        .preferredColorScheme(.dark)
     }
 
     private func row(title: String, value: String, identifier: String) -> some View {

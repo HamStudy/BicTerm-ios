@@ -1,5 +1,24 @@
 import SwiftUI
 
+/// Applies the app-global appearance preference at a scene root: System
+/// (nil) leaves the scene following the device; Dark/Light pin the window
+/// and everything presented inside it. Reading the observable model in a
+/// ViewModifier body keeps the override live — a Settings change re-renders
+/// every scene with the new scheme, no relaunch needed.
+private struct AppAppearanceModifier: ViewModifier {
+    let theme: ThemeModel
+
+    func body(content: Content) -> some View {
+        content.preferredColorScheme(theme.colorSchemeOverride)
+    }
+}
+
+private extension View {
+    func appAppearance(_ theme: ThemeModel) -> some View {
+        modifier(AppAppearanceModifier(theme: theme))
+    }
+}
+
 /// Terminal window whose restored SessionID has no live scene yet. Asks
 /// the store whether a termination snapshot exists for that window's
 /// original session (state-restored windows keep their value across
@@ -62,6 +81,7 @@ private struct TerminalWindowRoot: View {
         .sheet(isPresented: $listPresented) {
             ConnectionListView(
                 fontModel: store.terminalFont,
+                themeModel: store.theme,
                 onConnectRequested: { connection in
                     listPresented = false
                     let descriptor = store.openSession(for: connection)
@@ -111,57 +131,66 @@ struct BicTermApp: App {
 
     var body: some Scene {
         WindowGroup("BicTerm") {
-            #if DEBUG
-            if ProcessInfo.processInfo.arguments.contains("-uitest-terminal-preview") {
-                TerminalPreviewScreen()
-                    .terminalStyle()
-            } else {
+            Group {
+                #if DEBUG
+                if ProcessInfo.processInfo.arguments.contains("-uitest-terminal-preview") {
+                    TerminalPreviewScreen()
+                        .terminalStyle()
+                } else {
+                    ConnectionListContainer(store: sessionStore)
+                        .terminalStyle()
+                }
+                #else
                 ConnectionListContainer(store: sessionStore)
                     .terminalStyle()
+                #endif
             }
-            #else
-            ConnectionListContainer(store: sessionStore)
-                .terminalStyle()
-            #endif
+            .appAppearance(sessionStore.theme)
         }
 
         WindowGroup("Terminal", id: "terminal", for: SessionID.self) { $sessionID in
-            #if DEBUG
-            if ProcessInfo.processInfo.arguments.contains("-uitest-terminal-preview") {
-                TerminalPreviewScreen()
-                    .terminalStyle()
-            } else {
+            Group {
+                #if DEBUG
+                if ProcessInfo.processInfo.arguments.contains("-uitest-terminal-preview") {
+                    TerminalPreviewScreen()
+                        .terminalStyle()
+                } else {
+                    TerminalWindowRoot(store: sessionStore, windowSessionID: sessionID?.value)
+                }
+                #else
                 TerminalWindowRoot(store: sessionStore, windowSessionID: sessionID?.value)
+                #endif
             }
-            #else
-            TerminalWindowRoot(store: sessionStore, windowSessionID: sessionID?.value)
-            #endif
+            .appAppearance(sessionStore.theme)
         }
 
         WindowGroup("Herdr Workspace", id: "herdr", for: SessionID.self) { $sessionID in
-            #if DEBUG
-            // iPadOS persists scene sessions across launches and hard
-            // shutdowns: a stale herdr scene restored during a
-            // `-uitest-terminal-preview` run would render the connection
-            // list (HerdrWindowRoot's nil-state) and shadow the preview.
-            // Every WindowGroup must mirror the test gate.
-            if ProcessInfo.processInfo.arguments.contains("-uitest-terminal-preview") {
-                TerminalPreviewScreen()
-                    .terminalStyle()
-            } else {
+            Group {
+                #if DEBUG
+                // iPadOS persists scene sessions across launches and hard
+                // shutdowns: a stale herdr scene restored during a
+                // `-uitest-terminal-preview` run would render the connection
+                // list (HerdrWindowRoot's nil-state) and shadow the preview.
+                // Every WindowGroup must mirror the test gate.
+                if ProcessInfo.processInfo.arguments.contains("-uitest-terminal-preview") {
+                    TerminalPreviewScreen()
+                        .terminalStyle()
+                } else {
+                    HerdrWindowRoot(
+                        store: sessionStore,
+                        center: HerdrWorkspaceCenter.shared,
+                        windowSessionID: sessionID?.value
+                    )
+                }
+                #else
                 HerdrWindowRoot(
                     store: sessionStore,
                     center: HerdrWorkspaceCenter.shared,
                     windowSessionID: sessionID?.value
                 )
+                #endif
             }
-            #else
-            HerdrWindowRoot(
-                store: sessionStore,
-                center: HerdrWorkspaceCenter.shared,
-                windowSessionID: sessionID?.value
-            )
-            #endif
+            .appAppearance(sessionStore.theme)
         }
     }
 }

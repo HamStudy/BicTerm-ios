@@ -78,7 +78,6 @@ struct SessionSwitcherView: View {
                 }
             }
         }
-        .preferredColorScheme(.dark)
         .presentationDetents([.medium, .large])
         .task { store.warmSceneModelsForSwitcher() }
     }
