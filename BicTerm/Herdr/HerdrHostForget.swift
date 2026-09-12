@@ -91,8 +91,10 @@ final class HerdrHostForgetService {
                 .flatMap(ConnectionsModel.passwordTags(in:))
         )
         for tag in tags where !stillReferenced.contains(tag) {
-            try? await dependencies.passwordStore.deletePassword(for: tag)
-            passwordsRemoved += 1
+            let hadEntry = (try? await dependencies.passwordStore.password(for: tag)) != nil
+            if let _ = try? await dependencies.passwordStore.deletePassword(for: tag), hadEntry {
+                passwordsRemoved += 1
+            }
         }
 
         let restorableSessionsRemoved = await dependencies.deleteRestorableSessions(

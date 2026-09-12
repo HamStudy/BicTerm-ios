@@ -82,6 +82,7 @@ struct ConnectionEditorView: View {
             if originalDraft == nil {
                 populateDraft()
                 originalDraft = draft
+                Task { await probePasswords() }
             }
         }
             .onChange(of: draft) {
@@ -126,6 +127,32 @@ struct ConnectionEditorView: View {
     private var isDirty: Bool {
         guard let originalDraft else { return false }
         return draft != originalDraft
+    }
+
+    private func probePasswords() async {
+        let tag = draft.passwordTag
+        if !tag.isEmpty {
+            let found = (try? await AppServices.shared.passwordStore.password(for: tag)) != nil
+            if draft.passwordTag == tag {
+                draft.hasSavedPassword = found
+                draft.passwordEntryMissing = !found
+                originalDraft?.hasSavedPassword = found
+                originalDraft?.passwordEntryMissing = !found
+            }
+        }
+        for hop in draft.hops where !hop.passwordTag.isEmpty {
+            let found = (try? await AppServices.shared.passwordStore.password(for: hop.passwordTag)) != nil
+            if let index = draft.hops.firstIndex(where: { $0.id == hop.id && $0.passwordTag == hop.passwordTag }) {
+                draft.hops[index].hasSavedPassword = found
+                draft.hops[index].passwordEntryMissing = !found
+                draft.hops[index].passwordWasProbed = true
+            }
+            if let index = originalDraft?.hops.firstIndex(where: { $0.id == hop.id }) {
+                originalDraft?.hops[index].hasSavedPassword = found
+                originalDraft?.hops[index].passwordEntryMissing = !found
+                originalDraft?.hops[index].passwordWasProbed = true
+            }
+        }
     }
 
     private func cancelTapped() {
@@ -234,8 +261,6 @@ struct ConnectionEditorView: View {
                     get: { draft.authMethod },
                     set: {
                         draft.switchAuthMethod(to: $0)
-                        // Choosing password mode is itself the interaction
-                        // that arms the (still empty) password field's error.
                         if $0 == .password { touchedFields.insert(.password) }
                     }
                 )) {
@@ -254,6 +279,9 @@ struct ConnectionEditorView: View {
                             .foregroundColor(colors.foreground)
                         Spacer()
                         SecureField("", text: touchedBinding($draft.passwordInput, field: .password))
+                            // Opt out of the system password-vault save flow; BicTerm owns persistence.
+                            .textContentType(.oneTimeCode)
+                            .focused($focus, equals: .password)
                             .font(typography.body)
                             .foregroundColor(colors.foreground)
                             .multilineTextAlignment(.trailing)
@@ -263,15 +291,22 @@ struct ConnectionEditorView: View {
                             .accessibilityIdentifier("password-field")
                     }
                     if draft.hasSavedPassword, draft.passwordInput.isEmpty {
-                        Text("Saved in Keychain")
+                        Text("Saved on this device")
                             .font(typography.caption)
                             .foregroundColor(colors.success)
                             .accessibilityIdentifier("password-saved-badge")
-                    } else if let error = visibleError(draft.passwordError, for: .password) {
-                        Text(error)
+                    } else if draft.passwordEntryMissing, draft.passwordInput.isEmpty {
+                        Text("Saved password missing — re-enter it or you'll be asked when connecting")
                             .font(typography.caption)
                             .foregroundColor(colors.error)
                             .accessibilityIdentifier("password-field-error")
+                    } else {
+                        Text(draft.passwordInput.isEmpty
+                             ? "You'll be asked for the password when connecting"
+                             : "Will be saved in this device's Keychain when you tap Save")
+                            .font(typography.caption)
+                            .foregroundStyle(colors.dimmed)
+                            .accessibilityIdentifier("password-field-status")
                     }
                 }
             } else {
@@ -281,7 +316,9 @@ struct ConnectionEditorView: View {
             Text("Authentication")
         } footer: {
             if draft.authMethod == .password, draft.protocolID == ProtocolDescriptor.ssh.id {
-                Text("Passwords are stored in the iOS Keychain on this device only, protected when locked. The connection record holds a Keychain tag, never the password.")
+                Text(draft.hasSavedPassword
+                     ? "Leave the field blank to keep the saved password, or type a replacement. Passwords stay in this device's Keychain, protected when locked; they don't transfer to another device."
+                     : "Password is optional. Leave it blank to be asked when connecting. Typed passwords are saved in this device's Keychain, protected when locked; they don't transfer to another device.")
                     .font(typography.caption)
                     .foregroundColor(colors.dimmed)
             } else {
@@ -583,9 +620,8 @@ struct ConnectionEditorView: View {
         return writes
     }
 
-    /// Writes must precede the model persist: a saved password connection
-    /// whose tag has no Keychain entry would be persisted-but-unusable, so a
-    /// store failure aborts here and leaves the model untouched.
+    /// A typed password must not be silently discarded when Keychain saving
+    /// fails; leave the draft open rather than saving only its tag.
     private func storePendingPasswords() async -> String? {
         for write in pendingPasswordWrites {
             do {

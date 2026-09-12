@@ -1,6 +1,7 @@
 import Foundation
 import NIOCore
 import NIOEmbedded
+import NIOPosix
 import NIOSSH
 import Security
 import XCTest
@@ -36,6 +37,25 @@ actor InMemoryPasswordStore: PasswordStoring {
 struct NoKeyProvider: SSHAuthenticationKeyProvider {
     func authenticationPrivateKey(with reference: String, reason: String) async throws -> NIOSSHPrivateKey {
         throw KeyRepositoryError.keyNotFound
+    }
+}
+
+actor RecordingPasswordPrompt: SSHPasswordPrompting {
+    let answer: String?
+    let store: (any PasswordStoring)?
+    private(set) var requests: [SSHPasswordRequest] = []
+
+    init(answer: String?, store: (any PasswordStoring)? = nil) {
+        self.answer = answer
+        self.store = store
+    }
+
+    func promptForPassword(_ request: SSHPasswordRequest) async -> String? {
+        requests.append(request)
+        if let answer, let tag = request.saveTag {
+            try? await store?.save(answer, for: tag)
+        }
+        return answer
     }
 }
 
@@ -169,6 +189,159 @@ final class PasswordAuthTests: XCTestCase {
     }
 
     // MARK: End-to-end over the in-process loopback password server
+
+    func testCascadeOffersKeyThenPasswordOnceAfterRejectionOrPartialSuccess() async throws {
+        let group = MultiThreadedEventLoopGroup(numberOfThreads: 1)
+        defer { Task { try? await group.shutdownGracefully() } }
+        let loop = group.next()
+        let prompt = RecordingPasswordPrompt(answer: Self.correctPassword)
+        let key = try await SSHTestFixture.loadFixtureEd25519Key()
+        let delegate = CascadeUserAuthenticationDelegate(
+            host: "hop.example.com", port: 2222, username: "hop-user", key: key,
+            passwordTag: nil, canRemember: false, passwordStore: InMemoryPasswordStore(), prompt: prompt
+        )
+        let first = loop.makePromise(of: NIOSSHUserAuthenticationOffer?.self)
+        loop.execute { delegate.nextAuthenticationType(availableMethods: [.publicKey, .password], nextChallengePromise: first) }
+        let keyOffer = try await first.futureResult.get()
+        guard case .privateKey = keyOffer?.offer else { return XCTFail("Expected key first") }
+        let second = loop.makePromise(of: NIOSSHUserAuthenticationOffer?.self)
+        loop.execute { delegate.nextAuthenticationType(availableMethods: [.password], nextChallengePromise: second) }
+        let passwordOffer = try await second.futureResult.get()
+        guard case .password = passwordOffer?.offer else { return XCTFail("Expected password second") }
+        let third = loop.makePromise(of: NIOSSHUserAuthenticationOffer?.self)
+        loop.execute { delegate.nextAuthenticationType(availableMethods: [.password], nextChallengePromise: third) }
+        await assertThrowsSSHError(.authenticationFailed) { _ = try await third.futureResult.get() }
+        let requests = await prompt.requests
+        XCTAssertEqual(requests.count, 1)
+        XCTAssertEqual(requests.first?.host, "hop.example.com")
+        XCTAssertEqual(requests.first?.username, "hop-user")
+        XCTAssertNil(requests.first?.saveTag)
+    }
+
+    func testCascadeDoesNotPromptWithoutAdvertisedPassword() async throws {
+        let loop = EmbeddedEventLoop()
+        let prompt = RecordingPasswordPrompt(answer: Self.correctPassword)
+        let delegate = CascadeUserAuthenticationDelegate(
+            host: "example.com", port: 22, username: "user", key: nil,
+            passwordTag: "tag", canRemember: true, passwordStore: InMemoryPasswordStore(), prompt: prompt
+        )
+        let promise = loop.makePromise(of: NIOSSHUserAuthenticationOffer?.self)
+        delegate.nextAuthenticationType(availableMethods: [.publicKey], nextChallengePromise: promise)
+        await assertThrowsSSHError(.authenticationFailed) { _ = try await promise.futureResult.get() }
+        let requests = await prompt.requests
+        XCTAssertTrue(requests.isEmpty)
+    }
+
+    func testInteractivePasswordIsRememberedAndReusedAcrossTransports() async throws {
+        let server = LoopbackPasswordSSHServer(username: "pwduser", password: Self.correctPassword)
+        let port = try await server.start(port: 0)
+        defer { Task { await server.stop() } }
+        let store = InMemoryPasswordStore()
+        let prompt = RecordingPasswordPrompt(answer: Self.correctPassword, store: store)
+        let verifier = try await pretrustingVerifier(for: server, port: port)
+        let connection = try makePasswordConnection(port: port, username: "pwduser", tag: "interactive-tag")
+        for _ in 0..<2 {
+            let transport = SSHTransport(hostKeyVerifier: verifier, authenticationKeyProvider: NoKeyProvider(),
+                                         passwordStore: store, passwordPrompt: prompt)
+            try await transport.connect(to: connection, cols: 80, rows: 24)
+            await transport.close()
+        }
+        let requests = await prompt.requests
+        XCTAssertEqual(requests.count, 1)
+        XCTAssertEqual(requests.first?.saveTag, "interactive-tag")
+        XCTAssertEqual(server.authenticatedConnectionCount, 2)
+        await server.stop()
+    }
+
+    func testInteractiveCancelFailsTypedDuringHandshake() async throws {
+        let server = LoopbackPasswordSSHServer(username: "pwduser", password: Self.correctPassword)
+        let port = try await server.start(port: 0)
+        defer { Task { await server.stop() } }
+        let prompt = RecordingPasswordPrompt(answer: nil)
+        let verifier = try await pretrustingVerifier(for: server, port: port)
+        let transport = SSHTransport(hostKeyVerifier: verifier, passwordStore: InMemoryPasswordStore(), passwordPrompt: prompt)
+        let connection = try makePasswordConnection(port: port, username: "pwduser", tag: "cancel-tag")
+        await assertThrowsSSHError(.authenticationFailed) {
+            try await transport.connect(to: connection, cols: 80, rows: 24)
+        }
+        let requests = await prompt.requests
+        XCTAssertEqual(requests.count, 1)
+        XCTAssertEqual(server.inboundConnectionCount, 1)
+        XCTAssertEqual(server.authenticatedConnectionCount, 0)
+        await transport.close()
+        await server.stop()
+    }
+
+    func testKeyFallbackAndDualAuthReuseDerivedPasswordTag() async throws {
+        for mode in [LoopbackPasswordSSHServer.KeyAuthentication.rejected, .requiresPassword] {
+            let server = LoopbackPasswordSSHServer(username: "pwduser", password: Self.correctPassword, keyAuthentication: mode)
+            let port = try await server.start(port: 0)
+            let verifier = try await pretrustingVerifier(for: server, port: port)
+            let connection = try Connection(name: "dual", type: .ssh, host: "127.0.0.1", port: port,
+                                            username: "pwduser", keyReference: "fixture-ed25519")
+            let store = InMemoryPasswordStore()
+            let prompt = RecordingPasswordPrompt(answer: Self.correctPassword, store: store)
+            let key = try await SSHTestFixture.loadFixtureEd25519Key()
+            for _ in 0..<2 {
+                let transport = SSHTransport(hostKeyVerifier: verifier, authenticationKeyProvider: StaticKeyProvider(key: key),
+                                             passwordStore: store, passwordPrompt: prompt)
+                try await transport.connect(to: connection, cols: 80, rows: 24)
+                await transport.close()
+            }
+            let requests = await prompt.requests
+            XCTAssertEqual(requests.count, 1)
+            XCTAssertEqual(requests.first?.saveTag, connection.promptedPasswordTag)
+            XCTAssertEqual(server.authenticatedConnectionCount, 2)
+            await server.stop()
+        }
+    }
+
+    func testJumpHopPromptsForItsOwnIdentityWithoutRemembering() async throws {
+        let server = LoopbackPasswordSSHServer(username: "hop-user", password: Self.correctPassword)
+        let port = try await server.start(port: 0)
+        defer { Task { await server.stop() } }
+        let prompt = RecordingPasswordPrompt(answer: Self.correctPassword)
+        let verifier = try await pretrustingVerifier(for: server, port: port)
+        let dialer = NIOJumpDialer(hostKeyVerifier: verifier, authenticationKeyProvider: NoKeyProvider(),
+                                  passwordStore: InMemoryPasswordStore(), passwordPrompt: prompt)
+        let hop = try await dialer.connectTCP(to: JumpHopEndpoint(
+            host: "127.0.0.1", port: port, username: "hop-user", keyReference: "hop-password", authMethod: .password
+        ))
+        let session = try await hop.openSession(cols: 80, rows: 24)
+        let requests = await prompt.requests
+        XCTAssertEqual(requests.count, 1)
+        XCTAssertEqual(requests.first?.username, "hop-user")
+        XCTAssertEqual(requests.first?.port, port)
+        XCTAssertNil(requests.first?.saveTag)
+        await session.close()
+        await hop.close()
+        await server.stop()
+    }
+
+    func testJumpDestinationUsesDerivedTagAfterKeyRejection() async throws {
+        let server = LoopbackPasswordSSHServer(username: "pwduser", password: Self.correctPassword, keyAuthentication: .rejected)
+        let port = try await server.start(port: 0)
+        defer { Task { await server.stop() } }
+        let verifier = try await pretrustingVerifier(for: server, port: port)
+        let hostKey = try SSHTestFixture.hostPublicKey("Fixtures/sshd/host_keys/hop1_host_ed25519.pub")
+        try await verifier.trust(host: "127.0.0.1", port: 12222, key: hostKey.blob, algorithm: hostKey.algorithm)
+        let key = try await SSHTestFixture.loadFixtureEd25519Key()
+        let store = InMemoryPasswordStore()
+        let prompt = RecordingPasswordPrompt(answer: Self.correctPassword, store: store)
+        let builder = JumpChainBuilder(hostKeyVerifier: verifier, authenticationKeyProvider: StaticKeyProvider(key: key),
+                                       passwordStore: store, passwordPrompt: prompt)
+        let connection = try Connection(name: "jump-password", type: .ssh, host: "127.0.0.1", port: port,
+                                        username: "pwduser", keyReference: "fixture", jumpChain: [
+                                            Hop(host: "127.0.0.1", port: 12222, username: SSHTestFixture.username, keyReference: "fixture")
+                                        ])
+        let transport = try await builder.build(connection: connection, cols: 80, rows: 24)
+        let requests = await prompt.requests
+        XCTAssertEqual(requests.count, 1)
+        XCTAssertEqual(requests.first?.saveTag, connection.promptedPasswordTag)
+        XCTAssertEqual(requests.first?.port, port)
+        await transport.close()
+        await server.stop()
+    }
 
     private func pretrustingVerifier(
         for server: LoopbackPasswordSSHServer,

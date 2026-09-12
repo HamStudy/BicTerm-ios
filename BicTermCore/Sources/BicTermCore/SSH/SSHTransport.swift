@@ -32,6 +32,7 @@ public actor SSHTransport {
     let hostKeyVerifier: HostKeyVerifier
     private let authenticationKeyProvider: any SSHAuthenticationKeyProvider
     private let passwordStore: any PasswordStoring
+    private let passwordPrompt: (any SSHPasswordPrompting)?
     private var outputContinuation: AsyncStream<Data>.Continuation?
     private var group: MultiThreadedEventLoopGroup?
     var connectionChannel: (any Channel)?
@@ -56,11 +57,13 @@ public actor SSHTransport {
     public init(
         hostKeyVerifier: HostKeyVerifier,
         authenticationKeyProvider: any SSHAuthenticationKeyProvider = DefaultSSHAuthenticationKeyProvider(),
-        passwordStore: any PasswordStoring = KeychainPasswordStore()
+        passwordStore: any PasswordStoring = KeychainPasswordStore(),
+        passwordPrompt: (any SSHPasswordPrompting)? = nil
     ) {
         self.hostKeyVerifier = hostKeyVerifier
         self.authenticationKeyProvider = authenticationKeyProvider
         self.passwordStore = passwordStore
+        self.passwordPrompt = passwordPrompt
         let (stream, _) = AsyncStream.makeStream(of: Data.self, bufferingPolicy: .bufferingNewest(32))
         self.output = stream
     }
@@ -84,10 +87,9 @@ public actor SSHTransport {
         }
     }
 
-    /// Resolves the user-auth delegate strictly from the connection's
-    /// declared method — a password endpoint never offers keys and a key
-    /// endpoint never falls back to passwords. A credential that cannot be
-    /// resolved is the typed `.authenticationFailed`, thrown before any dial.
+    /// Key connections can continue with RFC 4252 password auth after rejection
+    /// or partial success. Without a prompt, missing password credentials still
+    /// fail before dialing on the password-only path for headless callers.
     func userAuthDelegate(
         for connection: Connection
     ) async throws(SSHTransportError) -> any NIOSSHClientUserAuthenticationDelegate {
@@ -102,8 +104,19 @@ public actor SSHTransport {
             } catch {
                 throw .authenticationFailed
             }
-            return SingleKeyUserAuthenticationDelegate(username: connection.username, key: privateKey)
+            return CascadeUserAuthenticationDelegate(
+                host: connection.host, port: connection.port, username: connection.username,
+                key: privateKey, passwordTag: connection.promptedPasswordTag, canRemember: true,
+                passwordStore: passwordStore, prompt: passwordPrompt
+            )
         case .password:
+            if let passwordPrompt {
+                return CascadeUserAuthenticationDelegate(
+                    host: connection.host, port: connection.port, username: connection.username,
+                    key: nil, passwordTag: connection.keyReference, canRemember: true,
+                    passwordStore: passwordStore, prompt: passwordPrompt
+                )
+            }
             return PasswordUserAuthenticationDelegate(
                 username: connection.username,
                 password: try await resolvedPassword(forTag: connection.keyReference)
@@ -159,6 +172,9 @@ public actor SSHTransport {
                             )
                         }
                     ))
+                    if let cascade = setup.userAuth as? CascadeUserAuthenticationDelegate {
+                        try channel.pipeline.syncOperations.addHandler(cascade)
+                    }
                     try channel.pipeline.syncOperations.addHandler(recorder)
                 }
             }

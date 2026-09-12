@@ -68,7 +68,13 @@ public actor SessionRegistry {
             throw .transport(error)
         }
         do {
-            try await transport.connect(to: connection, cols: cols, rows: rows)
+            let result = await SessionTransportContext.$sceneID.withValue(sceneID) { () async -> Result<Void, TransportError> in
+                do throws(TransportError) {
+                    try await transport.connect(to: connection, cols: cols, rows: rows)
+                    return .success(())
+                } catch { return .failure(error) }
+            }
+            try result.get()
         } catch let error {
             if isCurrent(record, generation: generation) {
                 setState(record, .failed(.transport(error)))
@@ -195,7 +201,13 @@ public actor SessionRegistry {
             throw .transport(error)
         }
         do {
-            try await transport.connect(to: record.connection, cols: record.cols, rows: record.rows)
+            let result = await SessionTransportContext.$sceneID.withValue(record.sceneID) { () async -> Result<Void, TransportError> in
+                do throws(TransportError) {
+                    try await transport.connect(to: record.connection, cols: record.cols, rows: record.rows)
+                    return .success(())
+                } catch { return .failure(error) }
+            }
+            try result.get()
         } catch let error {
             if isCurrent(record, generation: generation) {
                 setState(record, .failed(.transport(error)))

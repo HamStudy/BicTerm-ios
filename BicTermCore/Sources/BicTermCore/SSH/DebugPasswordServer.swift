@@ -21,6 +21,9 @@ import NIOSSH
 /// data back, which is all a client-side transport test needs. Release builds
 /// compile this file to nothing (whole-file `#if DEBUG`).
 public final class LoopbackPasswordSSHServer: @unchecked Sendable {
+    public enum KeyAuthentication: Sendable {
+        case disabled, rejected, requiresPassword
+    }
     public enum StartError: Error, Equatable {
         case alreadyStarted
         case bindFailed
@@ -33,16 +36,19 @@ public final class LoopbackPasswordSSHServer: @unchecked Sendable {
     private let username: String
     private let offeredPassword: String
     private let hostKey: NIOSSHPrivateKey
+    private let keyAuthentication: KeyAuthentication
     private let lock = NSLock()
     private var group: MultiThreadedEventLoopGroup?
     private var serverChannel: (any Channel)?
     private var inboundChannelCount = 0
     private var authenticatedCount = 0
 
-    public init(username: String, password: String) {
+    public init(username: String, password: String, keyAuthentication: KeyAuthentication = .disabled,
+                hostKey: NIOSSHPrivateKey? = nil) {
         self.username = username
         self.offeredPassword = password
-        self.hostKey = NIOSSHPrivateKey(ed25519Key: Curve25519.Signing.PrivateKey())
+        self.hostKey = hostKey ?? NIOSSHPrivateKey(ed25519Key: Curve25519.Signing.PrivateKey())
+        self.keyAuthentication = keyAuthentication
     }
 
     /// `"algorithm base64-wire-blob"` in authorized_keys format — tests
@@ -102,16 +108,18 @@ public final class LoopbackPasswordSSHServer: @unchecked Sendable {
     public func start(port: Int) async throws(StartError) -> Int {
         let group = MultiThreadedEventLoopGroup(numberOfThreads: 1)
         let hostKey = self.hostKey
-        let authDelegate = AcceptanceCountingPasswordAuthDelegate(
-            username: username,
-            password: offeredPassword,
-            onAuthenticated: { [weak self] in self?.noteAuthenticated() }
-        )
+        let username = username
+        let password = offeredPassword
+        let keyAuthentication = keyAuthentication
 
         let bootstrap = ServerBootstrap(group: group)
             .serverChannelOption(.socketOption(.so_reuseaddr), value: 1)
             .childChannelInitializer { [weak self] channel in
                 self?.noteInboundConnection()
+                let authDelegate = AcceptanceCountingPasswordAuthDelegate(
+                    username: username, password: password, keyAuthentication: keyAuthentication,
+                    onAuthenticated: { [weak self] in self?.noteAuthenticated() }
+                )
                 return channel.eventLoop.makeCompletedFuture {
                     try channel.pipeline.syncOperations.addHandler(NIOSSHHandler(
                         role: .server(SSHServerConfiguration(
@@ -157,23 +165,39 @@ public final class LoopbackPasswordSSHServer: @unchecked Sendable {
 /// Server-side auth delegate: accepts only the exact configured pair via the
 /// password method.
 private final class AcceptanceCountingPasswordAuthDelegate: NIOSSHServerUserAuthenticationDelegate, @unchecked Sendable {
-    let supportedAuthenticationMethods: NIOSSHAvailableUserAuthenticationMethods = .password
+    var supportedAuthenticationMethods: NIOSSHAvailableUserAuthenticationMethods {
+        keyAuthentication == .disabled ? .password : [.publicKey, .password]
+    }
 
     private let username: String
     private let password: String
     private let onAuthenticated: @Sendable () -> Void
+    private let keyAuthentication: LoopbackPasswordSSHServer.KeyAuthentication
+    private var keyAccepted = false
 
-    init(username: String, password: String, onAuthenticated: @escaping @Sendable () -> Void) {
+    init(username: String, password: String, keyAuthentication: LoopbackPasswordSSHServer.KeyAuthentication,
+         onAuthenticated: @escaping @Sendable () -> Void) {
         self.username = username
         self.password = password
         self.onAuthenticated = onAuthenticated
+        self.keyAuthentication = keyAuthentication
     }
 
     func requestReceived(
         request: NIOSSHUserAuthenticationRequest,
         responsePromise: EventLoopPromise<NIOSSHUserAuthenticationOutcome>
     ) {
+        if case .publicKey = request.request {
+            if keyAuthentication == .requiresPassword, request.username == username {
+                keyAccepted = true
+                responsePromise.succeed(.partialSuccess(remainingMethods: .password))
+            } else {
+                responsePromise.succeed(.failure)
+            }
+            return
+        }
         guard case .password(let offer) = request.request,
+              keyAuthentication != .requiresPassword || keyAccepted,
               request.username == username,
               offer.password == password
         else {
@@ -251,7 +275,11 @@ public enum UITestPasswordServerSeam {
 
         let port = environment[portEnvironmentVariable].flatMap(Int.init) ?? defaultPort
         let password = environment[passwordEnvironmentVariable] ?? defaultPassword
-        let server = LoopbackPasswordSSHServer(username: username, password: password)
+        // Stable DEBUG fixture identity lets relaunch tests reuse trust without
+        // bypassing verification or mistaking a fresh random key for an attack.
+        guard let signingKey = try? Curve25519.Signing.PrivateKey(rawRepresentation: Data(repeating: 0x5a, count: 32)) else { return }
+        let server = LoopbackPasswordSSHServer(username: username, password: password,
+                                              hostKey: NIOSSHPrivateKey(ed25519Key: signingKey))
 
         shared.lock.lock()
         shared.server = server

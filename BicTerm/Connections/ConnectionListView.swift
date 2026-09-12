@@ -237,6 +237,15 @@ struct ConnectionListView: View {
                 Text("\(connection.username)@\(connection.host):\(connection.port)")
                     .font(typography.caption)
                     .foregroundColor(colors.dimmed)
+
+                if connection.type == .ssh {
+                    TerminalBadge(
+                        connection.authMethod == .password
+                            ? "Password" : "Key: \(model.keyLabel(forReference: connection.keyReference) ?? "Unavailable")",
+                        tint: colors.dimmed
+                    )
+                    .accessibilityIdentifier("auth-method-\(sanitized(connection.name))")
+                }
             }
 
             Spacer()

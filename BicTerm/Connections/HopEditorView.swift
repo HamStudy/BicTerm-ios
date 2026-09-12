@@ -119,6 +119,9 @@ struct HopEditorView: View {
                                 .foregroundColor(colors.foreground)
                             Spacer()
                             SecureField("", text: touchedBinding($draft.passwordInput, field: .password))
+                                // Opt out of the system password-vault save flow; BicTerm owns persistence.
+                                .textContentType(.oneTimeCode)
+                                .focused($focus, equals: .password)
                                 .font(typography.body)
                                 .foregroundColor(colors.foreground)
                                 .multilineTextAlignment(.trailing)
@@ -128,10 +131,21 @@ struct HopEditorView: View {
                                 .accessibilityIdentifier("hop-password-field")
                         }
                         if draft.hasSavedPassword, draft.passwordInput.isEmpty {
-                            Text("Saved in Keychain")
+                            Text("Saved on this device")
                                 .font(typography.caption)
                                 .foregroundColor(colors.success)
                                 .accessibilityIdentifier("hop-password-saved-badge")
+                        } else if draft.passwordEntryMissing, draft.passwordInput.isEmpty {
+                            Text("Saved password missing — re-enter it or you'll be asked when connecting")
+                                .font(typography.caption)
+                                .foregroundStyle(colors.error)
+                                .accessibilityIdentifier("hop-password-field-error")
+                        } else {
+                            Text(draft.passwordInput.isEmpty
+                                 ? "You'll be asked for the password when connecting"
+                                 : "Will be saved in this device's Keychain when you tap Save in the connection editor")
+                                .font(typography.caption)
+                                .foregroundStyle(colors.dimmed)
                         }
                     }
                 } else {
@@ -161,6 +175,18 @@ struct HopEditorView: View {
             }
         }
         .scrollContentBackground(.hidden)
+        .task {
+            guard !draft.passwordWasProbed, !draft.passwordTag.isEmpty else { return }
+            let tag = draft.passwordTag
+            let found = (try? await AppServices.shared.passwordStore.password(for: tag)) != nil
+            guard draft.passwordTag == tag else { return }
+            draft.hasSavedPassword = found
+            draft.passwordEntryMissing = !found
+            draft.passwordWasProbed = true
+            originalDraft.hasSavedPassword = found
+            originalDraft.passwordEntryMissing = !found
+            originalDraft.passwordWasProbed = true
+        }
         .background(colors.background)
         .scrollDismissesKeyboard(.immediately)
         .toolbar {

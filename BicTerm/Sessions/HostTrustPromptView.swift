@@ -23,7 +23,7 @@ struct HostTrustPromptView: View {
                     .foregroundColor(colors.foreground)
                     .accessibilityIdentifier("trust-prompt")
 
-                Text("You are connecting for the first time and this host's identity is not yet trusted. Verify the fingerprint through a channel you control before trusting it.")
+                Text("This key identifies the server, not your login credential. Password connections also verify the server's identity. Verify the fingerprint through a channel you control before trusting it.")
                     .font(typography.caption)
                     .foregroundColor(colors.dimmed)
 

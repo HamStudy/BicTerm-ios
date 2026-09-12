@@ -225,6 +225,22 @@ final class HerdrHostForgetTests: XCTestCase {
         XCTAssertNil(hopKey)
     }
 
+    func testForgetRemovesRememberedKeyFallbackPassword() async throws {
+        let connection = try Connection(name: "Key and password", type: .ssh, host: "web.example.com",
+                                        port: 22, username: "alice", keyReference: "signing-key")
+        let passwordStore = MemoryPasswordStore()
+        try await passwordStore.save("remembered", for: connection.promptedPasswordTag)
+        let service = HerdrHostForgetService(dependencies: .init(
+            hostKeyStore: MemoryHostKeyStore(), passwordStore: passwordStore,
+            connectionStore: MemoryConnectionStore([connection]),
+            clipboardSettings: HerdrClipboardSettings(defaults: try ephemeralDefaults()),
+            deleteRestorableSessions: { _, _ in 0 }
+        ))
+        let outcome = await service.forget(connection: connection)
+        XCTAssertEqual(outcome.passwordsRemoved, 1)
+        await XCTAssertNilAsync(try await passwordStore.password(for: connection.promptedPasswordTag))
+    }
+
     func testEndpointIdentityIsStableAndHostQualified() throws {
         let connection = try passwordConnection(name: "X", host: "web.example.com", tag: "t")
         XCTAssertEqual(

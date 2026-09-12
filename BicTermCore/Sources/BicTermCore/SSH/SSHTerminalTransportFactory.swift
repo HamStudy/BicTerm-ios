@@ -11,15 +11,18 @@ public struct SSHSessionTransportFactory: TerminalTransportFactory {
     private let hostKeyVerifier: HostKeyVerifier
     private let authenticationKeyProvider: any SSHAuthenticationKeyProvider
     private let passwordStore: any PasswordStoring
+    private let passwordPrompt: (any SSHPasswordPrompting)?
 
     public init(
         hostKeyVerifier: HostKeyVerifier,
         authenticationKeyProvider: any SSHAuthenticationKeyProvider = DefaultSSHAuthenticationKeyProvider(),
-        passwordStore: any PasswordStoring = KeychainPasswordStore()
+        passwordStore: any PasswordStoring = KeychainPasswordStore(),
+        passwordPrompt: (any SSHPasswordPrompting)? = nil
     ) {
         self.hostKeyVerifier = hostKeyVerifier
         self.authenticationKeyProvider = authenticationKeyProvider
         self.passwordStore = passwordStore
+        self.passwordPrompt = passwordPrompt
     }
 
     public func makeTransport(for connection: Connection) throws(TransportError) -> any TerminalTransport {
@@ -30,13 +33,15 @@ public struct SSHSessionTransportFactory: TerminalTransportFactory {
             return SSHTransport(
                 hostKeyVerifier: hostKeyVerifier,
                 authenticationKeyProvider: authenticationKeyProvider,
-                passwordStore: passwordStore
+                passwordStore: passwordStore,
+                passwordPrompt: passwordPrompt
             )
         }
         return JumpTerminalTransport(builder: JumpChainBuilder(
             hostKeyVerifier: hostKeyVerifier,
             authenticationKeyProvider: authenticationKeyProvider,
-            passwordStore: passwordStore
+            passwordStore: passwordStore,
+            passwordPrompt: passwordPrompt
         ))
     }
 }

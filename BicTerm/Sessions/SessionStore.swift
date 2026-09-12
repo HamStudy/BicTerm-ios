@@ -54,6 +54,7 @@ final class SessionStore {
 
     let registry: SessionRegistry
     let agentPresenter: AgentApprovalPresenter
+    let passwordPresenter: PasswordPromptPresenter
     let agentBook: AgentSessionBook
     let hostKeyVerifier: HostKeyVerifier?
     /// Live terminal surfaces for every attached-or-detached session —
@@ -126,6 +127,7 @@ final class SessionStore {
     ) {
         let snapshots = snapshotStore ?? Self.defaultSnapshotStore()
         let book = AgentSessionBook()
+        let passwordPresenter = PasswordPromptPresenter(passwordStore: AppServices.shared.passwordStore)
         let presenter = AgentApprovalPresenter(resolveRouting: { _ in
             AgentPromptRouting(target: .mainWindow, sessionDisplayName: "Session")
         })
@@ -158,12 +160,14 @@ final class SessionStore {
             factory = Self.makeLiveFactory(
                 authorizer: authorizer,
                 book: book,
-                verifier: verifier
+                verifier: verifier,
+                passwordPrompt: passwordPresenter
             )
         }
 
         self.registry = SessionRegistry(transportFactory: factory, snapshotStore: snapshots)
         self.agentPresenter = presenter
+        self.passwordPresenter = passwordPresenter
         self.agentBook = book
         self.hostKeyVerifier = verifier
         self.hostKeyStore = injectedHostKeyStore ?? keyStore
@@ -174,6 +178,9 @@ final class SessionStore {
         } else {
             let store = AppServices.shared.connectionStore
             self.connectionLookup = { id in (try? await store.connection(id: id)) ?? nil }
+        }
+        passwordPresenter.isSceneAvailable = { [weak self] sceneID in
+            self?.descriptors.values.contains(where: { $0.registrySceneID == sceneID }) == true
         }
 
         // Font size: surfaces are created at the model's current size, and
@@ -289,6 +296,7 @@ final class SessionStore {
         agentPresenter.denyPendingIfTargeting(scene: descriptorID)
         viewCache.removeSurface(for: descriptorID)
         if let descriptor = descriptors[descriptorID] {
+            passwordPresenter.cancel(sceneID: descriptor.registrySceneID)
             await registry.closeSession(sceneID: descriptor.registrySceneID)
         }
         descriptors[descriptorID] = nil
@@ -422,10 +430,14 @@ final class SessionStore {
     private static func makeLiveFactory(
         authorizer: AgentAuthorizationService,
         book: AgentSessionBook,
-        verifier: HostKeyVerifier
+        verifier: HostKeyVerifier,
+        passwordPrompt: any SSHPasswordPrompting
     ) -> any TerminalTransportFactory {
         var registry = TransportRegistry()
-        registry.register(.ssh, factory: SSHSessionTransportFactory(hostKeyVerifier: verifier))
+        registry.register(.ssh, factory: SSHSessionTransportFactory(
+            hostKeyVerifier: verifier, passwordStore: AppServices.shared.passwordStore,
+            passwordPrompt: passwordPrompt
+        ))
         return AgentForwardingTransportFactory(
             base: registry,
             keyProvider: DefaultAgentKeyProvider(),

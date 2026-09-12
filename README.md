@@ -14,7 +14,7 @@ An iOS 18+ SSH terminal client for iPhone and iPad, built on
 
 ## What Works
 
-- **SSH connections** with password auth (RFC 4252 `password`, secrets in Keychain) and public-key auth (ed25519 from Keychain, P-256 from Secure Enclave)
+- **SSH connections** with optional passwords: save a password connection blank to be prompted during connect or reconnect (RFC 4252 `password` only). Public-key auth (ed25519 from Keychain, P-256 from Secure Enclave) can continue with a password when the server rejects the key or requires both. The prompt can remember destination passwords in this device's Keychain, protected when locked and never transferred to another device; jump-host prompts are session-only (save hop passwords in the editor instead). Connection rows show **Password** or the authentication **key label**, and the editor verifies the local Keychain entry before showing **Saved on this device**.
 - **Key management inline in the editor** — generate or import an SSH key, or copy a public key, directly from the connection editor's key picker; the picker reads the Keychain live and auto-selects a freshly saved key
 - **Discard confirmation in connection and hop editors** — cancelling with uncommitted edits prompts "Discard Changes?" instead of silently dropping the draft; untouched drafts (or edits reverted to the saved values) dismiss instantly, and swipe-down dismissal is disabled while a draft is dirty
 - **ProxyJump / jump chains** up to 5 hops with per-hop host-key verification

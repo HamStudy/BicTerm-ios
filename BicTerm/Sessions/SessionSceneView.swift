@@ -111,6 +111,12 @@ struct SessionSceneView: View {
                 )
             }
         }
+        .sheet(item: Binding(
+            get: { store.passwordPresenter.requests[model.sceneID] },
+            set: { if $0 == nil { store.passwordPresenter.cancel(sceneID: model.sceneID) } }
+        )) { request in
+            PasswordPromptView(request: request, presenter: store.passwordPresenter)
+        }
     }
 
     // MARK: - Chrome

@@ -13,6 +13,8 @@ struct JumpHopEndpoint: Equatable, Sendable {
     let username: String
     let keyReference: String
     let authMethod: AuthMethod
+    let promptedPasswordTag: String?
+    let canRemember: Bool
 
     init(hop: Hop) {
         self.init(
@@ -24,12 +26,15 @@ struct JumpHopEndpoint: Equatable, Sendable {
         )
     }
 
-    init(host: String, port: Int, username: String, keyReference: String, authMethod: AuthMethod = .publickey) {
+    init(host: String, port: Int, username: String, keyReference: String, authMethod: AuthMethod = .publickey,
+         promptedPasswordTag: String? = nil, canRemember: Bool = false) {
         self.host = host
         self.port = port
         self.username = username
         self.keyReference = keyReference
         self.authMethod = authMethod
+        self.promptedPasswordTag = promptedPasswordTag
+        self.canRemember = canRemember
     }
 }
 
@@ -84,6 +89,7 @@ struct NIOJumpDialer: JumpDialer {
     let hostKeyVerifier: HostKeyVerifier
     let authenticationKeyProvider: any SSHAuthenticationKeyProvider
     let passwordStore: any PasswordStoring
+    var passwordPrompt: (any SSHPasswordPrompting)? = nil
 
     func connectTCP(to endpoint: JumpHopEndpoint) async throws(SSHTransportError) -> any JumpHopConnection {
         let userAuth = try await makeUserAuthDelegate(for: endpoint)
@@ -103,6 +109,9 @@ struct NIOJumpDialer: JumpDialer {
                         allocator: channel.allocator,
                         inboundChildChannelInitializer: SSHClientPipelineFactory.rejectAllInboundChildChannels
                     ))
+                    if let cascade = userAuth as? CascadeUserAuthenticationDelegate {
+                        try channel.pipeline.syncOperations.addHandler(cascade)
+                    }
                     try channel.pipeline.syncOperations.addHandler(recorder)
                 }
             }
@@ -137,6 +146,9 @@ struct NIOJumpDialer: JumpDialer {
                     allocator: channel.allocator,
                     inboundChildChannelInitializer: SSHClientPipelineFactory.rejectAllInboundChildChannels
                 ))
+                if let cascade = userAuth as? CascadeUserAuthenticationDelegate {
+                    try channel.pipeline.syncOperations.addHandler(cascade)
+                }
                 try channel.pipeline.syncOperations.addHandler(recorder)
             }.get()
         } catch {
@@ -155,11 +167,24 @@ struct NIOJumpDialer: JumpDialer {
                     with: endpoint.keyReference,
                     reason: "Authenticate to \(endpoint.host)"
                 )
-                return SingleKeyUserAuthenticationDelegate(username: endpoint.username, key: key)
+                // Hop indices are not stable identities: hop prompts are session-only,
+                // avoiding orphaned/reassigned remembered passwords after a reorder.
+                return CascadeUserAuthenticationDelegate(
+                    host: endpoint.host, port: endpoint.port, username: endpoint.username,
+                    key: key, passwordTag: endpoint.promptedPasswordTag, canRemember: endpoint.canRemember,
+                    passwordStore: passwordStore, prompt: passwordPrompt
+                )
             } catch {
                 throw .authenticationFailed
             }
         case .password:
+            if let passwordPrompt {
+                return CascadeUserAuthenticationDelegate(
+                    host: endpoint.host, port: endpoint.port, username: endpoint.username,
+                    key: nil, passwordTag: endpoint.keyReference, canRemember: endpoint.canRemember,
+                    passwordStore: passwordStore, prompt: passwordPrompt
+                )
+            }
             let stored: String?
             do {
                 stored = try await passwordStore.password(for: endpoint.keyReference)

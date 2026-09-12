@@ -139,7 +139,7 @@ final class ConnectionsModel {
     /// hops). The persisted model stores tags only — never password bytes —
     /// so cleanup is driven entirely from the model.
     static func passwordTags(in connection: Connection) -> [String] {
-        var tags: [String] = []
+        var tags: [String] = [connection.promptedPasswordTag]
         if connection.authMethod == .password, !connection.keyReference.isEmpty {
             tags.append(connection.keyReference)
         }

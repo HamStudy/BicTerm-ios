@@ -1,11 +1,7 @@
 import XCTest
 
-/// Drives the password-auth editor flows: the segmented Key|Password pickers,
-/// the never-prefilled SecureField, the "Saved in Keychain" badge, and
-/// persistence across relaunch. All runs launch with `--uitest-pwd-server`
-/// (DEBUG-only in-app accept-password NIOSSH server on loopback) so the seam
-/// itself stays exercised even though these tests stop at the editor layer —
-/// the end-to-end password handshake proof lives in BicTermCoreTests.
+/// Uses the DEBUG loopback server to exercise editor persistence and real
+/// mid-handshake prompts without depending on an external password account.
 @MainActor
 final class PasswordAuthUITests: XCTestCase {
     var app: XCUIApplication!
@@ -23,6 +19,54 @@ final class PasswordAuthUITests: XCTestCase {
 
     // MARK: Destination password — create, persist, reopen with badge
 
+    func testPasswordPresentationAcrossSurfaces() {
+        launchApp(arguments: ["--uitest-reset", "--uitest-pwd-server"])
+        openEditorForNewConnection()
+        typeInto(app.textFields["field-name"], "Password Audit")
+        typeInto(app.textFields["field-host"], "127.0.0.1")
+        typeInto(app.textFields["field-port"], "18090", clearing: "22")
+        typeInto(app.textFields["field-username"], "uitest")
+        selectSegment("Password", in: "auth-method-picker")
+        typeIntoSecure(app.secureTextFields["password-field"], "bicterm-uitest-fixture-password")
+        app.buttons["save-editor"].tap()
+        assertNoSystemSavePasswordPrompt()
+        XCTAssertTrue(app.buttons["connection-Password-Audit"].waitForExistence(timeout: 10))
+        recordSurface("list")
+        openEditorForConnection(named: "Password-Audit")
+        scrollToHittable(app.secureTextFields["password-field"])
+        recordSurface("reopened-editor")
+        XCTAssertFalse(app.buttons["key-selector"].exists)
+        selectSegment("Key", in: "auth-method-picker")
+        recordSurface("switched-to-key")
+        app.buttons["key-selector"].tap()
+        recordSurface("key-picker")
+        app.terminate()
+        launchApp(arguments: ["-uitest-keys-entry"])
+        XCTAssertTrue(app.navigationBars["SSH Keys"].waitForExistence(timeout: 15))
+        recordSurface("key-management")
+        app.terminate()
+        launchApp(arguments: ["--uitest-pwd-server"])
+        app.buttons["connection-Password-Audit"].tap()
+        sleep(3)
+        recordSurface("session")
+        if app.buttons["trust-confirm"].exists {
+            app.buttons["trust-confirm"].tap()
+        }
+        sleep(2)
+        let menu = app.buttons["scene-menu"]
+        if menu.exists { menu.tap() }
+        if app.buttons["scene-sessions"].exists { app.buttons["scene-sessions"].tap() }
+        recordSurface("session-menu")
+    }
+
+    private func recordSurface(_ name: String) {
+        let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        attachment.name = "password-audit-\(name)"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+        print("PASSWORD AUDIT \(name): \(app.debugDescription)")
+    }
+
     func testPasswordDestinationPersistsAndNeverPrefills() {
         launchApp(arguments: ["--uitest-reset", "--uitest-pwd-server"])
 
@@ -36,13 +80,14 @@ final class PasswordAuthUITests: XCTestCase {
         let secureField = app.secureTextFields["password-field"]
         XCTAssertTrue(secureField.waitForExistence(timeout: 5), "password mode must swap the key picker for a SecureField")
         XCTAssertFalse(app.buttons["key-selector"].exists, "password mode must not offer key selection")
-        XCTAssertTrue(app.staticTexts["password-field-error"].exists, "empty password must keep save gated")
+        XCTAssertTrue(app.staticTexts["password-field-status"].exists, "blank passwords explain ask-on-connect")
+        waitForEnabled(app.buttons["save-editor"])
 
         typeIntoSecure(secureField, "bicterm-uitest-fixture-password")
         XCTAssertFalse(app.staticTexts["password-field-error"].exists)
         waitForEnabled(app.buttons["save-editor"])
         app.buttons["save-editor"].tap()
-        dismissSavePasswordPromptIfPresent()
+        assertNoSystemSavePasswordPrompt()
 
         let row = app.buttons["connection-Password-Auth"]
         XCTAssertTrue(row.waitForExistence(timeout: 10))
@@ -83,7 +128,7 @@ final class PasswordAuthUITests: XCTestCase {
         XCTAssertEqual(credential.label, "hop1user · Password")
 
         app.buttons["save-editor"].tap()
-        dismissSavePasswordPromptIfPresent()
+        assertNoSystemSavePasswordPrompt()
         XCTAssertTrue(app.buttons["connection-Password-Hop"].waitForExistence(timeout: 10))
 
         app.terminate()
@@ -121,7 +166,7 @@ final class PasswordAuthUITests: XCTestCase {
         typeIntoSecure(app.secureTextFields["password-field"], "bicterm-uitest-fixture-password")
         waitForEnabled(app.buttons["save-editor"])
         app.buttons["save-editor"].tap()
-        dismissSavePasswordPromptIfPresent()
+        assertNoSystemSavePasswordPrompt()
         XCTAssertTrue(app.buttons["connection-Password-Auth"].waitForExistence(timeout: 10))
 
         // The duplicate shares the source's Keychain tag: the editor opens
@@ -145,7 +190,7 @@ final class PasswordAuthUITests: XCTestCase {
         waitForEnabled(app.buttons["save-editor"])
 
         app.buttons["save-editor"].tap()
-        dismissSavePasswordPromptIfPresent()
+        assertNoSystemSavePasswordPrompt()
         XCTAssertTrue(app.buttons["connection-Password-Auth-(copy)"].waitForExistence(timeout: 10))
 
         // Deleting the source must not orphan the shared entry: the copy
@@ -191,8 +236,91 @@ final class PasswordAuthUITests: XCTestCase {
 
     // MARK: Helpers
 
+    func testBlankPasswordPromptsAndConnectsWithoutRemembering() {
+        createBlankPasswordConnection()
+        connectInteractiveConnection()
+        XCTAssertTrue(app.secureTextFields["password-prompt-field"].waitForExistence(timeout: 10))
+        recordSurface("interactive-prompt")
+        typeIntoSecure(app.secureTextFields["password-prompt-field"], "bicterm-uitest-fixture-password")
+        app.buttons["password-prompt-connect"].tap()
+        waitForConnected()
+        app.terminate()
+        launchApp(arguments: ["--uitest-pwd-server"])
+        openEditorForConnection(named: "Interactive")
+        scrollToHittable(app.secureTextFields["password-field"])
+        XCTAssertFalse(app.staticTexts["password-saved-badge"].exists)
+        XCTAssertTrue(app.staticTexts["password-field-error"].exists)
+    }
+
+    func testCancelPasswordPromptShowsAuthenticationFailureAndRetryPromptsAgain() {
+        createBlankPasswordConnection()
+        connectInteractiveConnection()
+        XCTAssertTrue(app.buttons["password-prompt-cancel"].waitForExistence(timeout: 10))
+        app.buttons["password-prompt-cancel"].tap()
+        let status = app.staticTexts["scene-statuschip-Interactive"]
+        expectation(for: NSPredicate(format: "label CONTAINS[c] 'authentication'"), evaluatedWith: status)
+        waitForExpectations(timeout: 15)
+        XCTAssertFalse(app.secureTextFields["password-prompt-field"].exists)
+        let retry = app.buttons["scene-reconnect-Interactive"]
+        XCTAssertTrue(retry.exists)
+        retry.tap()
+        XCTAssertTrue(app.secureTextFields["password-prompt-field"].waitForExistence(timeout: 10))
+        app.buttons["password-prompt-cancel"].tap()
+    }
+
+    func testRememberedPromptPasswordSurvivesRelaunchAndEditorVerifiesBadge() {
+        createBlankPasswordConnection()
+        connectInteractiveConnection()
+        XCTAssertTrue(app.secureTextFields["password-prompt-field"].waitForExistence(timeout: 10))
+        typeIntoSecure(app.secureTextFields["password-prompt-field"], "bicterm-uitest-fixture-password")
+        let toggle = app.switches["password-prompt-save"]
+        toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
+        XCTAssertEqual(toggle.value as? String, "1")
+        app.buttons["password-prompt-connect"].tap()
+        waitForConnected()
+        app.terminate()
+        launchApp(arguments: ["--uitest-pwd-server"])
+        openEditorForConnection(named: "Interactive")
+        scrollToHittable(app.secureTextFields["password-field"])
+        XCTAssertTrue(app.staticTexts["password-saved-badge"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["password-saved-badge"].label, "Saved on this device")
+        app.buttons["cancel-editor"].tap()
+        connectInteractiveConnection()
+        waitForConnected()
+        XCTAssertFalse(app.secureTextFields["password-prompt-field"].exists)
+    }
+
+    private func createBlankPasswordConnection() {
+        launchApp(arguments: ["--uitest-reset", "--uitest-pwd-server"])
+        openEditorForNewConnection()
+        typeInto(app.textFields["field-name"], "Interactive")
+        typeInto(app.textFields["field-host"], "127.0.0.1")
+        typeInto(app.textFields["field-port"], "18090", clearing: "22")
+        typeInto(app.textFields["field-username"], "uitest")
+        selectSegment("Password", in: "auth-method-picker")
+        XCTAssertFalse(app.staticTexts["password-field-error"].exists)
+        XCTAssertTrue(app.staticTexts["password-field-status"].label.contains("asked"))
+        waitForEnabled(app.buttons["save-editor"])
+        app.buttons["save-editor"].tap()
+        XCTAssertTrue(app.buttons["connection-Interactive"].waitForExistence(timeout: 10))
+        XCTAssertEqual(app.staticTexts["auth-method-Interactive"].label, "Password")
+    }
+
+    private func connectInteractiveConnection() {
+        app.buttons["connection-Interactive"].tap()
+        if app.buttons["trust-confirm"].waitForExistence(timeout: 5) {
+            app.buttons["trust-confirm"].tap()
+        }
+    }
+
+    private func waitForConnected() {
+        let status = app.staticTexts["scene-statuschip-Interactive"]
+        expectation(for: NSPredicate(format: "label == 'Connected'"), evaluatedWith: status)
+        waitForExpectations(timeout: 15)
+    }
+
     private func launchApp(arguments: [String]) {
-        app.launchArguments = arguments
+        app.launchArguments = arguments + ["--uitest-pretrust-fixtures"]
         app.launch()
     }
 
@@ -254,7 +382,7 @@ final class PasswordAuthUITests: XCTestCase {
         expectation(for: sheetDismissed, evaluatedWith: app.buttons["save-hop"])
         expectation(for: sheetDismissed, evaluatedWith: hostField)
         waitForExpectations(timeout: 10)
-        dismissSavePasswordPromptIfPresent()
+        assertNoSystemSavePasswordPrompt()
         Thread.sleep(forTimeInterval: 0.4)
     }
 
@@ -333,13 +461,9 @@ final class PasswordAuthUITests: XCTestCase {
         start.press(forDuration: 0.05, thenDragTo: end)
     }
 
-    /// iOS may offer to save a SecureField value after the editor sheet
-    /// dismisses; decline so the prompt never overlaps later assertions.
-    private func dismissSavePasswordPromptIfPresent() {
+    private func assertNoSystemSavePasswordPrompt() {
         let notNow = app.buttons["Not Now"]
-        if notNow.waitForExistence(timeout: 3) {
-            notNow.tap()
-        }
+        XCTAssertFalse(notNow.waitForExistence(timeout: 3), "BicTerm must not trigger a second system password-save flow")
     }
 
     private func scrollToHittable(

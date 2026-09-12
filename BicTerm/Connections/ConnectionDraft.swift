@@ -16,10 +16,11 @@ struct HopDraft: Identifiable, Equatable {
     /// Unsaved editor input — written to the Keychain only at connection-save
     /// time, never persisted with the model.
     var passwordInput = ""
-    /// Whether the persisted hop already has a password entry under
-    /// `passwordTag`. Drives the "Saved in Keychain" badge; the SecureField
-    /// itself is never pre-filled.
+    /// Verified by a local store probe, not inferred from the persisted tag.
+    /// Drives the "Saved on this device" badge without prefilling the field.
     var hasSavedPassword = false
+    var passwordEntryMissing = false
+    var passwordWasProbed = false
 
     init() {}
 
@@ -34,7 +35,6 @@ struct HopDraft: Identifiable, Equatable {
             self.keyLabel = keyLabel ?? ""
         case .password:
             passwordTag = hop.keyReference
-            hasSavedPassword = !hop.keyReference.isEmpty
         }
     }
 
@@ -66,7 +66,7 @@ struct HopDraft: Identifiable, Equatable {
         case .publickey:
             !keyReference.isEmpty
         case .password:
-            !passwordTag.isEmpty && (hasSavedPassword || !passwordInput.isEmpty)
+            !passwordTag.isEmpty
         }
     }
 
@@ -109,6 +109,7 @@ struct ConnectionDraft: Equatable {
     /// Unsaved editor input — Keychain-only on save, never persisted.
     var passwordInput = ""
     var hasSavedPassword = false
+    var passwordEntryMissing = false
     var hops: [HopDraft] = []
     var agentForwarding = false
 
@@ -128,7 +129,6 @@ struct ConnectionDraft: Equatable {
             self.keyLabel = keyLabel ?? ""
         case .password:
             passwordTag = connection.keyReference
-            hasSavedPassword = !connection.keyReference.isEmpty
         }
         hops = connection.jumpChain.map { HopDraft(hop: $0, keyLabel: nil) }
         agentForwarding = connection.protocolOptions["agentForwarding"]?.boolValue == true
@@ -170,7 +170,7 @@ struct ConnectionDraft: Equatable {
     var passwordError: String? {
         guard authMethod == .password else { return nil }
         if passwordTag.isEmpty { return "Password storage tag unavailable" }
-        return (hasSavedPassword || !passwordInput.isEmpty) ? nil : "Enter a password"
+        return nil
     }
 
     /// Entering password mode detaches the key selection; entering key mode

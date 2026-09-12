@@ -12,21 +12,25 @@ public struct JumpChainBuilder: Sendable {
     private let hostKeyVerifier: HostKeyVerifier
     private let authenticationKeyProvider: any SSHAuthenticationKeyProvider
     private let passwordStore: any PasswordStoring
+    private let passwordPrompt: (any SSHPasswordPrompting)?
     private let dialer: any JumpDialer
 
     public init(
         hostKeyVerifier: HostKeyVerifier,
         authenticationKeyProvider: any SSHAuthenticationKeyProvider = DefaultSSHAuthenticationKeyProvider(),
-        passwordStore: any PasswordStoring = KeychainPasswordStore()
+        passwordStore: any PasswordStoring = KeychainPasswordStore(),
+        passwordPrompt: (any SSHPasswordPrompting)? = nil
     ) {
         self.init(
             hostKeyVerifier: hostKeyVerifier,
             authenticationKeyProvider: authenticationKeyProvider,
             passwordStore: passwordStore,
+            passwordPrompt: passwordPrompt,
             dialer: NIOJumpDialer(
                 hostKeyVerifier: hostKeyVerifier,
                 authenticationKeyProvider: authenticationKeyProvider,
-                passwordStore: passwordStore
+                passwordStore: passwordStore,
+                passwordPrompt: passwordPrompt
             )
         )
     }
@@ -35,11 +39,13 @@ public struct JumpChainBuilder: Sendable {
         hostKeyVerifier: HostKeyVerifier,
         authenticationKeyProvider: any SSHAuthenticationKeyProvider,
         passwordStore: any PasswordStoring = KeychainPasswordStore(),
+        passwordPrompt: (any SSHPasswordPrompting)? = nil,
         dialer: any JumpDialer
     ) {
         self.hostKeyVerifier = hostKeyVerifier
         self.authenticationKeyProvider = authenticationKeyProvider
         self.passwordStore = passwordStore
+        self.passwordPrompt = passwordPrompt
         self.dialer = dialer
     }
 
@@ -56,7 +62,9 @@ public struct JumpChainBuilder: Sendable {
             port: connection.port,
             username: connection.username,
             keyReference: connection.keyReference,
-            authMethod: connection.authMethod
+            authMethod: connection.authMethod,
+            promptedPasswordTag: connection.promptedPasswordTag,
+            canRemember: true
         )
         let jumps = connection.jumpChain.map(JumpHopEndpoint.init(hop:))
         try Self.validate(jumps: jumps, destination: destination)
@@ -192,7 +200,8 @@ public struct JumpChainBuilder: Sendable {
         let transport = SSHTransport(
             hostKeyVerifier: hostKeyVerifier,
             authenticationKeyProvider: authenticationKeyProvider,
-            passwordStore: passwordStore
+            passwordStore: passwordStore,
+            passwordPrompt: passwordPrompt
         )
         do {
             try await transport.connect(to: connection, cols: cols, rows: rows)
