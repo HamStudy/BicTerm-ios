@@ -87,4 +87,15 @@ public struct Connection: Codable, Equatable, Identifiable, Sendable {
             protocolOptions: container.decode(ProtocolOptions.self, forKey: .protocolOptions)
         )
     }
+
+    /// Per-connection herdr toggle over ``ProtocolOptions/herdrEnabled``.
+    public var herdrEnabled: Bool {
+        protocolOptions.herdrEnabled
+    }
+
+    /// Trimmed remote herdr session name over ``ProtocolOptions/herdrSessionName``;
+    /// nil when unset, blank, or wrong-typed.
+    public var herdrSessionName: String? {
+        protocolOptions.herdrSessionName
+    }
 }

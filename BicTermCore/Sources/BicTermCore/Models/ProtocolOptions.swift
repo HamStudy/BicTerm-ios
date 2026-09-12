@@ -32,6 +32,15 @@ public struct ProtocolOptions: Codable, Equatable, Sendable {
 
     private let storage: [String: ProtocolOptionValue]
 
+    /// Per-connection herdr toggle (herdr-support plan todo 1): `true` means
+    /// connects to this machine open a single-endpoint herdr workspace.
+    public static let herdrEnabledKey = "herdrEnabled"
+
+    /// Optional remote herdr session name for a herdr-enabled connection.
+    /// The value is an unvalidated string here; the herdr layers enforce
+    /// herdr's own session-name grammar before any remote command runs.
+    public static let herdrSessionKey = "herdrSession"
+
     public init() {
         storage = [:]
     }
@@ -56,6 +65,20 @@ public struct ProtocolOptions: Codable, Equatable, Sendable {
 
     public subscript(key: String) -> ProtocolOptionValue? {
         storage[key]
+    }
+
+    /// Herdr mode toggle (``herdrEnabledKey``). A wrong-typed value reads as
+    /// unset (`false`) — persisted junk never enables herdr by accident.
+    public var herdrEnabled: Bool {
+        self[Self.herdrEnabledKey]?.boolValue ?? false
+    }
+
+    /// Remote herdr session name (``herdrSessionKey``): trimmed, with empty
+    /// and wrong-typed values reading as unset (`nil`).
+    public var herdrSessionName: String? {
+        guard let raw = self[Self.herdrSessionKey]?.stringValue else { return nil }
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     public init(from decoder: any Decoder) throws {
