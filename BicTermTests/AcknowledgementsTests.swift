@@ -17,3 +17,24 @@ final class AcknowledgementsTests: XCTestCase {
         XCTAssertTrue(text.contains("Apache License, Version 2.0"), "the Apache-2.0 notice text must be present")
     }
 }
+
+/// Device-crash regression lock: evaluating a biometry policy (Face ID)
+/// without NSFaceIDUsageDescription in the app's Info.plist makes iOS
+/// TERMINATE the app on the spot — not a catchable error. Key generation
+/// hits this twice over: GenerateKeySheet gates on LABiometricGate
+/// (requiresBiometry defaults to true), and Secure Enclave P-256 keys are
+/// minted with .biometryCurrentSet access control, which prompts Face ID
+/// again at generation. The kill only fires with biometrics enrolled, so
+/// simulator runs without enrolled Face ID never exercise it.
+final class InfoPlistPrivacyTests: XCTestCase {
+    func testAppBundleDeclaresFaceIDUsageDescription() throws {
+        let value = try XCTUnwrap(
+            Bundle.main.object(forInfoDictionaryKey: "NSFaceIDUsageDescription") as? String,
+            "NSFaceIDUsageDescription must ship in the app Info.plist — without it, iOS kills the app on the first Face ID evaluation"
+        )
+        XCTAssertFalse(
+            value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+            "NSFaceIDUsageDescription must be a non-empty, user-facing explanation"
+        )
+    }
+}
