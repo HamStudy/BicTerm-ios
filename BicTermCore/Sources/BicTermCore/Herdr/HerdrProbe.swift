@@ -193,15 +193,16 @@ public enum HerdrProbe {
         )
     }
 
-    /// Runs the probe on one ESTABLISHED ``SSHTransport``: opens a
-    /// short-lived non-PTY exec channel, reads its bounded stdout, drains
-    /// stderr (an exec channel whose stderr nobody reads eventually stalls —
-    /// see ``SSHExecSession``), and closes the channel. The probe command is
-    /// non-interactive and bounded server-side (fixed candidate list, one
-    /// status query capped by ``statusQueryByteCap``), so the channel ends
-    /// on its own like every other fixture exec round-trip.
+    /// Runs the probe on one ESTABLISHED exec-capable connection (direct or
+    /// jump-chained): opens a short-lived non-PTY exec channel, reads its
+    /// bounded stdout, drains stderr (an exec channel whose stderr nobody
+    /// reads eventually stalls — see ``SSHExecSession``), and closes the
+    /// channel. The probe command is non-interactive and bounded
+    /// server-side (fixed candidate list, one status query capped by
+    /// ``statusQueryByteCap``), so the channel ends on its own like every
+    /// other fixture exec round-trip.
     public static func run(
-        on transport: SSHTransport,
+        on transport: any SSHExecCapableConnection,
         host: String,
         searchPaths: [String] = defaultSearchPaths
     ) async throws(ProbeError) -> Result {

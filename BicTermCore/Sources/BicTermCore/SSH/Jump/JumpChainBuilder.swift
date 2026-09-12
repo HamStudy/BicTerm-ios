@@ -1,5 +1,41 @@
 import Foundation
 
+/// Established hop connections for one chain, in hop order. Owns the
+/// reverse-order teardown of everything it holds.
+struct EstablishedHopChain: Sendable {
+    let connections: [any JumpHopConnection]
+
+    var finalConnection: any JumpHopConnection {
+        connections[connections.count - 1]
+    }
+
+    func close() async {
+        for connection in connections.reversed() {
+            await connection.close()
+        }
+    }
+}
+
+/// Jump-chain carrier whose ONLY channel surface is non-PTY exec: the chain
+/// is established WITHOUT any pty/shell session — herdr's probe and bridge
+/// exec channels ride the final hop's SSH connection (integration doc
+/// §3.5), transparent to how many hops precede it.
+struct JumpExecConnection: SSHExecCapableConnection, Sendable {
+    private let chain: EstablishedHopChain
+
+    init(chain: EstablishedHopChain) {
+        self.chain = chain
+    }
+
+    func openExecChannel(command: String) async throws(TransportError) -> SSHExecSession {
+        try await chain.finalConnection.openExec(command: command)
+    }
+
+    func close() async {
+        await chain.close()
+    }
+}
+
 /// Builds an ``SSHSessionTransport`` for a `Connection`, transparently
 /// chaining ≤5 jump hosts via nested SSH-over-direct-tcpip handshakes.
 ///
@@ -75,6 +111,25 @@ public struct JumpChainBuilder: Sendable {
         return try await buildChained(endpoints: jumps + [destination], cols: cols, rows: rows)
     }
 
+    /// Establishes every hop of `[jumpChain..., destination]` — dial,
+    /// handshake, forward — with the same error attribution and
+    /// reverse-order cleanup as the terminal path, but opens NO session
+    /// channel: exec channels ride the final hop afterwards (herdr).
+    /// Same untyped-throws caveat as ``build(connection:cols:rows:)``.
+    func buildExecConnection(connection: Connection) async throws -> JumpExecConnection {
+        let destination = JumpHopEndpoint(
+            host: connection.host,
+            port: connection.port,
+            username: connection.username,
+            keyReference: connection.keyReference,
+            authMethod: connection.authMethod
+        )
+        let jumps = connection.jumpChain.map(JumpHopEndpoint.init(hop:))
+        try Self.validate(jumps: jumps, destination: destination)
+        let chain = try await establishHops(endpoints: jumps + [destination])
+        return JumpExecConnection(chain: chain)
+    }
+
     /// Chains handshakes over `[jumpChain..., destination]`. Kept in a
     /// separate concrete-returning helper with inline reverse-order cleanup:
     /// loops reassigning protocol existentials and error-returning cleanup
@@ -85,6 +140,28 @@ public struct JumpChainBuilder: Sendable {
         cols: Int,
         rows: Int
     ) async throws -> JumpTransport {
+        let chain = try await establishHops(endpoints: endpoints)
+
+        let lastIndex = endpoints.count - 1
+        let destination = endpoints[lastIndex]
+        let session: any JumpSession
+        do {
+            session = try await chain.finalConnection.openSession(cols: cols, rows: rows)
+        } catch let error as SSHTransportError {
+            await chain.close()
+            throw JumpError.hopFailed(
+                hopIndex: endpoints.count,
+                host: destination.host,
+                port: destination.port,
+                underlying: error
+            )
+        }
+        return JumpTransport(session: session, hops: chain.connections)
+    }
+
+    /// The dial/forward half of a chained establish (SIL-verifier-safe
+    /// shape: one loop, inline cleanup, existential array built up locally).
+    private func establishHops(endpoints: [JumpHopEndpoint]) async throws -> EstablishedHopChain {
         var established: [any JumpHopConnection] = []
 
         let first = endpoints[0]
@@ -133,23 +210,7 @@ public struct JumpChainBuilder: Sendable {
             }
         }
 
-        let lastIndex = endpoints.count - 1
-        let destination = endpoints[lastIndex]
-        let session: any JumpSession
-        do {
-            session = try await established[lastIndex].openSession(cols: cols, rows: rows)
-        } catch let error as SSHTransportError {
-            for hop in established.reversed() {
-                await hop.close()
-            }
-            throw JumpError.hopFailed(
-                hopIndex: endpoints.count,
-                host: destination.host,
-                port: destination.port,
-                underlying: error
-            )
-        }
-        return JumpTransport(session: session, hops: established)
+        return EstablishedHopChain(connections: established)
     }
 
     // MARK: - Validation

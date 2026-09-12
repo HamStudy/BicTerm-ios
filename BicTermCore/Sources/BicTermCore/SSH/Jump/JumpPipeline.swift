@@ -66,6 +66,11 @@ protocol JumpHopConnection: Sendable {
     /// Final hop only: session channel + pty-req + shell, both wantReply-tracked.
     func openSession(cols: Int, rows: Int) async throws(SSHTransportError) -> any JumpSession
 
+    /// Non-PTY exec channel on this hop's connection — the herdr probe and
+    /// bridge surface over jump chains. Same channel posture as
+    /// `SSHTransport.openExecChannel(command:)`.
+    func openExec(command: String) async throws(SSHTransportError) -> SSHExecSession
+
     func close() async
 }
 
@@ -316,6 +321,45 @@ final class NIOJumpHopConnection: JumpHopConnection, @unchecked Sendable {
         }
 
         return NIOJumpSession(channel: session, handler: handler, output: stream, termination: termination)
+    }
+
+    /// Mirrors `SSHTransport.openExecChannel` channel-for-channel: half-close
+    /// as in-order EOF event, demand-driven reads, wantReply-tracked exec
+    /// request whose refusal never leaks the opened channel.
+    func openExec(command: String) async throws(SSHTransportError) -> SSHExecSession {
+        guard channel.isActive else {
+            throw await recordedFirstError() ?? .channelDenied
+        }
+
+        let core = ExecChannelCore()
+        let handler = ExecChannelHandler(core: core)
+        let session: any Channel
+        do {
+            session = try await openChild(type: .session) { child, channelType in
+                guard channelType == .session else {
+                    return child.eventLoop.makeFailedFuture(SSHTransportError.channelDenied)
+                }
+                return child.eventLoop.makeCompletedFuture {
+                    try child.setOption(ChannelOptions.allowRemoteHalfClosure, value: true)
+                    try child.setOption(ChannelOptions.autoRead, value: false)
+                    core.attach(channel: child)
+                    try child.pipeline.syncOperations.addHandler(handler)
+                }
+            }
+        } catch {
+            throw await recordedFirstError() ?? .channelDenied
+        }
+
+        do {
+            try await handler.sendRequestExpectingSuccess(
+                SSHChannelRequestEvent.ExecRequest(command: command, wantReply: true)
+            )
+        } catch let error as SSHTransportError {
+            try? await session.close().get()
+            throw error
+        }
+        core.beginReading()
+        return SSHExecSession(channel: session, handler: handler, core: core)
     }
 
     func close() async {

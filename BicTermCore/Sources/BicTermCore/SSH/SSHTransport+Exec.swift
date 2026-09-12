@@ -2,6 +2,20 @@ import Foundation
 import NIOCore
 import NIOSSH
 
+/// An established SSH connection that opens non-PTY exec channels.
+/// ``SSHTransport`` (direct) and the jump-chain carrier conform, so herdr's
+/// probe and bridge ride ONE established connection regardless of hops
+/// (integration doc §3.5 shared-connection shape).
+public protocol SSHExecCapableConnection: Sendable {
+    /// Opens a NEW non-PTY exec session channel on the established
+    /// connection (same posture as ``SSHTransport/openExecChannel(command:)``).
+    func openExecChannel(command: String) async throws(TransportError) -> SSHExecSession
+
+    func close() async
+}
+
+extension SSHTransport: SSHExecCapableConnection {}
+
 /// Non-PTY exec channel factory (T15, herdr remote-client-bridge) on
 /// ``SSHTransport``, split out so the session-lifecycle file stays
 /// reviewable on its own (same convention as SSHTransport+DirectTCPIP).

@@ -83,6 +83,11 @@ final class FakeHopConnection: JumpHopConnection, @unchecked Sendable {
         return FakeJumpSession(name: name, recorder: recorder)
     }
 
+    func openExec(command: String) async throws(SSHTransportError) -> SSHExecSession {
+        recorder.log("exec(\(name))")
+        throw .channelDenied
+    }
+
     func close() async {
         recorder.log("close(\(name))")
     }

@@ -37,23 +37,32 @@ public final class HerdrSSHTransport: HerdrByteTransport, @unchecked Sendable {
 
     public let session: SSHExecSession
 
+    /// The connection this transport owns (nil when wrapping a bare exec
+    /// session): `close()` tears it down with the session, so a
+    /// connector-produced transport never leaks its SSH connection.
+    private let ownedCarrier: (any SSHExecCapableConnection)?
+
     private let lock = NSLock()
     private var inboundStream: AsyncThrowingStream<Data, Error>?
     private var bridgeTask: Task<Void, Never>?
     private var isClosed = false
 
-    /// Wraps an already-open exec session (any transport source).
+    /// Wraps an already-open exec session (any transport source); the
+    /// caller keeps owning the underlying connection.
     public init(execSession: SSHExecSession) {
         self.session = execSession
+        self.ownedCarrier = nil
     }
 
     /// Builds herdr's fixed bridge command and opens the exec channel on
-    /// an ESTABLISHED SSHTransport connection (doc §3.5 shared-connection
-    /// shape; the connection's own shell session, if any, is untouched).
+    /// an ESTABLISHED exec-capable SSH connection (direct or jump-chained;
+    /// doc §3.5 shared-connection shape — the connection's own shell
+    /// session, if any, is untouched). TAKES OWNERSHIP of `transport`:
+    /// ``close()`` tears the connection down after the session.
     /// Throws ``HerdrCommandBuilder/BuildError`` for hostile inputs and
     /// ``TransportError`` for connection-level refusals.
     public init(
-        transport: SSHTransport,
+        transport: any SSHExecCapableConnection,
         executablePath: String,
         sessionName: String? = nil
     ) async throws {
@@ -62,6 +71,7 @@ public final class HerdrSSHTransport: HerdrByteTransport, @unchecked Sendable {
             sessionName: sessionName
         )
         self.session = try await transport.openExecChannel(command: command)
+        self.ownedCarrier = transport
     }
 
     public func write(_ bytes: Data) async throws {
@@ -107,21 +117,24 @@ public final class HerdrSSHTransport: HerdrByteTransport, @unchecked Sendable {
     }
 
     public func close() async {
-        let (shouldClose, task) = claimClose()
+        let (shouldClose, task, carrier) = claimClose()
         guard shouldClose else { return }
         task?.cancel()
         await session.close()
+        if let carrier {
+            await carrier.close()
+        }
     }
 
     /// Sync lock-confined close claiming (NSLock is unavailable from async
     /// contexts; locked state never straddles an await). Idempotent.
-    private func claimClose() -> (Bool, Task<Void, Never>?) {
+    private func claimClose() -> (Bool, Task<Void, Never>?, (any SSHExecCapableConnection)?) {
         lock.lock()
         defer { lock.unlock() }
-        guard !isClosed else { return (false, nil) }
+        guard !isClosed else { return (false, nil, nil) }
         isClosed = true
         let task = bridgeTask
         bridgeTask = nil
-        return (true, task)
+        return (true, task, ownedCarrier)
     }
 }
