@@ -1,3 +1,0 @@
-[1] start: session created
-[3] dial: tailnet establish failed: get connection info: GET http://127.0.0.1:7080/api/v2/workspaceagents/fd0387b9-be73-4c8a-889f-64a6fc865f55/connection: unexpected status code 404: Agent doesn't exist with that id, or you do not have access to it.
-[1] close: session torn down

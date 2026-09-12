@@ -6,8 +6,7 @@ import XCTest
 
 /// T16 herdr session model over a deterministic replay transport. Fixtures
 /// are the committed real-codec frames (Vendor golden + Fixtures/herdr/golden)
-/// loaded repo-relative via #filePath, the same pattern as the CoderNative
-/// suites.
+/// loaded repo-relative via #filePath.
 @MainActor
 final class HerdrSessionModelTests: XCTestCase {
     private static let repoRoot = URL(fileURLWithPath: #filePath)

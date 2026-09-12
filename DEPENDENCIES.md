@@ -1,13 +1,10 @@
 # DEPENDENCIES.md — BicTerm dependency & license inventory
 
-Review date: 2026-09-03 (task T3 key layer); amended 2026-09-04 (task T8 vendored swift-nio-ssh fork); amended 2026-09-07 (phase-2 task 7 dual-build isolation)
-Policy: App Store distribution requires GPL/LGPL-free dependencies. Two build flavors now exist (phase-2 task 7):
-- **Default flavor** (schemes/configs `BicTerm` + `Debug`/`Release`): everything below INCLUDING the
-  copyleft section. Distributed as AGPL-3.0 binaries.
-- **AppStore flavor** (scheme `BicTerm-AppStore`, configs `AppStore-Debug`/`AppStore-Release`):
-  everything below EXCLUDING the copyleft section. All remaining entries use permissive
-  Apache-2.0, MIT, ISC, or BSD-3-Clause licenses — **AppStore-flavor verdict: GO**; three-layer
-  binary audit per build in `.sisyphus/evidence/phase2-g7-*-audit.log` proves the exclusion.
+Review date: 2026-09-03 (task T3 key layer); amended 2026-09-04 (task T8 vendored swift-nio-ssh fork); amended 2026-09-11 (AGPL/copyleft removal — single permissive-only build)
+Policy: App Store distribution requires GPL/LGPL/AGPL-free dependencies. Every entry below
+uses a permissive Apache-2.0, MIT, ISC, or BSD-3-Clause license — **verdict: GO**. There is
+exactly one build flavor (scheme `BicTerm`, configs `Debug`/`Release`) and it contains no
+copyleft code of any kind.
 
 ## Direct dependencies (pinned exact)
 
@@ -29,21 +26,9 @@ SSHMessages.swift:905-906, which kills the connection).
 |---|---|---|---|---|
 | swift-nio-ssh (NIOSSH), BicTerm fork | 0.15.0 (`3ec281496f28a3b6581afd946b759e2642f5cd8d`) + 12 `BICTERM-PATCH` hunks | Apache-2.0 | https://github.com/apple/swift-nio-ssh | Vendored at `Vendor/swift-nio-ssh` (2026-09-04, task T8); the 12 marked hunks add OpenSSH agent channel/request parsing and serialization plus outbound agent-request emission; LICENSE.txt retained; upstream PR candidate |
 | SwiftTerm, BicTerm fork | 1.20.0 (`v1.20.0`, commit `5d14406844143538cd8f8851d2d8a67c1fe443e5`) + keyboard test-seam access | MIT | https://github.com/migueldeicaza/SwiftTerm | Vendored at `Vendor/SwiftTerm` (2026-09-06, task T12; hunks completed 2026-09-07); 5 additive hunks documented in `Vendor/SwiftTerm/BICTERM-PATCH.md` with inline `BICTERM-PATCH hunk N` markers; LICENSE preserved verbatim; hunks widen `keyRepeat`/`pressesEnded` access and add the `installsSoftwareKeyboard` opt-out (hidden blocker input view + `.causesPageTurn` gating) consumed only by the app's DEBUG UI-test seams; production input paths, timers, and traits are unchanged; upstream PR candidate |
+| herdr (protocol core + iOS FFI) | v0.9.0 (`b99002ac99b09e00b4ca692436cb15a6b0d676f1`) | Apache-2.0 | https://github.com/herdrdev/herdr | Vendored at `Vendor/herdr`; builds `HerdrCore.xcframework` via `scripts/build-herdr-core.sh`; Rust dependency licenses/advisories enforced by cargo-deny policy in `Vendor/herdr/check.sh` |
 | OpenSSH portable `bcrypt_pbkdf.c` | `7fe3b24c922b7af2d743737f7cf37df61ea06426` | ISC | https://github.com/openssh/openssh-portable | Adapted to CommonCrypto SHA-512 in `CBcryptPBKDF`; original notice retained |
 | OpenSSH portable `blowfish.c` / `blf.h` | `7fe3b24c922b7af2d743737f7cf37df61ea06426` | BSD-3-Clause | https://github.com/openssh/openssh-portable | bcrypt PBKDF support only; original notices retained |
-
-## Copyleft section — EXCLUDED from the AppStore flavor at build time
-
-These dependencies build into `.build-artifacts/coder-net/CoderNet.xcframework` via
-`scripts/build-coder-net.sh` (gitignored artifact; the build script is the pinned source of
-truth). The `CoderTunnel` framework target wraps the archive; `project.yml` links it only for
-`Debug`/`Release` configs under `CODER_TUNNEL=1`, and the target is absent from the
-`BicTerm-AppStore` scheme entirely. See `CoderNet/LICENSE-AGPL-NOTICE.md` and `Docs/SECURITY.md`.
-
-| Name | Pinned version | License | Source | Notes |
-|---|---|---|---|---|
-| coder/coder v2 (`codersdk`, `codersdk/workspacesdk`) | v2.36.4 (module `github.com/coder/coder/v2`) | AGPL-3.0 | https://github.com/coder/coder | Drives the workspace-agent tailnet tunnel. Statically fused into CoderNet.a — any binary containing it is AGPL-3.0-governed, hence AppStore exclusion. |
-| coder/coder fork graph (`coder/tailscale`, `coder/wireguard-go`, `coder/gvisor`, `coder/kcp-go`, `coder/ssh`, `coder/pq`, `coder/glog`, `coder/anthropic-sdk-go`, `coder/trivy`, `coder/openai-go/v3`, `coder/fantasy`, `coder/bubbletea`, `coder/terraform-config-inspect`, `coder/go-scim`, `coder/go-httpstat`, plus `kylecarbs/*` and `dannykopping/*` fork pins) | per `CoderNet/go.mod` `replace` block (verbatim from coder/coder v2.36.4 go.mod) | BSD-3-Clause / ISC / Apache-2.0 upstreams; shipped fused with the AGPL module | see `CoderNet/go.mod` | Forks retain upstream licenses but are inseparable from the AGPL binary artifact — excluded from the AppStore flavor together. Module list kept inline by reference to `go.mod` to avoid drift. |
 
 ## Transitive dependencies (as resolved; see Package.resolved / workspace state)
 
@@ -68,7 +53,5 @@ Notes:
 - SwiftTerm 1.20.0 compiles Metal shaders; Xcode 26 requires the on-demand
   Metal Toolchain (`xcodebuild -downloadComponent MetalToolchain`) — installed 2026-09-04.
 
-**Verdict: dual-GO** — the AppStore flavor (scheme `BicTerm-AppStore`) is permissive-only and
-App-Store compatible (GO); the default flavor (scheme `BicTerm`) additionally contains the
-copyleft section and is distributed as an AGPL-3.0 binary (GO for open source, NOT for App
-Store). GPL/LGPL/LGPL-style weak-copyleft: zero occurrences in either flavor.
+**Verdict: GO** — the single `BicTerm` build is permissive-only and App-Store compatible.
+AGPL/GPL/LGPL/LGPL-style weak-copyleft: zero occurrences anywhere in the dependency graph.

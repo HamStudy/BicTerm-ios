@@ -54,22 +54,6 @@ struct SettingsView: View {
                 }
                 .listRowBackground(colors.background)
                 .accessibilityIdentifier("settings-ssh-keys")
-
-                NavigationLink {
-                    CoderServersListView(
-                        model: CoderServersModel(
-                            store: AppServices.shared.coderServerStore,
-                            connectionStore: AppServices.shared.connectionStore,
-                            makeClient: AppServices.shared.coderClientFactory
-                        )
-                    )
-                } label: {
-                    Text("Coder Servers")
-                        .font(typography.body)
-                        .foregroundColor(colors.foreground)
-                }
-                .listRowBackground(colors.background)
-                .accessibilityIdentifier("settings-coder-servers")
             }
 
             Section("About") {

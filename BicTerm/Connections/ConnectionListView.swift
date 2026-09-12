@@ -106,11 +106,6 @@ struct ConnectionListView: View {
                 await model.bootstrap()
                 presentDebugEditorIfNeeded()
             }
-            .onAppear {
-                Task {
-                    await model.refreshCoderStatuses()
-                }
-            }
         }
     }
 
@@ -127,8 +122,7 @@ struct ConnectionListView: View {
                     ForEach(group.connections) { connection in
                         row(
                             for: connection,
-                            isAvailable: group.isAvailable,
-                            coderStatus: model.coderStatus(for: connection)
+                            isAvailable: group.isAvailable
                         )
                     }
                     .onDelete { offsets in
@@ -152,13 +146,12 @@ struct ConnectionListView: View {
 
     private func row(
         for connection: Connection,
-        isAvailable: Bool,
-        coderStatus: ConnectionsModel.CoderConnectionStatus?
+        isAvailable: Bool
     ) -> some View {
         Button {
             editorTarget = EditorTarget(connection: connection)
         } label: {
-            rowLabel(for: connection, isAvailable: isAvailable, coderStatus: coderStatus)
+            rowLabel(for: connection, isAvailable: isAvailable)
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("connection-\(sanitized(connection.name))")
@@ -194,20 +187,6 @@ struct ConnectionListView: View {
             .tint(colors.dimmed)
             .accessibilityIdentifier("forget-host-\(sanitized(connection.name))")
 
-            if let coderStatus, coderStatus.isUnauthorized, let serverID = coderStatus.serverID {
-                Button {
-                    NotificationCenter.default.post(
-                        name: .coderReauthenticationRequested,
-                        object: nil,
-                        userInfo: ["serverID": serverID]
-                    )
-                } label: {
-                    Label("Reauthenticate", systemImage: "key.fill")
-                }
-                .tint(colors.error)
-                .accessibilityIdentifier("reauthenticate-\(sanitized(connection.name))")
-            }
-
             Button {
                 connect(connection)
             } label: {
@@ -221,42 +200,17 @@ struct ConnectionListView: View {
 
     private func rowLabel(
         for connection: Connection,
-        isAvailable: Bool,
-        coderStatus: ConnectionsModel.CoderConnectionStatus?
+        isAvailable: Bool
     ) -> some View {
         HStack(spacing: spacing.sm) {
-            Circle()
-                .fill(coderStatus?.isConnectable == true ? colors.success : colors.dimmed)
-                .frame(width: 8, height: 8)
-                .accessibilityLabel(coderStatus?.isConnectable == true ? "Running" : "Idle")
-
             VStack(alignment: .leading, spacing: spacing.xxxs) {
                 Text(connection.name)
                     .font(typography.headline)
                     .foregroundColor(colors.foreground)
 
-                if let coderStatus {
-                    Text("\(coderStatus.workspaceName) · \(coderStatus.serverName)")
-                        .font(typography.caption)
-                        .foregroundColor(colors.dimmed)
-
-                    HStack(spacing: spacing.xxxs) {
-                        if let state = coderStatus.state {
-                            Text(state.rawValue.capitalized)
-                                .font(typography.caption)
-                                .foregroundColor(coderStatus.isConnectable ? colors.success : colors.error)
-                        }
-                        if coderStatus.isUnauthorized {
-                            Text("Reauthenticate")
-                                .font(typography.caption)
-                                .foregroundColor(colors.error)
-                        }
-                    }
-                } else {
-                    Text("\(connection.username)@\(connection.host):\(connection.port)")
-                        .font(typography.caption)
-                        .foregroundColor(colors.dimmed)
-                }
+                Text("\(connection.username)@\(connection.host):\(connection.port)")
+                    .font(typography.caption)
+                    .foregroundColor(colors.dimmed)
             }
 
             Spacer()

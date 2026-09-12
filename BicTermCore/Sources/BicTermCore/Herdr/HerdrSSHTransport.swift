@@ -11,8 +11,8 @@ public enum HerdrTransportError: Error, Equatable {
 /// `remote-client-bridge` (integration doc §5).
 ///
 /// Transport-agnostic by construction: it wraps ANY ``SSHExecSession`` —
-/// one opened on a direct-TCP SSHTransport, on a UDS-dialed transport
-/// (Coder bridge shape), or on a future jump-chain/tunnel source. The
+/// one opened on a direct-TCP SSHTransport, on a UDS-dialed transport,
+/// or on a future jump-chain/tunnel source. The
 /// convenience init builds the fixed wrapper command via
 /// ``HerdrCommandBuilder`` and opens the channel on an established
 /// ``SSHTransport`` connection.

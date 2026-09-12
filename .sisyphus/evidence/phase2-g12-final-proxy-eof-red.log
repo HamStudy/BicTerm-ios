@@ -1,8 +1,0 @@
---- FAIL: TestSSHProxyDrainsOutputAndStatusAfterStdinEOF (0.08s)
-    sshproxy_eof_test.go:61: exit = wait: remote command exited without exit status or exit signal; want remote status 37
-    sshproxy_eof_test.go:64: stdout = ; want 00010a0d7f80ff747261696c696e672d6f7574707574
-    sshproxy_eof_test.go:67: stderr = ""; want stderr-after-eof
-    sshproxy_eof_test.go:72: io: read/write on closed pipe
-FAIL
-exit status 1
-FAIL	github.com/bicterm/coder-net	0.999s

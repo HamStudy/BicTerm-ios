@@ -16,7 +16,6 @@ enum SSHTestFixture {
     static let hop1Host = "127.0.0.1"
     static let hop1Port = 12222
     static let hop2Port = 12223
-    static let coderStubPort = 18080
 
     static let normalHostKeyFingerprint = "SHA256:pT2cNum6IkFhCplSQfWE5oW2CU4Bg51qD1/1HtirjBs"
     static let altHostKeyFingerprint = "SHA256:KFI1+LB+PDwEPIR2F+G3BCOriC0xIqASUsRHhyDsRdk"
@@ -193,13 +192,13 @@ func assertThrowsSSHError(
 
 // MARK: - UDS test scaffolding (T8)
 
-/// Per-session socket path following the Coder UDS contract
-/// (`coder-ssh-<uuid>.sock`). Tests bind under `Fixtures/run` (repo-local,
-/// gitignored) because iOS sandbox tmp paths exceed the 104-byte
-/// `sockaddr_un.sun_path` limit; Docs/SECURITY.md documents that constraint.
+/// Per-session socket path (`bicterm-uds-<uuid>.sock`). Tests bind under
+/// `Fixtures/run` (repo-local, gitignored) because iOS sandbox tmp paths
+/// exceed the 104-byte `sockaddr_un.sun_path` limit; Docs/SECURITY.md
+/// documents that constraint.
 func makeTestSocketPath() -> String {
     SSHTestFixture.repoRoot
-        .appendingPathComponent("Fixtures/run/coder-ssh-\(UUID().uuidString).sock")
+        .appendingPathComponent("Fixtures/run/bicterm-uds-\(UUID().uuidString).sock")
         .path
 }
 
@@ -208,8 +207,8 @@ func removeIfExists(_ path: String) {
 }
 
 /// Test-side unix-domain-socket listener that bridges each accepted
-/// connection to a loopback TCP target. Embodies the Coder per-session
-/// bridge contract: stale leftover file at the path is unlinked before bind,
+/// connection to a loopback TCP target. Embodies the per-session bridge
+/// contract: stale leftover file at the path is unlinked before bind,
 /// the socket carries 0600, and `stop()` removes the socket path.
 final class UDSTestBridge: @unchecked Sendable {
     // @unchecked Sendable: start/stop are called serially from async tests;
@@ -390,214 +389,5 @@ final class UDSPeerRelay: ChannelInboundHandler, @unchecked Sendable {
 
     func errorCaught(context: ChannelHandlerContext, error: Error) {
         context.close(promise: nil)
-    }
-}
-
-/// Records WindowChangeRequest dimensions delivered at the server side so
-/// conformance suites can prove a resize traversed the whole transport.
-final class WindowChangeRecorder: @unchecked Sendable {
-    private let lock = NSLock()
-    private var recorded: [(cols: Int, rows: Int)] = []
-
-    func add(cols: Int, rows: Int) {
-        lock.lock()
-        recorded.append((cols: cols, rows: rows))
-        lock.unlock()
-    }
-
-    var sizes: [(cols: Int, rows: Int)] {
-        lock.lock()
-        defer { lock.unlock() }
-        return recorded
-    }
-}
-
-/// In-process NoClientAuth SSH server bound to a unix domain socket — the
-/// Coder agent posture (spec §11.2): accepts the RFC 4252 `none` method
-/// unconditionally, presents an ephemeral ed25519 host key each launch, and
-/// echoes session data back after granting pty/shell.
-final class LoopbackNoAuthSSHUDSServer: @unchecked Sendable {
-    // @unchecked Sendable: start/stop serialized by async tests; NIO handler
-    // state lives on the server's own EventLoop; the child registry is
-    // guarded by sync NSLock helpers that never straddle an await.
-    static let greeting = "noauth-uds-server ready\r\n"
-
-    let path: String
-    let windowChanges = WindowChangeRecorder()
-    /// When true, the server ends every session's child channel right after
-    /// the greeting — the deterministic shape of the SSH stream dying while
-    /// the client considers itself connected (marker for native-roaming
-    /// resume-redial paths). The default keeps sessions open until stopped.
-    let closesChannelAfterGreeting: Bool
-    private let hostKey = NIOSSHPrivateKey(ed25519Key: Curve25519.Signing.PrivateKey())
-    private let lock = NSLock()
-    private var children: [ObjectIdentifier: any Channel] = [:]
-    private var group: MultiThreadedEventLoopGroup?
-    private var serverChannel: (any Channel)?
-
-    init(path: String, closesChannelAfterGreeting: Bool = false) {
-        self.path = path
-        self.closesChannelAfterGreeting = closesChannelAfterGreeting
-    }
-
-    var hostKeyOpenSSH: String {
-        String(openSSHPublicKey: hostKey.publicKey)
-    }
-
-    private func noteChild(_ channel: any Channel) {
-        lock.lock()
-        children[ObjectIdentifier(channel)] = channel
-        lock.unlock()
-    }
-
-    private func dropChild(_ channel: any Channel) {
-        lock.lock()
-        children.removeValue(forKey: ObjectIdentifier(channel))
-        lock.unlock()
-    }
-
-    private func childSnapshot() -> [any Channel] {
-        lock.lock()
-        defer { lock.unlock() }
-        return Array(children.values)
-    }
-
-    /// Force-closes every accepted session connection — the hermetic
-    /// stand-in for the virtual-TCP stream dying under a suspended session.
-    func closeChildren() async {
-        for child in childSnapshot() {
-            try? await child.close().get()
-        }
-    }
-
-    func start() async throws {
-        removeIfExists(path)
-        let group = MultiThreadedEventLoopGroup(numberOfThreads: 1)
-        let hostKey = self.hostKey
-        let recorder = windowChanges
-        let closesAfterGreeting = closesChannelAfterGreeting
-        let bootstrap = ServerBootstrap(group: group)
-            .childChannelInitializer { channel in
-                channel.eventLoop.makeCompletedFuture {
-                    try channel.pipeline.syncOperations.addHandler(NIOSSHHandler(
-                        role: .server(SSHServerConfiguration(
-                            hostKeys: [hostKey],
-                            userAuthDelegate: NoClientAuthAcceptingServerDelegate()
-                        )),
-                        allocator: channel.allocator,
-                        inboundChildChannelInitializer: { [self] child, channelType in
-                            guard channelType == .session else {
-                                return child.eventLoop.makeFailedFuture(TransportError.channelDenied)
-                            }
-                            noteChild(channel)
-                            return child.eventLoop.makeCompletedFuture {
-                                try child.pipeline.syncOperations.addHandler(EchoSessionHandler(
-                                    windowChanges: recorder,
-                                    closesAfterGreeting: closesAfterGreeting,
-                                    onChannelInactive: { [weak self] ended in self?.dropChild(ended) }
-                                ))
-                            }
-                        }
-                    ))
-                }
-            }
-        do {
-            serverChannel = try await bootstrap.bind(to: SocketAddress(unixDomainSocketPath: path)).get()
-        } catch {
-            try? await group.shutdownGracefully()
-            removeIfExists(path)
-            throw error
-        }
-        self.group = group
-    }
-
-    func stop() async {
-        if let serverChannel {
-            self.serverChannel = nil
-            try? await serverChannel.close().get()
-        }
-        await closeChildren()
-        if let group {
-            self.group = nil
-            try? await group.shutdownGracefully()
-        }
-        removeIfExists(path)
-    }
-}
-
-/// Server-side NoClientAuth: any `none` request succeeds; credential-bearing
-/// requests (which a coder client never sends) are rejected.
-final class NoClientAuthAcceptingServerDelegate: NIOSSHServerUserAuthenticationDelegate, @unchecked Sendable {
-    let supportedAuthenticationMethods: NIOSSHAvailableUserAuthenticationMethods = []
-
-    func requestReceived(
-        request: NIOSSHUserAuthenticationRequest,
-        responsePromise: EventLoopPromise<NIOSSHUserAuthenticationOutcome>
-    ) {
-        guard case .none = request.request else {
-            responsePromise.succeed(.failure)
-            return
-        }
-        responsePromise.succeed(.success)
-    }
-}
-
-/// Same behavior contract as the debug loopback password server: grant
-/// pty/shell, greet once, echo input. Optionally records window changes and
-/// reports connection teardown to its owning server.
-final class EchoSessionHandler: ChannelDuplexHandler, @unchecked Sendable {
-    typealias InboundIn = SSHChannelData
-    typealias OutboundIn = SSHChannelData
-    typealias OutboundOut = SSHChannelData
-
-    private let windowChanges: WindowChangeRecorder?
-    private let closesAfterGreeting: Bool
-    private let onChannelInactive: (@Sendable (any Channel) -> Void)?
-
-    init(
-        windowChanges: WindowChangeRecorder? = nil,
-        closesAfterGreeting: Bool = false,
-        onChannelInactive: (@Sendable (any Channel) -> Void)? = nil
-    ) {
-        self.windowChanges = windowChanges
-        self.closesAfterGreeting = closesAfterGreeting
-        self.onChannelInactive = onChannelInactive
-    }
-
-    func channelInactive(context: ChannelHandlerContext) {
-        onChannelInactive?(context.channel)
-        context.fireChannelInactive()
-    }
-
-    func userInboundEventTriggered(context: ChannelHandlerContext, event: Any) {
-        switch event {
-        case let pty as SSHChannelRequestEvent.PseudoTerminalRequest:
-            if pty.wantReply {
-                context.triggerUserOutboundEvent(ChannelSuccessEvent(), promise: nil)
-            }
-        case let shell as SSHChannelRequestEvent.ShellRequest:
-            if shell.wantReply {
-                context.triggerUserOutboundEvent(ChannelSuccessEvent(), promise: nil)
-            }
-            var buffer = context.channel.allocator.buffer(capacity: LoopbackNoAuthSSHUDSServer.greeting.utf8.count)
-            buffer.writeString(LoopbackNoAuthSSHUDSServer.greeting)
-            context.writeAndFlush(wrapOutboundOut(SSHChannelData(type: .channel, data: .byteBuffer(buffer))), promise: nil)
-            if closesAfterGreeting {
-                context.close(promise: nil)
-            }
-        case let window as SSHChannelRequestEvent.WindowChangeRequest:
-            windowChanges?.add(
-                cols: Int(window.terminalCharacterWidth),
-                rows: Int(window.terminalRowHeight)
-            )
-        default:
-            context.fireUserInboundEventTriggered(event)
-        }
-    }
-
-    func channelRead(context: ChannelHandlerContext, data: NIOAny) {
-        let message = unwrapInboundIn(data)
-        guard message.type == .channel, case .byteBuffer = message.data else { return }
-        context.writeAndFlush(data, promise: nil)
     }
 }

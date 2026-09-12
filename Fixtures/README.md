@@ -1,7 +1,7 @@
 # BicTerm Test Fixtures
 
-Loopback-only fixtures for BicTerm's SSH transport, agent-forwarding, and
-Coder-API tests. Nothing here touches the network beyond 127.0.0.1; all keys
+Loopback-only fixtures for BicTerm's SSH transport and agent-forwarding
+tests. Nothing here touches the network beyond 127.0.0.1; all keys
 are obviously fake (`bicterm-fixture-*`) and TEST-ONLY. The passphrase for the
 encrypted fixture key is exactly `testpass`.
 
@@ -70,51 +70,6 @@ against `$SSH_AUTH_SOCK` to exercise BicTerm's forwarded agent (T8/T14):
 
 Framing: uint32 BE length + payload. Opcodes: 11=request-identities,
 12=identities-answer, 13=sign-request, 14=sign-response, 5=failure.
-
-### Coder stub (`Fixtures/coder/stub.py`)
-
-python3-stdlib HTTP stub on 127.0.0.1:18080. Requests logged to
-`Fixtures/run/coder_stub.log`.
-
-- `GET /api/v2/workspaces?q=owner:me[&limit=&offset=]` — requires header
-  `Coder-Session-Token: fixture-token` (`expired-token`/missing/wrong →
-  401 `{"message":"invalid api key"}`). Returns
-  `{"workspaces":[...], "count":3}`: `dev-main` (running), `dev-api`
-  (running), `batch-gpu` (stopped). `limit`/`offset` paginate (default 100).
-- `POST /api/v2/users/me/keys/tokens` → 201 `{"key":"fixture-token", ...}`.
-- `GET /api/v2/workspaceagents/{id}/connection` → minimal DERPMap stub (T20).
-- `GET/POST /_control/mode` — runtime mode flips for T17 (no restarts):
-  `ok` (default), `unauthorized` (401 on all authed endpoints),
-  `ratelimited` (429 + `Retry-After: 1` on the NEXT request, then back to ok).
-
-### Native Coder dev server (`Fixtures/coder/template/main.tf`, port 7080)
-
-A REAL Coder v2.36.4 dev deployment for the workspace-SSH protocol lanes
-(T9–T12), run by dedicated scripts (kept out of `fixtures-up.sh` because the
-first run downloads a pinned binary, built-in PostgreSQL, terraform, and
-providers). NO Docker: the server and workspace agent are native host
-processes on loopback.
-
-```sh
-scripts/coder-dev-up.sh    # download+sha256-verify, server on 127.0.0.1:7080,
-                           # first user via POST /api/v2/users/first, token ->
-                           # Fixtures/run/coder-dev.env (0600), pushes the
-                           # bicterm-host template, creates bicterm-host
-                           # (running, host agent connected) + bicterm-stopped
-scripts/coder-dev-down.sh  # kills server+agents by fixture path, verifies
-                           # port 7080 closed, removes Fixtures/run/coder-dev/
-                           # and the env file (keeps the coder-bin cache)
-```
-
-State: `Fixtures/run/coder-dev/` (gitignored) — config/postgres, terraform
-cache, per-workspace agent start scripts + logs under `agents/`, `server.log`,
-pidfiles. Template: committed `Fixtures/coder/template/main.tf` with the
-`coder/coder` provider — a `coder_agent "main"` (darwin/arm64) plus a
-`null_resource` local-exec that writes the agent start script into
-`Fixtures/run/coder-dev/agents/`; the up script materializes a path-rewritten
-runtime copy under `Fixtures/run/coder-dev/template/` (same prefix-sed
-convention as the sshd configs). Credentials never appear on any command
-line (env/stdin only) and are masked from script output.
 
 ## The `ssh -J` wrapper (macOS quirk)
 

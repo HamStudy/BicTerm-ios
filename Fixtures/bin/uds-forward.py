@@ -5,7 +5,8 @@ BicTerm fixture bridge (plan T8): makes the fixture sshd on 127.0.0.1:12222
 reachable over a unix domain socket so SSHTransport's UDS dial path can be
 conformance-tested from the simulator with key auth. stdlib only.
 
-Ownership/lifecycle contract (mirrors the per-session Coder bridge contract):
+Ownership/lifecycle contract (mirrors the per-session UDS endpoint contract
+in Docs/SECURITY.md):
   * Unless a LIVE listener already owns the socket path, a stale leftover
     (from a crashed/killed bridge) is unlinked before bind.
   * The bound socket carries mode 0600 from creation (umask, not chmod —

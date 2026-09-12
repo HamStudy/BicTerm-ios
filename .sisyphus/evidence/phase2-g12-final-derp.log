@@ -1,4 +1,0 @@
-Historical attempt receipt: the original command emitted no stdout and failed
-its proxy-ledger check. The client targeted 7080 rather than audited port 7081.
-The retry and actual upgrade observations are preserved in
-phase2-g12-final-derp-retry.log and the fallback/forced proxy ledgers.

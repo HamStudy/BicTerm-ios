@@ -6,7 +6,7 @@ public enum PersistenceStoreFactory {
         inMemoryOnly: Bool = false,
         storeURL: URL? = nil
     ) throws(PersistenceError) -> SwiftDataConfigurationStore {
-        let schema = Schema([StoredConnection.self, StoredCoderServer.self])
+        let schema = Schema([StoredConnection.self])
         let container = try makeContainer(
             name: "BicTermConfigurations",
             schema: schema,

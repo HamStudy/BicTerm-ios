@@ -13,17 +13,6 @@ final class StoredConnection {
 }
 
 @Model
-final class StoredCoderServer {
-    @Attribute(.unique) var id: UUID
-    var payload: Data
-
-    init(id: UUID, payload: Data) {
-        self.id = id
-        self.payload = payload
-    }
-}
-
-@Model
 final class StoredHostKeyRecord {
     @Attribute(.unique) var identityKey: String
     var host: String

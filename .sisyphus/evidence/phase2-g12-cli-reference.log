@@ -1,8 +1,0 @@
-Coder v2.36.4+10fd510 Tue Sep  1 01:37:18 UTC 2026
-https://github.com/coder/coder/commit/10fd510ada0e3a7c222511dbd9916f83afd1acf0
-
-Full build of Coder, supports the server subcommand.
-Encountered an error running "coder ssh", see "coder ssh --help" for more information
-error: error opening /Users/richard/code/BicTerm/.scratch/g12-cli for logging: open /Users/richard/code/BicTerm/.scratch/g12-cli/coder-ssh-20260908-152506-juyzu.log: no such file or directory
-Fixtures/run/coder-bin/coder ssh --disable-autostart --wait auto --log-dir     0.05s user 0.03s system 112% cpu 0.073 total
-bicterm-g12-cli-okFixtures/run/coder-bin/coder ssh --disable-autostart --wait auto --log-dir     0.07s user 0.05s system 44% cpu 0.272 total

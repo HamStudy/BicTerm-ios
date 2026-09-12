@@ -7,7 +7,7 @@ import Foundation
 /// any protocol internals.
 public struct ProtocolDescriptor: Equatable, Sendable {
     /// Stable wire/persistence id: matches `Connection.type.rawValue`
-    /// (`"ssh"`, future `"et"`/`"mosh"`/`"coder"`).
+    /// (`"ssh"`, future `"et"`/`"mosh"`).
     public let id: String
     public let displayName: String
     public let supportsAgentForwarding: Bool
@@ -20,14 +20,6 @@ public struct ProtocolDescriptor: Equatable, Sendable {
     public let keyAlgorithmsAccepted: [String]
     public let resumeStrategy: ResumeStrategy
 
-    /// Whether this build ships the AGPL CoderNet tailnet tunnel core.
-    /// Injected from the build flavor (`CODER_TUNNEL` compilation condition)
-    /// at registration time — never hardcoded here: AppStore configurations
-    /// exclude the Go core from the binary and MUST report `false` so coder
-    /// connections fall back to the direct-SSH path. Defaults to `false` so
-    /// a call site that forgets the flag cannot silently claim support.
-    public let supportsTailnetTunnel: Bool
-
     public init(
         id: String,
         displayName: String,
@@ -37,8 +29,7 @@ public struct ProtocolDescriptor: Equatable, Sendable {
         requiresServerComponent: Bool,
         defaultPort: Int,
         keyAlgorithmsAccepted: [String],
-        resumeStrategy: ResumeStrategy,
-        supportsTailnetTunnel: Bool = false
+        resumeStrategy: ResumeStrategy
     ) {
         self.id = id
         self.displayName = displayName
@@ -49,7 +40,6 @@ public struct ProtocolDescriptor: Equatable, Sendable {
         self.defaultPort = defaultPort
         self.keyAlgorithmsAccepted = keyAlgorithmsAccepted
         self.resumeStrategy = resumeStrategy
-        self.supportsTailnetTunnel = supportsTailnetTunnel
     }
 }
 
@@ -66,30 +56,6 @@ extension ProtocolDescriptor {
         requiresServerComponent: false,
         defaultPort: 22,
         keyAlgorithmsAccepted: ["ssh-ed25519", "ecdsa-sha2-nistp256"],
-        resumeStrategy: .rehandshake,
-        supportsTailnetTunnel: false
+        resumeStrategy: .rehandshake
     )
-
-    /// Coder workspaces via the REST API + agent connection. The tunnel
-    /// capability is a parameter, not a constant: default (open-source)
-    /// builds pass `true`, AppStore builds pass `false` and fall back to
-    /// direct SSH against the workspace's routable address. Roaming is real
-    /// only when ``CoderTransport`` backs the protocol: the tailnet
-    /// coordination outlives a backgrounded SSH stream, so the descriptor
-    /// declares `.nativeRoaming` either way — a flavor without the tunnel
-    /// can never reach the connect stage at all.
-    public static func coder(supportsTailnetTunnel: Bool) -> ProtocolDescriptor {
-        ProtocolDescriptor(
-            id: "coder",
-            displayName: "Coder",
-            supportsAgentForwarding: false,
-            supportsJumpChain: false,
-            supportsRoamingResume: true,
-            requiresServerComponent: true,
-            defaultPort: 443,
-            keyAlgorithmsAccepted: ["ssh-ed25519"],
-            resumeStrategy: .nativeRoaming,
-            supportsTailnetTunnel: supportsTailnetTunnel
-        )
-    }
 }

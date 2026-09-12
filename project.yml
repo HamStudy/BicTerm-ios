@@ -5,38 +5,12 @@ options:
 configs:
   Debug: debug
   Release: release
-  AppStore-Debug: debug
-  AppStore-Release: release
 packages:
   BicTermCore:
     path: ./BicTermCore
   SwiftTerm:
     path: ./Vendor/SwiftTerm
 targets:
-  CoderTunnel:
-    type: framework
-    platform: iOS
-    deploymentTarget: "18.0"
-    sources:
-      - path: CoderTunnel
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.bicterm.CoderTunnel
-        PRODUCT_MODULE_NAME: CoderTunnel
-        DEFINES_MODULE: YES
-        SKIP_INSTALL: YES
-        GENERATE_INFOPLIST_FILE: YES
-        SWIFT_VERSION: "6.0"
-        MARKETING_VERSION: "0.1.0"
-        CURRENT_PROJECT_VERSION: "1"
-        # Static archive: BicTermCore must resolve ONCE in the app image —
-        # a dylib copy would split protocol identity (witness-table copy).
-        MACH_O_TYPE: staticlib
-    dependencies:
-      - package: BicTermCore
-        product: BicTermCore
-      - framework: .build-artifacts/coder-net/CoderNet.xcframework
-        embed: false
   HerdrCoreC:
     type: framework
     platform: iOS
@@ -105,23 +79,8 @@ targets:
         CURRENT_PROJECT_VERSION: "1"
         # -u _herdr_client_create: the app target does not reference Herdr code
         # yet (T16 wires the UI); the anchor keeps the HerdrCore objects in
-        # BOTH build flavors' binaries (Apache-2.0 is App Store-safe).
+        # the app binary (Apache-2.0 is App Store-safe).
         OTHER_LDFLAGS: "$(inherited) -u _herdr_client_create"
-      configs:
-        Debug:
-          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) CODER_TUNNEL"
-          # -lresolv: Go cgo DNS resolver (_res_9_ninit/_res_9_nclose).
-          # -u _CoderNetVersion: forces the archiver to extract the Go bridge
-          # object into the final link regardless of Swift-side DCE of the
-          # CoderNetTunnel metatype touch. NOT -force_load/-all_load: Xcode
-          # merges the SwiftPM product objects into CoderTunnel.a, and
-          # wholesale extraction double-defines BicTermCore/NIO symbols.
-          OTHER_LDFLAGS: "$(inherited) -u _herdr_client_create -framework CoderTunnel -lresolv -u _CoderNetVersion"
-          FRAMEWORK_SEARCH_PATHS: "$(inherited) $(BUILT_PRODUCTS_DIR)"
-        Release:
-          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) CODER_TUNNEL"
-          OTHER_LDFLAGS: "$(inherited) -u _herdr_client_create -framework CoderTunnel -lresolv -u _CoderNetVersion"
-          FRAMEWORK_SEARCH_PATHS: "$(inherited) $(BUILT_PRODUCTS_DIR)"
     dependencies:
       - package: BicTermCore
         product: BicTermCore
@@ -158,11 +117,6 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         TARGETED_DEVICE_FAMILY: "1,2"
         SWIFT_VERSION: "6.0"
-      configs:
-        Debug:
-          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) CODER_TUNNEL"
-        Release:
-          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) CODER_TUNNEL"
     dependencies:
       - target: BicTerm
   BicTermTests:
@@ -176,21 +130,12 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         TARGETED_DEVICE_FAMILY: "1,2"
         SWIFT_VERSION: "6.0"
-      configs:
-        Debug:
-          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) CODER_TUNNEL"
-        Release:
-          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) CODER_TUNNEL"
     dependencies:
       - target: BicTerm
 schemes:
   BicTerm:
     build:
-      # CoderTunnel has no target-dependency edge from the app (the AppStore
-      # flavor must not even build it); schemes list it before the app, and
-      # default-config OTHER_LDFLAGS/force_load do the linking.
       targets:
-        CoderTunnel: all
         BicTerm: all
         BicTermUITests:
           - test
@@ -209,27 +154,6 @@ schemes:
       config: Debug
     archive:
       config: Release
-  BicTerm-AppStore:
-    build:
-      targets:
-        BicTerm: all
-        BicTermUITests:
-          - test
-        BicTermTests:
-          - test
-    run:
-      config: AppStore-Debug
-    test:
-      config: AppStore-Debug
-      targets:
-        - BicTermUITests
-        - BicTermTests
-    profile:
-      config: AppStore-Release
-    analyze:
-      config: AppStore-Debug
-    archive:
-      config: AppStore-Release
   HerdrClientCore:
     build:
       targets:

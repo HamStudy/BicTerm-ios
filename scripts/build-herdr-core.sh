@@ -76,8 +76,8 @@ EOF
 
     # Headerless on purpose: ProcessXCFramework flattens module maps from
     # every header-carrying xcframework into the shared per-build include
-    # dir, and CoderNet.xcframework already owns that slot. The clang module
-    # for the ABI lives in the HerdrCoreC target (HerdrCoreC/include).
+    # dir, where colliding module maps would break the build. The clang
+    # module for the ABI lives in the HerdrCoreC target (HerdrCoreC/include).
     xcodebuild -create-xcframework \
         -library "$DEVICE/HerdrCore.a" \
         -library "$SIMULATOR/HerdrCore.a" \

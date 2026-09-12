@@ -7,9 +7,9 @@ import XCTest
 /// fixture sshd's exec channel) — no real herdr involved.
 ///
 /// Proves the ``HerdrSSHTransport`` byte-stream seam over BOTH transport
-/// sources: direct TCP SSH and the UDS forwarder chain (the Coder-bridge
-/// dial shape), plus chunk-boundary independence, stderr isolation, and
-/// behavioral command-injection resistance through the real sshd shell.
+/// sources: direct TCP SSH and the UDS forwarder chain, plus chunk-boundary
+/// independence, stderr isolation, and behavioral command-injection
+/// resistance through the real sshd shell.
 final class HerdrSSHTransportTests: XCTestCase {
     private var transport: SSHTransport?
 
@@ -43,7 +43,7 @@ final class HerdrSSHTransportTests: XCTestCase {
     }
 
     /// Chained path: UDS dial through the fixtures-up forwarder to the same
-    /// fixture sshd (the Coder per-session bridge dial shape).
+    /// fixture sshd.
     private func makeUDSTransport() async throws -> SSHTransport {
         let key = try await SSHTestFixture.loadFixtureEd25519Key()
         let transport = SSHTransport(

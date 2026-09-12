@@ -2,8 +2,8 @@
 
 ## Ordinary SSH profiles: TOFU host-key trust
 
-Every ordinary (`type == .ssh`) connection performs trust-on-first-use host-key
-verification through `HostKeyVerifier(store:)` (trust policy `.tofu`):
+Every connection performs trust-on-first-use host-key verification through
+`HostKeyVerifier(store:)`:
 
 - First contact: the presented key is persisted as `.firstSeen` and the connect
   fails with the typed `TransportError.requiresTrust`; the UI prompts, and only
@@ -14,79 +14,13 @@ verification through `HostKeyVerifier(store:)` (trust policy `.tofu`):
   method (key or password, never both), and credential resolution failures
   surface as `TransportError.authenticationFailed` before any dial.
 
-Nothing in the Coder machinery below weakens this path. The two policies are
-enum-separated at the type level and the normal SSH profile factory
-(`SSHSessionTransportFactory`) contains no reference to the Coder trust
-machinery (kept honest by `CoderTrustPolicyTests`).
-
-## Coder workspace sessions: the tailnet transport is the boundary
-
-Reference: `CODER_WORKSPACE_SSH_PROTOCOL_SPEC.md` §10.5 and §11.1–11.4.
-
-A Coder workspace agent runs a built-in SSH server with `NoClientAuth: true`.
-The stock Coder SDK policy is: create the SSH client connection **without** an
-SSH password/private-key configuration and skip independent SSH host-key
-checking. Authorization has already happened through Coder's authenticated
-network setup (WireGuard between client and agent; the coordinator introducing
-peer keys, including over DERP relays).
-
-BicTerm mirrors that stock policy deliberately (the "coder tunnel trust
-policy"):
-
-- `HostKeyVerifier.coderTunnel()` (policy `.coderTunnelTrust`) accepts the
-  agent's host key unconditionally. Agent host keys are ephemeral and rotate
-  on rebuilds; pinning them would produce false rejections. The policy never
-  reads from or writes to the persistent TOFU store — acceptance leaves no
-  trace, and `trust(...)` is a no-op under it.
-- `SSHTransport.connect(unixSocketPath:cols:rows:)` offers the RFC 4252
-  `none` method exactly once (`NoClientUserAuthenticationDelegate`), under the
-  fixed username `coder` — per spec §11.4 an example username, never a
-  privilege instruction. The vendored NIOSSH fork supports `Offer.none`, so
-  **no dummy-password fallback exists anywhere**. A server that rejects `none`
-  gets the typed `TransportError.authenticationFailed`, final — coder sessions
-  never fall back to credentials.
-- A TOFU-mode transport pointed at a coder-posture server still gates the
-  unseen host key (typed `TransportError.requiresTrust`) — the UDS dial and
-  the `none` offer never smuggle a server past the ordinary trust model.
-
-### What this does and does not claim
-
-- This arrangement says: whoever can drive the Coder transport can reach the
-  workspace shell. The authenticated, authorized tailnet path **is** the
-  access boundary.
-- It does **not** claim protection against a malicious Coder control plane
-  (spec §10.5 says not to make that claim while following the SDK's stock
-  policy). Independent host-key pinning remains a possible additional policy,
-  per §11.4, and would require a documented key-rotation story.
-- The trust exception is confined to coder-tunnel sessions. It is never
-  selected for ordinary SSH profiles, never applied to the Coder HTTPS/REST
-  connection, and never applied under a `Host *`-style wildcard rule.
-
-### The SSH translation hop inside the bridge
-
-Coder's agent SSH server presents a hardcoded RSA host key
-(`agentssh.CoderSigner` — deterministic RSA-2048, no configuration), which
-NIOSSH cannot negotiate: its host-key set never includes the RSA family. The
-Go bridge therefore runs an in-process SSH relay as its UDS handler:
-downstream toward the app it serves SSH with a per-session ephemeral ed25519
-host key and `none` auth; upstream toward the agent it opens the SSH session
-with the reference client's posture (`InsecureIgnoreHostKey`, none auth).
-Channel requests (`pty-req`, `shell`, `window-change`, `exit-status`) relay
-opaquely, so terminal semantics traverse both legs unchanged.
-
-Security accounting: the bridge already transported the session's plaintext
-bytes; this hop terminates and originates SSH inside the same process and
-trust domain without changing who can reach the bytes. What the app's trust
-policy accepts is still the session delivered by the authenticated tailnet
-authorization boundary — never a claim about the RSA host anyway.
-
 ## Per-session UDS endpoint contract
 
-The bridge that fronts a coder session (Go bridge in production; the test
-double in `UDSTransportTests`; `Fixtures/bin/uds-forward.py` for the fixture)
-owns the socket endpoint. `SSHTransport` only ever **dials** it. Invariants:
+A unix-domain-socket bridge fronting an SSH session (the test double in
+`UDSTransportTests`; `Fixtures/bin/uds-forward.py` for the fixture) owns the
+socket endpoint. `SSHTransport` only ever **dials** it. Invariants:
 
-1. The socket path is per-session random: `coder-ssh-<uuid>.sock`.
+1. The socket path is per-session random: `bicterm-uds-<uuid>.sock`.
 2. The bound socket carries permissions `0600` from creation.
 3. A stale leftover at the path (crashed previous session) is unlinked before
    bind; a live listener at the path is never replaced.
@@ -113,106 +47,3 @@ sandbox-tmp literal.
 - All agent-controlled outputs — DerivedData, evidence logs, socket files,
   scratch — stay repo-local (`.build-artifacts/`, `.sisyphus/evidence/`,
   `Fixtures/run/`).
-
-## Build isolation: AGPL tunnel core vs App Store flavor
-
-Phase 2, task 7 (2026-09-07). BicTerm builds in two flavors from one Xcode
-project (`project.yml`, xcodegen):
-
-| | Default flavor | AppStore flavor |
-|---|---|---|
-| Scheme | `BicTerm` | `BicTerm-AppStore` |
-| Configurations | `Debug`, `Release` | `AppStore-Debug`, `AppStore-Release` |
-| `CODER_TUNNEL` Swift flag | set on app + test targets | absent everywhere |
-| `CoderTunnel` target | built and statically linked | never built (not in the scheme) |
-| Coder tailnet tunnel | shipped (AGPL-3.0 Go core) | absent; coder connections use direct SSH |
-
-### Why a framework target and not a library import
-
-`CoderNet.xcframework` statically fuses AGPL-3.0-licensed code
-(coder/coder v2.36.4 `codersdk`/`workspacesdk` plus the coder fork graph).
-The boundary for that code is exactly one framework target:
-
-- `CoderTunnel` (Xcode target, `MACH_O_TYPE=staticlib`) — contains
-  `CoderNetTunnel: CoderTunneling`, the only Swift code that imports the
-  `CoderNet` Clang module. It links the xcframework's per-slice
-  `CoderNet.a` and nothing else foreign.
-- `BicTermCore` — defines `CoderTunneling` (pure Swift, no imports beyond
-  Foundation) and carries `ProtocolDescriptor.supportsTailnetTunnel`,
-  injected at registration from the build flavor. BicTermCore itself stays
-  permissive-license clean and builds identically in both flavors.
-- The app links `CoderTunnel` only when compiled for `Debug`/`Release`
-  (per-config `-framework CoderTunnel` + `-lresolv`) and reads the flavor
-  through `BuildFlavor.coderTailnetTunnelSupported` (`#if CODER_TUNNEL`).
-
-### Three-layer audit (run per release, both flavors)
-
-Symbol stripping could hide a leak, so all three layers are mandatory:
-
-1. **Build-system proof** — the AppStore scheme's build action never lists
-   `CoderTunnel` (`xcodebuild -list` scheme matrix + the AppStore build log
-   contains zero `CoderTunnel` task lines).
-2. **Bundle proof** — the AppStore `.app` tree contains no
-   `CoderTunnel`/`CoderNet` framework or dylib, and `otool -L` on the app
-   binary shows no CoderTunnel load command.
-3. **Symbol sweep** — `strings` over every Mach-O file in the AppStore
-   bundle finds zero `CoderNet`/`workspacesdk` matches; the default-flavor
-   build shows positive matches (proving the sweep detects the code when
-   present).
-
-Logs: `.sisyphus/evidence/phase2-g7-appstore-audit.log` and
-`.sisyphus/evidence/phase2-g7-default-audit.log`.
-
-### Invariants that keep the flavors honest
-
-- No runtime download of the tunnel: it is build-time linked or absent.
-- No user-facing tunnel claim in the AppStore flavor: the capability is
-  compile-gated, not UI-hidden (`BuildFlavorTests` asserts both directions
-  against the `AppServices` registered descriptor).
-- `-force_load` is deliberately NOT used on the merged static archive: Xcode
-  merges the SwiftPM product objects into `CoderTunnel.a` for a staticlib
-  framework, and wholesale extraction double-defines them. On-demand
-  archive extraction keeps those members dormant so each module resolves
-  exactly once; the app's metatype reference to `CoderNetTunnel.self`
-  provides the demand edge.
-
-## Coder credential generations and authentication loss
-
-Reference: `CODER_WORKSPACE_SSH_PROTOCOL_SPEC.md` §4.3, §14.5, §15 — phase 2,
-task 10 (`CoderLifecycleCoordinator`, `CoderCredentialGenerations`).
-
-Every Coder dial carries a **credential generation number** per server
-(minted 1 at first contact; stamped into the tunnel start config as
-`credential_generation` for observability — the Go core tolerates the extra
-field).
-
-**Classification before action.** Auth-requirement decisions follow spec §15:
-an HTTP 401 whose error `validations` names `resume_token` is a resume-token
-rejection — the Go core discards the token and retries without it, and the
-event taxonomy (§8.7) surfaces it ONLY as `resumeRefreshed`/`transientError`.
-The Swift classifier (`CoderEventClassifier`) additionally quarantines any
-resume-token-validated event bound Swift-side: it can never surface as
-`authRequired`. Only a genuine primary 401 (REST or coordination, without the
-marker) marks the generation — a dedicated usage heart‑beat 401 explicitly
-never does (§14.3: a failed optional usage call is not proof of auth loss).
-
-**On confirmed auth loss:**
-
-1. The current generation is marked `AuthRequired` exactly once (duplicates
-   collapse), and the app is notified to run the Reauthenticate flow.
-2. NEW dials with the generation are refused before any network or tunnel
-   work (no REST call, no Go handle).
-3. Established sessions continue until their natural end. This is the
-   explicit client policy (§14.5): we do **not** claim that token expiry
-   tears down an already-established data-plane connection at the expiry
-   instant, and we do not force-close the user's live shell.
-4. The replacement credential is validated by the Reauthenticate flow through
-   a FRESH client (identity check included), persisted atomically, and only
-   then is a new generation installed. Subsequent connections allocate a
-   FRESH Go handle per dial — an old handle is never reused, and no active
-   network client's token provider is ever mutated in place.
-5. A stale handle's late `authRequired` event cannot condemn the replacement
-   generation (registrations carry their generation id; mismatches drop).
-6. Bounded auto-reconnect treats `authRequired` as terminal rather than
-   retrying with the same dead token; usage heartbeats stop when the
-   generation is marked, never on transient errors.

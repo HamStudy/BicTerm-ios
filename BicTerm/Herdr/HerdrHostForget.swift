@@ -15,9 +15,8 @@ enum HerdrHostIdentity {
     }
 }
 
-/// Per-host "forget" action (integration doc §15 security sweep; mirrors the
-/// Coder server delete flow's confirm-then-clear shape). Clears every local
-/// remnant of one host while KEEPING the connection entry itself:
+/// Per-host "forget" action (integration doc §15 security sweep). Clears
+/// every local remnant of one host while KEEPING the connection entry itself:
 ///
 /// - the TOFU known-host record for the destination and each jump hop
 ///   (next connect re-prompts on the fingerprint),

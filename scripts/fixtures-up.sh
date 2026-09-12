@@ -1,6 +1,6 @@
 #!/bin/bash
-# BicTerm fixtures: bring up hop-1 sshd (12222), hop-2 sshd (12223),
-# coder stub (18080) on loopback. Idempotent. Self-checks run at the end;
+# BicTerm fixtures: bring up hop-1 sshd (12222), hop-2 sshd (12223), and a
+# UDS forwarder on loopback. Idempotent. Self-checks run at the end;
 # exits non-zero if any check fails.
 #
 # Env knobs:
@@ -85,16 +85,6 @@ start_sshd hop1 "$HOP1_CONFIG" "$HOP1_HOSTKEY"
   echo "$HOP1_CONFIG" > "$RUN/hop1.active_config" || echo "hop1_config" > "$RUN/hop1.active_config"
 start_sshd hop2 hop2_config "$SSHD_DIR/host_keys/hop2_host_ed25519"
 
-# coder stub
-STUB_PIDFILE="$RUN/coder_stub.pid"
-if [ -f "$STUB_PIDFILE" ] && kill -0 "$(cat "$STUB_PIDFILE")" 2>/dev/null; then
-  : # already running
-else
-  nohup python3 "$FIX/coder/stub.py" </dev/null >>"$RUN/coder_stub.log" 2>&1 &
-  echo $! > "$STUB_PIDFILE"
-  disown 2>/dev/null || true
-fi
-
 # UDS forwarder: bridges sshd-uds.sock -> hop1 (127.0.0.1:12222) so T8 UDS
 # dial tests can reach the fixture sshd with key auth. Bridge unlinks a stale
 # socket path before binding and removes it on exit.
@@ -114,7 +104,6 @@ fi
 {
   cat "$RUN/hop1.pid" 2>/dev/null
   cat "$RUN/hop2.pid" 2>/dev/null
-  cat "$STUB_PIDFILE" 2>/dev/null
   cat "$UDS_PIDFILE" 2>/dev/null
 } > "$RUN/pids"
 
@@ -130,7 +119,6 @@ wait_port() { # wait_port <port> <name>
 }
 wait_port 12222 hop1
 wait_port 12223 hop2
-wait_port 18080 coder-stub
 
 # Wait for the UDS forwarder to accept connections on its socket path.
 UDS_SOCK="$RUN/sshd-uds.sock"
@@ -199,26 +187,12 @@ check "two-hop ssh -J prints hop-ok" "hop-ok" "$out"
 
 # The UDS forwarder must carry a full SSH session from socket entry to hop1.
 out=$(/usr/bin/ssh $SSH_OPTS -o BatchMode=yes -i "$KEYS/bicterm-fixture-ed25519" \
-  -p 22 -o "ProxyCommand=/usr/bin/nc -U $UDS_SOCK" "$WHO@coder-uds.invalid" \
+  -p 22 -o "ProxyCommand=/usr/bin/nc -U $UDS_SOCK" "$WHO@bicterm-uds.invalid" \
   'printf bicterm-uds-ok' </dev/null 2>/dev/null)
 check "UDS-bridged ssh prints bicterm-uds-ok" "bicterm-uds-ok" "$out"
 
 perms=$(stat -f %Lp "$UDS_SOCK" 2>/dev/null)
 check "UDS socket permissions are 600" "600" "$perms"
-
-code=$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:18080/api/v2/workspaces?q=owner:me")
-check "coder stub rejects missing token (401)" "401" "$code"
-
-body=$(curl -s -H "Coder-Session-Token: fixture-token" "http://127.0.0.1:18080/api/v2/workspaces?q=owner:me")
-echo "$body" | python3 -c '
-import json, sys
-d = json.load(sys.stdin)
-ws = d.get("workspaces", [])
-statuses = [w["latest_build"]["status"] for w in ws]
-assert len(ws) >= 2, "need >=2 workspaces"
-assert "running" in statuses, "need a running workspace"
-assert "stopped" in statuses, "need a stopped workspace"
-' && check "coder stub returns workspaces (running+stopped)" "0" "0" || { echo "FAIL: coder stub workspace payload: $body"; FAILURES=$((FAILURES + 1)); }
 
 echo "---"
 if [ "$FAILURES" -gt 0 ]; then

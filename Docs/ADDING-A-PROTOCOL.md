@@ -153,7 +153,6 @@ and registry path without registering a production factory.
 ```swift
 public enum ConnectionType: String, Codable, Equatable, Hashable, Sendable {
     case ssh
-    case coder
     case et
     case mosh
 }

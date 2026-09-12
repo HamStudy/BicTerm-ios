@@ -13,21 +13,11 @@ final class ConnectionModelTests: XCTestCase {
 
     func testConnectionTypeRoundTrips() throws {
         XCTAssertEqual(try roundTrip(ConnectionType.ssh), .ssh)
-        XCTAssertEqual(try roundTrip(ConnectionType.coder), .coder)
         XCTAssertEqual(try roundTrip(ConnectionType.uppercaseEcho), .uppercaseEcho)
     }
 
     func testHopRoundTrips() throws {
         let value = TestModels.hop()
-
-        XCTAssertEqual(try roundTrip(value), value)
-    }
-
-    func testCoderReferenceRoundTrips() throws {
-        let value = CoderReference(
-            serverID: TestModels.coderServerID,
-            workspaceID: TestModels.workspaceID
-        )
 
         XCTAssertEqual(try roundTrip(value), value)
     }
@@ -44,12 +34,6 @@ final class ConnectionModelTests: XCTestCase {
 
     func testHostKeyRecordRoundTrips() throws {
         let value = TestModels.hostKey(port: 22, byte: 0x11)
-
-        XCTAssertEqual(try roundTrip(value), value)
-    }
-
-    func testCoderServerRoundTrips() throws {
-        let value = try TestModels.coderServer()
 
         XCTAssertEqual(try roundTrip(value), value)
     }
@@ -92,68 +76,6 @@ final class ConnectionModelTests: XCTestCase {
         }
     }
 
-    func testCoderServerRejectsHTTPWithTypedError() {
-        XCTAssertThrowsError(
-            try CoderServer(
-                name: "Insecure",
-                baseURL: URL(string: "http://coder.example.com")!,
-                tokenKeychainTag: "keychain://coder/insecure"
-            )
-        ) { error in
-            XCTAssertEqual(error as? CoderServerValidationError, .httpsRequired)
-        }
-    }
-
-    /// Loopback http is the dev-fixture exception (scripts/coder-dev-up.sh):
-    /// TLS adds nothing on the loopback interface, so only 127.0.0.1,
-    /// localhost, and [::1] may skip the https requirement.
-    func testCoderServerAllowsLoopbackHTTPForDevFixtures() throws {
-        for raw in [
-            "http://127.0.0.1:7080",
-            "http://localhost:7080",
-            "http://[::1]:7080",
-        ] {
-            let server = try CoderServer(
-                name: "Dev fixture",
-                baseURL: URL(string: raw)!,
-                tokenKeychainTag: "keychain://coder/dev-fixture"
-            )
-            XCTAssertEqual(server.baseURL.absoluteString, raw)
-        }
-    }
-
-    /// The loopback exception never widens: ordinary http endpoints stay
-    /// rejected, including loopback-looking names that are not loopback.
-    func testCoderServerRejectsNonLoopbackHTTP() {
-        for raw in [
-            "http://coder.example.com",
-            "http://192.168.1.5:8080",
-            "http://localhost.evil.example.com",
-        ] {
-            XCTAssertThrowsError(
-                try CoderServer(
-                    name: "Insecure",
-                    baseURL: URL(string: raw)!,
-                    tokenKeychainTag: "keychain://coder/insecure"
-                )
-            ) { error in
-                XCTAssertEqual(error as? CoderServerValidationError, .httpsRequired, raw)
-            }
-        }
-    }
-
-    func testCoderServerRejectsEmbeddedCredentials() {
-        XCTAssertThrowsError(
-            try CoderServer(
-                name: "Credentials",
-                baseURL: URL(string: "https://user:password@coder.example.com")!,
-                tokenKeychainTag: "keychain://coder/credentials"
-            )
-        ) { error in
-            XCTAssertEqual(error as? CoderServerValidationError, .embeddedCredentialsNotAllowed)
-        }
-    }
-
     func testProtocolOptionsRejectSecretBearingKeys() {
         XCTAssertThrowsError(try ProtocolOptions(["password": .string("not-even-a-real-secret")])) { error in
             XCTAssertEqual(
@@ -167,7 +89,6 @@ final class ConnectionModelTests: XCTestCase {
         requireSendable(try TestModels.connection())
         requireSendable(TestModels.hop())
         requireSendable(TestModels.hostKey(port: 22, byte: 0x22))
-        requireSendable(try TestModels.coderServer())
         requireSendable(TestModels.snapshot())
     }
 

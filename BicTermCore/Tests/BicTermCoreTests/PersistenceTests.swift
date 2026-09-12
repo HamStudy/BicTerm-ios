@@ -20,8 +20,7 @@ final class PersistenceTests: XCTestCase {
             username: original.username,
             keyReference: original.keyReference,
             jumpChain: original.jumpChain,
-            protocolOptions: original.protocolOptions,
-            coderRef: original.coderRef
+            protocolOptions: original.protocolOptions
         )
         try await store.save(updated)
         let loadedConnections = try await store.loadConnections()
@@ -32,27 +31,26 @@ final class PersistenceTests: XCTestCase {
         XCTAssertNil(deletedConnection)
     }
 
-    func testCoderServerStoreSavesLoadsUpdatesAndDeletesDTOs() async throws {
+    /// Rows written by removed features (a protocol id this build no longer
+    /// ships, or an unparseable payload) must be skipped on load — never a
+    /// wholesale store failure.
+    func testLoadConnectionsQuarantinesUndecodableRows() async throws {
         let store = try PersistenceStoreFactory.makeConfigurationStore(inMemoryOnly: true)
-        let original = try TestModels.coderServer()
-        try await store.save(original)
+        let good = try TestModels.connection()
+        try await store.save(good)
 
-        let loadedOriginal = try await store.coderServer(id: original.id)
-        XCTAssertEqual(loadedOriginal, original)
+        let retiredID = UUID()
+        let retiredPayload = Data("""
+        {"id":"\(retiredID.uuidString)","name":"Retired","type":"retired-protocol",\
+        "host":"retired.example.com","port":22,"username":"u","keyReference":"k",\
+        "jumpChain":[],"protocolOptions":{}}
+        """.utf8)
+        try await store.seedRawConnectionPayload(id: retiredID, payload: retiredPayload)
+        try await store.seedRawConnectionPayload(id: UUID(), payload: Data("not json".utf8))
 
-        let updated = try CoderServer(
-            id: original.id,
-            name: "Updated Coder",
-            baseURL: original.baseURL,
-            tokenKeychainTag: original.tokenKeychainTag
-        )
-        try await store.save(updated)
-        let loadedServers = try await store.loadCoderServers()
-        XCTAssertEqual(loadedServers, [updated])
+        let loaded = try await store.loadConnections()
 
-        try await store.deleteCoderServer(id: original.id)
-        let deletedServer = try await store.coderServer(id: original.id)
-        XCTAssertNil(deletedServer)
+        XCTAssertEqual(loaded, [good])
     }
 
     func testHostKeyIdentityIncludesPort() async throws {
@@ -125,5 +123,14 @@ final class PersistenceTests: XCTestCase {
         let remainingScene = try await store.snapshot(sceneID: sceneB.sceneID)
         XCTAssertNil(deletedScene)
         XCTAssertEqual(remainingScene, sceneB)
+    }
+}
+
+private extension SwiftDataConfigurationStore {
+    /// Inserts a row whose payload never went through `Connection` encoding,
+    /// standing in for data written by a build with features this one lacks.
+    func seedRawConnectionPayload(id: UUID, payload: Data) throws {
+        modelContext.insert(StoredConnection(id: id, payload: payload))
+        try modelContext.save()
     }
 }

@@ -32,8 +32,7 @@ public protocol PasswordStoring: Sendable {
 
 /// Keychain-backed ``PasswordStoring``: generic-password items protected by
 /// the data-protection Keychain, `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`
-/// (never migrated to a new device, never readable while locked). Mirrors
-/// ``KeychainCoderTokenStore``'s update-then-add upsert protocol.
+/// (never migrated to a new device, never readable while locked).
 public actor KeychainPasswordStore: PasswordStoring {
     public let keychainService: String
 

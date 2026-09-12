@@ -12,9 +12,9 @@ import NIOSSH
 /// (both with reply tracking). `output` is a FRESH stream per connection;
 /// the previous one is finished on reconnect or `close`.
 ///
-/// Unix-domain-socket dialing (fixture conformance and Coder NoClientAuth
-/// sessions) lives in SSHTransport+UDS.swift and shares the session-establish
-/// tail through `openSessionAndActivate`.
+/// Unix-domain-socket dialing (fixture conformance) lives in
+/// SSHTransport+UDS.swift and shares the session-establish tail through
+/// `openSessionAndActivate`.
 ///
 /// Output buffering policy: the stream holds at most 32 chunks of at most
 /// 32 KiB (≈1 MiB). On overflow the OLDEST queued chunks are dropped

@@ -62,7 +62,7 @@ Console excerpt per step.
 
 ## Reporting back
 
-Append results to `.omo/notepads/bicterm-phase2-coder-ssh/learnings.md`
-(or a new `.sisyphus/evidence/device-qa-<date>.md`) with: build flavor,
+Append results to the project learnings notepad under `.omo/notepads/`
+(or a new `.sisyphus/evidence/device-qa-<date>.md`) with: app build,
 iPadOS version, per-step pass/fail, and the Console excerpt for any
 failure. A release must not ship with an unreviewed failure in steps 1–12.

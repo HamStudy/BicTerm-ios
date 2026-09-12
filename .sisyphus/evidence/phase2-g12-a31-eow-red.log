@@ -1,6 +1,0 @@
---- FAIL: TestSSHProxyReturnsWhenConsumerSendsEndOfWrite (1.10s)
-    sshproxy_test.go:73: fake agent peer version: SSH-2.0-Go
-    sshproxy_failure_test.go:20: downstream write failed but upstream and relays stayed alive
-FAIL
-exit status 1
-FAIL	github.com/bicterm/coder-net	1.930s

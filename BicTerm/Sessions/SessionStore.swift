@@ -1,10 +1,4 @@
 import BicTermCore
-#if CODER_TUNNEL
-// Default flavors compile with CODER_TUNNEL=1 and link the CoderTunnel
-// framework; AppStore-* configurations exclude both, and the coder protocol
-// then keeps the registry's typed protocolUnavailable — never a fallback.
-import CoderTunnel
-#endif
 import Foundation
 import SwiftUI
 import UIKit
@@ -62,13 +56,6 @@ final class SessionStore {
     let agentPresenter: AgentApprovalPresenter
     let agentBook: AgentSessionBook
     let hostKeyVerifier: HostKeyVerifier?
-    /// T10: coder session lifecycle — credential generations, classified Go
-    /// core events, and heartbeat stops. Present in the live default flavor
-    /// (CODER_TUNNEL); nil under injected factories and the AppStore flavor.
-    let coderLifecycle: CoderLifecycleCoordinator?
-    /// T11: coder connection diagnostics surfaced by the session info sheet
-    /// (network path from the Go event taxonomy, cached server versions).
-    let coderDiagnostics: CoderSessionDiagnostics
     /// Live terminal surfaces for every attached-or-detached session —
     /// the buffer-preservation layer behind the session switcher.
     let viewCache = TerminalViewCache()
@@ -102,7 +89,6 @@ final class SessionStore {
         hostKeyStore injectedHostKeyStore: (any HostKeyStoreProtocol)? = nil
     ) {
         let snapshots = snapshotStore ?? Self.defaultSnapshotStore()
-        let diagnostics = CoderSessionDiagnostics()
         let book = AgentSessionBook()
         let presenter = AgentApprovalPresenter(resolveRouting: { _ in
             AgentPromptRouting(target: .mainWindow, sessionDisplayName: "Session")
@@ -123,7 +109,6 @@ final class SessionStore {
         }
 
         let factory: any TerminalTransportFactory
-        var lifecycleCoordinator: CoderLifecycleCoordinator?
         if let transportFactory {
             // Tests route prompts through the same book/presenter path.
             factory = AgentForwardingTransportFactory(
@@ -134,32 +119,19 @@ final class SessionStore {
                 agentForwardingApplies: { _ in true }
             )
         } else {
-            let built = Self.makeLiveFactory(
+            factory = Self.makeLiveFactory(
                 authorizer: authorizer,
                 book: book,
-                verifier: verifier,
-                diagnostics: diagnostics
+                verifier: verifier
             )
-            factory = built.factory
-            lifecycleCoordinator = built.coderLifecycle
         }
 
         self.registry = SessionRegistry(transportFactory: factory, snapshotStore: snapshots)
-        self.coderLifecycle = lifecycleCoordinator
-        self.coderDiagnostics = diagnostics
         self.agentPresenter = presenter
         self.agentBook = book
         self.hostKeyVerifier = verifier
         self.hostKeyStore = injectedHostKeyStore ?? keyStore
         self.snapshotStore = snapshotStore
-
-        if let lifecycleCoordinator {
-            let registry = self.registry
-            Task {
-                await lifecycleCoordinator.attach(registry: registry)
-                await lifecycleCoordinator.start()
-            }
-        }
 
         if let connectionLookup {
             self.connectionLookup = connectionLookup
@@ -406,57 +378,17 @@ final class SessionStore {
     private static func makeLiveFactory(
         authorizer: AgentAuthorizationService,
         book: AgentSessionBook,
-        verifier: HostKeyVerifier,
-        diagnostics: CoderSessionDiagnostics
-    ) -> (factory: any TerminalTransportFactory, coderLifecycle: CoderLifecycleCoordinator?) {
+        verifier: HostKeyVerifier
+    ) -> any TerminalTransportFactory {
         var registry = TransportRegistry()
         registry.register(.ssh, factory: SSHSessionTransportFactory(hostKeyVerifier: verifier))
-        var coordinator: CoderLifecycleCoordinator?
-        #if CODER_TUNNEL
-        let services = AppServices.shared
-        let resolver = CoderWorkspaceResolver(
-            serverStore: services.coderServerStore,
-            tokenStore: services.coderTokenStore
-        )
-        let lifecycleCoordinator = CoderLifecycleCoordinator(
-            events: CoderNetTunnel.events,
-            onAuthLoss: { serverID in
-                // T19's Reauthenticate flow consumes this notification.
-                await MainActor.run {
-                    NotificationCenter.default.post(
-                        name: .coderReauthenticationRequested,
-                        object: nil,
-                        userInfo: ["serverID": serverID]
-                    )
-                }
-            },
-            onSessionEvent: { event, registration in
-                await MainActor.run {
-                    diagnostics.apply(event, sceneID: registration.sceneID)
-                }
-            }
-        )
-        coordinator = lifecycleCoordinator
-        registry.register(
-            .coder(supportsTailnetTunnel: true),
-            factory: CoderTransportFactory(
-                resolver: resolver,
-                socketBaseDirectory: NSTemporaryDirectory(),
-                lifecycle: CoderSessionLifecycleDependencies(
-                    reporting: lifecycleCoordinator,
-                    generations: lifecycleCoordinator.generations
-                )
-            ) { CoderNetTunnel() }
-        )
-        #endif
-        let forwarding = AgentForwardingTransportFactory(
+        return AgentForwardingTransportFactory(
             base: registry,
             keyProvider: DefaultAgentKeyProvider(),
             authorizer: authorizer,
             book: book,
             agentForwardingApplies: { $0.type == .ssh }
         )
-        return (forwarding, coordinator)
     }
 
     static func defaultHostKeyStoreForLiveUse() -> any HostKeyStoreProtocol {

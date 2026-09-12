@@ -237,33 +237,4 @@ final class UDSTransportTests: XCTestCase {
             "closed session's socket path must be removed"
         )
     }
-
-    func testNoClientAuthSessionOverUDSReceivesGreetingAndEcho() async throws {
-        // Given: a NoClientAuth SSH server (Coder agent posture) on a UDS path
-        let path = makeTestSocketPath()
-        let server = LoopbackNoAuthSSHUDSServer(path: path)
-        try await server.start()
-        defer { Task { await server.stop() } }
-
-        // When: the coder-tunnel dial connects with the coder trust policy —
-        // the server's random ephemeral host key is never prompted on
-        let transport = SSHTransport(hostKeyVerifier: .coderTunnel())
-        defer { Task { await transport.close() } }
-        try await transport.connect(unixSocketPath: path, cols: 80, rows: 24)
-        let sink = await beginCollecting(transport)
-
-        // Then: greeting arrives without any credential or trust interaction
-        let greeted = await waitForContent(
-            sink: sink,
-            marker: LoopbackNoAuthSSHUDSServer.greeting,
-            timeoutMilliseconds: 15000
-        )
-        XCTAssertTrue(greeted, "coder UDS session should deliver the greeting")
-
-        try await transport.send(Data("echo coder-none-auth\n".utf8))
-        let echoed = await waitForContent(sink: sink, marker: "coder-none-auth", timeoutMilliseconds: 15000)
-        XCTAssertTrue(echoed, "coder UDS session should echo input back")
-        await transport.close()
-        await server.stop()
-    }
 }

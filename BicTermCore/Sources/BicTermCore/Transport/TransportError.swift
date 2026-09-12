@@ -43,9 +43,9 @@ public enum TransportError: Error, Equatable, Sendable {
     case resumeUnsupported
 
     /// The protocol's control plane rejected the credential before any
-    /// transport bytes flowed (Coder: REST/coordination HTTP 401 or a missing
-    /// stored token). Unlike ``authenticationFailed`` — an SSH-layer offer
-    /// rejection — this case is for reauthentication UX, not a fresh key.
+    /// transport bytes flowed. Unlike ``authenticationFailed`` — an
+    /// SSH-layer offer rejection — this case is for reauthentication UX,
+    /// not a fresh key.
     case authRequired
 
     /// The session's backing identity no longer resolves (workspace deleted

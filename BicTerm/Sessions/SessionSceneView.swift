@@ -25,7 +25,6 @@ struct SessionSceneView: View {
     var actions: SessionSceneActions?
 
     @State private var switcherPresented = false
-    @State private var coderInfoPresented = false
 
     private var agentPresenter: AgentApprovalPresenter { store.agentPresenter }
 
@@ -66,17 +65,6 @@ struct SessionSceneView: View {
                     actions?.onNewConnection()
                 }
             )
-        }
-        .sheet(isPresented: $coderInfoPresented) {
-            NavigationStack {
-                CoderSessionInfoView(
-                    connection: model.connection,
-                    sceneID: model.sceneID,
-                    diagnostics: store.coderDiagnostics
-                )
-            }
-            .presentationDetents([.medium, .large])
-            .terminalStyle()
         }
         .confirmationDialog(
             "Disconnect from \(model.connectionName)?",
@@ -132,18 +120,6 @@ struct SessionSceneView: View {
             }
 
             Spacer()
-
-            if model.connection.type == .coder {
-                Button {
-                    coderInfoPresented = true
-                } label: {
-                    Image(systemName: "info.circle")
-                        .font(.title3)
-                }
-                .accessibilityLabel("Connection info")
-                .accessibilityIdentifier("scene-coder-info")
-                .foregroundColor(colors.dimmed)
-            }
 
             Button {
                 switcherPresented = true

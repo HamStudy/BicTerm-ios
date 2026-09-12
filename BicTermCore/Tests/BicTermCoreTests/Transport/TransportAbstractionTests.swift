@@ -102,17 +102,18 @@ final class TransportAbstractionTests: XCTestCase {
     func testSelectedProtocolNeverSilentlyDowngrades() async throws {
         let registry = try await makeSSHRegistry()
 
-        let coderConnection = try Connection(
-            name: "coder",
-            type: .coder,
-            host: "coder.invalid",
-            port: 443,
+        // A known-but-unregistered protocol (the uppercase-echo proof case)
+        // fails typed, never downgraded to SSH.
+        let echoConnection = try Connection(
+            name: "echo",
+            type: .uppercaseEcho,
+            host: "echo.invalid",
+            port: 2022,
             username: "unit",
-            keyReference: "unit-key",
-            coderRef: CoderReference(serverID: UUID(), workspaceID: UUID())
+            keyReference: "unit-key"
         )
-        await assertThrowsTransportError(.protocolUnavailable(protocolID: "coder")) {
-            _ = try registry.makeTransport(for: coderConnection)
+        await assertThrowsTransportError(.protocolUnavailable(protocolID: "uppercase-echo")) {
+            _ = try registry.makeTransport(for: echoConnection)
         }
 
         // Unknown/future persisted protocol ids resolve to nil descriptor,
@@ -120,21 +121,21 @@ final class TransportAbstractionTests: XCTestCase {
         XCTAssertNil(registry.descriptor(forProtocolID: "mosh"))
         XCTAssertNil(registry.descriptor(forProtocolID: "et"))
 
-        // End-to-end through SessionRegistry: a coder session fails typed
-        // at start, without touching the network or dialing SSH.
+        // End-to-end through SessionRegistry: an unavailable protocol fails
+        // typed at start, without touching the network or dialing SSH.
         let sessionRegistry = SessionRegistry(
             transportFactory: registry,
             snapshotStore: InMemorySnapshotStore()
         )
         do {
-            try await sessionRegistry.startSession(sceneID: "coder-scene", connection: coderConnection)
+            try await sessionRegistry.startSession(sceneID: "echo-scene", connection: echoConnection)
             XCTFail("an unavailable protocol must throw, never downgrade")
         } catch let error as SessionRegistryError {
-            XCTAssertEqual(error, .transport(.protocolUnavailable(protocolID: "coder")))
+            XCTAssertEqual(error, .transport(.protocolUnavailable(protocolID: "uppercase-echo")))
         }
-        let state = await sessionRegistry.state(sceneID: "coder-scene")
-        XCTAssertEqual(state, .failed(.transport(.protocolUnavailable(protocolID: "coder"))))
-        await sessionRegistry.closeSession(sceneID: "coder-scene")
+        let state = await sessionRegistry.state(sceneID: "echo-scene")
+        XCTAssertEqual(state, .failed(.transport(.protocolUnavailable(protocolID: "uppercase-echo"))))
+        await sessionRegistry.closeSession(sceneID: "echo-scene")
     }
 
     func testSSHDescriptorResolvesEndToEndFromPersistedConnection() async throws {
@@ -172,16 +173,16 @@ final class TransportAbstractionTests: XCTestCase {
         let factory = SSHSessionTransportFactory(
             hostKeyVerifier: HostKeyVerifier(store: EphemeralHostKeyStore())
         )
-        let coderConnection = try Connection(
-            name: "coder",
-            type: .coder,
-            host: "coder.invalid",
-            port: 443,
+        let echoConnection = try Connection(
+            name: "echo",
+            type: .uppercaseEcho,
+            host: "echo.invalid",
+            port: 2022,
             username: "unit",
             keyReference: "unit-key"
         )
-        await assertThrowsTransportError(.protocolUnavailable(protocolID: "coder")) {
-            _ = try factory.makeTransport(for: coderConnection)
+        await assertThrowsTransportError(.protocolUnavailable(protocolID: "uppercase-echo")) {
+            _ = try factory.makeTransport(for: echoConnection)
         }
     }
 }

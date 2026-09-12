@@ -1,8 +1,0 @@
-import WireGuardKit
-
-@main
-struct WireGuardKitImportProbe {
-    static func main() {
-        _ = TunnelConfiguration.self
-    }
-}

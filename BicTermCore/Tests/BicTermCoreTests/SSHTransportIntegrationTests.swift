@@ -162,7 +162,7 @@ final class SSHTransportIntegrationTests: XCTestCase {
 
         let handle = try await transport.openDirectTCPIPChannel(
             toHost: "127.0.0.1",
-            port: SSHTestFixture.coderStubPort
+            port: SSHTestFixture.hop2Port
         )
         XCTAssertTrue(handle.isActive)
 
@@ -181,21 +181,19 @@ final class SSHTransportIntegrationTests: XCTestCase {
         let sink = SSHOutputSink()
         try await handle.channel.pipeline.addHandler(ByteRecorder(sink: sink)).get()
 
-        var request = handle.channel.allocator.buffer(capacity: 128)
-        request.writeString("GET /api/v2/workspaces?q=owner:me HTTP/1.0\r\nHost: 127.0.0.1\r\n\r\n")
-        try await handle.channel.writeAndFlush(request).get()
-
+        // hop2's sshd sends its identification banner on TCP connect; reading
+        // it through the channel proves the byte stream end to end.
         let clock = ContinuousClock()
         let deadline = clock.now + .seconds(5)
         var received = ""
         while clock.now < deadline {
             received = String(decoding: await sink.snapshot(), as: UTF8.self)
-            if received.contains("401") { break }
+            if received.contains("SSH-2.0") { break }
             try await Task.sleep(for: .milliseconds(50))
         }
         XCTAssertTrue(
-            received.contains("401"),
-            "expected coder stub 401 through direct-tcpip channel, got: \(received)"
+            received.contains("SSH-2.0"),
+            "expected sshd banner through direct-tcpip channel, got: \(received)"
         )
     }
 

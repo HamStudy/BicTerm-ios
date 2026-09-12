@@ -2,7 +2,7 @@
 
 Task T20. Every row of `HERDR_IOS_INTEGRATION.md` §15 (acceptance and
 release checklist) mapped to the task that owns it. Task numbering follows
-`.omo/plans/bicterm-phase2-coder-ssh.md` (13–20); "phase 1" refers to the
+the phase-2 work plan (tasks 13–20); "phase 1" refers to the
 SSH terminal foundation that predates the herdr plan (TOFU trust, jump
 chains, key management, reconnect engine).
 

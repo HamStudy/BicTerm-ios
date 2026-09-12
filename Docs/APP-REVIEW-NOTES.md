@@ -73,6 +73,5 @@ before submission: `TODO(app-owner): contact email for App Review`.
 
 - This document does not predict or claim App Store approval; it states
   what the binary does and how to exercise it.
-- The dual-build flavor note: the App Store flavor contains no AGPL code
-  (the Coder tunnel core is excluded at build time; audited per release).
-  The Herdr core is Apache-2.0 and ships in both flavors.
+- The binary contains no AGPL/GPL code anywhere in its dependency graph
+  (see `DEPENDENCIES.md`). The Herdr core is Apache-2.0.

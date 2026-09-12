@@ -3,10 +3,7 @@ import Foundation
 
 enum TestModels {
     static let connectionID = UUID(uuidString: "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA")!
-    static let coderServerID = UUID(uuidString: "BBBBBBBB-BBBB-4BBB-8BBB-BBBBBBBBBBBB")!
-    static let workspaceID = UUID(uuidString: "CCCCCCCC-CCCC-4CCC-8CCC-CCCCCCCCCCCC")!
     static let createdAt = Date(timeIntervalSince1970: 1_725_000_000)
-    static let tokenFixture = "coder-session-token-fixture-secret-123456"
 
     static func hop(_ index: Int = 1) -> Hop {
         Hop(
@@ -27,7 +24,7 @@ enum TestModels {
 
     static func connection(
         id: UUID = connectionID,
-        type: ConnectionType = .coder,
+        type: ConnectionType = .ssh,
         jumpChain: [Hop] = [hop(1), hop(2)]
     ) throws -> Connection {
         try Connection(
@@ -39,17 +36,7 @@ enum TestModels {
             username: "fixture-user",
             keyReference: "keychain://keys/main",
             jumpChain: jumpChain,
-            protocolOptions: protocolOptions(),
-            coderRef: CoderReference(serverID: coderServerID, workspaceID: workspaceID)
-        )
-    }
-
-    static func coderServer(id: UUID = coderServerID) throws -> CoderServer {
-        try CoderServer(
-            id: id,
-            name: "Fixture Coder",
-            baseURL: URL(string: "https://coder.example.com")!,
-            tokenKeychainTag: "keychain://coder/fixture"
+            protocolOptions: protocolOptions()
         )
     }
 
@@ -174,7 +161,7 @@ enum SecretAbsenceAssertions {
         }
 
         let tokenPatterns = [
-            #"(?i)\b(?:coder|ghp|github_pat|sk_live)[-_][A-Za-z0-9_-]{12,}\b"#,
+            #"(?i)\b(?:ghp|github_pat|sk_live)[-_][A-Za-z0-9_-]{12,}\b"#,
             #"\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b"#,
         ]
         if tokenPatterns.contains(where: { string.range(of: $0, options: .regularExpression) != nil }) {

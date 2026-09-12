@@ -14,9 +14,6 @@ final class ConnectionsModel {
 
     private let services: AppServices
     private let connectionStore: any ConnectionStoreProtocol
-    private let coderServerStore: any CoderServerStoreProtocol
-    private let coderClientFactory: CoderClientFactory
-    private let coderTokenStore: any CoderTokenStoring
     private let keyListProvider: () async -> [KeyMetadata]
     private let protocolDescriptors: [ProtocolDescriptor]
     private let descriptorProvider: (String) -> ProtocolDescriptor?
@@ -24,7 +21,6 @@ final class ConnectionsModel {
     private(set) var connections: [Connection] = []
     private(set) var keys: [KeyMetadata] = []
     private(set) var isLoading = false
-    private(set) var coderStatuses: [UUID: CoderConnectionStatus] = [:]
     var loadError: String?
 
     #if DEBUG
@@ -38,9 +34,6 @@ final class ConnectionsModel {
     init(services: AppServices = .shared) {
         self.services = services
         self.connectionStore = services.connectionStore
-        self.coderServerStore = services.coderServerStore
-        self.coderClientFactory = services.coderClientFactory
-        self.coderTokenStore = services.coderTokenStore
         self.keyListProvider = { (try? await services.keyRepository.list()) ?? [] }
         self.protocolDescriptors = services.protocols
         self.descriptorProvider = services.descriptor(forProtocolID:)
@@ -48,18 +41,12 @@ final class ConnectionsModel {
 
     internal init(
         connectionStore: any ConnectionStoreProtocol,
-        coderServerStore: any CoderServerStoreProtocol,
-        coderClientFactory: @escaping CoderClientFactory,
-        coderTokenStore: any CoderTokenStoring,
         protocolDescriptors: [ProtocolDescriptor],
         descriptorProvider: @escaping (String) -> ProtocolDescriptor?,
         keyListProvider: @escaping () async -> [KeyMetadata] = { [] }
     ) {
         self.services = .shared
         self.connectionStore = connectionStore
-        self.coderServerStore = coderServerStore
-        self.coderClientFactory = coderClientFactory
-        self.coderTokenStore = coderTokenStore
         self.protocolDescriptors = protocolDescriptors
         self.descriptorProvider = descriptorProvider
         self.keyListProvider = keyListProvider
@@ -105,83 +92,6 @@ final class ConnectionsModel {
         await SessionFixtureSeeder.seedIfNeeded()
         #endif
         await reload()
-        await refreshCoderStatuses()
-    }
-
-    func refreshCoderStatuses() async {
-        let coderConnections = connections.filter { $0.type == .coder }
-        guard !coderConnections.isEmpty else {
-            coderStatuses = [:]
-            return
-        }
-
-        let servers: [CoderServer]
-        do {
-            servers = try await coderServerStore.loadCoderServers()
-        } catch {
-            return
-        }
-
-        let client = coderClientFactory(coderTokenStore)
-        let byServerID = Dictionary(grouping: coderConnections) { $0.coderRef?.serverID }
-        var newStatuses: [UUID: CoderConnectionStatus] = [:]
-
-        for (serverID, connectionsForServer) in byServerID {
-            guard let serverID,
-                  let server = servers.first(where: { $0.id == serverID }) else {
-                for connection in connectionsForServer {
-                    newStatuses[connection.id] = fallbackCoderStatus(for: connection)
-                }
-                continue
-            }
-
-            do {
-                let workspaces = try await client.workspaces(for: server)
-                let workspaceByID = Dictionary(uniqueKeysWithValues: workspaces.map { ($0.id, $0) })
-                for connection in connectionsForServer {
-                    guard let ref = connection.coderRef else {
-                        newStatuses[connection.id] = fallbackCoderStatus(for: connection, serverName: server.name, serverID: server.id)
-                        continue
-                    }
-                    if let workspace = workspaceByID[ref.workspaceID] {
-                        newStatuses[connection.id] = CoderConnectionStatus(
-                            workspaceName: workspace.name,
-                            serverName: server.name,
-                            state: workspace.state,
-                            isConnectable: workspace.isConnectable,
-                            isUnauthorized: false,
-                            serverID: server.id
-                        )
-                    } else {
-                        newStatuses[connection.id] = CoderConnectionStatus(
-                            workspaceName: persistedCoderWorkspaceName(for: connection),
-                            serverName: server.name,
-                            state: nil,
-                            isConnectable: false,
-                            isUnauthorized: false,
-                            serverID: server.id
-                        )
-                    }
-                }
-            } catch let error as CoderClientError where error == .unauthorized || error == .tokenStorageFailure {
-                for connection in connectionsForServer {
-                    newStatuses[connection.id] = CoderConnectionStatus(
-                        workspaceName: persistedCoderWorkspaceName(for: connection),
-                        serverName: server.name,
-                        state: nil,
-                        isConnectable: false,
-                        isUnauthorized: true,
-                        serverID: server.id
-                    )
-                }
-            } catch {
-                for connection in connectionsForServer {
-                    newStatuses[connection.id] = fallbackCoderStatus(for: connection, serverName: server.name, serverID: server.id)
-                }
-            }
-        }
-
-        coderStatuses = newStatuses
     }
 
     func reload() async {
@@ -194,39 +104,6 @@ final class ConnectionsModel {
             loadError = "Couldn't load connections: \(error.localizedDescription)"
         }
         isLoading = false
-    }
-
-    func coderStatus(for connection: Connection) -> CoderConnectionStatus? {
-        coderStatuses[connection.id]
-    }
-
-    private func fallbackCoderStatus(
-        for connection: Connection,
-        serverName: String? = nil,
-        serverID: UUID? = nil
-    ) -> CoderConnectionStatus {
-        let persistedServerName = connection.protocolOptions["coder.serverName"]?.stringValue ?? ""
-        return CoderConnectionStatus(
-            workspaceName: persistedCoderWorkspaceName(for: connection),
-            serverName: serverName ?? persistedServerName,
-            state: nil,
-            isConnectable: false,
-            isUnauthorized: false,
-            serverID: serverID ?? connection.coderRef?.serverID
-        )
-    }
-
-    private func persistedCoderWorkspaceName(for connection: Connection) -> String {
-        connection.protocolOptions["coder.workspaceName"]?.stringValue ?? "Unknown workspace"
-    }
-
-    struct CoderConnectionStatus: Equatable, Sendable {
-        let workspaceName: String
-        let serverName: String
-        let state: CoderWorkspaceState?
-        let isConnectable: Bool
-        let isUnauthorized: Bool
-        let serverID: UUID?
     }
 
     func persist(_ connection: Connection) async -> Result<Void, PersistenceError> {
@@ -284,8 +161,7 @@ final class ConnectionsModel {
             username: connection.username,
             keyReference: connection.keyReference,
             jumpChain: connection.jumpChain,
-            protocolOptions: connection.protocolOptions,
-            coderRef: connection.coderRef
+            protocolOptions: connection.protocolOptions
         ) else { return }
         _ = await persist(copy)
     }

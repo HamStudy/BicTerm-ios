@@ -1,7 +1,0 @@
--test.shuffle 1788998874916270000
-=== RUN   TestNativeDERPMapUpdatePreservesSSHStream
-    derpmap_native_test.go:107: native DERP region update applied; original SSH channel preserved 32 ordered messages
-    derpmap_proxy_test.go:78: native DERP proxy connection finished (*errs.errorT)
---- PASS: TestNativeDERPMapUpdatePreservesSSHStream (5.56s)
-PASS
-ok  	github.com/bicterm/coder-net	7.398s

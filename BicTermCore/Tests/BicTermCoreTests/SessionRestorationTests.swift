@@ -47,7 +47,7 @@ final class SessionRestorationTests: XCTestCase {
         let privateKeyText = String(decoding: privateKey, as: UTF8.self)
         let deliberatelyUnsafeObject: [String: Any] = [
             "nested": ["privateKey": privateKeyText],
-            "credential": TestModels.tokenFixture,
+            "credential": "ghp_fixturesecret123456",
         ]
         let encoded = try JSONSerialization.data(withJSONObject: deliberatelyUnsafeObject)
 

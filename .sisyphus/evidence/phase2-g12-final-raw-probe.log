@@ -1,6 +1,0 @@
-Fixture Coder v2.36.4; bridge source built from CoderNet/; relay_only=false
-SSH_OPTIONS ["/usr/bin/ssh", "-F", "/dev/null", "-T", "-o", "ProxyCommand=/usr/bin/nc -U /Users/richard/code/BicTerm/Fixtures/run/g12s/coder-ssh-497e7aed-31f0-465f-bd87-4a53872804eb.sock", "-o", "UserKnownHostsFile=/dev/null", "-o", "GlobalKnownHostsFile=/dev/null", "-o", "StrictHostKeyChecking=no", "-o", "LogLevel=DEBUG3", "-o", "PreferredAuthentications=none", "-o", "BatchMode=yes", "-o", "ConnectTimeout=15"]
-COMMAND /usr/bin/ssh [recorded fixed options] coder@coder-workspace "printf raw-adapter-ok"
-scripts/test-coder-raw.rb:66:in 'block in <main>': command failed: status=255, stdout_bytes=0, stderr_bytes=11373 (RuntimeError)
-	from scripts/test-coder-raw.rb:39:in 'Object#check'
-	from scripts/test-coder-raw.rb:63:in '<main>'

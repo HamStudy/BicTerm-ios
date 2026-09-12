@@ -111,19 +111,6 @@ struct ConnectionDraft: Equatable {
     var hasSavedPassword = false
     var hops: [HopDraft] = []
     var agentForwarding = false
-    var coderServerID: String = ""
-    var coderWorkspaceID: String = ""
-    var coderWorkspaceName: String = ""
-    var coderServerName: String = ""
-    /// Explicit agent pick (spec §5.2): set only through the agent picker
-    /// when the workspace exposes multiple agents. Persisted alongside the
-    /// workspace identity so edits and diagnostics can name the agent.
-    var coderAgentID: String = ""
-    var coderAgentName: String = ""
-    /// Start-stopped policy (spec §6.1): OFF by default — starting a
-    /// workspace can incur cost, so it must be an explicit per-connection
-    /// decision confirmed through the policy dialog.
-    var coderStartPolicy = false
 
     init() {}
 
@@ -145,20 +132,6 @@ struct ConnectionDraft: Equatable {
         }
         hops = connection.jumpChain.map { HopDraft(hop: $0, keyLabel: nil) }
         agentForwarding = connection.protocolOptions["agentForwarding"]?.boolValue == true
-        coderServerID = connection.protocolOptions["coder.serverID"]?.stringValue ?? connection.coderRef?.serverID.uuidString ?? ""
-        coderWorkspaceID = connection.protocolOptions["coder.workspaceID"]?.stringValue ?? connection.coderRef?.workspaceID.uuidString ?? ""
-        coderWorkspaceName = connection.protocolOptions["coder.workspaceName"]?.stringValue ?? ""
-        coderServerName = connection.protocolOptions["coder.serverName"]?.stringValue ?? ""
-        coderAgentID = connection.protocolOptions["coder.agentID"]?.stringValue ?? ""
-        coderAgentName = connection.protocolOptions["coder.agentName"]?.stringValue ?? ""
-        coderStartPolicy = connection.protocolOptions["coder.startPolicy"]?.boolValue == true
-    }
-
-    var coderValidationError: String? {
-        guard protocolID == "coder" else { return nil }
-        if coderServerID.isEmpty { return "Select a Coder server" }
-        if coderWorkspaceID.isEmpty { return "Select a workspace" }
-        return nil
     }
 
     var nameError: String? {
@@ -261,7 +234,6 @@ struct ConnectionDraft: Equatable {
             && hopErrors.isEmpty
             && !hasCycle
             && hops.count <= Connection.maximumJumpChainLength
-            && coderValidationError == nil
     }
 
     func makeConnection() throws -> Connection {
@@ -274,7 +246,6 @@ struct ConnectionDraft: Equatable {
               usernameError == nil,
               keyError == nil,
               passwordError == nil,
-              coderValidationError == nil,
               !hasCycle,
               hops.count <= Connection.maximumJumpChainLength
         else {
@@ -294,28 +265,6 @@ struct ConnectionDraft: Equatable {
         if agentForwarding {
             optionValues["agentForwarding"] = .bool(true)
         }
-        var coderRef: CoderReference?
-        if protocolID == "coder" {
-            if let serverUUID = UUID(uuidString: coderServerID),
-               let workspaceUUID = UUID(uuidString: coderWorkspaceID) {
-                coderRef = CoderReference(serverID: serverUUID, workspaceID: workspaceUUID)
-            }
-            if !coderServerID.isEmpty {
-                optionValues["coder.serverID"] = .string(coderServerID)
-                optionValues["coder.serverName"] = .string(coderServerName)
-            }
-            if !coderWorkspaceID.isEmpty {
-                optionValues["coder.workspaceID"] = .string(coderWorkspaceID)
-                optionValues["coder.workspaceName"] = .string(coderWorkspaceName)
-            }
-            if !coderAgentID.isEmpty {
-                optionValues["coder.agentID"] = .string(coderAgentID)
-                optionValues["coder.agentName"] = .string(coderAgentName)
-            }
-            if coderStartPolicy {
-                optionValues["coder.startPolicy"] = .bool(true)
-            }
-        }
         var options = ProtocolOptions()
         if !optionValues.isEmpty {
             options = try ProtocolOptions(optionValues)
@@ -330,8 +279,7 @@ struct ConnectionDraft: Equatable {
             keyReference: authMethod == .password ? passwordTag : keyReference,
             authMethod: authMethod,
             jumpChain: jumpChain,
-            protocolOptions: options,
-            coderRef: coderRef
+            protocolOptions: options
         )
     }
 }
