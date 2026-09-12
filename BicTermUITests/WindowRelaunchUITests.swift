@@ -20,8 +20,9 @@ final class WindowRelaunchUITests: XCTestCase {
         )
         XCTAssertEqual(XCTWaiter.wait(for: [marker], timeout: 30), .completed)
         capture(app, name: "new-window-original")
-        app.buttons["scene-sessions"].firstMatch.tap()
-        app.buttons["switcher-new-connection"].tap()
+        app.buttons["scene-menu"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["scene-new-session"].waitForExistence(timeout: 5))
+        app.buttons["scene-new-session"].tap()
         if UIDevice.current.userInterfaceIdiom == .pad {
             XCTAssertTrue(app.buttons["list-done"].waitForExistence(timeout: 10))
         }

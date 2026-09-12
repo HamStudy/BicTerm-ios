@@ -72,15 +72,22 @@ final class SessionSwitcherUITests: XCTestCase {
         return !element.exists
     }
 
-    /// Several windows may each carry a Sessions button (iPad multi-window)
-    /// — tap whichever is actually hittable (the frontmost window's).
+    /// Several windows may each carry a session menu (iPad multi-window) —
+    /// tap whichever is actually hittable (the frontmost window's). The
+    /// switcher sheet now lives at scene-menu → Sessions → Manage
+    /// Sessions…; a failed attempt leaves the menu open, and re-tapping
+    /// the menu button closes it, so the loop converges.
     @discardableResult
     private func openSwitcher(timeout: TimeInterval = 15) -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
-            let candidates = app.buttons.matching(identifier: "scene-sessions")
+            let candidates = app.buttons.matching(identifier: "scene-menu")
             for index in 0..<candidates.count where candidates.element(boundBy: index).isHittable {
                 candidates.element(boundBy: index).tap()
+                guard app.buttons["scene-sessions"].waitForExistence(timeout: 5) else { continue }
+                app.buttons["scene-sessions"].tap()
+                guard app.buttons["scene-manage-sessions"].waitForExistence(timeout: 5) else { continue }
+                app.buttons["scene-manage-sessions"].tap()
                 if app.buttons["switcher-new-connection"].waitForExistence(timeout: 10) {
                     return true
                 }

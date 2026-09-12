@@ -130,6 +130,12 @@ enum TerminalMetric {
     /// margin. Light scheme improves the same way (error #D1242F over
     /// selection@0.3 on white ≈ 4.8:1).
     static let bannerFill: Double = 0.3
+
+    /// Interim default margin around the terminal surface (leading,
+    /// trailing, bottom) so glyphs never touch the screen/window edge.
+    /// The per-window margins feature (next slice) replaces this fixed
+    /// default with a real preference.
+    static let contentMargin: CGFloat = 5
 }
 
 // MARK: - Environment Values

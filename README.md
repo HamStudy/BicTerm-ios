@@ -21,7 +21,7 @@ An iOS 18+ SSH terminal client for iPhone and iPad, built on
 - **TOFU host-key trust** — fingerprint prompt on first connect, hard reject on changed keys
 - **In-app SSH agent** with per-request authorization, session cache, auto-deny when backgrounded
 - **Terminal UI** — SwiftTerm-based, hardware keyboard, IME/CJK composition, multi-window on iPad with freeform resizing (iPadOS 26 classifies the app as continuously resizable — drag the window's corner grip to any size or aspect ratio; declared via the orientation arrays in the xcodegen-generated `BicTerm/Info.plist`, guarded by `BicTermUITests/FreeformResizeUITests.swift`)
-- **Multiple concurrent sessions** — session switcher with detach/reattach that preserves terminal state, on iPhone and iPad
+- **Multiple concurrent sessions** — session switcher with detach/reattach that preserves terminal state, on iPhone and iPad. The scene's top-right **session menu** (ellipsis) lists every live session with its state for jump-to-session (on iPad it focuses the window already hosting the session, or gives a detached session its own window), opens the full switcher via **Manage Sessions…**, starts a **New Session**, and opens **Settings…** (its own window on iPad, a sheet on iPhone)
 - **Graceful reconnect** — background suspends, foreground re-handshakes; no auto-reconnect after kill
 - **Herdr client** — workspace handshake, native surface rendering, semantic keyboard/focus/resize input, clipboard text and bounded image paste, probe diagnostics, detach/reconnect
 - **Transport abstraction** — SSH is one conformer; ET/mosh can be added later without touching session layers
@@ -54,7 +54,8 @@ An iOS 18+ SSH terminal client for iPhone and iPad, built on
 - The esc/ctrl/tab/arrows accessory strip defaults **OFF** when a hardware
   keyboard is attached (the common iPad case, detected via
   `GCKeyboard.coalesced`) and **ON** when only the on-screen keyboard is
-  available. The keyboard icon in the scene's top-right chrome toggles it;
+  available. The **Terminal Toolbar** item in the scene's top-right session
+  menu (ellipsis) toggles it and shows the current On/Off state;
   the explicit choice is persisted and wins over the heuristic.
 - When shown, the strip participates in layout — the terminal shrinks by the
   strip's height, so it never covers the terminal's bottom row.

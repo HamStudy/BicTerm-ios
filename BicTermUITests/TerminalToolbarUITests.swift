@@ -1,10 +1,10 @@
 import UIKit
 import XCTest
 
-/// Terminal accessory toolbar (esc/ctrl/tab/arrows strip): the scene
-/// chrome's top-right toggle persists an explicit choice, and a visible
-/// toolbar participates in layout — the terminal shrinks by exactly the
-/// strip's height instead of being overlaid.
+/// Terminal accessory toolbar (esc/ctrl/tab/arrows strip): the toggle lives
+/// in the scene chrome's top-right session menu (ellipsis) and persists an
+/// explicit choice, and a visible toolbar participates in layout — the
+/// terminal shrinks by exactly the strip's height instead of being overlaid.
 ///
 /// The hardware-keyboard heuristic only supplies the default; these tests
 /// drive explicit toggles so they pass on any simulator regardless of its
@@ -45,13 +45,29 @@ final class TerminalToolbarUITests: XCTestCase {
         app.launchArguments = arguments
         app.launch()
         XCTAssertTrue(
-            toggleButton.waitForExistence(timeout: 60),
+            menuButton.waitForExistence(timeout: 60),
             "scene chrome never appeared"
         )
     }
 
+    private var menuButton: XCUIElement {
+        app.buttons["scene-menu"].firstMatch
+    }
+
     private var toggleButton: XCUIElement {
         app.buttons["terminal-toolbar-toggle"]
+    }
+
+    /// The toolbar toggle lives inside the scene's session menu: open the
+    /// menu, then tap the item (the menu closes on selection).
+    private func tapToolbarToggleInMenu() {
+        XCTAssertTrue(menuButton.waitForExistence(timeout: 10), "session menu never appeared")
+        menuButton.tap()
+        XCTAssertTrue(
+            toggleButton.waitForExistence(timeout: 5),
+            "toolbar toggle missing from the session menu"
+        )
+        toggleButton.tap()
     }
 
     private var accessory: XCUIElement {
@@ -78,10 +94,18 @@ final class TerminalToolbarUITests: XCTestCase {
 
     // MARK: - Tests
 
-    /// The toggle lives in the scene chrome's top-right button cluster.
+    /// The toggle lives in the scene chrome's session menu (ellipsis), the
+    /// only top-right control besides Close.
     func testToggleButtonPresentInSceneChrome() {
         launch()
-        XCTAssertTrue(toggleButton.exists)
+        XCTAssertTrue(menuButton.exists)
+        XCTAssertTrue(menuButton.isHittable)
+        XCTAssertFalse(
+            toggleButton.exists,
+            "the toolbar toggle must live inside the menu, not the chrome"
+        )
+        menuButton.tap()
+        XCTAssertTrue(toggleButton.waitForExistence(timeout: 5))
         XCTAssertTrue(toggleButton.isHittable)
     }
 
@@ -94,7 +118,7 @@ final class TerminalToolbarUITests: XCTestCase {
         let wasVisible = accessory.exists
         let heightBefore = terminal.frame.height
 
-        toggleButton.tap()
+        tapToolbarToggleInMenu()
 
         if wasVisible {
             XCTAssertTrue(
@@ -115,7 +139,7 @@ final class TerminalToolbarUITests: XCTestCase {
                 heightBefore - terminal.frame.height, stripHeight, accuracy: 2,
                 "showing the toolbar must shrink the terminal by the strip height — no overlay"
             )
-            toggleButton.tap()
+            tapToolbarToggleInMenu()
             XCTAssertTrue(
                 accessory.waitForNonExistence(timeout: 10),
                 "second toggle must hide the toolbar again"
@@ -131,7 +155,7 @@ final class TerminalToolbarUITests: XCTestCase {
 
         // Establish explicit ON regardless of the heuristic default.
         if !accessory.exists {
-            toggleButton.tap()
+            tapToolbarToggleInMenu()
         }
         XCTAssertTrue(accessory.waitForExistence(timeout: 10))
 
@@ -143,12 +167,12 @@ final class TerminalToolbarUITests: XCTestCase {
         )
 
         // Establish explicit OFF.
-        toggleButton.tap()
+        tapToolbarToggleInMenu()
         XCTAssertTrue(accessory.waitForNonExistence(timeout: 10))
 
         app.terminate()
         launch(keepToolbarPref: true)
-        XCTAssertTrue(toggleButton.waitForExistence(timeout: 60))
+        XCTAssertTrue(menuButton.waitForExistence(timeout: 60))
         XCTAssertFalse(
             accessory.waitForExistence(timeout: 5),
             "explicit OFF must survive a relaunch"

@@ -44,6 +44,8 @@ struct SessionSceneView: View {
                     toolbarVisible: store.terminalToolbar.isVisible
                 )
                 .background(colors.background)
+                .padding(.horizontal, TerminalMetric.contentMargin)
+                .padding(.bottom, TerminalMetric.contentMargin)
             } else {
                 closedPlaceholder
             }
@@ -52,7 +54,12 @@ struct SessionSceneView: View {
             #endif
         }
         .background(colors.background.ignoresSafeArea())
-        .task { await model.start() }
+        .task {
+            // Every descriptor needs a scene model for the session menu's
+            // live state text (same warm the switcher does on open).
+            store.warmSceneModelsForSwitcher()
+            await model.start()
+        }
         .onChange(of: model.isClosed) { _, closed in
             if closed { actions?.onSessionClosed() }
         }
@@ -125,29 +132,13 @@ struct SessionSceneView: View {
 
             Spacer()
 
-            Button {
-                store.terminalToolbar.toggle()
-            } label: {
-                Image(systemName: "keyboard")
-                    .font(.title3)
-            }
-            .frame(minWidth: 44, minHeight: 44)
-            .contentShape(Rectangle())
-            .accessibilityLabel("Terminal toolbar")
-            .accessibilityIdentifier("terminal-toolbar-toggle")
-            .foregroundColor(store.terminalToolbar.isVisible ? colors.accent : colors.dimmed)
-
-            Button {
-                switcherPresented = true
-            } label: {
-                Image(systemName: "rectangle.on.rectangle")
-                    .font(.title3)
-            }
-            .frame(minWidth: 44, minHeight: 44)
-            .contentShape(Rectangle())
-            .accessibilityLabel("Sessions")
-            .accessibilityIdentifier("scene-sessions")
-            .foregroundColor(colors.dimmed)
+            SessionMenuView(
+                store: store,
+                currentSessionID: model.id,
+                onPickSession: { pickedID in actions?.onPickSession(pickedID) },
+                onNewConnection: { actions?.onNewConnection() },
+                onManageSessions: { switcherPresented = true }
+            )
 
             Button {
                 model.requestClose()

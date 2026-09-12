@@ -95,6 +95,27 @@ private struct TerminalWindowRoot: View {
             )
             .terminalStyle()
         }
+        .onAppear { registerHosting() }
+        .onChange(of: switchedSessionID) { _, _ in registerHosting() }
+        .onDisappear { deregisterHosting() }
+    }
+
+    /// The session this window currently shows (in-window switch wins over
+    /// the window's creation value).
+    private var shownSessionID: UUID? {
+        switchedSessionID ?? windowSessionID
+    }
+
+    /// Keeps the store's window→session hosting map current so the session
+    /// menu can FOCUS the window already hosting a picked session.
+    private func registerHosting() {
+        guard let windowSessionID, let shown = shownSessionID else { return }
+        store.noteWindowHosting(windowValue: windowSessionID, shows: shown)
+    }
+
+    private func deregisterHosting() {
+        guard let windowSessionID else { return }
+        store.noteWindowClosed(windowValue: windowSessionID)
     }
 
     private var forcesConnectionListForUITests: Bool {
@@ -188,6 +209,38 @@ struct BicTermApp: App {
                     center: HerdrWorkspaceCenter.shared,
                     windowSessionID: sessionID?.value
                 )
+                #endif
+            }
+            .appAppearance(sessionStore.theme)
+        }
+
+        WindowGroup("Settings", id: "settings", for: SettingsWindowValue.self) { _ in
+            Group {
+                #if DEBUG
+                // Same restoration hazard as the herdr scene above: a stale
+                // Settings window restored under `-uitest-terminal-preview`
+                // would shadow the preview. Every WindowGroup must mirror
+                // the test gate.
+                if ProcessInfo.processInfo.arguments.contains("-uitest-terminal-preview") {
+                    TerminalPreviewScreen()
+                        .terminalStyle()
+                } else {
+                    NavigationStack {
+                        SettingsView(
+                            fontModel: sessionStore.terminalFont,
+                            themeModel: sessionStore.theme
+                        )
+                    }
+                    .terminalStyle()
+                }
+                #else
+                NavigationStack {
+                    SettingsView(
+                        fontModel: sessionStore.terminalFont,
+                        themeModel: sessionStore.theme
+                    )
+                }
+                .terminalStyle()
                 #endif
             }
             .appAppearance(sessionStore.theme)

@@ -87,9 +87,31 @@ final class SessionStore {
     private var orderedIDs: [UUID] = []
     private var sceneModels: [UUID: SessionSceneModel] = [:]
 
+    /// iPad terminal-window → shown-session map, maintained live by
+    /// `TerminalWindowRoot` as windows appear, switch content in place,
+    /// and close (window close never closes the session — it detaches).
+    /// The session menu's jump action reads this to FOCUS the window
+    /// already hosting a picked session instead of attaching the same
+    /// session in two windows at once.
+    private(set) var windowSessionHosting: [UUID: UUID] = [:]
+
     /// Live sessions in opening order — the switcher's stable listing.
     var orderedDescriptors: [SessionDescriptor] {
         orderedIDs.compactMap { descriptors[$0] }
+    }
+
+    func noteWindowHosting(windowValue: UUID, shows sessionID: UUID) {
+        windowSessionHosting[windowValue] = sessionID
+    }
+
+    func noteWindowClosed(windowValue: UUID) {
+        windowSessionHosting[windowValue] = nil
+    }
+
+    /// The window value of the terminal window currently showing
+    /// `sessionID`; nil when no window shows it (detached or iPhone cover).
+    func hostingWindowValue(for sessionID: UUID) -> UUID? {
+        windowSessionHosting.first(where: { $0.value == sessionID })?.key
     }
 
     /// Production wiring: real SSH factory (agent-forwarding enabled) and
