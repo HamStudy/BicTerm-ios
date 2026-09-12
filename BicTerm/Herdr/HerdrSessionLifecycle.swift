@@ -12,7 +12,39 @@ struct HerdrReconnectSource: Sendable {
         case authenticationLost
     }
 
-    let makeTransport: @MainActor () throws -> any HerdrByteTransport
+    let makeTransport: @MainActor () async throws -> any HerdrByteTransport
+
+    /// Adapts a live machine-establish closure (the mode-A connector or a
+    /// herd machine connect) into a reconnect source (herdr-support T10):
+    /// SSH authentication failures — a key revoked or credentials rejected
+    /// mid-session — throw ``OpenError/authenticationLost`` so the loop
+    /// stops after ONE attempt with the typed `.authLost` diagnostic;
+    /// every other failure stays retryable inside the per-endpoint and
+    /// aggregate budgets.
+    static func live(
+        _ connect: @escaping @MainActor () async throws -> any HerdrByteTransport
+    ) -> HerdrReconnectSource {
+        HerdrReconnectSource {
+            do {
+                return try await connect()
+            } catch let error as HerdrEndpointConnectorError {
+                switch error {
+                case .sshEstablish(let cause) where Self.isAuthenticationFailure(cause),
+                     .bridgeChannelFailed(let cause) where Self.isAuthenticationFailure(cause):
+                    throw OpenError.authenticationLost
+                default:
+                    throw error
+                }
+            }
+        }
+    }
+
+    private static func isAuthenticationFailure(_ cause: SSHTransportError) -> Bool {
+        switch cause {
+        case .authenticationFailed, .authRequired: true
+        default: false
+        }
+    }
 }
 
 /// Reconnect pacing (doc §6.3: bounded exponential backoff with jitter, no
@@ -86,6 +118,7 @@ extension HerdrSessionModel {
         runtime.client.destroy()
         await runtime.transport.close()
         markDetached(endpoint: id)
+        trimRetainedSurfaceCaches()
         #if DEBUG
         debugLifecycleLog.append("detached:\(id.rawValue)")
         #endif
@@ -103,21 +136,31 @@ extension HerdrSessionModel {
 
     /// Scene entered background (doc §10 steps 2-3, running inside the
     /// host's granted background window): clean detach of every live
-    /// endpoint.
+    /// endpoint. The detaches run CONCURRENTLY — each spends its 1 s drain
+    /// window suspended, so they interleave on the main actor and an
+    /// N-machine herd suspends in about one drain window, not N; the
+    /// granted window never scales with herd size.
     func suspendForSceneBackground() async {
         let ids = Array(runtimes.keys)
-        for id in ids {
-            await detach(endpoint: id, reason: .sceneBackground)
+        await withTaskGroup(of: Void.self) { group in
+            for id in ids {
+                group.addTask { [weak self] in
+                    await self?.detach(endpoint: id, reason: .sceneBackground)
+                }
+            }
         }
     }
 
     /// Scene returned to foreground (doc §10 step 4): every endpoint the
     /// background policy detached reconnects — fresh hello, authoritative
-    /// snapshot, never a replay of speculative input.
+    /// snapshot, never a replay of speculative input. The selected machine
+    /// reconnects first (it is the one on screen); the rest start in the
+    /// aggregate-budget queue behind it.
     func resumeFromSceneForeground() {
         let ids = awaitingForegroundReconnect
         awaitingForegroundReconnect.subtract(ids)
-        for id in ids {
+        let ordered = ids.sorted { a, _ in a == selectedEndpointID }
+        for id in ordered {
             reconnect(endpoint: id)
         }
     }
@@ -160,13 +203,65 @@ extension HerdrSessionModel {
     }
 
     /// Starts the bounded reconnect loop for an endpoint with a live
-    /// source. Idempotent while a loop is already running — no retry storms.
+    /// source. Idempotent while a loop is already running, and queued
+    /// while the aggregate budget (`aggregateReconnectBudget`) is spent —
+    /// no retry storms across endpoints either.
     func reconnect(endpoint id: HerdrEndpointID) {
         guard reconnectTasks[id] == nil else { return }
         guard let source = reconnectSources[id] else {
             endpoints[id]?.reconnectAttempt = nil
             return
         }
+        guard reconnectTasks.count < aggregateReconnectBudget else {
+            queueReconnect(endpoint: id)
+            return
+        }
+        startReconnectLoop(endpoint: id, source: source)
+    }
+
+    /// Manual cancel of the visible reconnect state (doc §6.3): the loop
+    /// stops, the endpoint stays detached with its retained snapshot.
+    func cancelReconnect(endpoint id: HerdrEndpointID) {
+        reconnectEpochs[id, default: 0] += 1
+        reconnectTasks.removeValue(forKey: id)?.cancel()
+        pendingReconnects.removeAll { $0 == id }
+        awaitingForegroundReconnect.remove(id)
+        if endpoints[id]?.phase == .reconnecting {
+            endpoints[id]?.phase = .disconnected
+        }
+        endpoints[id]?.reconnectAttempt = nil
+        #if DEBUG
+        debugLifecycleLog.append("reconnect:cancel:\(id.rawValue)")
+        #endif
+    }
+
+    // MARK: - Internals
+
+    private func queueReconnect(endpoint id: HerdrEndpointID) {
+        guard !pendingReconnects.contains(id) else { return }
+        pendingReconnects.append(id)
+        endpoints[id]?.phase = .reconnecting
+        #if DEBUG
+        debugLifecycleLog.append("reconnect:queued:\(id.rawValue)")
+        #endif
+    }
+
+    /// Starts the loop for a queued endpoint as budget frees (the finished
+    /// loop's slot is already gone when this runs).
+    private func startNextQueuedReconnect() {
+        while reconnectTasks.count < aggregateReconnectBudget,
+              let next = pendingReconnects.first {
+            pendingReconnects.removeFirst()
+            guard reconnectTasks[next] == nil else { continue }
+            guard let source = reconnectSources[next] else {
+                endpoints[next]?.reconnectAttempt = nil
+                continue
+            }
+            startReconnectLoop(endpoint: next, source: source)
+        }
+    }
+
+    private func startReconnectLoop(endpoint id: HerdrEndpointID, source: HerdrReconnectSource) {
         endpoints[id]?.phase = .reconnecting
         endpoints[id]?.diagnostic = nil
         #if DEBUG
@@ -180,23 +275,6 @@ extension HerdrSessionModel {
         }
     }
 
-    /// Manual cancel of the visible reconnect state (doc §6.3): the loop
-    /// stops, the endpoint stays detached with its retained snapshot.
-    func cancelReconnect(endpoint id: HerdrEndpointID) {
-        reconnectEpochs[id, default: 0] += 1
-        reconnectTasks.removeValue(forKey: id)?.cancel()
-        awaitingForegroundReconnect.remove(id)
-        if endpoints[id]?.phase == .reconnecting {
-            endpoints[id]?.phase = .disconnected
-        }
-        endpoints[id]?.reconnectAttempt = nil
-        #if DEBUG
-        debugLifecycleLog.append("reconnect:cancel:\(id.rawValue)")
-        #endif
-    }
-
-    // MARK: - Internals
-
     private func markDetached(endpoint id: HerdrEndpointID) {
         endpoints[id]?.phase = .disconnected
         endpoints[id]?.diagnostic = .simple(
@@ -206,10 +284,13 @@ extension HerdrSessionModel {
     }
 
     /// Removes the finished loop's task slot only when no newer loop (or
-    /// cancel) superseded it — a finished task must never clear a successor.
+    /// cancel) superseded it — a finished task must never clear a successor —
+    /// then hands the freed aggregate-budget slot to the next queued
+    /// endpoint.
     private func finishReconnectTask(endpoint id: HerdrEndpointID, epoch: UInt) {
         guard reconnectEpochs[id] == epoch else { return }
         reconnectTasks.removeValue(forKey: id)
+        startNextQueuedReconnect()
     }
 
     private func runReconnectLoop(
@@ -234,7 +315,7 @@ extension HerdrSessionModel {
         debugLifecycleLog.append("reconnect:attempt:\(attempt):\(id.rawValue)")
         #endif
         do {
-            let transport = try source.makeTransport()
+            let transport = try await source.makeTransport()
             // Fresh client + fresh generation: the only frames the new
             // transport ever carries are the fresh hello and input the user
             // sends AFTER the new authoritative state arrives.

@@ -165,8 +165,18 @@ final class HerdSessionCoordinator {
             let transport = try await connectMachine(endpointConnection, hostKeyVerifier)
             // Per-endpoint runtime with its own budgets (the model's T19
             // machinery): connect() hands this endpoint its own client,
-            // watchdog, and reconnect bookkeeping.
-            model.connect(endpoint: endpointID, transport: transport)
+            // watchdog, and reconnect bookkeeping. The live source keeps
+            // foreground/transport-loss recovery working per machine (T10)
+            // — auth failures map to the typed no-retry authLost path.
+            let machineConnect = connectMachine
+            let verifier = hostKeyVerifier
+            model.connect(
+                endpoint: endpointID,
+                transport: transport,
+                reconnectSource: .live {
+                    try await machineConnect(endpointConnection, verifier)
+                }
+            )
             // connect() points selection at the endpoint it just wired;
             // the herd's chosen machine stays the selected one.
             model.selectedEndpointID = selections[herdID]

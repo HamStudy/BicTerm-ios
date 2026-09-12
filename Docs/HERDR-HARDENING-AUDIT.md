@@ -85,6 +85,15 @@ or patch paths. The `length * size_of` claim multiplication inside bincode is
 | Text paste cap (app) | 1 MiB | `BicTerm/Herdr/HerdrClipboard.swift:100,127` (`maxTextPasteBytes`, classify `.tooLarge`) |
 | Image paste cap (app) | 16 MiB | `HerdrClipboard.swift:111` (`maxImagePayloadBytes`; FFI remains the authoritative backstop) |
 
+## Session-model multi-endpoint budgets (herdr-support T10)
+
+| Bound | Value | Enforced at |
+|---|---|---|
+| Aggregate reconnect-loop budget (every endpoint in one model) | 4 concurrent loops | `HerdrSessionModel.aggregateReconnectBudget` — default `HerdrReconnectBackoff.standard.maxAttempts` (the T19 per-endpoint budget reused as the model-wide cap, so N machines share budget/N); overflow queues FIFO in `pendingReconnects`, drained by `startNextQueuedReconnect` in `HerdrSessionLifecycle.swift` as loops settle |
+| N-machine background suspend | one ~1 s drain window, not N | `suspendForSceneBackground` (`HerdrSessionLifecycle.swift`) — concurrent per-endpoint detaches interleave on the main actor; tests pin a 5-machine herd under 3 s |
+| Retained per-machine surface caches (detached dimmed views) | 8 endpoints | `HerdrSessionModel.maxRetainedSurfaceCaches` (the `TerminalViewCache` cap-8 precedent); LRU eviction in `trimRetainedSurfaceCaches` — never evicts the selected endpoint's cache or a live runtime's current surface |
+| Auth loss on reconnect (revoked key mid-session) | 1 attempt → typed `.authLost`, never auto-retried | `HerdrReconnectSource.live` (`HerdrSessionLifecycle.swift`) maps `sshEstablish`/`bridgeChannelFailed` carrying `.authenticationFailed`/`.authRequired` to `OpenError.authenticationLost`; the loop exits on the first throw |
+
 ## Probe and command construction
 
 | Bound | Value | Enforced at |

@@ -56,8 +56,16 @@ final class HerdrConnectCoordinator {
             defer { inFlight.remove(connection.id) }
             do {
                 let transport = try await connector.connect(connection)
+                let reconnectSource = HerdrReconnectSource.live {
+                    try await self.makeConnector(hostKeyVerifier: hostKeyVerifier)
+                        .connect(connection)
+                }
                 let sessionID = HerdrWorkspaceCenter.shared.open { model in
-                    model.connect(endpoint: endpointID, transport: transport)
+                    model.connect(
+                        endpoint: endpointID,
+                        transport: transport,
+                        reconnectSource: reconnectSource
+                    )
                     return connection.name
                 }
                 #if DEBUG

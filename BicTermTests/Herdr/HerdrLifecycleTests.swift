@@ -67,7 +67,8 @@ final class HerdrLifecycleTests: XCTestCase {
         endpoint: HerdrEndpointID,
         source: HerdrReconnectSource? = nil
     ) async throws -> HerdrReplayTransport {
-        if let source, let fromSource = try? source.makeTransport() as? HerdrReplayTransport {
+        if let source,
+            let fromSource = try? await source.makeTransport() as? HerdrReplayTransport {
             model.connect(endpoint: endpoint, transport: fromSource, reconnectSource: source)
             let online = await waitUntil { model.endpoints[endpoint]?.phase == .online }
             XCTAssertTrue(online, "the fence must complete before lifecycle assertions")

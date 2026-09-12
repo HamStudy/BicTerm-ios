@@ -73,6 +73,18 @@ final class HerdrSessionModel {
     var reconnectSources: [HerdrEndpointID: HerdrReconnectSource] = [:]
     /// Running reconnect loops; presence is the "no retry storm" latch.
     var reconnectTasks: [HerdrEndpointID: Task<Void, Never>] = [:]
+    /// Aggregate reconnect budget (herdr-support T10): at most this many
+    /// reconnect loops run concurrently across EVERY endpoint in the model.
+    /// The value reuses the T19 per-endpoint attempt budget
+    /// (`HerdrReconnectBackoff.standard.maxAttempts`) as the model-wide
+    /// cap, so a herd of N machines shares one budget of 4 — each machine
+    /// effectively gets budget/N — and a foreground recovery or N-machine
+    /// failure fans out at most 4 concurrent transport establishments no
+    /// matter how large N grows. Endpoints beyond the cap queue FIFO in
+    /// `pendingReconnects` and start as loops settle.
+    let aggregateReconnectBudget: Int
+    /// Endpoints waiting for a free aggregate-budget slot, oldest first.
+    var pendingReconnects: [HerdrEndpointID] = []
     /// Bumped on every loop start/cancel so a finished loop never clears a
     /// successor's task slot.
     var reconnectEpochs: [HerdrEndpointID: UInt] = [:]
@@ -82,6 +94,19 @@ final class HerdrSessionModel {
     /// Scene-inactive input suspension (doc §10 step 1).
     var sceneInputSuspended = false
     let reconnectBackoff: HerdrReconnectBackoff
+    /// Retained-surface cache bound (herdr-support T10, T20 audit pattern):
+    /// a detached endpoint keeps its last committed snapshot+surface for
+    /// the dimmed machine view, but at most this many endpoints retain
+    /// caches at once (the `TerminalViewCache` cap-8 precedent). Endpoints
+    /// with a live runtime and the selected endpoint are never evicted;
+    /// beyond the cap the least-recently-committed retained cache drops —
+    /// the machine chip keeps its honest phase and diagnostic, only the
+    /// stale pixels go.
+    static let maxRetainedSurfaceCaches = 8
+    /// Monotonic commit clock for the retained-cache LRU.
+    private var surfaceCommitClock: UInt = 0
+    /// Last commit tick per endpoint holding a surface/snapshot cache.
+    var surfaceCommittedAt: [HerdrEndpointID: UInt] = [:]
     private var lastOnlineLoggedGeneration: [HerdrEndpointID: UInt] = [:]
     private let handshakeTimeout: Duration
     let clipboardSettings: HerdrClipboardSettings
@@ -98,13 +123,15 @@ final class HerdrSessionModel {
         clipboardSettings: HerdrClipboardSettings = HerdrClipboardSettings(),
         reconnectBackoff: HerdrReconnectBackoff = .standard,
         remoteClipboardBannerDuration: Duration = .seconds(10),
-        inputNoteDuration: Duration = .seconds(8)
+        inputNoteDuration: Duration = .seconds(8),
+        aggregateReconnectBudget: Int = HerdrReconnectBackoff.standard.maxAttempts
     ) {
         self.handshakeTimeout = handshakeTimeout
         self.clipboardSettings = clipboardSettings
         self.reconnectBackoff = reconnectBackoff
         self.remoteClipboardBannerDuration = remoteClipboardBannerDuration
         self.inputNoteDuration = inputNoteDuration
+        self.aggregateReconnectBudget = max(1, aggregateReconnectBudget)
     }
 
     // MARK: - Connection
@@ -216,6 +243,7 @@ final class HerdrSessionModel {
 
     func disconnect(endpoint id: HerdrEndpointID) async {
         guard let runtime = runtimes.removeValue(forKey: id) else { return }
+        pendingReconnects.removeAll { $0 == id }
         runtime.inboundTask?.cancel()
         runtime.inputTask?.cancel()
         runtime.writerTask?.cancel()
@@ -377,6 +405,10 @@ final class HerdrSessionModel {
         }
         if let surface {
             endpoints[id]?.surface = surface
+        }
+        if snapshot != nil || surface != nil {
+            surfaceCommitClock &+= 1
+            surfaceCommittedAt[id] = surfaceCommitClock
         }
         if phase == .online {
             endpoints[id]?.phase = .online
@@ -549,6 +581,29 @@ final class HerdrSessionModel {
         let transport = runtime.transport
         Task {
             await transport.close()
+        }
+        trimRetainedSurfaceCaches()
+    }
+
+    /// Enforces `maxRetainedSurfaceCaches`: endpoints without a live
+    /// runtime that still hold a snapshot/surface keep them oldest-first
+    /// only up to the bound (the selected endpoint's cache is protected —
+    /// it is the dimmed view on screen). Eviction drops the stale pixels,
+    /// never the phase or diagnostic.
+    func trimRetainedSurfaceCaches() {
+        let retained = surfaceCommittedAt.keys.filter { id in
+            runtimes[id] == nil
+                && (endpoints[id]?.surface != nil || endpoints[id]?.snapshot != nil)
+        }
+        guard retained.count > Self.maxRetainedSurfaceCaches else { return }
+        let evictable = retained
+            .filter { $0 != selectedEndpointID }
+            .sorted { (surfaceCommittedAt[$0] ?? 0) < (surfaceCommittedAt[$1] ?? 0) }
+        guard !evictable.isEmpty else { return }
+        for id in evictable.prefix(retained.count - Self.maxRetainedSurfaceCaches) {
+            endpoints[id]?.surface = nil
+            endpoints[id]?.snapshot = nil
+            surfaceCommittedAt.removeValue(forKey: id)
         }
     }
 
