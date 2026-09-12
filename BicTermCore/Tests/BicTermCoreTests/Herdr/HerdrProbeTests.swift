@@ -66,6 +66,17 @@ final class HerdrProbeTests: XCTestCase {
         }
     }
 
+    /// F3-A guard: the production default list must sit entirely inside
+    /// the validator's grammar — a default entry the CLIENT-side validator
+    /// rejects (e.g. `$USER` mid-path) fails every default-path production
+    /// connect before any remote exec, while every test that passes
+    /// explicit paths stays green.
+    func testDefaultSearchPathsAllPassTheHostilePathValidator() throws {
+        let validated = try HerdrProbe.validatedSearchPaths(HerdrProbe.defaultSearchPaths)
+        XCTAssertEqual(validated, HerdrProbe.defaultSearchPaths)
+        XCTAssertNoThrow(try HerdrProbe.command(searchPaths: HerdrProbe.defaultSearchPaths))
+    }
+
     // MARK: - Parser vectors
 
     private func compatibleStatusJSON(path: String) -> String {

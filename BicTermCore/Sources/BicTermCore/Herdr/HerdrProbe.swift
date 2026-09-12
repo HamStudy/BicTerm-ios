@@ -71,15 +71,18 @@ public enum HerdrProbe {
     /// Bounded candidate list mirroring upstream's
     /// `known_remote_binary_candidate_script` (remote/attach.rs), minus the
     /// version-parameterized mise install paths (those resolve through
-    /// `command -v herdr`'s PATH lookup, which runs first). `$HOME`/`$USER`
-    /// expand on the REMOTE side.
+    /// `command -v herdr`'s PATH lookup, which runs first) and minus the
+    /// NixOS per-user profile path `/etc/profiles/per-user/$USER/bin/herdr`
+    /// — ``validatedSearchPaths`` only expands `$HOME`/`USER` as a PREFIX,
+    /// and a default the client-side validator rejects would fail every
+    /// default-path connect before any remote exec. A herdr in that
+    /// profile is still found through the PATH lookup above.
     public static let defaultSearchPaths: [String] = [
         "$HOME/.local/bin/herdr",
         "/opt/homebrew/bin/herdr",
         "/usr/local/bin/herdr",
         "/home/linuxbrew/.linuxbrew/bin/herdr",
         "$HOME/.nix-profile/bin/herdr",
-        "/etc/profiles/per-user/$USER/bin/herdr",
         "/nix/var/nix/profiles/default/bin/herdr",
         "/run/current-system/sw/bin/herdr",
     ]
