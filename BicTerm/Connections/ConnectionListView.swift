@@ -163,6 +163,7 @@ struct ConnectionListView: View {
             connect(connection)
         } label: {
             rowLabel(for: connection, isAvailable: isAvailable)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("connection-\(sanitized(connection.name))")
