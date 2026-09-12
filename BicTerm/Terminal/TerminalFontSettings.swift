@@ -45,13 +45,9 @@ struct TerminalFontSettings {
     }
 }
 
-/// App-global terminal font-size preference: the single write path behind
-/// pinch-to-zoom (UIKit gesture on the terminal surface) and the Settings
-/// slider (SwiftUI). One instance shared by every scene, so a change applies
-/// to all open terminal surfaces at once via `onApplied` (wired to
-/// ``TerminalViewCache/applyFontSize(_:)`` by `SessionStore`). On iPad,
-/// several windows may pinch independently — they all write this one
-/// persisted pref, so concurrent gestures resolve last-write-wins.
+/// Persisted global default edited by Settings. SessionStore resolves this
+/// against each scene's override before applying changes to cached surfaces;
+/// session pinch gestures write the scene override instead of this default.
 ///
 /// Deliberately INDEPENDENT of Dynamic Type: the terminal is a fixed
 /// character grid, not body text — the user's point-size choice must not be

@@ -119,6 +119,9 @@ struct ConnectionListContainer: View {
                 #endif
             }
         }
+        .sceneAppearance(coverDescriptor.map {
+            store.effectiveTheme($0.registrySceneID)
+        } ?? store.theme.preference)
     }
 
     private func handleConnect(_ connection: Connection) {

@@ -9,7 +9,7 @@ private struct AppAppearanceModifier: ViewModifier {
     let theme: ThemeModel
 
     func body(content: Content) -> some View {
-        content.preferredColorScheme(theme.colorSchemeOverride)
+        content.sceneAppearance(theme.preference)
     }
 }
 
@@ -98,12 +98,20 @@ private struct TerminalWindowRoot: View {
         .onAppear { registerHosting() }
         .onChange(of: switchedSessionID) { _, _ in registerHosting() }
         .onDisappear { deregisterHosting() }
+        .sceneAppearance(effectiveTheme)
     }
 
     /// The session this window currently shows (in-window switch wins over
     /// the window's creation value).
     private var shownSessionID: UUID? {
         switchedSessionID ?? windowSessionID
+    }
+
+    private var effectiveTheme: AppearancePreference {
+        guard let shownSessionID, let descriptor = store.descriptor(id: shownSessionID) else {
+            return store.theme.preference
+        }
+        return store.effectiveTheme(descriptor.registrySceneID)
     }
 
     /// Keeps the store's window→session hosting map current so the session
@@ -166,7 +174,7 @@ struct BicTermApp: App {
                     .terminalStyle()
                 #endif
             }
-            .appAppearance(sessionStore.theme)
+            .environment(sessionStore.terminalMargin)
         }
 
         WindowGroup("Terminal", id: "terminal", for: SessionID.self) { $sessionID in
@@ -182,7 +190,7 @@ struct BicTermApp: App {
                 TerminalWindowRoot(store: sessionStore, windowSessionID: sessionID?.value)
                 #endif
             }
-            .appAppearance(sessionStore.theme)
+            .environment(sessionStore.terminalMargin)
         }
 
         WindowGroup("Herdr Workspace", id: "herdr", for: SessionID.self) { $sessionID in
@@ -212,6 +220,7 @@ struct BicTermApp: App {
                 #endif
             }
             .appAppearance(sessionStore.theme)
+            .environment(sessionStore.terminalMargin)
         }
 
         WindowGroup("Settings", id: "settings", for: SettingsWindowValue.self) { _ in
@@ -244,6 +253,7 @@ struct BicTermApp: App {
                 #endif
             }
             .appAppearance(sessionStore.theme)
+            .environment(sessionStore.terminalMargin)
         }
     }
 }

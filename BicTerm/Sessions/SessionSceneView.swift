@@ -16,6 +16,7 @@ struct SessionSceneActions {
 /// banner with typed error, close confirmation, and the agent approval sheet
 /// for THIS scene's pending request.
 struct SessionSceneView: View {
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.terminalColors) private var colors
     @Environment(\.terminalTypography) private var typography
     @Environment(\.terminalSpacing) private var spacing
@@ -44,8 +45,8 @@ struct SessionSceneView: View {
                     toolbarVisible: store.terminalToolbar.isVisible
                 )
                 .background(colors.background)
-                .padding(.horizontal, TerminalMetric.contentMargin)
-                .padding(.bottom, TerminalMetric.contentMargin)
+                .padding(.horizontal, store.effectiveMargin(model.sceneID).rawValue)
+                .padding(.bottom, store.effectiveMargin(model.sceneID).rawValue)
             } else {
                 closedPlaceholder
             }
@@ -54,6 +55,7 @@ struct SessionSceneView: View {
             #endif
         }
         .background(colors.background.ignoresSafeArea())
+        .sceneAppearance(store.effectiveTheme(model.sceneID))
         .task {
             // Every descriptor needs a scene model for the session menu's
             // live state text (same warm the switcher does on open).
@@ -269,6 +271,8 @@ struct SessionSceneView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(model.uitestStatusDescription)
                     .accessibilityIdentifier("scene-status-\(sanitized)")
+                Text("font:\(store.effectiveFontSize(model.sceneID)) theme:\(colorScheme == .dark ? "dark" : "light") margin:\(store.effectiveMargin(model.sceneID).rawValue)")
+                    .accessibilityIdentifier("scene-appearance-\(sanitized)")
                 Text(model.tail.isEmpty ? " " : model.tail)
                     .lineLimit(2)
                     .truncationMode(.head)

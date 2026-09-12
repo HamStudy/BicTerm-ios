@@ -195,10 +195,8 @@ final class TerminalCoordinator: NSObject, TerminalViewDelegate {
 ///   surface fixed-size). SwiftTerm ships no pinch gesture, so nothing
 ///   conflicts; the vendored fork is untouched.
 final class TerminalContainerView: TerminalView {
-    /// The shared font-size model this surface pinches into. Setting it
-    /// installs the pinch recognizer; the surface also re-fonts live when
-    /// the model changes through any OTHER path (Settings slider, another
-    /// window's pinch) via the cache's `applyFontSize`.
+    /// Installs zoom support. Standalone surfaces edit this model; cached
+    /// session surfaces route through `onFontPinch` to preserve window isolation.
     var fontModel: TerminalFontModel? {
         didSet {
             guard fontModel != nil, pinchRecognizer == nil else { return }
@@ -209,6 +207,9 @@ final class TerminalContainerView: TerminalView {
     }
 
     private var pinchRecognizer: UIPinchGestureRecognizer?
+    /// A session pinch writes its own override, starting from the displayed
+    /// font rather than the global model, so zoom never reflows other windows.
+    var onFontPinch: (@MainActor (Double) -> Void)?
     /// Point size captured at pinch start; the gesture's absolute scale
     /// multiplies it, so quantization steps the size in 0.5pt increments
     /// as the pinch grows (no per-event re-anchoring needed).
@@ -257,9 +258,14 @@ final class TerminalContainerView: TerminalView {
             guard let fontModel else { return }
             switch recognizer.state {
             case .began:
-                pinchStartSize = fontModel.size
+                pinchStartSize = font.pointSize
             case .changed:
-                fontModel.setSize(pinchStartSize * Double(recognizer.scale))
+                let size = pinchStartSize * Double(recognizer.scale)
+                if let onFontPinch {
+                    onFontPinch(size)
+                } else {
+                    fontModel.setSize(size)
+                }
             default:
                 break
             }

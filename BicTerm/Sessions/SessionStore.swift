@@ -66,14 +66,15 @@ final class SessionStore {
     let terminalToolbar = TerminalToolbarModel()
     /// App-global terminal font-size preference (default 14pt, persisted
     /// explicit choice, 9–32pt in 0.5 steps). One instance shared by every
-    /// scene: pinch-to-zoom on any surface, or the Settings slider, resizes
-    /// every cached terminal at once (wired to the view cache in `init`).
+    /// scene without an override follows Settings changes through the cache.
     let terminalFont = TerminalFontModel()
     /// App-global appearance preference (System default, persisted explicit
     /// Dark/Light choice). One instance shared by every scene: `BicTermApp`
     /// applies the color-scheme override at each WindowGroup root, so a
     /// Settings change re-themes every window at once.
     let theme = ThemeModel()
+    let terminalMargin = TerminalMarginModel()
+    var appearanceOverrides: [String: SessionAppearanceOverrides] = [:]
 
     private let hostKeyStore: (any HostKeyStoreProtocol)?
     private let connectionLookup: ConnectionLookup
@@ -183,12 +184,17 @@ final class SessionStore {
             self?.descriptors.values.contains(where: { $0.registrySceneID == sceneID }) == true
         }
 
-        // Font size: surfaces are created at the model's current size, and
-        // every applied change (pinch, Settings slider, reset) re-fonts all
-        // cached surfaces. Weak capture — both are store-lifetime objects.
+        // Resolve per scene even for detached surfaces; global changes must
+        // not replace an explicit override or wait for a SwiftUI placement.
         viewCache.fontModel = terminalFont
-        terminalFont.onApplied = { [weak viewCache] size in
-            viewCache?.applyFontSize(size)
+        viewCache.resolveFontSize = { [weak self] sceneID in
+            self?.effectiveFontSize(sceneID) ?? TerminalFontSettings.defaultSize
+        }
+        viewCache.onSceneFontPinch = { [weak self] sceneID, size in
+            self?.setFontSize(size, sceneID: sceneID)
+        }
+        terminalFont.onApplied = { [weak self] _ in
+            self?.refreshSceneFonts()
         }
 
         presenter.configureRouting { [weak self] bridgeSessionID in
@@ -296,6 +302,7 @@ final class SessionStore {
         agentPresenter.denyPendingIfTargeting(scene: descriptorID)
         viewCache.removeSurface(for: descriptorID)
         if let descriptor = descriptors[descriptorID] {
+            appearanceOverrides[descriptor.registrySceneID] = nil
             passwordPresenter.cancel(sceneID: descriptor.registrySceneID)
             await registry.closeSession(sceneID: descriptor.registrySceneID)
         }

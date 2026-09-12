@@ -123,7 +123,135 @@ final class SessionMenuUITests: XCTestCase {
         )
         XCTAssertTrue(app.buttons["scene-sessions"].exists)
         XCTAssertTrue(app.buttons["scene-new-session"].exists)
+        XCTAssertTrue(app.buttons["session-appearance-theme"].exists)
+        XCTAssertTrue(app.buttons["session-appearance-font"].exists)
+        XCTAssertTrue(app.buttons["session-appearance-margin"].exists)
         XCTAssertTrue(app.buttons["scene-settings"].exists)
+    }
+
+    func testAppearanceOverridesReflowAndReset() throws {
+        app.launchArguments = baseLaunchArguments(
+            command: "last=; while :; do size=$(stty size); if [ \"$size\" != \"$last\" ]; then printf 'SZ:%s\\n' \"$size\"; last=$size; fi; sleep 1; done",
+            extra: ["--uitest-open-session", "Alpha", "--uitest-open-session-detached", "Beta"]
+        )
+        app.launch()
+        let appearance = app.staticTexts["scene-appearance-Alpha"]
+        XCTAssertTrue(appearance.waitForExistence(timeout: 60))
+        XCTAssertTrue(waitUntil(appearance, contains: "font:14.0", timeout: 10))
+        let initialSize = try remoteSize("Alpha")
+
+        XCTAssertTrue(openSessionMenu())
+        app.buttons["session-appearance-font"].tap()
+        app.buttons["session-font-increase"].tap()
+        XCTAssertTrue(waitUntil(appearance, contains: "font:14.5", timeout: 10))
+        let resizeDeadline = Date().addingTimeInterval(15)
+        var resized = try remoteSize("Alpha")
+        while resized == initialSize, Date() < resizeDeadline {
+            Thread.sleep(forTimeInterval: 1)
+            resized = try remoteSize("Alpha")
+        }
+        XCTAssertNotEqual(resized, initialSize)
+
+        XCTAssertTrue(openSessionMenu())
+        app.buttons["session-appearance-theme"].tap()
+        app.buttons["session-theme-dark"].tap()
+        XCTAssertTrue(waitUntil(appearance, contains: "theme:dark", timeout: 10))
+        capture("appearance-dark-terminal")
+        XCTAssertTrue(openSessionMenu())
+        app.buttons["session-appearance-margin"].tap()
+        app.buttons["session-margin-20"].tap()
+        XCTAssertTrue(waitUntil(appearance, contains: "margin:20.0", timeout: 10))
+
+        XCTAssertTrue(openSessionsSubmenu())
+        app.buttons["menu-session-Beta-1"].tap()
+        let beta = app.staticTexts["scene-appearance-Beta"]
+        XCTAssertTrue(beta.waitForExistence(timeout: 20))
+        XCTAssertTrue(waitUntil(beta, contains: "font:14.0", timeout: 10))
+        XCTAssertTrue(label(of: beta).contains("margin:5.0"))
+        if UIDevice.current.userInterfaceIdiom == .pad {
+            XCTAssertTrue(label(of: appearance).contains("font:14.5"))
+        }
+        XCTAssertTrue(openSessionMenu())
+        app.buttons["session-appearance-theme"].tap()
+        app.buttons["session-theme-light"].tap()
+        XCTAssertTrue(waitUntil(beta, contains: "theme:light", timeout: 10))
+        if UIDevice.current.userInterfaceIdiom == .pad {
+            XCTAssertTrue(label(of: appearance).contains("theme:dark"))
+        }
+        XCTAssertTrue(openSessionsSubmenu())
+        app.buttons["menu-session-Alpha-1"].tap()
+        for property in ["font", "theme", "margin"] {
+            XCTAssertTrue(openSessionMenu())
+            app.buttons["session-appearance-\(property)"].tap()
+            app.buttons["session-\(property)-global"].tap()
+        }
+        XCTAssertTrue(waitUntil(appearance, contains: "font:14.0", timeout: 10))
+        XCTAssertTrue(waitUntil(appearance, contains: "margin:5.0", timeout: 10))
+        XCTAssertTrue(openSessionMenu())
+        XCTAssertTrue(label(of: app.buttons["session-appearance-theme"]).contains("Global"))
+        XCTAssertTrue(label(of: app.buttons["session-appearance-font"]).contains("Global"))
+        XCTAssertTrue(label(of: app.buttons["session-appearance-margin"]).contains("Global"))
+        capture("appearance-menu-global")
+    }
+
+    func testFontSliderSheetInheritsSessionTheme() {
+        app.launchArguments = baseLaunchArguments(extra: ["--uitest-open-session", "Alpha"])
+        app.launch()
+        XCTAssertTrue(openSessionMenu())
+        app.buttons["session-appearance-theme"].tap()
+        app.buttons["session-theme-dark"].tap()
+        XCTAssertTrue(openSessionMenu())
+        app.buttons["session-appearance-font"].tap()
+        app.buttons["session-font-adjust"].tap()
+        let slider = app.sliders["session-font-slider"]
+        XCTAssertTrue(slider.waitForExistence(timeout: 10))
+        slider.adjust(toNormalizedSliderPosition: 0.5)
+        capture("appearance-dark-font-sheet")
+        app.buttons["Reset to Global"].tap()
+        app.buttons["Done"].tap()
+        XCTAssertTrue(waitUntil(app.staticTexts["scene-appearance-Alpha"], contains: "font:14.0", timeout: 10))
+    }
+
+    func testSystemOverrideSupersedesPinnedGlobalTheme() {
+        app.launchArguments = baseLaunchArguments(extra: ["--uitest-open-session", "Alpha"])
+        app.launch()
+        let appearance = app.staticTexts["scene-appearance-Alpha"]
+        XCTAssertTrue(appearance.waitForExistence(timeout: 60))
+        let systemTheme = label(of: appearance).contains("theme:dark") ? "dark" : "light"
+        let globalTheme = systemTheme == "dark" ? "light" : "dark"
+        app.terminate()
+        app.launchArguments = baseLaunchArguments(extra: [
+            "--uitest-open-session", "Alpha", "--uitest-keep-theme-pref",
+            "-bicterm.appearance.theme", globalTheme,
+        ])
+        app.launch()
+        XCTAssertTrue(appearance.waitForExistence(timeout: 60))
+        XCTAssertTrue(waitUntil(appearance, contains: "theme:\(globalTheme)", timeout: 10))
+        XCTAssertTrue(openSessionMenu())
+        app.buttons["session-appearance-theme"].tap()
+        app.buttons["session-theme-system"].tap()
+        XCTAssertTrue(waitUntil(appearance, contains: "theme:\(systemTheme)", timeout: 10))
+        XCTAssertTrue(openSessionMenu())
+        app.buttons["session-appearance-theme"].tap()
+        app.buttons["session-theme-global"].tap()
+        XCTAssertTrue(waitUntil(appearance, contains: "theme:\(globalTheme)", timeout: 10))
+    }
+
+    private func capture(_ name: String) {
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
+    private func remoteSize(_ name: String) throws -> String {
+        let tail = app.staticTexts["scene-tail-\(name)"]
+        XCTAssertTrue(waitUntil(tail, contains: "SZ:", timeout: 30))
+        let matches = try NSRegularExpression(pattern: "SZ:[0-9]+ [0-9]+")
+        let text = label(of: tail)
+        let match = try XCTUnwrap(matches.matches(in: text, range: NSRange(text.startIndex..., in: text)).last)
+        let range = try XCTUnwrap(Range(match.range, in: text))
+        return String(text[range])
     }
 
     // MARK: - Toolbar toggle
@@ -374,6 +502,8 @@ final class SessionMenuUITests: XCTestCase {
 
         let settingsView = app.descendants(matching: .any)["settingsView"]
         XCTAssertTrue(settingsView.waitForExistence(timeout: 15), "Settings never appeared")
+        XCTAssertTrue(app.buttons["settings-margins"].exists)
+        capture("appearance-global-settings")
 
         if UIDevice.current.userInterfaceIdiom == .phone {
             app.buttons["menu-settings-done"].tap()

@@ -145,11 +145,11 @@ final class TerminalViewCache {
     private var attachGenerations: [UUID: UInt64] = [:]
     private var evictedSessionIDs: Set<UUID> = []
 
-    /// Shared font-size model, set once by `SessionStore`: new surfaces are
-    /// created at its size with its pinch handler installed, and its
-    /// `onApplied` hook calls ``applyFontSize(_:)`` so a change from any
-    /// scene re-fonts every cached surface across all windows.
+    /// Global fallback for standalone caches. SessionStore supplies scene
+    /// resolution and pinch routing so explicit overrides remain independent.
     var fontModel: TerminalFontModel?
+    var resolveFontSize: ((String) -> Double)?
+    var onSceneFontPinch: ((String, Double) -> Void)?
 
     let capacity: Int
 
@@ -169,6 +169,10 @@ final class TerminalViewCache {
         }
     }
 
+    func applyFontSize(_ size: Double, for sessionID: UUID) {
+        entries[sessionID]?.surface.applyFont(size: size)
+    }
+
     @discardableResult
     func attachSurface(for sessionID: UUID, model: SessionSceneModel) -> SurfaceAttachment {
         let generation = (attachGenerations[sessionID] ?? 0) &+ 1
@@ -185,9 +189,13 @@ final class TerminalViewCache {
             output: model.beginOutputStream(),
             send: { model.send($0) },
             onResize: { cols, rows in model.resize(cols: cols, rows: rows) },
-            fontSize: fontModel?.size ?? TerminalFontSettings.defaultSize,
+            fontSize: resolveFontSize?(model.sceneID) ?? fontModel?.size ?? TerminalFontSettings.defaultSize,
             fontModel: fontModel
         )
+        let sceneID = model.sceneID
+        if let onSceneFontPinch {
+            surface.view.onFontPinch = { size in onSceneFontPinch(sceneID, size) }
+        }
         entries[sessionID] = Entry(
             surface: surface,
             onDetach: { [weak model] in model?.surfaceDetached() }

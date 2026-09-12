@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct SettingsView: View {
+    @Environment(TerminalMarginModel.self) private var marginModel
     @Environment(\.terminalColors) var colors
     @Environment(\.terminalTypography) var typography
     @Environment(\.terminalSpacing) var spacing
@@ -46,6 +47,19 @@ struct SettingsView: View {
                 }
                 .listRowBackground(colors.background)
                 .accessibilityIdentifier("settings-font-size")
+
+                Picker("Margins", selection: Binding(
+                    get: { marginModel.margin },
+                    set: { marginModel.setMargin($0) }
+                )) {
+                    ForEach(TerminalMargin.allCases, id: \.self) { margin in
+                        Text(margin.label).tag(margin)
+                    }
+                }
+                .font(typography.body)
+                .foregroundStyle(colors.foreground)
+                .listRowBackground(colors.background)
+                .accessibilityIdentifier("settings-margins")
             }
 
             Section("Security") {

@@ -62,10 +62,11 @@ An iOS 18+ SSH terminal client for iPhone and iPad, built on
 
 ### Terminal font size
 
-- **Pinch-to-zoom on any terminal surface** rescales the font live (9–32pt
-  in 0.5pt steps), and **Settings → Appearance → Font Size** offers the same
-  range via slider with a monospace preview and Reset to Default. The choice
-  is persisted and applies immediately to every open session in every window
+- **Pinch-to-zoom on a terminal surface** rescales that session's font live
+  (9–32pt in 0.5pt steps), creating or updating its per-window override.
+  **Settings → Appearance → Font Size** sets the persisted global default
+  via slider with a monospace preview and Reset to Default. Global changes
+  apply immediately to every session without a font override
   (the font change recomputes the grid and emits an SSH window-change to the
   remote pty). Terminal font size is deliberately independent of Dynamic
   Type — the terminal is a fixed character grid, not body text.
@@ -74,10 +75,33 @@ An iOS 18+ SSH terminal client for iPhone and iPad, built on
 
 - **Settings → Appearance → Theme** offers **System** (the default — follows
   the device appearance), **Dark**, and **Light**. The choice is persisted
-  and applies to every window immediately, including sheets. Dark and Light
+  and applies to every window without a theme override immediately, including sheets. Dark and Light
   are both first-class design-token palettes; the terminal surface's native
   background/foreground re-resolve live on any appearance change, while the
   16 ANSI content colors keep their remote-output semantics untouched.
+
+### Per-window appearance and margins
+
+- Open the terminal's top-right **session menu (ellipsis) → Appearance** to
+  override **Theme**, **Font Size**, or **Margins** for that session only.
+  Rows show the effective value; **Global** means the session follows the
+  corresponding Settings default live. Choose **Global** inside any row to
+  reset just that property. A System theme override follows the device even
+  when the global theme is Dark or Light.
+- Font Size offers 0.5 pt increase/decrease actions and **Adjust Font Size…**
+  opens a slider. Pinching always starts
+  from the displayed font and updates this override, never the global default.
+  Other windows are not reflowed by a session's zoom.
+- **Settings → Appearance → Margins** sets the persisted global default:
+  **None (0 pt)**, **Small (5 pt, initial default)**, **Medium (10 pt)**, or
+  **Large (20 pt)**. The session menu offers the same scale. Margins apply
+  along the terminal's sides and bottom and recompute the remote grid.
+- Overrides are keyed by the registry scene ID, not by the connection. They
+  survive switching away, detaching, and reattaching during this app run,
+  including moving the session to another window. They are removed when the
+  session closes and are not restored across app relaunch; restored SSH
+  snapshots start with global defaults. Settings opened in a separate iPad
+  window keep the global theme rather than the terminal window's override.
 
 ## What Doesn't Work Yet
 

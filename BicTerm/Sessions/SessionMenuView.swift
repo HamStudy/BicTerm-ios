@@ -17,8 +17,6 @@ import SwiftUI
 ///      the switcher's "New connection…" row).
 ///   4. Settings… — iPad: the standalone Settings window; iPhone: a sheet.
 ///
-/// NEXT SLICE: per-window Appearance items (theme/font/margins) slot in as
-/// a dedicated section between "New Session" and the divider.
 struct SessionMenuView: View {
     @Environment(\.openWindow) private var openWindow
     @Environment(\.supportsMultipleWindows) private var supportsMultipleWindows
@@ -32,12 +30,17 @@ struct SessionMenuView: View {
     var onManageSessions: () -> Void
 
     @State private var settingsPresented = false
+    @State private var fontEditorPresented = false
 
     var body: some View {
         Menu {
             toolbarToggleItem
             sessionsSubmenu
             newSessionItem
+            if let descriptor = store.descriptor(id: currentSessionID) {
+                SessionAppearanceMenu(store: store, sceneID: descriptor.registrySceneID,
+                                      onEditFont: { fontEditorPresented = true })
+            }
             Divider()
             settingsItem
         } label: {
@@ -49,6 +52,12 @@ struct SessionMenuView: View {
         .accessibilityLabel("Session menu")
         .accessibilityIdentifier("scene-menu")
         .foregroundColor(colors.dimmed)
+        .sheet(isPresented: $fontEditorPresented) {
+            if let descriptor = store.descriptor(id: currentSessionID) {
+                SessionFontSettingsView(store: store, sceneID: descriptor.registrySceneID)
+                    .terminalStyle()
+            }
+        }
         .sheet(isPresented: $settingsPresented) {
             NavigationStack {
                 SettingsView(fontModel: store.terminalFont, themeModel: store.theme)

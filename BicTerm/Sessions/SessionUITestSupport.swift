@@ -80,6 +80,9 @@ enum SessionUITestDriver {
         if !arguments.contains("--uitest-keep-theme-pref") {
             store.theme.reset()
         }
+        if !arguments.contains("--uitest-keep-margin-pref") {
+            store.terminalMargin.setMargin(.small)
+        }
 
         let command = TerminalSceneUITest.value(after: "--uitest-session-command")
         let names = TerminalSceneUITest.values(after: "--uitest-open-session")
