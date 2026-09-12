@@ -266,6 +266,35 @@ final class TerminalUITests: XCTestCase {
         attachScreenshot(named: "mouse-sgr-ssh")
     }
 
+    func testMouseReportingDoesNotSurviveSessionReconnect() {
+        app.launchArguments = [
+            "--uitest-reset", "--uitest-seed-keys", "--uitest-sessions",
+            "--uitest-pretrust-fixtures", "--uitest-open-session", "Alpha",
+            "--uitest-session-command",
+            #"unsetopt nomatch; stty -isig -icanon -echo; printf \\033\\133?1003h\\033\\133?1006h__MOUSE_READY__\\n; dd bs=1 count=1 2>/dev/null | od -An -tu1; exit"#,
+        ]
+        app.launch()
+        let status = app.staticTexts["scene-status-Alpha"]
+        XCTAssertTrue(status.waitForExistence(timeout: 30))
+        let output = app.staticTexts["scene-tail-Alpha"]
+        XCTAssertTrue(waitFor(output, contains: "__MOUSE_READY__", timeout: 20))
+        let terminal = app.descendants(matching: .any)["terminalView"].firstMatch
+        terminal.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.3)).tap()
+        XCTAssertTrue(waitFor(status, contains: "status:disconnected", timeout: 30))
+        app.buttons["scene-reconnect-Alpha"].tap()
+        XCTAssertTrue(waitFor(status, contains: "status:active", timeout: 30))
+        terminal.tap()
+        app.typeText("stty -echo -icanon; printf '__NEW''_SHELL__\\n'; cat -v\n")
+        XCTAssertTrue(waitFor(output, contains: "__NEW_SHELL__", timeout: 20))
+        let start = terminal.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.3))
+        let end = terminal.coordinate(withNormalizedOffset: CGVector(dx: 0.6, dy: 0.4))
+        start.press(forDuration: 0.1, thenDragTo: end)
+        Thread.sleep(forTimeInterval: 1)
+        let received = output.label.components(separatedBy: "__NEW_SHELL__").last ?? ""
+        XCTAssertFalse(received.contains("^["), "mouse bytes leaked into the new shell: \(received)")
+        attachScreenshot(named: "mouse-after-session-reconnect")
+    }
+
     func testLocalSelectionCopyAndPaste() {
         launchPreview(command: #"unsetopt nomatch; stty -isig -icanon -echo; printf \\033\\1332J\\033\\133HCOPYME; cat -v"#)
         waitForTail("COPYME")

@@ -76,6 +76,25 @@ final class SessionRegistryIntegrationTests: XCTestCase {
         await sink.reset()
     }
 
+    func testCleanShellExitWaitsForManualReconnect() async throws {
+        let (registry, _) = try await makeRegistry()
+        let sceneID = "scene-exit"
+        let sink = try await startAndCollect(registry, sceneID: sceneID)
+        defer { Task { await registry.closeSession(sceneID: sceneID) } }
+        try await quiesce(registry, sceneID: sceneID, sink: sink)
+        try await registry.send(sceneID: sceneID, Data("exit\n".utf8))
+        let disconnected = await waitForState(registry, sceneID: sceneID) { $0 == .disconnected }
+        XCTAssertTrue(disconnected)
+        try await Task.sleep(for: .seconds(3))
+        let history = await registry.stateHistory(sceneID: sceneID)
+        XCTAssertEqual(history, [.connecting, .active, .disconnected])
+        try await registry.reconnect(sceneID: sceneID)
+        try await quiesce(registry, sceneID: sceneID, sink: sink)
+        try await registry.send(sceneID: sceneID, Data("printf '__MAN''UAL__\\n'\n".utf8))
+        let roundTrip = await waitForContent(sink: sink, marker: "__MANUAL__")
+        XCTAssertTrue(roundTrip)
+    }
+
     func testInBandKillTriggersReconnectAndStableOutputStreamSurvives() async throws {
         let (registry, store) = try await makeRegistry()
         let sceneID = "scene-kill"

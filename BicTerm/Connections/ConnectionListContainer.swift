@@ -176,12 +176,14 @@ struct ConnectionListContainer: View {
         await reloadRestorableSessions()
     }
 
-    /// On iPad every new session opens its own window, including narrow
-    /// multitasking layouts. On iPhone the terminal uses a cover over the
-    /// connection list.
+    /// Focus an existing host or reuse a dead one; live iPad sessions retain
+    /// separate windows. iPhone keeps its connection-list cover.
     private func present(_ descriptor: SessionStore.SessionDescriptor) {
         if supportsMultipleWindows {
-            openWindow(id: "terminal", value: SessionID(value: descriptor.id))
+            let windowValue = store.hostingWindowValue(for: descriptor.id)
+                ?? store.requestDeadWindowAttachment(for: descriptor.id)
+                ?? descriptor.id
+            openWindow(id: "terminal", value: SessionID(value: windowValue))
         } else {
             coverDescriptor = descriptor
         }

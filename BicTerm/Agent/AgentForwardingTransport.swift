@@ -68,6 +68,9 @@ final class AgentForwardingTransport: TerminalTransport {
     }
 
     var resumeStrategy: ResumeStrategy { base.resumeStrategy }
+    var closeReason: TransportCloseReason {
+        get async { await base.closeReason }
+    }
 
     func connect(to connection: Connection, cols: Int, rows: Int) async throws(TransportError) {
         if let bridge, let sshTransport {

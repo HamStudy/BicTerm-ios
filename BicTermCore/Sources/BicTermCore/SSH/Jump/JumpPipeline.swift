@@ -77,10 +77,15 @@ protocol JumpRawLink: Sendable {
 /// The established shell session on the final hop.
 protocol JumpSession: Sendable {
     var output: AsyncStream<Data> { get }
+    var closeReason: TransportCloseReason { get }
     func send(_ bytes: Data) async throws(SSHTransportError)
     func resize(cols: Int, rows: Int) async
     func sessionChannelHandle() throws(SSHTransportError) -> SSHChannelHandle
     func close() async
+}
+
+extension JumpSession {
+    var closeReason: TransportCloseReason { .connectionLost }
 }
 
 // MARK: - NIO implementation
@@ -270,9 +275,13 @@ final class NIOJumpHopConnection: JumpHopConnection, @unchecked Sendable {
             of: Data.self,
             bufferingPolicy: .bufferingNewest(32)
         )
+        let termination = SessionTermination()
         let handler = SessionChannelHandler(
             onOutput: { continuation.yield($0) },
-            onClosed: { continuation.finish() }
+            onClosed: {
+                termination.record($0)
+                continuation.finish()
+            }
         )
 
         let session: any Channel
@@ -282,6 +291,7 @@ final class NIOJumpHopConnection: JumpHopConnection, @unchecked Sendable {
                     return child.eventLoop.makeFailedFuture(SSHTransportError.channelDenied)
                 }
                 return child.eventLoop.makeCompletedFuture {
+                    try child.setOption(ChannelOptions.allowRemoteHalfClosure, value: true)
                     try child.pipeline.syncOperations.addHandler(handler)
                 }
             }
@@ -305,7 +315,7 @@ final class NIOJumpHopConnection: JumpHopConnection, @unchecked Sendable {
             throw await recordedFirstError() ?? .channelDenied
         }
 
-        return NIOJumpSession(channel: session, handler: handler, output: stream)
+        return NIOJumpSession(channel: session, handler: handler, output: stream, termination: termination)
     }
 
     func close() async {
@@ -340,11 +350,14 @@ final class NIOJumpSession: JumpSession, @unchecked Sendable {
     let channel: any Channel
     let handler: SessionChannelHandler
     let output: AsyncStream<Data>
+    private let termination: SessionTermination
+    var closeReason: TransportCloseReason { termination.reason }
 
-    init(channel: any Channel, handler: SessionChannelHandler, output: AsyncStream<Data>) {
+    init(channel: any Channel, handler: SessionChannelHandler, output: AsyncStream<Data>, termination: SessionTermination) {
         self.channel = channel
         self.handler = handler
         self.output = output
+        self.termination = termination
     }
 
     func send(_ bytes: Data) async throws(SSHTransportError) {

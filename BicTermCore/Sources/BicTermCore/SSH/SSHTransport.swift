@@ -26,6 +26,8 @@ import NIOSSH
 /// `SSHClientPipelineFactory`.
 public actor SSHTransport {
     public private(set) var output: AsyncStream<Data>
+    private var termination = SessionTermination()
+    public var closeReason: TransportCloseReason { termination.reason }
 
     // Internal (not private) so the UDS entry points in SSHTransport+UDS.swift
     // can reach them — Swift `private` is file-scoped.
@@ -195,9 +197,14 @@ public actor SSHTransport {
             of: Data.self,
             bufferingPolicy: .bufferingNewest(32)
         )
+        let termination = SessionTermination()
+        self.termination = termination
         let handler = SessionChannelHandler(
             onOutput: { continuation.yield($0) },
-            onClosed: { continuation.finish() }
+            onClosed: {
+                termination.record($0)
+                continuation.finish()
+            }
         )
 
         let session: any Channel
@@ -207,6 +214,9 @@ public actor SSHTransport {
                     return child.eventLoop.makeFailedFuture(SSHTransportError.channelDenied)
                 }
                 return child.eventLoop.makeCompletedFuture {
+                    // EOF may precede exit-status. Keep receiving requests
+                    // until channel CLOSE rather than mistaking EOF for loss.
+                    try child.setOption(ChannelOptions.allowRemoteHalfClosure, value: true)
                     try child.pipeline.syncOperations.addHandler(handler)
                 }
             }

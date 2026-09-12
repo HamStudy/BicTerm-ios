@@ -6,6 +6,7 @@ import Foundation
 /// ``SSHSessionTransport``.
 public actor JumpTransport: SSHSessionTransport {
     public let output: AsyncStream<Data>
+    public var closeReason: TransportCloseReason { session.closeReason }
 
     private let session: any JumpSession
     private var hops: [any JumpHopConnection]

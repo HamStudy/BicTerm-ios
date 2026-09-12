@@ -3,13 +3,21 @@ import UIKit
 
 @MainActor
 final class WindowRelaunchUITests: XCTestCase {
-    func testNewConnectionFromTerminalPreservesBothSessionsAndSeparateIPadWindows() throws {
+    func testNewConnectionFromActiveTerminalPreservesSeparateIPadWindows() throws {
+        try verifyNewConnection(remoteExit: false)
+    }
+
+    func testNewConnectionFromDeadTerminalReusesWindow() throws {
+        try verifyNewConnection(remoteExit: true)
+    }
+
+    private func verifyNewConnection(remoteExit: Bool) throws {
         let app = XCUIApplication()
         continueAfterFailure = false
         app.launchArguments = [
             "--uitest-reset", "--uitest-seed-keys", "--uitest-sessions",
             "--uitest-pretrust-fixtures", "--uitest-open-session", "Alpha",
-            "--uitest-session-command", "printf '__ORIGINAL_WINDOW__\\n'",
+            "--uitest-session-command", "printf '__ORIGINAL_WINDOW__\\n'" + (remoteExit ? "; exit" : ""),
         ]
         app.launch()
         let original = app.staticTexts["scene-tail-Alpha"]
@@ -19,6 +27,12 @@ final class WindowRelaunchUITests: XCTestCase {
             object: original
         )
         XCTAssertEqual(XCTWaiter.wait(for: [marker], timeout: 30), .completed)
+        let originalState = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "label CONTAINS %@", remoteExit ? "status:disconnected" : "status:active"),
+            object: app.staticTexts["scene-status-Alpha"]
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [originalState], timeout: 30), .completed)
+        let terminalWindowCount = app.windows.containing(.button, identifier: "scene-menu").count
         capture(app, name: "new-window-original")
         app.buttons["scene-menu"].firstMatch.tap()
         XCTAssertTrue(app.buttons["scene-new-session"].waitForExistence(timeout: 5))
@@ -36,7 +50,7 @@ final class WindowRelaunchUITests: XCTestCase {
         connect.tap()
 
         XCTAssertTrue(app.staticTexts["scene-title-Beta"].waitForExistence(timeout: 30))
-        if UIDevice.current.userInterfaceIdiom == .pad {
+        if UIDevice.current.userInterfaceIdiom == .pad, !remoteExit {
             let alphaWindow = app.windows.containing(.staticText, identifier: "scene-title-Alpha")
             let betaWindow = app.windows.containing(.staticText, identifier: "scene-title-Beta")
             XCTAssertEqual(alphaWindow.count, 1)
@@ -44,6 +58,12 @@ final class WindowRelaunchUITests: XCTestCase {
             XCTAssertFalse(betaWindow.firstMatch.staticTexts["scene-title-Alpha"].exists)
             XCTAssertTrue(original.label.contains("__ORIGINAL_WINDOW__"))
             XCTAssertTrue(app.staticTexts["scene-status-Alpha"].label.contains("status:active"))
+        }
+        if remoteExit {
+            XCTAssertFalse(app.staticTexts["scene-title-Alpha"].exists)
+            if UIDevice.current.userInterfaceIdiom == .pad {
+                XCTAssertEqual(app.windows.containing(.button, identifier: "scene-menu").count, terminalWindowCount)
+            }
         }
         let active = XCTNSPredicateExpectation(
             predicate: NSPredicate(format: "label CONTAINS %@", "status:active"),
@@ -58,6 +78,31 @@ final class WindowRelaunchUITests: XCTestCase {
         attachment.name = name
         attachment.lifetime = .keepAlways
         add(attachment)
+    }
+
+    func testMainPresenterReusesDeadTerminalWindow() {
+        let app = XCUIApplication()
+        continueAfterFailure = false
+        app.launchArguments = [
+            "--uitest-reset", "--uitest-seed-keys", "--uitest-sessions",
+            "--uitest-pretrust-fixtures", "--uitest-open-session", "Alpha",
+            "--uitest-session-command", "if [ '{NAME}' = Alpha ]; then exit; fi",
+            "--uitest-open-session-after", "Beta:8",
+        ]
+        app.launch()
+        XCTAssertTrue(app.staticTexts["scene-title-Alpha"].waitForExistence(timeout: 30))
+        let disconnected = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "label CONTAINS %@", "status:disconnected"),
+            object: app.staticTexts["scene-status-Alpha"]
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [disconnected], timeout: 5), .completed)
+        let count = app.windows.containing(.button, identifier: "scene-menu").count
+        XCTAssertTrue(app.staticTexts["scene-title-Beta"].waitForExistence(timeout: 30))
+        XCTAssertFalse(app.staticTexts["scene-title-Alpha"].exists)
+        if UIDevice.current.userInterfaceIdiom == .pad {
+            XCTAssertEqual(app.windows.containing(.button, identifier: "scene-menu").count, count)
+        }
+        capture(app, name: "main-presenter-reused-window")
     }
 
     func testFreshSessionLaunchReplacesAnOrphanedTerminalWindow() {

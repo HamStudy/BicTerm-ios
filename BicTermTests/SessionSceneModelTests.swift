@@ -49,6 +49,13 @@ actor ScriptedSessionTransport: TerminalTransport {
     func yield(_ data: Data) {
         continuation.yield(data)
     }
+
+    private(set) var closeReason: TransportCloseReason = .connectionLost
+
+    func remoteExit() {
+        closeReason = .remoteExit
+        continuation.finish()
+    }
 }
 
 final class ScriptedSessionTransportFactory: TerminalTransportFactory, @unchecked Sendable {
@@ -376,6 +383,79 @@ final class SessionSceneModelTests: XCTestCase {
             try? await Task.sleep(for: .milliseconds(20))
         }
         XCTAssertTrue(model.isClosed)
+    }
+
+    func testDeadWindowReservationsPreferLatestExitAndExcludeLiveSessions() async throws {
+        let factory = ScriptedSessionTransportFactory()
+        let store = makeStore(factory: factory)
+        let alpha = store.openSession(for: try makeConnection(name: "Alpha"))
+        let beta = store.openSession(for: try makeConnection(name: "Beta"))
+        let a = try XCTUnwrap(store.sceneModel(for: alpha.id))
+        let b = try XCTUnwrap(store.sceneModel(for: beta.id))
+        let alphaWindow = UUID()
+        let betaWindow = UUID()
+        store.noteWindowHosting(windowValue: alphaWindow, shows: alpha.id)
+        store.noteWindowHosting(windowValue: betaWindow, shows: beta.id)
+        XCTAssertNil(store.requestDeadWindowAttachment(for: UUID()))
+        await a.start()
+        await b.start()
+        let aActive = await waitFor(a) { $0 == .active }
+        let bActive = await waitFor(b) { $0 == .active }
+        XCTAssertTrue(aActive && bActive)
+        XCTAssertNil(store.requestDeadWindowAttachment(for: UUID()))
+        let first = try XCTUnwrap(factory.transport(named: "Alpha"))
+        let second = try XCTUnwrap(factory.transport(named: "Beta"))
+        await first.remoteExit()
+        let aDead = await waitFor(a) { $0 == .disconnected }
+        XCTAssertTrue(aDead)
+        await second.remoteExit()
+        let bDead = await waitFor(b) { $0 == .disconnected }
+        XCTAssertTrue(bDead)
+        let replacement = UUID()
+        XCTAssertEqual(store.requestDeadWindowAttachment(for: replacement), betaWindow)
+        XCTAssertEqual(store.requestDeadWindowAttachment(for: UUID()), alphaWindow)
+        XCTAssertNil(store.requestDeadWindowAttachment(for: UUID()))
+        XCTAssertEqual(store.takeWindowAttachment(for: betaWindow), replacement)
+        store.noteWindowHosting(windowValue: betaWindow, shows: replacement)
+        XCTAssertEqual(store.hostingWindowValue(for: replacement), betaWindow)
+        store.noteWindowClosed(windowValue: alphaWindow)
+        XCTAssertNil(store.pendingWindowAttachments[alphaWindow])
+        await a.closeNow()
+        await b.closeNow()
+    }
+
+    func testUnresolvedRestoredWindowIsNotADeadSessionHost() {
+        let store = makeStore(factory: ScriptedSessionTransportFactory())
+        let restoredWindow = UUID()
+        store.noteWindowHosting(windowValue: restoredWindow, shows: restoredWindow)
+        XCTAssertNil(store.requestDeadWindowAttachment(for: UUID()))
+        XCTAssertTrue(store.pendingWindowAttachments.isEmpty)
+    }
+
+    func testReconnectResetsCachedTerminalModesAndPreservesText() async throws {
+        let factory = ScriptedSessionTransportFactory()
+        let store = makeStore(factory: factory)
+        let descriptor = store.openSession(for: try makeConnection(name: "Alpha"))
+        let model = try XCTUnwrap(store.sceneModel(for: descriptor.id))
+        let surface = store.viewCache.attachSurface(for: descriptor.id, model: model).surface
+        await model.start()
+        let active = await waitFor(model) { $0 == .active }
+        XCTAssertTrue(active)
+        let terminal = surface.view.getTerminal()
+        terminal.feed(text: "transcript\u{1b}[?1003h\u{1b}[?2004h")
+        let transport = try XCTUnwrap(factory.transport(named: "Alpha"))
+        await transport.remoteExit()
+        let dead = await waitFor(model) { $0 == .disconnected }
+        XCTAssertTrue(dead)
+        XCTAssertEqual(terminal.mouseMode, .anyEvent)
+        await model.reconnect()
+        let reconnected = await waitFor(model) { $0 == .active }
+        XCTAssertTrue(reconnected)
+        XCTAssertEqual(terminal.mouseMode, .off)
+        XCTAssertFalse(terminal.bracketedPasteMode)
+        XCTAssertEqual(terminal.getCharacter(col: 0, row: 0), "t")
+        XCTAssertTrue(store.viewCache.attachSurface(for: descriptor.id, model: model).surface === surface)
+        await model.closeNow()
     }
 
     /// Chrome status text covers connecting/reconnecting/failed states

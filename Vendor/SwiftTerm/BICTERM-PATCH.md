@@ -307,3 +307,22 @@ fork suite is not green on this host, independently of the selection assertions.
 
 Reapply hunk 9 with hunks 1-8 when rebasing. Search the two view files and the
 regression test file for `BICTERM-PATCH hunk 9` markers.
+
+## Reconnect mode reset (production, hunk 10)
+
+### Hunk 10 — additive `Terminal.resetSessionModes()` (`Terminal.swift`)
+
+Clears mouse reporting, Shift capture, mouse encoding, bracketed paste,
+application cursor/keypad, and both normal/alternate keyboard-mode stacks.
+Returns to the normal buffer with `activateNormalBuffer(clearAlt: true)`;
+normal-buffer content and scrollback are not reset. Setting `mouseMode` uses
+its existing observer so the view stops tracking remote mouse input.
+
+DECSTR alone leaves mouse and paste modes enabled; RIS recreates the normal
+buffer and loses the transcript. This explicit API is called by
+`TerminalViewCache.resetSessionState(for:)` when the scene observes reconnecting.
+It does not change remote DECSTR or RIS semantics.
+
+`BicTermMouseTests.testSessionModeResetPreservesScrollback` checks mode reset,
+both keyboard states, alternate-screen exit, and unchanged normal-buffer text.
+Reapply hunk 10 with hunks 1-9; its source and test carry inline markers.

@@ -233,6 +233,7 @@ public actor SessionRegistry {
         generation: UInt64
     ) async {
         record.transport = transport
+        record.remoteExited = false
         startBridge(record, transport: transport)
         if let attachable = transport as? any SessionSceneAttachable {
             await attachable.sessionAttachedToScene(record.sceneID)
@@ -272,6 +273,7 @@ public actor SessionRegistry {
     /// an in-place resume without re-auth.
     public func didEnterBackground(sceneID: String) async {
         guard let record = records[sceneID], record.state != .closed else { return }
+        guard !(record.remoteExited && record.state == .disconnected) else { return }
         try? await snapshotStore.save(SessionSnapshot(
             connectionID: record.connection.id,
             sceneID: sceneID,
@@ -438,7 +440,8 @@ public actor SessionRegistry {
             for await chunk in stream {
                 await bridgeYield(chunk, for: record, transport: transport)
             }
-            await bridgeFinished(for: record, transport: transport)
+            let reason = await transport.closeReason
+            await bridgeFinished(for: record, transport: transport, reason: reason)
         }
     }
 
@@ -450,11 +453,14 @@ public actor SessionRegistry {
         }
     }
 
-    private func bridgeFinished(for record: SessionRecord, transport: any SessionTransport) {
+    private func bridgeFinished(for record: SessionRecord, transport: any SessionTransport, reason: TransportCloseReason) {
         guard isCurrentTransport(record, transport: transport) else { return }
         guard record.state == .active else { return }
+        record.remoteExited = reason == .remoteExit
         setState(record, .disconnected)
-        scheduleAutoReconnect(record)
+        if reason != .remoteExit {
+            scheduleAutoReconnect(record)
+        }
     }
 
     private func isCurrentTransport(_ record: SessionRecord, transport: any SessionTransport) -> Bool {
@@ -574,6 +580,7 @@ final class SessionRecord: @unchecked Sendable {
     var autoReconnectTask: Task<Void, Never>?
 
     var reconnectInFlight = false
+    var remoteExited = false
     var reconnectWaiters: [CheckedContinuation<Result<Void, SessionRegistryError>, Never>] = []
 
     var isAttached = false

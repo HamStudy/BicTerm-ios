@@ -9,6 +9,7 @@ public protocol SSHSessionTransport: Sendable {
     /// on overflow (see `SSHTransport`). `async` so actor conformers satisfy
     /// it without crossing isolation.
     var output: AsyncStream<Data> { get async }
+    var closeReason: TransportCloseReason { get async }
 
     func send(_ bytes: Data) async throws(SSHTransportError)
     func resize(cols: Int, rows: Int) async
@@ -20,3 +21,7 @@ public protocol SSHSessionTransport: Sendable {
 }
 
 extension SSHTransport: SSHSessionTransport {}
+
+extension SSHSessionTransport {
+    public var closeReason: TransportCloseReason { .connectionLost }
+}

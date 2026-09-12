@@ -199,6 +199,27 @@ final class SessionRegistryTests: XCTestCase {
         await registry.closeSession(sceneID: "s1")
     }
 
+    func testRemoteExitStaysDisconnectedUntilManualReconnect() async throws {
+        let factory = FakeSessionTransportFactory()
+        let registry = makeRegistry(factory: factory)
+        try await registry.startSession(sceneID: "exit", connection: makeUnitConnection())
+        await factory.transports[0].finishOutput(reason: .remoteExit)
+        let disconnected = await waitForState(registry, sceneID: "exit") { $0 == .disconnected }
+        XCTAssertTrue(disconnected)
+        try await Task.sleep(for: .milliseconds(150))
+        XCTAssertEqual(factory.makeCount, 1)
+        let history = await registry.stateHistory(sceneID: "exit")
+        XCTAssertEqual(history, [.connecting, .active, .disconnected])
+        await registry.didEnterBackground(sceneID: "exit")
+        await registry.willEnterForeground(sceneID: "exit")
+        XCTAssertEqual(factory.makeCount, 1)
+        try await registry.reconnect(sceneID: "exit")
+        XCTAssertEqual(factory.makeCount, 2)
+        let state = await registry.state(sceneID: "exit")
+        XCTAssertEqual(state, .active)
+        await registry.closeSession(sceneID: "exit")
+    }
+
     func testReconnectReplaysLatestTerminalSize() async throws {
         let factory = FakeSessionTransportFactory()
         let registry = makeRegistry(factory: factory)

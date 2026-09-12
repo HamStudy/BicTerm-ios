@@ -96,6 +96,7 @@ final class SessionStore {
     /// already hosting a picked session instead of attaching the same
     /// session in two windows at once.
     private(set) var windowSessionHosting: [UUID: UUID] = [:]
+    private(set) var pendingWindowAttachments: [UUID: UUID] = [:]
 
     /// Live sessions in opening order — the switcher's stable listing.
     var orderedDescriptors: [SessionDescriptor] {
@@ -108,12 +109,43 @@ final class SessionStore {
 
     func noteWindowClosed(windowValue: UUID) {
         windowSessionHosting[windowValue] = nil
+        pendingWindowAttachments[windowValue] = nil
     }
 
     /// The window value of the terminal window currently showing
     /// `sessionID`; nil when no window shows it (detached or iPhone cover).
     func hostingWindowValue(for sessionID: UUID) -> UUID? {
         windowSessionHosting.first(where: { $0.value == sessionID })?.key
+    }
+
+    func canReplaceSession(_ sessionID: UUID?) -> Bool {
+        guard let sessionID, descriptors[sessionID] != nil else { return true }
+        guard let model = existingModel(for: sessionID) else { return false }
+        return model.canRetry || model.isClosed
+    }
+
+    /// Reserve a dead host before focusing its original window value. A pending
+    /// attachment excludes that host from a second connection's selection.
+    func requestDeadWindowAttachment(for sessionID: UUID) -> UUID? {
+        let candidates = windowSessionHosting.filter {
+            // An unresolved restored window is not a known dead session;
+            // focusing it during restoration can leave prompts behind another scene.
+            guard pendingWindowAttachments[$0.key] == nil,
+                  let model = existingModel(for: $0.value) else { return false }
+            return model.canRetry || model.isClosed
+        }
+        let window = candidates.sorted {
+            let left = existingModel(for: $0.value)?.lastRetryableTransition ?? .distantPast
+            let right = existingModel(for: $1.value)?.lastRetryableTransition ?? .distantPast
+            return left == right ? $0.key.uuidString < $1.key.uuidString : left > right
+        }.first?.key
+        guard let window else { return nil }
+        pendingWindowAttachments[window] = sessionID
+        return window
+    }
+
+    func takeWindowAttachment(for windowValue: UUID) -> UUID? {
+        pendingWindowAttachments.removeValue(forKey: windowValue)
     }
 
     /// Production wiring: real SSH factory (agent-forwarding enabled) and
@@ -295,6 +327,9 @@ final class SessionStore {
             trustStore: self
         )
         sceneModels[descriptorID] = model
+        model.onReconnect = { [weak self] in
+            self?.viewCache.resetSessionState(for: descriptorID)
+        }
         return model
     }
 

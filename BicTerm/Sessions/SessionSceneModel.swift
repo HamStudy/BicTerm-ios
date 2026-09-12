@@ -22,6 +22,8 @@ final class SessionSceneModel: Identifiable {
     private weak var trustStore: SessionStore?
 
     private(set) var state: SessionState
+    private(set) var lastRetryableTransition = Date.distantPast
+    var onReconnect: (@MainActor () -> Void)?
     private(set) var launchErrorMessage: String?
     private(set) var pendingCloseConfirmation = false
     private(set) var isClosed = false
@@ -177,7 +179,14 @@ final class SessionSceneModel: Identifiable {
             guard let self else { return }
             guard let stream = await self.registry.states(sceneID: self.sceneID) else { return }
             for await newState in stream {
+                let wasRetryable = self.canRetry
+                if newState == .reconnecting, self.state != .reconnecting {
+                    self.onReconnect?()
+                }
                 self.state = newState
+                if self.canRetry, !wasRetryable {
+                    self.lastRetryableTransition = Date()
+                }
                 self.updateTrustChallenge(for: newState)
             }
         }

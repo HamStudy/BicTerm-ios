@@ -1,5 +1,10 @@
 import Foundation
 
+public enum TransportCloseReason: Equatable, Sendable {
+    case connectionLost
+    case remoteExit
+}
+
 /// How a ``TerminalTransport`` comes back from `suspend()`. This is the
 /// capability that keeps the abstraction from being SSH-shaped:
 ///
@@ -52,6 +57,10 @@ public protocol TerminalTransport: Sendable, AnyObject {
     /// compete.
     var output: AsyncStream<Data> { get async }
 
+    /// Read after output finishes. Only a protocol exit marker proves the
+    /// remote session ended deliberately; a bare TCP close is still a drop.
+    var closeReason: TransportCloseReason { get async }
+
     /// How this instance behaves across `suspend()`/`resume()`.
     var resumeStrategy: ResumeStrategy { get }
 
@@ -75,6 +84,7 @@ public protocol TerminalTransport: Sendable, AnyObject {
 }
 
 extension TerminalTransport {
+    public var closeReason: TransportCloseReason { .connectionLost }
     public var resumeStrategy: ResumeStrategy { .rehandshake }
 
     public func suspend() async {

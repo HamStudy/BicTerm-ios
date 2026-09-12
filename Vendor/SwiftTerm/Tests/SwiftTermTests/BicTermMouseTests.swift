@@ -5,6 +5,31 @@ import UIKit
 @testable import SwiftTerm
 
 final class BicTermMouseTests: XCTestCase {
+    // BICTERM-PATCH hunk 10: reconnect preserves normal-buffer history.
+    func testSessionModeResetPreservesScrollback() {
+        let (terminal, _) = TerminalTestHarness.makeTerminal()
+        terminal.feed(text: String(repeating: "transcript\r\n", count: 50))
+        let normal = terminal.buffer
+        let before = (0..<normal.lines.count).map { normal.lines[$0].translateToString(trimRight: true) }
+        terminal.feed(text: "\u{1b}[?1h\u{1b}=\u{1b}[?2004h\u{1b}[?1003h\u{1b}[?1006h\u{1b}[>1s\u{1b}[>15u")
+        terminal.feed(text: "\u{1b}[?1049h\u{1b}[>31u")
+        XCTAssertTrue(terminal.isCurrentBufferAlternate)
+        XCTAssertEqual(terminal.mouseMode, .anyEvent)
+        XCTAssertTrue(terminal.bracketedPasteMode)
+        terminal.resetSessionModes()
+        XCTAssertFalse(terminal.isCurrentBufferAlternate)
+        XCTAssertTrue(terminal.buffer === normal)
+        XCTAssertEqual((0..<normal.lines.count).map { normal.lines[$0].translateToString(trimRight: true) }, before)
+        XCTAssertEqual(terminal.mouseMode, .off)
+        XCTAssertFalse(terminal.mouseShiftCapture)
+        XCTAssertFalse(terminal.bracketedPasteMode)
+        XCTAssertFalse(terminal.applicationCursor)
+        XCTAssertFalse(terminal.applicationKeypad)
+        XCTAssertEqual(terminal.keyboardEnhancementFlags.rawValue, 0)
+        terminal.feed(text: "\u{1b}[?1049h")
+        XCTAssertEqual(terminal.keyboardEnhancementFlags.rawValue, 0)
+    }
+
     // BICTERM-PATCH hunk 9: exercise the view feed path, not just the emulator.
     #if os(macOS) || os(iOS)
     @MainActor func testFeedPreservesSelectionWhenMouseModeIsOff() {

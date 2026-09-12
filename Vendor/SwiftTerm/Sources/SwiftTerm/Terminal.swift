@@ -1002,6 +1002,21 @@ open class Terminal {
         lineFeedMode = options.convertEol
     }
 
+    // BICTERM-PATCH hunk 10: reset protocol modes without discarding transcript.
+    /// A fresh remote shell must not inherit its predecessor's input modes.
+    /// DECSTR leaves mouse/paste modes enabled; RIS destroys normal scrollback.
+    public func resetSessionModes() {
+        mouseMode = .off
+        mouseShiftCapture = false
+        mouseProtocol = .x10
+        bracketedPasteMode = false
+        applicationCursor = false
+        applicationKeypad = false
+        keyboardModeNormal = KeyboardModeState()
+        keyboardModeAlt = KeyboardModeState()
+        activateNormalBuffer(clearAlt: true)
+    }
+
     private func updateKeyboardModeState(_ update: (inout KeyboardModeState) -> Void) {
         if isCurrentBufferAlternate {
             update(&keyboardModeAlt)

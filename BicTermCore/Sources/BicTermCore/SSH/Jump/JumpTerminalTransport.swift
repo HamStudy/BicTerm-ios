@@ -16,6 +16,9 @@ public actor JumpTerminalTransport: TerminalTransport {
     private let outputContinuation: AsyncStream<Data>.Continuation
     public private(set) var output: AsyncStream<Data>
     private var isClosed = false
+    public var closeReason: TransportCloseReason {
+        get async { await inner?.closeReason ?? .connectionLost }
+    }
 
     public init(builder: JumpChainBuilder) {
         self.builder = builder

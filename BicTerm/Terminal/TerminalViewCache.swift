@@ -159,6 +159,10 @@ final class TerminalViewCache {
 
     var cachedCount: Int { entries.count }
 
+    func resetSessionState(for sessionID: UUID) {
+        entries[sessionID]?.surface.view.getTerminal().resetSessionModes()
+    }
+
     /// Re-fonts every live surface (attached or detached). SwiftTerm's font
     /// setter recomputes cell metrics and resizes the grid, so each
     /// surface's `sizeChanged` → `onResize` chain emits an SSH

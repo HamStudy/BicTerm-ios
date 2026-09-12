@@ -85,7 +85,7 @@ private struct TerminalWindowRoot: View {
                 onConnectRequested: { connection in
                     listPresented = false
                     let descriptor = store.openSession(for: connection)
-                    if supportsMultipleWindows {
+                    if supportsMultipleWindows, !store.canReplaceSession(shownSessionID) {
                         openWindow(id: "terminal", value: SessionID(value: descriptor.id))
                     } else {
                         switchedSessionID = descriptor.id
@@ -96,6 +96,17 @@ private struct TerminalWindowRoot: View {
             .terminalStyle()
         }
         .onAppear { registerHosting() }
+        .onChange(of: windowSessionID.flatMap { store.pendingWindowAttachments[$0] }, initial: true) {
+            guard let windowSessionID,
+                  let attached = store.takeWindowAttachment(for: windowSessionID) else { return }
+            // A retry may have made the old session live since it was selected.
+            if store.canReplaceSession(shownSessionID) {
+                switchedSessionID = attached
+                registerHosting()
+            } else {
+                openWindow(id: "terminal", value: SessionID(value: attached))
+            }
+        }
         .onChange(of: switchedSessionID) { _, _ in registerHosting() }
         .onDisappear { deregisterHosting() }
         .sceneAppearance(effectiveTheme)

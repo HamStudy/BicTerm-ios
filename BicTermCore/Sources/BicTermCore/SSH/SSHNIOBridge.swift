@@ -219,12 +219,13 @@ final class SessionChannelHandler: ChannelDuplexHandler, @unchecked Sendable {
     static let maximumChunkBytes = 32 * 1024
 
     private let onOutput: @Sendable (Data) -> Void
-    private let onClosed: @Sendable () -> Void
+    private let onClosed: @Sendable (TransportCloseReason) -> Void
+    private var closeReason: TransportCloseReason = .connectionLost
     private var requestWaiters: [EventLoopPromise<Void>] = []
     private var writabilityWaiters: [CheckedContinuation<Void, Never>] = []
     private var context: ChannelHandlerContext?
 
-    init(onOutput: @escaping @Sendable (Data) -> Void, onClosed: @escaping @Sendable () -> Void) {
+    init(onOutput: @escaping @Sendable (Data) -> Void, onClosed: @escaping @Sendable (TransportCloseReason) -> Void) {
         self.onOutput = onOutput
         self.onClosed = onClosed
     }
@@ -252,6 +253,8 @@ final class SessionChannelHandler: ChannelDuplexHandler, @unchecked Sendable {
 
     func userInboundEventTriggered(context: ChannelHandlerContext, event: Any) {
         switch event {
+        case is SSHChannelRequestEvent.ExitStatus, is SSHChannelRequestEvent.ExitSignal:
+            closeReason = .remoteExit
         case is ChannelSuccessEvent:
             if !requestWaiters.isEmpty {
                 requestWaiters.removeFirst().succeed(())
@@ -278,13 +281,13 @@ final class SessionChannelHandler: ChannelDuplexHandler, @unchecked Sendable {
 
     func channelInactive(context: ChannelHandlerContext) {
         failAll(error: SSHTransportError.channelDenied)
-        onClosed()
+        onClosed(closeReason)
         context.fireChannelInactive()
     }
 
     func errorCaught(context: ChannelHandlerContext, error: Error) {
         failAll(error: SSHTransportError.unreachable)
-        onClosed()
+        onClosed(closeReason)
         context.close(promise: nil)
     }
 

@@ -127,7 +127,10 @@ actor FakeSessionTransport: SessionTransport {
         continuation.yield(bytes)
     }
 
-    func finishOutput() {
+    private(set) var closeReason: TransportCloseReason = .connectionLost
+
+    func finishOutput(reason: TransportCloseReason = .connectionLost) {
+        closeReason = reason
         outputAlive = false
         continuation.finish()
     }
