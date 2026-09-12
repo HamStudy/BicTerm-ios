@@ -107,6 +107,66 @@ final class PasswordAuthUITests: XCTestCase {
         app.buttons["cancel-editor"].tap()
     }
 
+    // MARK: Duplicate — pre-filled add flow keeps the saved password
+
+    func testDuplicateKeepsSavedPasswordWithoutRetyping() {
+        launchApp(arguments: ["--uitest-reset", "--uitest-pwd-server"])
+
+        openEditorForNewConnection()
+        typeInto(app.textFields["field-name"], "Password Auth")
+        typeInto(app.textFields["field-host"], "127.0.0.1")
+        typeInto(app.textFields["field-port"], "18090", clearing: "22")
+        typeInto(app.textFields["field-username"], "uitest")
+        selectSegment("Password", in: "auth-method-picker")
+        typeIntoSecure(app.secureTextFields["password-field"], "bicterm-uitest-fixture-password")
+        waitForEnabled(app.buttons["save-editor"])
+        app.buttons["save-editor"].tap()
+        dismissSavePasswordPromptIfPresent()
+        XCTAssertTrue(app.buttons["connection-Password-Auth"].waitForExistence(timeout: 10))
+
+        // The duplicate shares the source's Keychain tag: the editor opens
+        // with the saved-password badge and Save stays enabled with no
+        // retype and no rewrite of the entry.
+        swipeRow(named: "Password-Auth")
+        let duplicate = app.buttons["duplicate-Password-Auth"]
+        XCTAssertTrue(duplicate.waitForExistence(timeout: 5))
+        duplicate.tap()
+
+        XCTAssertTrue(app.navigationBars["New Connection"].waitForExistence(timeout: 10),
+                      "duplicate must open as an add flow")
+        XCTAssertEqual(app.textFields["field-name"].value as? String, "Password Auth (copy)")
+        let secure = app.secureTextFields["password-field"]
+        scrollToHittable(secure)
+        XCTAssertTrue(secure.exists)
+        XCTAssertTrue(app.staticTexts["password-saved-badge"].exists,
+                      "duplicate must inherit the saved-password state, never require retyping")
+        let value = secure.value as? String
+        XCTAssertTrue(value == nil || value == "", "SecureField must stay empty; got \(value ?? "<nil>")")
+        waitForEnabled(app.buttons["save-editor"])
+
+        app.buttons["save-editor"].tap()
+        dismissSavePasswordPromptIfPresent()
+        XCTAssertTrue(app.buttons["connection-Password-Auth-(copy)"].waitForExistence(timeout: 10))
+
+        // Deleting the source must not orphan the shared entry: the copy
+        // still opens with the saved-password badge.
+        swipeRow(named: "Password-Auth")
+        let delete = app.buttons["delete-Password-Auth"]
+        XCTAssertTrue(delete.waitForExistence(timeout: 5))
+        delete.tap()
+        let originalGone = NSPredicate(format: "exists == false")
+        expectation(for: originalGone, evaluatedWith: app.buttons["connection-Password-Auth"])
+        waitForExpectations(timeout: 10)
+
+        openEditorForConnection(named: "Password-Auth-(copy)")
+        let reopenedSecure = app.secureTextFields["password-field"]
+        scrollToHittable(reopenedSecure)
+        XCTAssertTrue(reopenedSecure.exists)
+        XCTAssertTrue(app.staticTexts["password-saved-badge"].exists,
+                      "deleting the source must leave the copy's shared password entry intact")
+        app.buttons["cancel-editor"].tap()
+    }
+
     // MARK: Picker toggles
 
     func testSwitchingAuthMethodTogglesCredentialFields() {

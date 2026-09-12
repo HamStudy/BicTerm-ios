@@ -323,11 +323,62 @@ final class ConnectionEditorUITests: XCTestCase {
         XCTAssertTrue(app.textFields["field-name"].waitForExistence(timeout: 5))
         app.buttons["cancel-editor"].tap()
 
+        // Duplicate opens the editor as a pre-filled add flow; nothing
+        // persists until Save.
         swipeRow(named: "Swipe-Me")
         let duplicate = app.buttons["duplicate-Swipe-Me"]
         XCTAssertTrue(duplicate.waitForExistence(timeout: 5))
         duplicate.tap()
-        XCTAssertTrue(app.buttons["connection-Swipe-Me-(copy)"].waitForExistence(timeout: 10))
+
+        XCTAssertTrue(
+            app.descendants(matching: .any)["connection-editor"].waitForExistence(timeout: 10),
+            "duplicate must open the connection editor"
+        )
+        XCTAssertTrue(app.navigationBars["New Connection"].exists,
+                      "duplicate must behave as the add flow, not an edit")
+        let nameField = app.textFields["field-name"]
+        XCTAssertTrue(nameField.waitForExistence(timeout: 5))
+        XCTAssertEqual(nameField.value as? String, "Swipe Me (copy)")
+        XCTAssertEqual(app.textFields["field-host"].value as? String, "10.9.9.9")
+        XCTAssertEqual(app.textFields["field-port"].value as? String, "22")
+        XCTAssertEqual(app.textFields["field-username"].value as? String, "u")
+        XCTAssertTrue(
+            app.buttons["key-selector"].label.contains("Fixture Ed25519"),
+            "duplicate must carry the source's key selection"
+        )
+        XCTAssertTrue(app.buttons["save-editor"].isEnabled,
+                      "a pre-filled duplicate draft must be valid without further input")
+        XCTAssertFalse(app.buttons["connection-Swipe-Me-(copy)"].exists,
+                       "duplicating must not persist a row before Save")
+
+        // The pre-filled draft is the dirty-check baseline, so cancelling an
+        // untouched duplicate dismisses without a prompt and adds no row.
+        app.buttons["cancel-editor"].tap()
+        let editorGone = NSPredicate(format: "exists == false")
+        expectation(for: editorGone, evaluatedWith: app.buttons["cancel-editor"])
+        waitForExpectations(timeout: 10)
+        XCTAssertFalse(
+            app.descendants(matching: .any)["discard-changes-dialog"].exists,
+            "an untouched duplicate draft must cancel without prompting"
+        )
+        XCTAssertFalse(app.buttons["connection-Swipe-Me-(copy)"].exists,
+                       "cancel must discard the duplicate — no new row")
+        XCTAssertTrue(original.exists)
+
+        // Saving the pre-filled editor persists exactly one new row.
+        swipeRow(named: "Swipe-Me")
+        XCTAssertTrue(app.buttons["duplicate-Swipe-Me"].waitForExistence(timeout: 5))
+        app.buttons["duplicate-Swipe-Me"].tap()
+        XCTAssertTrue(app.textFields["field-name"].waitForExistence(timeout: 5))
+        app.buttons["save-editor"].tap()
+
+        let copy = app.buttons["connection-Swipe-Me-(copy)"]
+        XCTAssertTrue(copy.waitForExistence(timeout: 10))
+        XCTAssertEqual(
+            app.buttons.matching(identifier: "connection-Swipe-Me-(copy)").count, 1,
+            "save must insert exactly one new row"
+        )
+        XCTAssertTrue(original.exists, "the source row must survive duplicating")
 
         swipeRow(named: "Swipe-Me-(copy)")
         let delete = app.buttons["delete-Swipe-Me-(copy)"]

@@ -8,6 +8,12 @@ struct ConnectionEditorView: View {
     @Environment(\.dismiss) private var dismiss
 
     let existing: Connection?
+    /// Duplicate-as-new pre-fill source. Its values seed a fresh draft while
+    /// `existing` stays nil, so the editor keeps add-flow semantics: "New
+    /// Connection" title, Save inserts a new connection, and the
+    /// orphaned-password cleanup never treats the source's (shared)
+    /// Keychain tags as replaced.
+    let seed: Connection?
     let model: ConnectionsModel
     let onConnect: (Connection) -> Void
 
@@ -505,14 +511,28 @@ struct ConnectionEditorView: View {
     }
 
     private func populateDraft() {
-        guard let existing else { return }
-        draft = ConnectionDraft(
-            connection: existing,
-            keyLabel: model.keyLabel(forReference: existing.keyReference)
-        )
+        if let existing {
+            draft = ConnectionDraft(
+                connection: existing,
+                keyLabel: model.keyLabel(forReference: existing.keyReference)
+            )
+            applyHopKeyLabels(from: existing)
+        } else if let seed {
+            draft = ConnectionDraft(
+                duplicating: seed,
+                name: model.nextDuplicateName(of: seed.name),
+                keyLabel: model.keyLabel(forReference: seed.keyReference)
+            )
+            applyHopKeyLabels(from: seed)
+        }
+    }
+
+    /// Password hops carry Keychain tags, never key references, so the key
+    /// list resolves no label for them and their label stays empty.
+    private func applyHopKeyLabels(from connection: Connection) {
         for index in draft.hops.indices {
             draft.hops[index].keyLabel =
-                model.keyLabel(forReference: existing.jumpChain[index].keyReference) ?? ""
+                model.keyLabel(forReference: connection.jumpChain[index].keyReference) ?? ""
         }
     }
 

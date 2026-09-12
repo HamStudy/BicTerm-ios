@@ -37,7 +37,21 @@ struct ConnectionListView: View {
 
     struct EditorTarget: Identifiable {
         let connection: Connection?
-        var id: String { connection?.id.uuidString ?? "new" }
+        /// Duplicate-as-new pre-fill source: when set (with `connection`
+        /// nil), the editor opens pre-filled from this connection as an add
+        /// flow — nothing persists unless the user saves.
+        let seed: Connection?
+
+        init(connection: Connection?, seed: Connection? = nil) {
+            self.connection = connection
+            self.seed = seed
+        }
+
+        var id: String {
+            if let connection { return connection.id.uuidString }
+            if let seed { return "duplicate-\(seed.id.uuidString)" }
+            return "new"
+        }
     }
 
     var body: some View {
@@ -87,7 +101,7 @@ struct ConnectionListView: View {
                 }
             }
             .sheet(item: $editorTarget) { target in
-                ConnectionEditorView(existing: target.connection, model: model) { connection in
+                ConnectionEditorView(existing: target.connection, seed: target.seed, model: model) { connection in
                     connect(connection)
                 }
                 .presentationDetents([.large])
@@ -176,7 +190,7 @@ struct ConnectionListView: View {
             .accessibilityIdentifier("delete-\(sanitized(connection.name))")
 
             Button {
-                Task { await model.duplicate(connection) }
+                editorTarget = EditorTarget(connection: nil, seed: connection)
             } label: {
                 Label("Duplicate", systemImage: "plus.square.on.square")
             }

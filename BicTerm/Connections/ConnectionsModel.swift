@@ -151,21 +151,6 @@ final class ConnectionsModel {
         return tags
     }
 
-    func duplicate(_ connection: Connection) async {
-        let copyName = nextDuplicateName(of: connection.name)
-        guard let copy = try? Connection(
-            name: copyName,
-            type: connection.type,
-            host: connection.host,
-            port: connection.port,
-            username: connection.username,
-            keyReference: connection.keyReference,
-            jumpChain: connection.jumpChain,
-            protocolOptions: connection.protocolOptions
-        ) else { return }
-        _ = await persist(copy)
-    }
-
     func nextDuplicateName(of name: String) -> String {
         let taken = Set(connections.map(\.name))
         if !taken.contains("\(name) (copy)") { return "\(name) (copy)" }

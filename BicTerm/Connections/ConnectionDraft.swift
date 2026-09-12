@@ -134,6 +134,18 @@ struct ConnectionDraft: Equatable {
         agentForwarding = connection.protocolOptions["agentForwarding"]?.boolValue == true
     }
 
+    /// Duplicate-as-new: copies every editable value from `connection` —
+    /// including the password Keychain tag, which the copy SHARES with the
+    /// source (a retype overwrites in place for both; no entry is rewritten
+    /// or re-created here) — but mints a fresh id and takes the
+    /// caller-provided copy name, so saving inserts a new connection
+    /// instead of overwriting the source.
+    init(duplicating connection: Connection, name: String, keyLabel: String?) {
+        self.init(connection: connection, keyLabel: keyLabel)
+        id = UUID()
+        self.name = name
+    }
+
     var nameError: String? {
         name.trimmingCharacters(in: .whitespaces).isEmpty ? "Name is required" : nil
     }
