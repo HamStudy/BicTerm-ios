@@ -41,20 +41,20 @@ plan); everything else 13–19 is complete.
 
 | §15 row | Disposition |
 |---|---|
-| Two hosts + two named sessions without merging state | Partial (T16 endpoint-qualified state keyed by `HerdrEndpointID`; T19 independent-connection model tests; production "Add Machine" UI is OPEN) |
-| Add Machine never invokes installation-capable setup | Delivered as a rule (probe is diagnostic-only, T19); the Add Machine surface itself is OPEN |
+| Two hosts + two named sessions without merging state | Delivered (T16 endpoint-qualified state keyed by `HerdrEndpointID`; T19 independent-connection model tests; production Add Machine UI delivered by the herdr-support herd editor (T7) and coordinator (T8); two-live-server E2E `.sisyphus/evidence/herdr-support-t9.log`) |
+| Add Machine never invokes installation-capable setup | Delivered (herd editor's Add Machine is a picker over existing SSH connections — herdr-support T7, evidence `.sisyphus/evidence/herdr-support-t7.log`; the probe stays diagnostic-only (T19), boundary enforced by `HerdrInstallBoundaryTests`) |
 | Every endpoint negotiates generation/codecs/capabilities independently | Delivered in the core (T13 per-endpoint supervisors; one `HerdrClient` per endpoint in the app model, T16) |
 | Missing optional methods disable only that endpoint's action | Partial (T13 registry health per endpoint; app-level action gating is OPEN with the multi-machine UI) |
 | Colliding workspace/tab/pane IDs and agent names route correctly | Delivered (T16 `HerdrPaneRoutingKey` qualifies by endpoint+generation+boot; tests) |
-| Inactive endpoints update metadata without pane streaming | Partial (T13 projection store supports it; app-side inactive-endpoint rendering is OPEN) |
-| Switching freezes input until coherent target activation | Partial (T13 activation transaction + presentation fence extracted and tested; app-side A→B switching UX is OPEN) |
-| Rapid switching/failed activation/late responses never misroute input | Partial (core-side stale-target rejection T17; switching-scenario app tests are OPEN with the switching UX) |
+| Inactive endpoints update metadata without pane streaming | Delivered (selection drives per-endpoint surface interest through `selectedEndpointID` — herdr-support T8 coordinator + T9 machine switcher; status/metadata per machine asserted in `.sisyphus/evidence/herdr-support-t8.log`, `.sisyphus/evidence/herdr-support-t9.log`) |
+| Switching freezes input until coherent target activation | Delivered (T13 activation transaction + presentation fence; app-side switching shipped as the herd machine switcher — herdr-support T9, mid-activation switch coherence tests in `HerdSessionCoordinatorTests`, evidence `.sisyphus/evidence/herdr-support-t9.log`) |
+| Rapid switching/failed activation/late responses never misroute input | Delivered (core-side stale-target rejection T17; app-side: late-connecting machines never steal selection and mid-activation switches keep both endpoints coherent — `HerdSessionCoordinatorTests`, herdr-support T8/T9, evidence `.sisyphus/evidence/herdr-support-t8.log`) |
 | Modifiers/mouse/selection/image paste stay machine-qualified through switching | Partial (T18 clipboard attribution is endpoint-qualified; mouse/selection are OPEN) |
-| Independent bounded writes/health/retries with aggregate memory limits | Partial (per-endpoint reconnect budgets T19; the flooded/stalled/healthy three-endpoint soak is OPEN) |
+| Independent bounded writes/health/retries with aggregate memory limits | Partial (per-endpoint reconnect budgets T19; aggregate reconnect-loop budget and bounded retained-surface caches delivered by herdr-support T10, evidence `.sisyphus/evidence/herdr-support-t10.log`, bounds registered in `Docs/HERDR-HARDENING-AUDIT.md`; the flooded/stalled/healthy three-endpoint soak is OPEN) |
 | Reconnect does not steal selection; stale panes visibly stale | OPEN (server-authoritative selection not yet shipped) — triage (2026-09-11): blocked-on-user-decision. Server-authoritative selection requires the live herdr-server path, which is blocked by the zig 0.15.x/libSystem link failure on macOS 26; options await a user decision. See `.omo/evidence/phase2-h16-server-fixture.md` (identical copy: `.sisyphus/evidence/phase2-h16-server-fixture.md`). |
-| Disable/remove disconnects only the chosen profile | Partial (T19 detach/disconnect per endpoint; profile-level disable UI is OPEN) |
+| Disable/remove disconnects only the chosen profile | Delivered (T19 detach/disconnect per endpoint; profile-disable semantics shipped as the per-connection "Use Herdr" toggle (herdr-support T5) plus the herd editor's per-machine Remove/Add — the plan's adopted no-toggle decision — evidence `.sisyphus/evidence/herdr-support-t7.log`; herd deletion never touches connections or remote sessions, `HerdSessionCoordinatorTests`) |
 | Multiple clients per tab follow last-interaction resize ownership | OPEN — triage (2026-09-11): blocked-on-user-decision. Exercising multiple live clients per tab requires the live herdr server, blocked by the zig 0.15.x/libSystem link failure on macOS 26; options await a user decision. See `.omo/evidence/phase2-h16-server-fixture.md`. |
-| Background/foreground recovery for several endpoints without reconnect storms | Partial (single-endpoint bg/fg delivered T19; multi-endpoint variant is User QA + OPEN for the storm-budget part) |
+| Background/foreground recovery for several endpoints without reconnect storms | Delivered (herdr-support T10: concurrent multi-endpoint background detach inside one drain window, foreground recovery paced by the aggregate reconnect budget with the selected machine first; evidence `.sisyphus/evidence/herdr-support-t10.log`. Physical-device confirmation remains part of the iOS-quality User QA rows below) |
 
 ## Terminal rendering and input
 
@@ -148,9 +148,14 @@ each not-applicable-with-reason as stated above.
 ## Counts
 
 76 rows (11 functional, 14 multi-machine, 11 terminal, 11 pointer/touch,
-8 clipboard, 7 security, 5 iOS quality, 9 licensing). Delivered 40,
-Partial 16, User QA 4, OPEN 16 (the pointer/touch section plus the named
+8 clipboard, 7 security, 5 iOS quality, 9 licensing). Delivered 46,
+Partial 10, User QA 4, OPEN 16 (the pointer/touch section plus the named
 future-phase items). Zero rows without a disposition.
+
+Amendment (2026-09-12, herdr-support T10/T11): six multi-machine rows
+flipped Partial → Delivered with evidence pointers above (two-hosts,
+inactive-endpoint metadata, both switching rows, profile-disable
+semantics, multi-endpoint bg/fg storm budget).
 
 Triage addendum (2026-09-11): the 16 OPEN rows now carry inline `triage:`
 annotations (5 table rows) or a section-level triage list (11
@@ -174,3 +179,18 @@ macOS 26, recorded with a minimal reproduction and user options in
 persistence, reducer, and re-render code paths against committed frames;
 what it does not prove is live-server frame generation. Closing that gap
 is one of the user decisions listed in the h16 fixture doc.
+
+## Live-fixture amendment (2026-09-12, herdr-support T3)
+
+The zig blocker recorded above no longer applies to the fixture path:
+`scripts/herdr-server-fetch.sh` now fetches the pinned prebuilt herdr
+v0.9.0 release binary (sha256-verified against
+`Fixtures/herdr/server-0.9.0.sha256`; the server is never built from
+source), and `scripts/fixtures-up.sh` runs one herdr server per fixture
+port. Live E2E against both servers shipped with herdr-support T6 (mode A)
+and T9 (herd switching; evidence `.sisyphus/evidence/herdr-support-t6.log`,
+`.sisyphus/evidence/herdr-support-t9.log`). The three OPEN rows above that
+cite the zig-blocked live-server path (server-authoritative selection,
+multi-client resize ownership, `pane.selection.read`) remain OPEN because
+those server-side features are not exercised by the shipped flows — their
+scheduling is still a user decision, now unconstrained by the fixture.

@@ -1,6 +1,6 @@
 # DEPENDENCIES.md — BicTerm dependency & license inventory
 
-Review date: 2026-09-03 (task T3 key layer); amended 2026-09-04 (task T8 vendored swift-nio-ssh fork); amended 2026-09-11 (AGPL/copyleft removal — single permissive-only build)
+Review date: 2026-09-03 (task T3 key layer); amended 2026-09-04 (task T8 vendored swift-nio-ssh fork); amended 2026-09-11 (AGPL/copyleft removal — single permissive-only build); amended 2026-09-12 (herdr-support T11 — fixture-binary provenance, no graph change)
 Policy: App Store distribution requires GPL/LGPL/AGPL-free dependencies. Every entry below
 uses a permissive Apache-2.0, MIT, ISC, or BSD-3-Clause license — **verdict: GO**. There is
 exactly one build flavor (scheme `BicTerm`, configs `Debug`/`Release`) and it contains no
@@ -19,6 +19,18 @@ forwarding (confirmed: outbound `auth-agent-req@openssh.com` →
 `ChannelError.operationUnsupported` at SSHChildChannel.swift:427; inbound
 `auth-agent@openssh.com` channel open → `NIOSSHError.unknownPacketType` at
 SSHMessages.swift:905-906, which kills the connection).
+
+Note (2026-09-12, herdr-support T11 — fixture-binary provenance): the test
+fixtures run a REAL herdr v0.9.0 server, but never one built from source.
+`scripts/herdr-server-fetch.sh` downloads the pinned upstream release asset
+`herdr-macos-aarch64` from
+`https://github.com/herdrdev/herdr/releases/download/v0.9.0/` into the
+gitignored `Fixtures/run/herdr/herdr` and verifies it byte-exact against
+the committed sha256 lockfile `Fixtures/herdr/server-0.9.0.sha256`
+(idempotent; a mismatch re-downloads or fails loudly). The binary is test
+fixture data, not a linked dependency — it adds nothing to the app's
+dependency graph or license surface beyond the vendored herdr source above
+(Apache-2.0), and it is never shipped.
 
 ## Vendored source dependencies
 

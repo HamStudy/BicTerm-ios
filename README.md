@@ -24,6 +24,8 @@ An iOS 18+ SSH terminal client for iPhone and iPad, built on
 - **Multiple concurrent sessions** — session switcher with detach/reattach that preserves terminal state, on iPhone and iPad. The scene's top-right **session menu** (ellipsis) lists every live session with its state for jump-to-session (on iPad it focuses the window already hosting the session, or gives a detached session its own window), opens the full switcher via **Manage Sessions…**, starts a **New Session**, and opens **Settings…** (its own window on iPad, a sheet on iPhone)
 - **Graceful reconnect** — network drops reconnect automatically; a clean remote shell exit stays disconnected until manual Retry. Background suspends live sessions and foreground re-handshakes; app relaunch requires manual reconnect. Reconnect resets terminal mouse, paste, and keyboard modes and exits the alternate screen while preserving normal scrollback. New connections reuse dead iPad terminal windows; active sessions keep separate windows.
 - **Herdr client** — workspace handshake, native surface rendering, semantic keyboard/focus/resize input, clipboard text and bounded image paste, probe diagnostics, detach/reconnect
+- **Herdr in two modes** — (A) a per-connection "Use Herdr" toggle that opens one machine's herdr workspace over that SSH connection, and (B) Herd mode: named herds of existing connections that background-connect every machine behind one machine switcher (status chips, selection-driven surface interest, per-machine failure isolation, orphan badges)
+- **Multi-endpoint hardening** — one aggregate reconnect budget across every machine in a workspace (no reconnect storms), parallel background detach (an N-machine herd suspends in one drain window), bounded per-machine surface caches, and a typed authentication-lost diagnostic that never auto-retries
 - **Transport abstraction** — SSH is one conformer; ET/mosh can be added later without touching session layers
 - **Accessibility** — VoiceOver labels on every icon-only control (session chrome, switcher, key management, herdr header) and on editor text fields; 44×44pt minimum touch targets on app-layer controls (the vendored SwiftTerm accessory strip excepted); editor validation arms only after a field is touched, so pristine blank forms show no red; SSH key fingerprints render full-length over two lines — the distinguishing tail is never middle-truncated or shrunk
 
@@ -105,12 +107,12 @@ An iOS 18+ SSH terminal client for iPhone and iPad, built on
 
 ## What Doesn't Work Yet
 
-- **Live herdr-server validation on this dev host** — building the herdr v0.9.0 server fixture needs zig 0.15.x, which fails to link libSystem on macOS 26 (toolchain-vs-host issue, not an app defect). Persistence and lifecycle tests currently run against committed-frame replay. See `.omo/evidence/phase2-h16-server-fixture.md`.
 - **No mosh or Eternal Terminal** — architecture supports adding them, but they are not implemented in v1.
 - **Pointer/touch routing for herdr panes, graphics scenes, OSC 8 safe-open** — triaged as future-phase work in `Docs/HERDR-RELEASE-TRACEABILITY.md`.
 
 ## What's Not In Scope (v1)
 
+- SSH agent forwarding **for herdr endpoints** — upstream herdr has no agent-forwarding concept, so there is no protocol path to forward into (documented research verdict; the in-app SSH agent still serves terminal sessions)
 - Keyboard-interactive auth (NIOSSH has no keyboard-interactive client; password and public-key only)
 - RSA keys / key export
 - SFTP/SCP or port forwarding
@@ -163,13 +165,15 @@ do not brew anything for them.
 | Feature | Required tools |
 |---------|----------------|
 | Basic app build (`xcodegen generate`, open Xcode, build) | Xcode, XcodeGen |
-| Test fixtures (`scripts/fixtures-up.sh`) | Python 3 and the preinstalled OpenSSH/curl tools |
+| Test fixtures (`scripts/fixtures-up.sh`) | Python 3 and the preinstalled OpenSSH/curl tools; for the herdr servers, the pinned prebuilt binary via `scripts/herdr-server-fetch.sh` (curl download, sha256-verified — never built from source) |
 | herdr FFI build (`scripts/build-herdr-core.sh`) | Rust with both iOS targets (cbindgen self-installs) |
 | Hardening / SBOM (`Vendor/herdr/check.sh`, fuzz targets) | cargo-deny, jq; cargo-audit and cargo-fuzz for the optional audit/fuzz passes |
 
-Not required: Docker (no container is used anywhere in the fixture flow), and
-zig. The live herdr server fixture would need zig 0.15.x, which fails to link on
-macOS 26 (see "What Doesn't Work Yet"), but no build or test script invokes zig.
+Not required: Docker (no container is used anywhere in the fixture flow) and
+zig. The herdr server fixture is a pinned prebuilt release binary
+(`herdr-macos-aarch64`, v0.9.0) fetched and sha256-verified by
+`scripts/herdr-server-fetch.sh`; no test script builds the server from
+source.
 
 ### Common-case install
 
@@ -214,7 +218,10 @@ SwiftPM `Package.resolved` pin is tracked).
 The fixtures and suites below need the tools listed under [Dependencies](#dependencies).
 
 ```bash
-# Start local fixtures (sshd on 12222/12223, UDS forwarder)
+# Fetch the pinned prebuilt herdr server (idempotent, sha256-verified),
+# then start local fixtures (sshd on 12222/12223, UDS forwarder, and one
+# herdr server per port — HERDR_SERVERS, default "12222 12223")
+scripts/herdr-server-fetch.sh
 scripts/fixtures-up.sh
 
 # Core unit/integration tests

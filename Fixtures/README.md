@@ -71,6 +71,35 @@ against `$SSH_AUTH_SOCK` to exercise BicTerm's forwarded agent (T8/T14):
 Framing: uint32 BE length + payload. Opcodes: 11=request-identities,
 12=identities-answer, 13=sign-request, 14=sign-response, 5=failure.
 
+### herdr servers (`Fixtures/herdr/`)
+
+Real herdr v0.9.0 servers for live-endpoint E2E — always the pinned
+PREBUILT release binary, never built from source (standing project
+policy; no zig anywhere in the fixture chain):
+
+- **Binary**: `scripts/herdr-server-fetch.sh` downloads
+  `herdr-macos-aarch64` from the upstream v0.9.0 GitHub release into
+  `Fixtures/run/herdr/herdr` (gitignored) and verifies it against the
+  committed sha256 lockfile `Fixtures/herdr/server-0.9.0.sha256`.
+  Idempotent: a binary already matching the lockfile is left alone.
+- **Servers**: `fixtures-up.sh` starts one headless server per fixture
+  sshd port (`herdr server`), each with fully isolated state under
+  `Fixtures/run/herdr/server-<port>/` (own `HOME`, own UDS sockets), so
+  the two fixture servers cannot collide with each other or with a real
+  user herdr. `HERDR_SERVERS` selects the ports (default `12222 12223`);
+  a server whose port is not selected is stopped. Readiness is polled on
+  each server's `herdr-client.sock`. Without the fetched binary,
+  `fixtures-up.sh` still brings up sshd and warns loudly.
+- **Also in this block**: `mock-herdr` / `mock-bridge.py` (framed
+  remote-client-bridge mock over the fixture sshd exec path, T15
+  transport tests), `fake-herdr-status` (deterministic probe-status
+  stand-in, T19/T4 probe tests), `golden/` (committed frames for replay
+  tests), `gen/` (golden-frame generator crate).
+- **Consumers**: herdr-support T3 (fixture bring-up proof), T4 (connector
+  vs live 12222), T6 (mode-A live E2E + missing-server diagnostics),
+  T8/T9 (herd fan-out and two-machine live switching E2E, including the
+  kill-one-server dimmed-machine scenario).
+
 ## The `ssh -J` wrapper (macOS quirk)
 
 The acceptance two-hop command `ssh -o ... -J user@127.0.0.1:12222 ...`
