@@ -82,6 +82,7 @@ struct ConnectionListView: View {
                         Image(systemName: "gear")
                             .foregroundColor(colors.accent)
                     }
+                    .accessibilityLabel("Settings")
                     .accessibilityIdentifier("open-settings")
                 }
             }

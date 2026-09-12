@@ -20,10 +20,16 @@ struct ConnectionEditorView: View {
     @State private var hopLimitMessage: String?
     @State private var saveError: String?
     @State private var isSaving = false
+    /// Validation timing: a field's error renders only after the field was
+    /// edited (or its credential mode chosen) or a save was attempted — a
+    /// pristine blank form never shows red. Save-button gating stays eager
+    /// (`canSubmit`); a disabled Save needs no error text to explain itself.
+    @State private var touchedFields: Set<FocusField> = []
+    @State private var saveAttempted = false
     @FocusState private var focus: FocusField?
 
     enum FocusField {
-        case name, host, port, username
+        case name, host, port, username, password
     }
 
     struct HopSheetTarget: Identifiable {
@@ -133,7 +139,7 @@ struct ConnectionEditorView: View {
 
     private var identitySection: some View {
         Section("Connection") {
-            labeledField("Name", text: $draft.name, identifier: "field-name", error: draft.nameError, focus: .name)
+            labeledField("Name", text: $draft.name, identifier: "field-name", error: visibleError(draft.nameError, for: .name), focus: .name)
 
             Picker("Protocol", selection: $draft.protocolID) {
                 ForEach(protocolChoices) { candidate in
@@ -160,18 +166,35 @@ struct ConnectionEditorView: View {
                 .foregroundColor(colors.error)
             }
 
-            labeledField("Host", text: $draft.host, identifier: "field-host", error: draft.hostError, focus: .host)
+            labeledField("Host", text: $draft.host, identifier: "field-host", error: visibleError(draft.hostError, for: .host), focus: .host)
                 .keyboardType(.URL)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
 
-            labeledField("Port", text: $draft.port, identifier: "field-port", error: draft.portError, focus: .port)
+            labeledField("Port", text: $draft.port, identifier: "field-port", error: visibleError(draft.portError, for: .port), focus: .port)
                 .keyboardType(UIDevice.current.userInterfaceIdiom == .pad ? .numbersAndPunctuation : .numberPad)
 
-            labeledField("Username", text: $draft.username, identifier: "field-username", error: draft.usernameError, focus: .username)
+            labeledField("Username", text: $draft.username, identifier: "field-username", error: visibleError(draft.usernameError, for: .username), focus: .username)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
         }
+    }
+
+    private func visibleError(_ error: String?, for field: FocusField) -> String? {
+        guard touchedFields.contains(field) || saveAttempted else { return nil }
+        return error
+    }
+
+    /// Wraps a field binding so the first edit marks the field touched,
+    /// arming its inline error from that keystroke on.
+    private func touchedBinding(_ binding: Binding<String>, field: FocusField) -> Binding<String> {
+        Binding(
+            get: { binding.wrappedValue },
+            set: { newValue in
+                touchedFields.insert(field)
+                binding.wrappedValue = newValue
+            }
+        )
     }
 
     private struct ProtocolChoice: Identifiable {
@@ -202,7 +225,12 @@ struct ConnectionEditorView: View {
             if draft.protocolID == ProtocolDescriptor.ssh.id {
                 Picker("Authentication", selection: Binding(
                     get: { draft.authMethod },
-                    set: { draft.switchAuthMethod(to: $0) }
+                    set: {
+                        draft.switchAuthMethod(to: $0)
+                        // Choosing password mode is itself the interaction
+                        // that arms the (still empty) password field's error.
+                        if $0 == .password { touchedFields.insert(.password) }
+                    }
                 )) {
                     Text("Key").tag(AuthMethod.publickey)
                     Text("Password").tag(AuthMethod.password)
@@ -218,12 +246,13 @@ struct ConnectionEditorView: View {
                             .font(typography.body)
                             .foregroundColor(colors.foreground)
                         Spacer()
-                        SecureField("", text: $draft.passwordInput)
+                        SecureField("", text: touchedBinding($draft.passwordInput, field: .password))
                             .font(typography.body)
                             .foregroundColor(colors.foreground)
                             .multilineTextAlignment(.trailing)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
+                            .accessibilityLabel("Password")
                             .accessibilityIdentifier("password-field")
                     }
                     if draft.hasSavedPassword, draft.passwordInput.isEmpty {
@@ -231,7 +260,7 @@ struct ConnectionEditorView: View {
                             .font(typography.caption)
                             .foregroundColor(colors.success)
                             .accessibilityIdentifier("password-saved-badge")
-                    } else if let error = draft.passwordError {
+                    } else if let error = visibleError(draft.passwordError, for: .password) {
                         Text(error)
                             .font(typography.caption)
                             .foregroundColor(colors.error)
@@ -268,9 +297,9 @@ struct ConnectionEditorView: View {
                     .font(typography.body)
                     .foregroundColor(colors.foreground)
                 if draft.keyReference.isEmpty {
-                    Text(draft.keyError ?? "Select a key")
+                    Text(saveAttempted ? (draft.keyError ?? "Select a key") : "Select a key")
                         .font(typography.caption)
-                        .foregroundColor(draft.keyError == nil ? colors.dimmed : colors.error)
+                        .foregroundColor(saveAttempted && draft.keyError != nil ? colors.error : colors.dimmed)
                 } else {
                     Text(draft.keyLabel.isEmpty ? draft.keyReference : draft.keyLabel)
                         .font(typography.caption)
@@ -355,6 +384,8 @@ struct ConnectionEditorView: View {
             Button("Edit") { hopSheetTarget = HopSheetTarget(index: index) }
                 .font(typography.caption)
                 .foregroundColor(colors.accent)
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
                 .accessibilityIdentifier("edit-hop-\(index)")
 
             Button {
@@ -363,6 +394,9 @@ struct ConnectionEditorView: View {
                 Image(systemName: "trash")
             }
             .foregroundColor(colors.error)
+            .frame(minWidth: 44, minHeight: 44)
+            .contentShape(Rectangle())
+            .accessibilityLabel("Delete hop")
             .accessibilityIdentifier("delete-hop-\(index)")
         }
         .buttonStyle(.borderless)
@@ -450,13 +484,14 @@ struct ConnectionEditorView: View {
                     .font(typography.body)
                     .foregroundColor(colors.foreground)
                 Spacer()
-                TextField("", text: text)
+                TextField("", text: touchedBinding(text, field: focus))
                     .font(typography.body)
                     .foregroundColor(colors.foreground)
                     .multilineTextAlignment(.trailing)
                     .focused($focus, equals: focus)
                     .submitLabel(.done)
                     .onSubmit { self.focus = nil }
+                    .accessibilityLabel(label)
                     .accessibilityIdentifier(identifier)
             }
             if let error {
@@ -481,6 +516,7 @@ struct ConnectionEditorView: View {
     }
 
     private func persist(connectAfterSave: Bool) {
+        saveAttempted = true
         saveError = nil
         do {
             let connection = try draft.makeConnection()

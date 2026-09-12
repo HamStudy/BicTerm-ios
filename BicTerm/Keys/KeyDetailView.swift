@@ -34,6 +34,7 @@ struct KeyDetailView: View {
                             Image(systemName: "faceid")
                                 .font(typography.caption)
                                 .foregroundColor(colors.accent)
+                                .accessibilityHidden(true)
                         }
                     }
                     LabeledContent {
@@ -91,6 +92,8 @@ struct KeyDetailView: View {
                                 .background(colors.accent.opacity(0.18), in: Capsule())
                         }
                         .buttonStyle(.borderless)
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
                         .accessibilityIdentifier("copy-public-key")
                         copyConfirmationLabel
                         ShareLink(item: item.authorizedKeysLine) {
@@ -102,6 +105,8 @@ struct KeyDetailView: View {
                                 .background(colors.accent.opacity(0.18), in: Capsule())
                         }
                         .buttonStyle(.borderless)
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
                         .accessibilityIdentifier("share-public-key")
                     }
                     .buttonStyle(.borderless)

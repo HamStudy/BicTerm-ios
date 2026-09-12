@@ -14,10 +14,16 @@ struct HopEditorView: View {
     @State private var draft: HopDraft
     let isEditing: Bool
     let onFinish: (HopDraft) -> Void
+    /// Validation timing mirrors ConnectionEditorView: an error renders only
+    /// after its field was edited (or password mode chosen) or a save was
+    /// attempted — a pristine blank hop never shows red. Save gating stays
+    /// eager via `draft.isComplete`.
+    @State private var touchedFields: Set<FocusField> = []
+    @State private var saveAttempted = false
     @FocusState private var focus: FocusField?
 
     enum FocusField {
-        case host, port, username
+        case host, port, username, password
     }
 
     init(
@@ -44,17 +50,37 @@ struct HopEditorView: View {
     }
 
     private var hostError: String? {
-        draft.host.trimmingCharacters(in: .whitespaces).isEmpty
-            ? "Host is required"
-            : (ConnectionFieldValidation.isValidHostname(draft.host) ? nil : "Invalid hop hostname")
+        visibleError(
+            draft.host.trimmingCharacters(in: .whitespaces).isEmpty
+                ? "Host is required"
+                : (ConnectionFieldValidation.isValidHostname(draft.host) ? nil : "Invalid hop hostname"),
+            for: .host
+        )
     }
 
     private var portError: String? {
-        HopPort.errorDescription(draft.port, field: "Port")
+        visibleError(HopPort.errorDescription(draft.port, field: "Port"), for: .port)
     }
 
     private var usernameError: String? {
-        ConnectionFieldValidation.usernameError(draft.username)
+        visibleError(ConnectionFieldValidation.usernameError(draft.username), for: .username)
+    }
+
+    private func visibleError(_ error: String?, for field: FocusField) -> String? {
+        guard touchedFields.contains(field) || saveAttempted else { return nil }
+        return error
+    }
+
+    /// Wraps a field binding so the first edit marks the field touched,
+    /// arming its inline error from that keystroke on.
+    private func touchedBinding(_ binding: Binding<String>, field: FocusField) -> Binding<String> {
+        Binding(
+            get: { binding.wrappedValue },
+            set: { newValue in
+                touchedFields.insert(field)
+                binding.wrappedValue = newValue
+            }
+        )
     }
 
     var body: some View {
@@ -75,7 +101,10 @@ struct HopEditorView: View {
 
                     Picker("Authentication", selection: Binding(
                         get: { draft.authMethod },
-                        set: { draft.switchAuthMethod(to: $0) }
+                        set: {
+                            draft.switchAuthMethod(to: $0)
+                            if $0 == .password { touchedFields.insert(.password) }
+                        }
                     )) {
                         Text("Key").tag(AuthMethod.publickey)
                         Text("Password").tag(AuthMethod.password)
@@ -90,12 +119,13 @@ struct HopEditorView: View {
                                     .font(typography.body)
                                     .foregroundColor(colors.foreground)
                                 Spacer()
-                                SecureField("", text: $draft.passwordInput)
+                                SecureField("", text: touchedBinding($draft.passwordInput, field: .password))
                                     .font(typography.body)
                                     .foregroundColor(colors.foreground)
                                     .multilineTextAlignment(.trailing)
                                     .textInputAutocapitalization(.never)
                                     .autocorrectionDisabled()
+                                    .accessibilityLabel("Password")
                                     .accessibilityIdentifier("hop-password-field")
                             }
                             if draft.hasSavedPassword, draft.passwordInput.isEmpty {
@@ -120,7 +150,11 @@ struct HopEditorView: View {
                                     .foregroundColor(colors.foreground)
                                 Text(draft.keyReference.isEmpty ? "Select a key" : draft.keyLabel)
                                     .font(typography.caption)
-                                    .foregroundColor(draft.keyReference.isEmpty ? colors.error : colors.accent)
+                                    .foregroundColor(
+                                        draft.keyReference.isEmpty
+                                            ? (saveAttempted ? colors.error : colors.dimmed)
+                                            : colors.accent
+                                    )
                             }
                         }
                         .accessibilityIdentifier("hop-key-selector")
@@ -145,6 +179,7 @@ struct HopEditorView: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Save") {
+                        saveAttempted = true
                         originalDraft = draft
                         onFinish(draft)
                         dismiss()
@@ -189,13 +224,14 @@ struct HopEditorView: View {
                     .font(typography.body)
                     .foregroundColor(colors.foreground)
                 Spacer()
-                TextField("", text: text)
+                TextField("", text: touchedBinding(text, field: focus))
                     .font(typography.body)
                     .foregroundColor(colors.foreground)
                     .multilineTextAlignment(.trailing)
                     .focused($focus, equals: focus)
                     .submitLabel(.done)
                     .onSubmit { self.focus = nil }
+                    .accessibilityLabel(label)
                     .accessibilityIdentifier(identifier)
             }
             if let error {

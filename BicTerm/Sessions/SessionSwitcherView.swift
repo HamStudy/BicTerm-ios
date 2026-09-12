@@ -104,9 +104,9 @@ private struct SessionSwitcherRow: View {
         HStack(spacing: spacing.sm) {
             if hasUnseenOutput {
                 Text("●")
-                    .font(.system(size: 10))
+                    .font(.system(size: 12))
                     .foregroundColor(colors.accent)
-                    .accessibilityLabel("Unread output")
+                    .accessibilityLabel("Unread activity")
                     .accessibilityIdentifier("switcher-unread-\(key)")
             }
 
@@ -144,6 +144,8 @@ private struct SessionSwitcherRow: View {
                     .font(.title3)
                     .foregroundColor(colors.dimmed)
             }
+            .frame(minWidth: 44, minHeight: 44)
+            .contentShape(Rectangle())
             .accessibilityLabel("Close session")
             .accessibilityIdentifier("switcher-close-\(key)")
         }

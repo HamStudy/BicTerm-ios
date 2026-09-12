@@ -124,6 +124,14 @@ final class TerminalToolbarHostView: UIView {
         self.terminalView = terminalView
         // Matches SwiftTerm's own docked accessory heights
         // (setupAccessoryView: 36 on phone, 48 otherwise).
+        // Accessibility note: the strip's buttons live in the VENDORED
+        // SwiftTerm TerminalAccessory (UIKit), so the 36pt phone strip and
+        // its sub-44pt keys are upstream's layout, not app code — raising
+        // the height here would leave the vendored button layout
+        // vertically misaligned. The 44pt minimum is therefore met only by
+        // the chrome toggle that shows/hides this strip; the strip keys
+        // stay at the vendored size until a SwiftTerm fork hunk (recorded
+        // in Vendor/SwiftTerm/BICTERM-PATCH.md) takes ownership of them.
         accessoryHeight = UIDevice.current.userInterfaceIdiom == .phone ? 36 : 48
         accessoryView = TerminalAccessory(
             frame: CGRect(x: 0, y: 0, width: 320, height: accessoryHeight),

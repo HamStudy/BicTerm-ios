@@ -521,6 +521,58 @@ final class ConnectionEditorUITests: XCTestCase {
         return button
     }
 
+    // MARK: Validation timing — no red on pristine blank forms
+
+    /// A freshly opened editor must not flag required-but-empty fields;
+    /// the inline error arms only after the field is edited (or a save is
+    /// attempted, which stays gated off while the draft is invalid).
+    func testBlankConnectionFormShowsNoFieldErrorsUntilEdited() {
+        launchApp(reset: true)
+        openEditorForNewConnection()
+
+        XCTAssertFalse(app.staticTexts["field-name-error"].exists,
+                       "a pristine blank form must not flag the name field")
+        XCTAssertFalse(app.staticTexts["field-host-error"].exists,
+                       "a pristine blank form must not flag the host field")
+        XCTAssertFalse(app.staticTexts["field-username-error"].exists,
+                       "a pristine blank form must not flag the username field")
+
+        typeInto(app.textFields["field-host"], "bad_host")
+        let hostError = app.staticTexts["field-host-error"]
+        XCTAssertTrue(hostError.waitForExistence(timeout: 5),
+                      "editing a field must arm its inline error")
+        XCTAssertEqual(hostError.label, "Invalid hostname")
+    }
+
+    func testBlankHopFormShowsNoFieldErrorsUntilEdited() {
+        launchApp(reset: true)
+        openEditorForNewConnection()
+
+        let addHop = app.buttons["add-hop"]
+        scrollToHittable(addHop)
+        addHop.tap()
+
+        let hostField = app.textFields["hop-field-host"]
+        XCTAssertTrue(hostField.waitForExistence(timeout: 10))
+        XCTAssertFalse(app.staticTexts["hop-field-host-error"].exists,
+                       "a pristine blank hop must not flag the host field")
+        XCTAssertFalse(app.staticTexts["hop-field-username-error"].exists,
+                       "a pristine blank hop must not flag the username field")
+
+        typeInto(hostField, "bad_host")
+        XCTAssertTrue(app.staticTexts["hop-field-host-error"].waitForExistence(timeout: 5),
+                      "editing a hop field must arm its inline error")
+
+        app.buttons["cancel-hop"].tap()
+        dialogButton(identifier: "discard-confirm", label: "Discard Changes").tap()
+        XCTAssertTrue(app.textFields["field-name"].waitForExistence(timeout: 5),
+                      "discarding the hop must return to the connection editor")
+
+        app.buttons["cancel-editor"].tap()
+        XCTAssertFalse(app.descendants(matching: .any)["discard-changes-dialog"].exists,
+                       "the parent draft was never touched — no discard prompt")
+    }
+
     // MARK: Helpers
 
     private func launchApp(reset: Bool) {

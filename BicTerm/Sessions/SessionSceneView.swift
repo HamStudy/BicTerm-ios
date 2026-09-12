@@ -131,6 +131,8 @@ struct SessionSceneView: View {
                 Image(systemName: "keyboard")
                     .font(.title3)
             }
+            .frame(minWidth: 44, minHeight: 44)
+            .contentShape(Rectangle())
             .accessibilityLabel("Terminal toolbar")
             .accessibilityIdentifier("terminal-toolbar-toggle")
             .foregroundColor(store.terminalToolbar.isVisible ? colors.accent : colors.dimmed)
@@ -141,6 +143,8 @@ struct SessionSceneView: View {
                 Image(systemName: "rectangle.on.rectangle")
                     .font(.title3)
             }
+            .frame(minWidth: 44, minHeight: 44)
+            .contentShape(Rectangle())
             .accessibilityLabel("Sessions")
             .accessibilityIdentifier("scene-sessions")
             .foregroundColor(colors.dimmed)
@@ -151,6 +155,8 @@ struct SessionSceneView: View {
                 Image(systemName: "xmark.circle.fill")
                     .font(.title3)
             }
+            .frame(minWidth: 44, minHeight: 44)
+            .contentShape(Rectangle())
             .accessibilityLabel("Close session")
             .accessibilityIdentifier("scene-close-\(sanitized)")
             .foregroundColor(colors.dimmed)
@@ -184,6 +190,8 @@ struct SessionSceneView: View {
                 Image(systemName: "xmark")
                     .font(.caption)
             }
+            .frame(minWidth: 44, minHeight: 44)
+            .contentShape(Rectangle())
             .accessibilityLabel("Dismiss notice")
             .accessibilityIdentifier("scene-scrollback-released-dismiss")
             .foregroundColor(colors.dimmed)
@@ -230,6 +238,8 @@ struct SessionSceneView: View {
                     }
                     .buttonStyle(.bordered)
                     .tint(colors.accent)
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
                     .accessibilityIdentifier("scene-reconnect-\(sanitized)")
                 }
             }

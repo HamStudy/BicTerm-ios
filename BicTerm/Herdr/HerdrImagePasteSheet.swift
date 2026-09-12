@@ -46,12 +46,16 @@ struct HerdrImagePasteSheet: View {
                 .foregroundStyle(.secondary)
             HStack {
                 Button("Cancel", role: .cancel, action: onCancel)
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
                     .accessibilityIdentifier("herdr-image-cancel")
                 Spacer()
                 Button("Send Image") {
                     onSend(includeMetadata, needsDownscale ? downscaleFactor : 1.0)
                 }
                 .buttonStyle(.borderedProminent)
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
                 .accessibilityIdentifier("herdr-image-send")
             }
         }

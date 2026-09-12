@@ -200,6 +200,8 @@ struct HerdrWorkspaceView: View {
                 Button("Detach", action: detach)
                     .font(typography.body)
                     .buttonStyle(.bordered)
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
                     .accessibilityIdentifier("herdr-detach")
                 // A plain gesture button, not UIPasteControl: the system
                 // control neither delivers responder-chain `paste(_:)` nor
@@ -210,11 +212,15 @@ struct HerdrWorkspaceView: View {
                 // path in the input field.
                 Button("Paste", action: beginPaste)
                     .buttonStyle(.bordered)
-                    .frame(width: 88, height: 32)
+                    .frame(width: 88, height: 44)
+                    .contentShape(Rectangle())
                     .accessibilityIdentifier("herdr-paste-control")
                 PhotosPicker(selection: $photoSelection, matching: .images) {
                     Image(systemName: "photo")
                 }
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
+                .accessibilityLabel("Insert Photo")
                 .accessibilityIdentifier("herdr-insert-photo")
                 .onChange(of: photoSelection) { _, item in
                     guard let item else { return }
@@ -225,6 +231,8 @@ struct HerdrWorkspaceView: View {
             Button("Disconnect", action: disconnect)
                 .font(typography.body)
                 .buttonStyle(.bordered)
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
                 .accessibilityIdentifier("herdr-disconnect")
         }
         .padding([.horizontal, .top], spacing.sm)
@@ -286,6 +294,8 @@ struct HerdrWorkspaceView: View {
             }
             .font(typography.body)
             .buttonStyle(.bordered)
+            .frame(minWidth: 44, minHeight: 44)
+            .contentShape(Rectangle())
             .accessibilityIdentifier("herdr-reconnect-cancel")
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -412,6 +422,8 @@ struct HerdrWorkspaceView: View {
                 }
                 .font(typography.caption)
                 .buttonStyle(.bordered)
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
                 .accessibilityIdentifier("herdr-copy-remote")
                 Button("Always for This Host") {
                     guard let id = model.selectedEndpointID else { return }
@@ -419,6 +431,8 @@ struct HerdrWorkspaceView: View {
                 }
                 .font(typography.caption)
                 .buttonStyle(.bordered)
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
                 .accessibilityIdentifier("herdr-autocopy-remote")
             }
             .padding(.horizontal, spacing.sm)
@@ -502,7 +516,12 @@ struct HerdrWorkspaceView: View {
                         if let cwd = pane.cwd {
                             Text(cwd)
                                 .font(typography.caption)
-                                .foregroundStyle(colors.dimmed)
+                                // dimmed on the focused pane's selection@0.6
+                                // fill measures ~4.0:1 — below WCAG AA; a
+                                // 0.7-weight foreground keeps the secondary
+                                // hierarchy at ~6:1. Unfocused panes (0.25
+                                // fill) keep dimmed at ~5.3:1.
+                                .foregroundStyle(pane.focused ? colors.foreground.opacity(0.7) : colors.dimmed)
                                 .lineLimit(1)
                                 .truncationMode(.middle)
                         }

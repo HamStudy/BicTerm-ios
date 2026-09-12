@@ -25,6 +25,7 @@ An iOS 18+ SSH terminal client for iPhone and iPad, built on
 - **Graceful reconnect** — background suspends, foreground re-handshakes; no auto-reconnect after kill
 - **Herdr client** — workspace handshake, native surface rendering, semantic keyboard/focus/resize input, clipboard text and bounded image paste, probe diagnostics, detach/reconnect
 - **Transport abstraction** — SSH is one conformer; ET/mosh can be added later without touching session layers
+- **Accessibility** — VoiceOver labels on every icon-only control (session chrome, switcher, key management, herdr header) and on editor text fields; 44×44pt minimum touch targets on app-layer controls (the vendored SwiftTerm accessory strip excepted); editor validation arms only after a field is touched, so pristine blank forms show no red; SSH key fingerprints render full-length over two lines — the distinguishing tail is never middle-truncated or shrunk
 
 ### Terminal mouse and clipboard
 

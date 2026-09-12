@@ -95,6 +95,7 @@ struct KeyListView: View {
                     Image(systemName: "plus")
                         .foregroundColor(colors.accent)
                 }
+                .accessibilityLabel("Add Key")
                 .accessibilityIdentifier("keys-add-menu")
             }
         }
@@ -127,8 +128,7 @@ struct KeyRowView: View {
             Text(item.metadata.fingerprint)
                 .font(typography.caption)
                 .foregroundColor(colors.dimmed)
-                .lineLimit(1)
-                .minimumScaleFactor(0.5)
+                .lineLimit(2)
                 .accessibilityIdentifier("key-fingerprint")
             if let created = item.createdDate {
                 Text("Created \(created.formatted(date: .abbreviated, time: .omitted))")
