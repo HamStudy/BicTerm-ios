@@ -53,6 +53,17 @@ final class StoredSessionSnapshot {
     }
 }
 
+@Model
+final class StoredHerd {
+    @Attribute(.unique) var id: UUID
+    var payload: Data
+
+    init(id: UUID, payload: Data) {
+        self.id = id
+        self.payload = payload
+    }
+}
+
 enum PersistenceCodec {
     static func encode<Value: Encodable>(
         _ value: Value,

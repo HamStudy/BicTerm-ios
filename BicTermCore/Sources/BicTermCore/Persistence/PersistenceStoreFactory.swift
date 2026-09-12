@@ -44,6 +44,20 @@ public enum PersistenceStoreFactory {
         return SwiftDataSessionSnapshotStore(modelContainer: container)
     }
 
+    public static func makeHerdStore(
+        inMemoryOnly: Bool = false,
+        storeURL: URL? = nil
+    ) throws(PersistenceError) -> SwiftDataHerdStore {
+        let schema = Schema([StoredHerd.self])
+        let container = try makeContainer(
+            name: "BicTermHerds",
+            schema: schema,
+            inMemoryOnly: inMemoryOnly,
+            storeURL: storeURL
+        )
+        return SwiftDataHerdStore(modelContainer: container)
+    }
+
     private static func makeContainer(
         name: String,
         schema: Schema,

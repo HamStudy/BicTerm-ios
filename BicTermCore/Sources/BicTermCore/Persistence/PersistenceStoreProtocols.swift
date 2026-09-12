@@ -13,3 +13,10 @@ public protocol SessionSnapshotStoreProtocol: Sendable {
     func save(_ snapshot: SessionSnapshot) async throws(PersistenceError)
     func deleteSnapshot(sceneID: String) async throws(PersistenceError)
 }
+
+public protocol HerdStoreProtocol: Sendable {
+    func loadHerds() async throws(PersistenceError) -> [Herd]
+    func herd(id: UUID) async throws(PersistenceError) -> Herd?
+    func save(_ herd: Herd) async throws(PersistenceError)
+    func deleteHerd(id: UUID) async throws(PersistenceError)
+}

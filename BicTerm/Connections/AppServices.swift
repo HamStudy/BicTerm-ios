@@ -17,6 +17,7 @@ final class AppServices {
 
     let protocols: [ProtocolDescriptor]
     let connectionStore: any ConnectionStoreProtocol
+    let herdStore: any HerdStoreProtocol
     let keyRepository = KeychainKeyRepository()
     let passwordStore: any PasswordStoring
 
@@ -36,6 +37,7 @@ final class AppServices {
         self.protocols = [ProtocolDescriptor.ssh]
 
         self.connectionStore = Self.makeConfigurationStore()
+        self.herdStore = Self.makeHerdStore()
         self.passwordStore = KeychainPasswordStore()
 
         #if DEBUG
@@ -61,6 +63,24 @@ final class AppServices {
         return InMemoryConnectionStore()
     }
 
+    private static func makeHerdStore() -> any HerdStoreProtocol {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--uitest-fail-persistence") {
+            return FailingHerdStore()
+        }
+        #endif
+
+        if let store = try? PersistenceStoreFactory.makeHerdStore() {
+            return store
+        }
+
+        if let store = try? PersistenceStoreFactory.makeHerdStore(inMemoryOnly: true) {
+            return store
+        }
+
+        return InMemoryHerdStore()
+    }
+
     func descriptor(forProtocolID id: String) -> ProtocolDescriptor? {
         registry.descriptor(forProtocolID: id)
     }
@@ -78,6 +98,20 @@ private actor FailingConnectionStore: ConnectionStoreProtocol {
     }
 
     func deleteConnection(id: UUID) async throws(PersistenceError) {
+        throw .operationFailed("the test store rejected the delete")
+    }
+}
+
+private actor FailingHerdStore: HerdStoreProtocol {
+    func loadHerds() async throws(PersistenceError) -> [Herd] { [] }
+
+    func herd(id: UUID) async throws(PersistenceError) -> Herd? { nil }
+
+    func save(_ herd: Herd) async throws(PersistenceError) {
+        throw .operationFailed("the test store rejected the write")
+    }
+
+    func deleteHerd(id: UUID) async throws(PersistenceError) {
         throw .operationFailed("the test store rejected the delete")
     }
 }
@@ -113,6 +147,29 @@ private actor InMemoryConnectionStore: ConnectionStoreProtocol {
     }
 
     func deleteConnection(id: UUID) async throws(PersistenceError) {
+        storage[id] = nil
+    }
+}
+
+/// Last-resort herd store mirroring ``InMemoryConnectionStore``: a SwiftData
+/// initialization failure degrades to session-only herd support instead of a
+/// crash.
+private actor InMemoryHerdStore: HerdStoreProtocol {
+    private var storage: [UUID: Herd] = [:]
+
+    func loadHerds() async throws(PersistenceError) -> [Herd] {
+        storage.values.sorted { $0.name < $1.name }
+    }
+
+    func herd(id: UUID) async throws(PersistenceError) -> Herd? {
+        storage[id]
+    }
+
+    func save(_ herd: Herd) async throws(PersistenceError) {
+        storage[herd.id] = herd
+    }
+
+    func deleteHerd(id: UUID) async throws(PersistenceError) {
         storage[id] = nil
     }
 }
