@@ -68,6 +68,10 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.bicterm.app
         TARGETED_DEVICE_FAMILY: "1,2"
+        # HamStudy Org LLC — automatic signing for device builds; simulator
+        # builds ignore code signing entirely.
+        DEVELOPMENT_TEAM: BALVL8YD22
+        CODE_SIGN_STYLE: Automatic
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
