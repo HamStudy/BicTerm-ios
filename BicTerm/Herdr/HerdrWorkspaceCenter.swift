@@ -15,6 +15,19 @@ final class HerdrWorkspaceCenter {
         let id: UUID
         let label: String
         let model: HerdrSessionModel
+        let herd: HerdSessionCoordinator.HerdDescriptor?
+
+        init(
+            id: UUID,
+            label: String,
+            model: HerdrSessionModel,
+            herd: HerdSessionCoordinator.HerdDescriptor? = nil
+        ) {
+            self.id = id
+            self.label = label
+            self.model = model
+            self.herd = herd
+        }
     }
 
     private(set) var entries: [Entry] = []
@@ -24,6 +37,15 @@ final class HerdrWorkspaceCenter {
         let model = HerdrSessionModel()
         let label = connect(model)
         entries.append(Entry(id: id, label: label, model: model))
+        return id
+    }
+
+    /// Herd workspace: one model shared by every machine endpoint, plus the
+    /// machine catalog the chrome renders its switcher from.
+    func openHerd(_ herd: HerdSessionCoordinator.HerdDescriptor) -> UUID {
+        let id = UUID()
+        let model = HerdrSessionModel()
+        entries.append(Entry(id: id, label: herd.herdName, model: model, herd: herd))
         return id
     }
 

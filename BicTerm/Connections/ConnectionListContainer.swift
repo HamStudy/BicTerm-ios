@@ -16,6 +16,7 @@ struct ConnectionListContainer: View {
     @State private var restorableSessions: [SessionStore.RestorableSession] = []
     @State private var switcherPresented = false
     @State private var herdrConnect = HerdrConnectCoordinator()
+    @State private var herdConnect = HerdSessionCoordinator()
 
     private struct HerdrCoverSession: Identifiable {
         let id: UUID
@@ -47,7 +48,8 @@ struct ConnectionListContainer: View {
                 onOpenSessions: { switcherPresented = true },
                 onForgetHost: { connection in
                     Task { await forgetHostData(connection) }
-                }
+                },
+                onOpenHerd: openHerd
             )
         }
         .fullScreenCover(item: $coverDescriptor) { descriptor in
@@ -142,6 +144,28 @@ struct ConnectionListContainer: View {
             .presentationDetents([.large])
             .terminalStyle()
         }
+        .sheet(
+            item: Binding(
+                get: { herdConnect.trustPrompt },
+                set: { herdConnect.trustPrompt = $0 }
+            )
+        ) { prompt in
+            HostTrustPromptView(
+                challenge: SessionStore.HostTrustChallenge(
+                    host: prompt.challenge.host,
+                    port: prompt.challenge.port,
+                    algorithm: prompt.challenge.algorithm,
+                    fingerprint: prompt.challenge.fingerprint,
+                    publicKeyData: prompt.challenge.publicKeyData
+                ),
+                errorMessage: nil,
+                onTrust: { herdConnect.resolveTrustPrompt(true) },
+                onCancel: { herdConnect.resolveTrustPrompt(false) }
+            )
+            .interactiveDismissDisabled(true)
+            .presentationDetents([.large])
+            .terminalStyle()
+        }
         .alert(
             "Can’t Connect",
             isPresented: Binding(
@@ -188,6 +212,14 @@ struct ConnectionListContainer: View {
     private func fireHerdrConnect(_ connection: Connection) {
         herdrConnect.handleConnect(
             connection,
+            hostKeyVerifier: store.hostKeyVerifier,
+            present: { sessionID in presentHerdr(sessionID: sessionID) }
+        )
+    }
+
+    private func openHerd(_ herd: Herd) {
+        herdConnect.open(
+            herd,
             hostKeyVerifier: store.hostKeyVerifier,
             present: { sessionID in presentHerdr(sessionID: sessionID) }
         )

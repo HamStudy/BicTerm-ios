@@ -10,7 +10,7 @@ import Observation
 @MainActor
 @Observable
 final class HerdsModel {
-    private let services: AppServices
+    private let connectionStore: any ConnectionStoreProtocol
     private let herdStore: any HerdStoreProtocol
 
     private(set) var herds: [Herd] = []
@@ -18,8 +18,16 @@ final class HerdsModel {
     var loadError: String?
 
     init(services: AppServices = .shared) {
-        self.services = services
+        self.connectionStore = services.connectionStore
         self.herdStore = services.herdStore
+    }
+
+    init(
+        connectionStore: any ConnectionStoreProtocol,
+        herdStore: any HerdStoreProtocol
+    ) {
+        self.connectionStore = connectionStore
+        self.herdStore = herdStore
     }
 
     func bootstrap() async {
@@ -32,7 +40,7 @@ final class HerdsModel {
     func reload() async {
         do {
             herds = try await herdStore.loadHerds()
-            connections = try await services.connectionStore.loadConnections()
+            connections = try await connectionStore.loadConnections()
             loadError = nil
         } catch {
             loadError = "Couldn't load herds: \(error.localizedDescription)"
@@ -154,7 +162,7 @@ final class HerdsModel {
         machineConnectionNames: [String],
         sessionNames: [String?]
     ) async {
-        let existing = (try? await services.connectionStore.loadConnections()) ?? []
+        let existing = (try? await connectionStore.loadConnections()) ?? []
         let machines = machineConnectionNames.enumerated().compactMap { index, connectionName -> HerdMachine? in
             guard let connection = existing.first(where: { $0.name == connectionName }) else { return nil }
             return try? HerdMachine(

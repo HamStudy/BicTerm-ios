@@ -276,5 +276,31 @@ enum HerdrWorkspaceUITest {
             }
         }
     }
+
+    /// Herd live E2E: same start condition as
+    /// ``startLiveInjectionWhenReady(model:endpoint:)`` but keyed to the
+    /// model's SELECTED endpoint, so the spec's first text token lands on
+    /// the machine the herd restored as selected. Later tokens can gate on
+    /// `await:echo:chip:<label>` — selection switches record into the same
+    /// echo surface the injector polls.
+    @MainActor
+    static func startHerdInjectionWhenReady(model: HerdrSessionModel) {
+        guard liveConnectEnabled, keyInjector == nil else { return }
+        let injector = TestHardwareKeyInjector(spec: hwkeysSpec)
+        guard let injector else { return }
+        keyInjector = injector
+        Task { @MainActor in
+            let deadline = Date().addingTimeInterval(90)
+            while Date() < deadline {
+                if let id = model.selectedEndpointID,
+                   let state = model.endpoints[id],
+                   state.phase == .online, state.surface != nil {
+                    injector.startNow()
+                    return
+                }
+                try? await Task.sleep(for: .milliseconds(200))
+            }
+        }
+    }
 }
 #endif
