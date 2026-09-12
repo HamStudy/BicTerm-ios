@@ -418,6 +418,109 @@ final class ConnectionEditorUITests: XCTestCase {
         XCTAssertFalse(error.exists, "editing before a retry must clear the stale save error")
     }
 
+    // MARK: Dirty-draft discard confirmation
+
+    func testDirtyNewConnectionCancelPromptsAndDiscards() {
+        launchApp(reset: true)
+        openEditorForNewConnection()
+        typeInto(app.textFields["field-host"], "dirty.example.com")
+
+        app.buttons["cancel-editor"].tap()
+
+        XCTAssertTrue(
+            app.descendants(matching: .any)["discard-changes-dialog"].waitForExistence(timeout: 5),
+            "cancelling a dirty draft must prompt before losing it"
+        )
+        XCTAssertTrue(app.staticTexts["Discard Changes?"].exists)
+
+        dialogButton(identifier: "discard-confirm", label: "Discard Changes").tap()
+
+        let editorGone = NSPredicate(format: "exists == false")
+        expectation(for: editorGone, evaluatedWith: app.buttons["cancel-editor"])
+        waitForExpectations(timeout: 10)
+        XCTAssertFalse(app.buttons["connection-dirty"].exists, "a discarded draft must not persist")
+    }
+
+    func testDirtyNewConnectionKeepEditingPreservesDraft() {
+        launchApp(reset: true)
+        openEditorForNewConnection()
+        typeInto(app.textFields["field-host"], "keep.example.com")
+
+        app.buttons["cancel-editor"].tap()
+
+        XCTAssertTrue(
+            app.descendants(matching: .any)["discard-changes-dialog"].waitForExistence(timeout: 5),
+            "cancelling a dirty draft must prompt"
+        )
+        dialogButton(identifier: "discard-cancel", label: "Keep Editing").tap()
+
+        let host = app.textFields["field-host"]
+        XCTAssertTrue(host.waitForExistence(timeout: 5), "Keep Editing must stay in the editor")
+        XCTAssertEqual(host.value as? String, "keep.example.com", "Keep Editing must preserve the draft")
+
+        app.buttons["cancel-editor"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["discard-changes-dialog"].waitForExistence(timeout: 5))
+        dialogButton(identifier: "discard-confirm", label: "Discard Changes").tap()
+    }
+
+    func testCleanExistingConnectionCancelsWithoutPrompting() {
+        app.launchArguments = ["--uitest-reset", "--uitest-demo"]
+        app.launch()
+        openEditorForConnection(named: "Demo-Jump-Chain")
+
+        app.buttons["cancel-editor"].tap()
+
+        let editorGone = NSPredicate(format: "exists == false")
+        expectation(for: editorGone, evaluatedWith: app.buttons["cancel-editor"])
+        waitForExpectations(timeout: 5)
+        XCTAssertFalse(
+            app.descendants(matching: .any)["discard-changes-dialog"].exists,
+            "an untouched draft must never show the discard dialog"
+        )
+        XCTAssertFalse(app.staticTexts["Discard Changes?"].exists)
+    }
+
+    func testDirtyHopEditorCancelPromptsAndDiscards() {
+        launchApp(reset: true)
+        openEditorForNewConnection()
+
+        let addHop = app.buttons["add-hop"]
+        scrollToHittable(addHop)
+        addHop.tap()
+        let hostField = app.textFields["hop-field-host"]
+        XCTAssertTrue(hostField.waitForExistence(timeout: 10))
+        typeInto(hostField, "hop.example.com")
+
+        app.buttons["cancel-hop"].tap()
+
+        XCTAssertTrue(
+            app.descendants(matching: .any)["discard-changes-dialog"].waitForExistence(timeout: 5),
+            "cancelling a dirty hop draft must prompt"
+        )
+        dialogButton(identifier: "discard-confirm", label: "Discard Changes").tap()
+
+        let sheetGone = NSPredicate(format: "exists == false")
+        expectation(for: sheetGone, evaluatedWith: hostField)
+        waitForExpectations(timeout: 10)
+        XCTAssertTrue(
+            app.textFields["field-name"].waitForExistence(timeout: 5),
+            "discarding the hop must return to the connection editor"
+        )
+        XCTAssertFalse(app.staticTexts["hop-0-host"].exists, "a discarded hop must not enter the draft")
+
+        app.buttons["cancel-editor"].tap()
+    }
+
+    /// SwiftUI confirmationDialog actions surface under their SwiftUI
+    /// accessibilityIdentifier or their visible label depending on the OS
+    /// bridge; match either.
+    private func dialogButton(identifier: String, label: String) -> XCUIElement {
+        let predicate = NSPredicate(format: "identifier == %@ OR label == %@", identifier, label)
+        let button = app.buttons.matching(predicate).firstMatch
+        XCTAssertTrue(button.waitForExistence(timeout: 5), "dialog action \(label) must exist")
+        return button
+    }
+
     // MARK: Helpers
 
     private func launchApp(reset: Bool) {

@@ -7,6 +7,10 @@ struct HopEditorView: View {
     @Environment(\.terminalSpacing) var spacing
     @Environment(\.dismiss) private var dismiss
 
+    /// Snapshot of the incoming draft; dirty = working draft differs, so a
+    /// hop reverted to its original values cancels without prompting.
+    @State private var originalDraft: HopDraft
+    @State private var showDiscardConfirmation = false
     @State private var draft: HopDraft
     let isEditing: Bool
     let onFinish: (HopDraft) -> Void
@@ -22,8 +26,21 @@ struct HopEditorView: View {
         onFinish: @escaping (HopDraft) -> Void
     ) {
         self._draft = State(initialValue: draft)
+        self._originalDraft = State(initialValue: draft)
         self.isEditing = isEditing
         self.onFinish = onFinish
+    }
+
+    private var isDirty: Bool {
+        draft != originalDraft
+    }
+
+    private func cancelTapped() {
+        if isDirty {
+            showDiscardConfirmation = true
+        } else {
+            dismiss()
+        }
     }
 
     private var hostError: String? {
@@ -123,11 +140,12 @@ struct HopEditorView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Cancel") { dismiss() }
+                    Button("Cancel") { cancelTapped() }
                         .accessibilityIdentifier("cancel-hop")
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Save") {
+                        originalDraft = draft
                         onFinish(draft)
                         dismiss()
                     }
@@ -140,6 +158,22 @@ struct HopEditorView: View {
         .environment(\.terminalColors, colors)
         .environment(\.terminalTypography, typography)
         .environment(\.terminalSpacing, spacing)
+        .interactiveDismissDisabled(isDirty)
+        .confirmationDialog(
+            "Discard Changes?",
+            isPresented: $showDiscardConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Discard Changes", role: .destructive) { dismiss() }
+                .accessibilityIdentifier("discard-confirm")
+            // No .cancel role: iOS 26 compact dialogs render a cancel-role
+            // action as outside-tap only, leaving VoiceOver/tests no button.
+            Button("Keep Editing") {}
+                .accessibilityIdentifier("discard-cancel")
+        }
+        // See ConnectionEditorView: the identifier rides the sheet root and
+        // is present only while the discard dialog is showing.
+        .accessibilityIdentifier(showDiscardConfirmation ? "discard-changes-dialog" : "hop-editor")
     }
 
     private func field(

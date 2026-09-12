@@ -12,6 +12,10 @@ struct ConnectionEditorView: View {
     let onConnect: (Connection) -> Void
 
     @State private var draft = ConnectionDraft()
+    /// Snapshot captured once on first appear (post-populate); dirty = working
+    /// draft differs from it, so reverted edits read clean again.
+    @State private var originalDraft: ConnectionDraft?
+    @State private var showDiscardConfirmation = false
     @State private var hopSheetTarget: HopSheetTarget?
     @State private var hopLimitMessage: String?
     @State private var saveError: String?
@@ -49,7 +53,7 @@ struct ConnectionEditorView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Cancel") { dismiss() }
+                    Button("Cancel") { cancelTapped() }
                         .accessibilityIdentifier("cancel-editor")
                 }
                         ToolbarItem(placement: .topBarTrailing) {
@@ -61,6 +65,9 @@ struct ConnectionEditorView: View {
             }
         .onAppear {
             populateDraft()
+            if originalDraft == nil {
+                originalDraft = draft
+            }
         }
             .onChange(of: draft) {
                 saveError = nil
@@ -84,6 +91,36 @@ struct ConnectionEditorView: View {
         .environment(\.terminalTypography, typography)
         .environment(\.terminalSpacing, spacing)
         .presentationSizing(.page)
+        .interactiveDismissDisabled(isDirty)
+        .confirmationDialog(
+            "Discard Changes?",
+            isPresented: $showDiscardConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Discard Changes", role: .destructive) { dismiss() }
+                .accessibilityIdentifier("discard-confirm")
+            // No .cancel role: iOS 26 compact dialogs render a cancel-role
+            // action as outside-tap only, leaving VoiceOver/tests no button.
+            Button("Keep Editing") {}
+                .accessibilityIdentifier("discard-cancel")
+        }
+        // System action sheets don't inherit SwiftUI identifiers; expose the
+        // dialog-presenting state on the sheet root instead (never present
+        // while the editor is clean).
+        .accessibilityIdentifier(showDiscardConfirmation ? "discard-changes-dialog" : "connection-editor")
+    }
+
+    private var isDirty: Bool {
+        guard let originalDraft else { return false }
+        return draft != originalDraft
+    }
+
+    private func cancelTapped() {
+        if isDirty {
+            showDiscardConfirmation = true
+        } else {
+            dismiss()
+        }
     }
 
     private var descriptor: ProtocolDescriptor? {
@@ -463,6 +500,7 @@ struct ConnectionEditorView: View {
                 switch result {
                 case .success:
                     await deleteOrphanedPasswordEntries(replacedBy: connection)
+                    originalDraft = draft
                     if connectAfterSave { onConnect(connection) }
                     dismiss()
                 case let .failure(error):
