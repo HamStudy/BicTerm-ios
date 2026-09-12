@@ -9,7 +9,6 @@ struct HopEditorView: View {
 
     @State private var draft: HopDraft
     let isEditing: Bool
-    let keys: [KeyMetadata]
     let onFinish: (HopDraft) -> Void
     @FocusState private var focus: FocusField?
 
@@ -20,12 +19,10 @@ struct HopEditorView: View {
     init(
         draft: HopDraft,
         isEditing: Bool,
-        keys: [KeyMetadata],
         onFinish: @escaping (HopDraft) -> Void
     ) {
         self._draft = State(initialValue: draft)
         self.isEditing = isEditing
-        self.keys = keys
         self.onFinish = onFinish
     }
 
@@ -94,7 +91,6 @@ struct HopEditorView: View {
                     } else {
                         NavigationLink {
                             KeyPickerView(
-                                keys: keys,
                                 selectedReference: draft.keyReference
                             ) { selected in
                                 draft.keyReference = selected.reference

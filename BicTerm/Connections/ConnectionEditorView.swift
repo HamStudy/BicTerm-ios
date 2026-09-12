@@ -68,8 +68,7 @@ struct ConnectionEditorView: View {
             .sheet(item: $hopSheetTarget) { target in
                 HopEditorView(
                     draft: target.index.map { draft.hops[$0] } ?? HopDraft(),
-                    isEditing: target.index != nil,
-                    keys: model.keys
+                    isEditing: target.index != nil
                 ) { finished in
                     if let index = target.index {
                         draft.hops[index] = finished
@@ -222,7 +221,7 @@ struct ConnectionEditorView: View {
 
     private var keyPickerRow: some View {
         NavigationLink {
-            KeyPickerView(keys: model.keys) { selected in
+            KeyPickerView(selectedReference: draft.keyReference) { selected in
                 draft.keyReference = selected.reference
                 draft.keyLabel = selected.label
             }

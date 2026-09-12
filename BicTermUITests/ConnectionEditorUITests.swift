@@ -159,6 +159,148 @@ final class ConnectionEditorUITests: XCTestCase {
                       "selected key label must appear on the key row")
     }
 
+    // MARK: Key picker — inline generate/import/copy + live list
+
+    private static let repoRoot = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+
+    private static let unencryptedFixture = repoRoot
+        .appendingPathComponent("Fixtures/keys/bicterm-fixture-ed25519")
+
+    /// Wipes every keychain key through the existing `-uitest-reset-keys`
+    /// seam (activated by the key-management cover), then dismisses the
+    /// cover so the connection list is reachable.
+    private func launchWithNoKeys(extraArguments: [String] = []) {
+        app.launchArguments = ["-uitest-keys-entry", "-uitest-reset-keys"] + extraArguments
+        app.launch()
+        XCTAssertTrue(
+            app.navigationBars["SSH Keys"].waitForExistence(timeout: 15),
+            "Key management entry did not appear"
+        )
+        app.buttons["keys-done"].tap()
+        XCTAssertTrue(app.buttons["add-connection"].waitForExistence(timeout: 10))
+    }
+
+    private func openKeyPickerForNewConnection() {
+        openEditorForNewConnection()
+        app.buttons["key-selector"].tap()
+        XCTAssertTrue(
+            app.navigationBars["Select Key"].waitForExistence(timeout: 5),
+            "Key picker did not open"
+        )
+    }
+
+    func testKeyPickerEmptyStateOffersGenerateAndImport() {
+        launchWithNoKeys()
+        openKeyPickerForNewConnection()
+
+        XCTAssertTrue(
+            app.descendants(matching: .any)["picker-empty-state"].waitForExistence(timeout: 5),
+            "Empty state must replace the inert text"
+        )
+        XCTAssertTrue(app.buttons["picker-empty-generate"].exists, "Empty state must offer Generate Key")
+        XCTAssertTrue(app.buttons["picker-empty-import"].exists, "Empty state must offer Import Key")
+        XCTAssertTrue(app.buttons["picker-add-menu"].exists, "Toolbar add menu must exist in the empty state")
+    }
+
+    func testGenerateKeyInlineAutoSelectsInEditor() {
+        launchWithNoKeys(extraArguments: ["-uitest-biometrics-bypass"])
+        openKeyPickerForNewConnection()
+
+        app.buttons["picker-empty-generate"].tap()
+        let labelField = app.textFields["generate-label"]
+        XCTAssertTrue(labelField.waitForExistence(timeout: 5), "Generate sheet must open over the picker")
+        typeInto(labelField, "Inline Key")
+        XCTAssertTrue(setToggle(app.switches["generate-biometrics"], on: false))
+
+        app.buttons["generate-save"].tap()
+
+        let keySelector = app.buttons["key-selector"]
+        XCTAssertTrue(
+            keySelector.waitForExistence(timeout: 10),
+            "Saving a key inline must auto-select it and return to the editor"
+        )
+        XCTAssertTrue(
+            keySelector.label.contains("Inline Key"),
+            "Editor key row must show the inline-generated key, got: \(keySelector.label)"
+        )
+    }
+
+    func testImportKeyInlineAutoSelectsInEditor() {
+        launchWithNoKeys(extraArguments: ["-uitest-seed-pasteboard", Self.unencryptedFixture.path])
+        openKeyPickerForNewConnection()
+
+        app.buttons["picker-empty-import"].tap()
+        let labelField = app.textFields["import-label"]
+        XCTAssertTrue(labelField.waitForExistence(timeout: 5), "Import sheet must open over the picker")
+        typeInto(labelField, "Inline Import")
+
+        app.buttons["import-paste"].tap()
+        let status = app.staticTexts["import-status"]
+        XCTAssertTrue(status.waitForExistence(timeout: 5))
+        XCTAssertTrue(
+            status.label.contains("unencrypted"),
+            "Seeded fixture must parse without a passphrase, got: \(status.label)"
+        )
+
+        app.buttons["import-save"].tap()
+
+        let keySelector = app.buttons["key-selector"]
+        XCTAssertTrue(
+            keySelector.waitForExistence(timeout: 10),
+            "Saving an imported key inline must auto-select it and return to the editor"
+        )
+        XCTAssertTrue(
+            keySelector.label.contains("Inline Import"),
+            "Editor key row must show the inline-imported key, got: \(keySelector.label)"
+        )
+    }
+
+    func testCopyPublicKeyFromPickerShowsConfirmation() {
+        launchApp(reset: true)
+        openKeyPickerForNewConnection()
+
+        let row = app.buttons["key-Fixture-Ed25519"]
+        XCTAssertTrue(row.waitForExistence(timeout: 5))
+        row.press(forDuration: 1.2)
+
+        let copyByIdentifier = app.buttons["copy-key-Fixture-Ed25519"]
+        let copyItem = copyByIdentifier.exists ? copyByIdentifier : app.buttons["Copy Public Key"]
+        XCTAssertTrue(copyItem.waitForExistence(timeout: 5), "Row context menu must offer Copy Public Key")
+        copyItem.tap()
+
+        let confirmation = app.staticTexts["copy-confirmation"]
+        XCTAssertTrue(
+            confirmation.waitForExistence(timeout: 5),
+            "Copy must surface app-observable confirmation state in the picker"
+        )
+        XCTAssertEqual(
+            confirmation.label, "Copied public key",
+            "Copy round-trip verification failed inside the app"
+        )
+    }
+
+    func testKeyPickerShowsCheckmarkForCurrentlySelectedKey() {
+        launchApp(reset: true)
+        openEditorForNewConnection()
+        selectAuthenticationKey("Fixture Ed25519")
+
+        app.buttons["key-selector"].tap()
+        XCTAssertTrue(app.navigationBars["Select Key"].waitForExistence(timeout: 5))
+
+        let selected = app.buttons["key-Fixture-Ed25519"]
+        XCTAssertTrue(selected.waitForExistence(timeout: 5))
+        XCTAssertEqual(
+            selected.value as? String, "Selected",
+            "The connection editor's current key must read as selected in the picker"
+        )
+        XCTAssertNotEqual(
+            app.buttons["key-Fixture-Hop2-Unauthorized"].value as? String, "Selected",
+            "Unselected keys must not read as selected"
+        )
+    }
+
     // MARK: Swipe actions — edit / duplicate / delete
 
     func testSwipeActionsEditDuplicateAndDelete() {
@@ -395,6 +537,30 @@ final class ConnectionEditorUITests: XCTestCase {
         let key = app.buttons["key-\(label.replacingOccurrences(of: " ", with: "-"))"]
         XCTAssertTrue(key.waitForExistence(timeout: 5), "key \(label) must be listed")
         key.tap()
+    }
+
+    /// A SwiftUI Form Toggle's XCUI element spans the whole row; tapping its
+    /// center hits the label, which does NOT flip the switch. Taps land on the
+    /// trailing edge (where the switch renders) after revealing the row.
+    @discardableResult
+    private func setToggle(_ element: XCUIElement, on: Bool) -> Bool {
+        XCTAssertTrue(element.waitForExistence(timeout: 5), "Toggle \(element) missing")
+        func isOn() -> Bool {
+            let value = (element.value as? String ?? "").lowercased()
+            return value == "1" || value == "true" || value == "on"
+        }
+        var swipes = 0
+        while isOn() != on {
+            if !element.isHittable, swipes < 3 {
+                app.swipeUp()
+                swipes += 1
+                continue
+            }
+            guard swipes < 6 else { return false }
+            element.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
+            swipes += 1
+        }
+        return true
     }
 
     private func addHop(host: String, port: String?, username: String, key: String) {

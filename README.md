@@ -15,6 +15,7 @@ An iOS 18+ SSH terminal client for iPhone and iPad, built on
 ## What Works
 
 - **SSH connections** with password auth (RFC 4252 `password`, secrets in Keychain) and public-key auth (ed25519 from Keychain, P-256 from Secure Enclave)
+- **Key management inline in the editor** — generate or import an SSH key, or copy a public key, directly from the connection editor's key picker; the picker reads the Keychain live and auto-selects a freshly saved key
 - **ProxyJump / jump chains** up to 5 hops with per-hop host-key verification
 - **TOFU host-key trust** — fingerprint prompt on first connect, hard reject on changed keys
 - **In-app SSH agent** with per-request authorization, session cache, auto-deny when backgrounded
