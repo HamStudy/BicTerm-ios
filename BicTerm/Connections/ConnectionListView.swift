@@ -149,7 +149,7 @@ struct ConnectionListView: View {
         isAvailable: Bool
     ) -> some View {
         Button {
-            editorTarget = EditorTarget(connection: connection)
+            connect(connection)
         } label: {
             rowLabel(for: connection, isAvailable: isAvailable)
         }

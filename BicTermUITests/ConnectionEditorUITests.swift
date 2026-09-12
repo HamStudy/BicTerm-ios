@@ -197,6 +197,33 @@ final class ConnectionEditorUITests: XCTestCase {
         XCTAssertTrue(original.waitForExistence(timeout: 5), "original must survive deleting the copy")
     }
 
+    // MARK: Row tap — default tap connects, swipe menu keeps edit
+
+    func testTappingConnectionRowOpensSession() {
+        app.launchArguments = ["--uitest-reset", "--uitest-demo"]
+        app.launch()
+
+        let row = app.buttons["connection-Demo-Jump-Chain"]
+        XCTAssertTrue(row.waitForExistence(timeout: 15))
+
+        swipeRow(named: "Demo-Jump-Chain")
+        XCTAssertTrue(app.buttons["edit-Demo-Jump-Chain"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["connect-Demo-Jump-Chain"].exists)
+
+        app.terminate()
+        app.launch()
+
+        let relaunchedRow = app.buttons["connection-Demo-Jump-Chain"]
+        XCTAssertTrue(relaunchedRow.waitForExistence(timeout: 15))
+        relaunchedRow.tap()
+
+        XCTAssertTrue(app.staticTexts["scene-title-Demo-Jump-Chain"].waitForExistence(timeout: 10),
+                      "tapping a row must open a session scene for that connection")
+        XCTAssertTrue(app.buttons["scene-close-Demo-Jump-Chain"].exists)
+        XCTAssertFalse(app.textFields["field-name"].exists,
+                       "tapping a row must not open the editor")
+    }
+
     func testUnavailablePersistedProtocolRemainsVisibleAndCannotBeSavedOrConnected() {
         app.launchArguments = ["--uitest-unavailable-connection"]
         app.launch()
