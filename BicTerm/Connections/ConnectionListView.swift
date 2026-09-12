@@ -260,6 +260,17 @@ struct ConnectionListView: View {
             }
 
             VStack(alignment: .trailing, spacing: spacing.xxxs) {
+                if connection.herdrEnabled {
+                    Text("Herdr")
+                        .font(typography.caption)
+                        .foregroundColor(colors.accent)
+                        .padding(.horizontal, spacing.xs)
+                        .padding(.vertical, spacing.xxxs)
+                        .background(colors.accent.opacity(0.18), in: Capsule())
+                        .overlay(Capsule().stroke(colors.accent.opacity(0.5), lineWidth: 0.5))
+                        .accessibilityIdentifier("badge-herdr")
+                }
+
                 ProtocolBadge(protocolID: connection.type.rawValue)
 
                 if !isAvailable {

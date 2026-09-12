@@ -112,6 +112,13 @@ struct ConnectionDraft: Equatable {
     var passwordEntryMissing = false
     var hops: [HopDraft] = []
     var agentForwarding = false
+    /// Herdr mode A (herdr-support plan todo 5): master switch persisted as
+    /// the `herdrEnabled` protocol option.
+    var herdrEnabled = false
+    /// Optional remote herdr session name (`herdrSession` option); only
+    /// persisted while ``herdrEnabled`` is on — the toggle is the sole
+    /// authority for whether herdr applies at all.
+    var herdrSessionName = ""
 
     init() {}
 
@@ -132,6 +139,8 @@ struct ConnectionDraft: Equatable {
         }
         hops = connection.jumpChain.map { HopDraft(hop: $0, keyLabel: nil) }
         agentForwarding = connection.protocolOptions["agentForwarding"]?.boolValue == true
+        herdrEnabled = connection.herdrEnabled
+        herdrSessionName = connection.herdrSessionName ?? ""
     }
 
     /// Duplicate-as-new: copies every editable value from `connection` —
@@ -165,6 +174,18 @@ struct ConnectionDraft: Equatable {
     var keyError: String? {
         guard authMethod == .publickey else { return nil }
         return keyReference.isEmpty ? "Select an authentication key" : nil
+    }
+
+    /// Mirrors herdr's own session-name grammar (`HerdrCommandBuilder.isValidSessionName`)
+    /// so a bad name surfaces in the editor instead of at connect time. Empty
+    /// means "no session" and stays valid.
+    var herdrSessionError: String? {
+        guard herdrEnabled, !herdrSessionName.isEmpty else { return nil }
+        let trimmed = herdrSessionName.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return nil }
+        return HerdrCommandBuilder.isValidSessionName(trimmed)
+            ? nil
+            : "Session names use letters, numbers, dots, underscores, and hyphens, and start with a letter or number"
     }
 
     var passwordError: String? {
@@ -243,6 +264,7 @@ struct ConnectionDraft: Equatable {
             && usernameError == nil
             && keyError == nil
             && passwordError == nil
+            && herdrSessionError == nil
             && hopErrors.isEmpty
             && !hasCycle
             && hops.count <= Connection.maximumJumpChainLength
@@ -258,6 +280,7 @@ struct ConnectionDraft: Equatable {
               usernameError == nil,
               keyError == nil,
               passwordError == nil,
+              herdrSessionError == nil,
               !hasCycle,
               hops.count <= Connection.maximumJumpChainLength
         else {
@@ -276,6 +299,13 @@ struct ConnectionDraft: Equatable {
         var optionValues: [String: ProtocolOptionValue] = [:]
         if agentForwarding {
             optionValues["agentForwarding"] = .bool(true)
+        }
+        if herdrEnabled {
+            optionValues[ProtocolOptions.herdrEnabledKey] = .bool(true)
+            let trimmedSession = herdrSessionName.trimmingCharacters(in: .whitespaces)
+            if !trimmedSession.isEmpty {
+                optionValues[ProtocolOptions.herdrSessionKey] = .string(trimmedSession)
+            }
         }
         var options = ProtocolOptions()
         if !optionValues.isEmpty {

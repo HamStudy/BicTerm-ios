@@ -35,7 +35,7 @@ struct ConnectionEditorView: View {
     @FocusState private var focus: FocusField?
 
     enum FocusField {
-        case name, host, port, username, password
+        case name, host, port, username, password, herdrSession
     }
 
     struct HopSheetTarget: Hashable, Identifiable {
@@ -50,6 +50,7 @@ struct ConnectionEditorView: View {
                 authenticationSection
                 if jumpChainSupported { jumpChainSection }
                 protocolOptionsSection
+                if draft.protocolID == ProtocolDescriptor.ssh.id { herdrSection }
                 connectSection
             }
             .scrollContentBackground(.hidden)
@@ -491,6 +492,42 @@ struct ConnectionEditorView: View {
                     .font(typography.caption)
                     .foregroundColor(colors.dimmed)
             }
+        }
+    }
+
+    private var herdrSection: some View {
+        Section {
+            Toggle(isOn: $draft.herdrEnabled) {
+                VStack(alignment: .leading, spacing: spacing.xxxs) {
+                    Text("Use Herdr")
+                        .font(typography.body)
+                        .foregroundColor(colors.foreground)
+                    Text("Connect to this machine's herdr workspace instead of a single shell")
+                        .font(typography.caption)
+                        .foregroundColor(colors.dimmed)
+                }
+            }
+            .tint(colors.accent)
+            .accessibilityIdentifier("herdr-toggle")
+
+            if draft.herdrEnabled {
+                labeledField(
+                    "Remote Session (optional)",
+                    text: $draft.herdrSessionName,
+                    identifier: "herdr-session-field",
+                    error: draft.herdrSessionError,
+                    focus: .herdrSession
+                )
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+            }
+        } header: {
+            Text("Herdr")
+        } footer: {
+            Text("Connecting opens this machine's herdr workspace (tabs and panes) instead of a plain terminal. The host must already run herdr 0.9 or newer; this app never installs or updates it.")
+                .font(typography.caption)
+                .foregroundColor(colors.dimmed)
+                .accessibilityIdentifier("herdr-section-footer")
         }
     }
 
