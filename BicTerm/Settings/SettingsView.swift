@@ -31,19 +31,6 @@ struct SettingsView: View {
                 .listRowBackground(colors.background)
             }
 
-            Section("Connection") {
-                HStack {
-                    Text("Default Shell")
-                        .font(typography.body)
-                        .foregroundColor(colors.foreground)
-                    Spacer()
-                    Text("/bin/bash")
-                        .font(typography.body)
-                        .foregroundColor(colors.dimmed)
-                }
-                .listRowBackground(colors.background)
-            }
-
             Section("Security") {
                 NavigationLink {
                     KeyManagementView()
