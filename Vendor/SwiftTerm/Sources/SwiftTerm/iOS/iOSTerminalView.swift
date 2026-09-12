@@ -51,7 +51,7 @@ public extension Notification.Name {
  * Use the `configureNativeColors()` to set the defaults colors for the view to match the OS
  * defaults, otherwise, this uses its own set of defaults colors.
  */
-open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollViewDelegate, TerminalDelegate, UIPointerInteractionDelegate {
+open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollViewDelegate, TerminalDelegate, UIPointerInteractionDelegate, UIGestureRecognizerDelegate {
     private enum PendingKoreanResyllabificationResult {
         case none
         case prefixReinserted
@@ -972,7 +972,7 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
         return (Position(col: logicalColumn, row: row), toInt(point))
     }
 
-    func encodeFlags (release: Bool) -> Int
+    func encodeFlags (release: Bool, modifiers: UIKeyModifierFlags = []) -> Int
     {
         let encodedFlags = terminal.encodeButton(
             // Outpost patch: taps/drags are the primary (left) button. Upstream
@@ -980,9 +980,9 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
             // vim pastes, and left-click targets in TUIs never fire. 0 = left.
             button: 0,
             release: release,
-            shift: false,
-            meta: false,
-            control: terminalAccessory?.controlModifier ?? controlModifier ?? false)
+            shift: modifiers.contains(.shift),
+            meta: modifiers.contains(.alternate),
+            control: modifiers.contains(.control) || controlModifier || (terminalAccessory?.controlModifier ?? false))
         terminalAccessory?.controlModifier = false
         controlModifier = false
         return encodedFlags
@@ -990,10 +990,8 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
     
     func sharedMouseEvent (gestureRecognizer: UIGestureRecognizer, release: Bool)
     {
-        let hit = calculateTapHit(gesture: gestureRecognizer)
-        if let grid = hit.grid.toScreenCoordinate(from: terminal.displayBuffer) {
-            terminal.sendEvent(buttonFlags: encodeFlags (release: release), x: grid.col, y: grid.row, pixelX: hit.pixels.col, pixelY: hit.pixels.row)
-        }
+        let hit = mouseReportHit(gestureRecognizer)
+        terminal.sendEvent(buttonFlags: encodeFlags(release: release, modifiers: gestureRecognizer.modifierFlags), x: hit.grid.col, y: hit.grid.row, pixelX: hit.pixels.col, pixelY: hit.pixels.row)
     }
     
     // Returns the offsets into getTerminal().buffer.lines for the first visible and last visible lines
@@ -1017,6 +1015,11 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
     /// of being forwarded to the application as a mouse event.
     private func shiftBypassesMouseReporting(for gestureRecognizer: UIGestureRecognizer) -> Bool {
         gestureRecognizer.modifierFlags.contains(.shift) && !terminal.mouseShiftCapture
+    }
+
+    // BICTERM-PATCH hunk 9: Option always selects locally, regardless of Shift capture.
+    private func modifierForcesLocalSelection(_ gesture: UIGestureRecognizer) -> Bool {
+        gesture.modifierFlags.contains(.alternate) || shiftBypassesMouseReporting(for: gesture)
     }
 
     private func semanticPromptModifiers(for gestureRecognizer: UIGestureRecognizer) -> SemanticPromptClickModifiers {
@@ -1044,7 +1047,7 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
                 return
             }
 
-            if allowMouseReporting && !shiftBypassesMouseReporting(for: gestureRecognizer) && terminal.mouseMode.sendButtonPress() {
+            if allowMouseReporting && !modifierForcesLocalSelection(gestureRecognizer) && terminal.mouseMode.sendButtonPress() {
                 sharedMouseEvent(gestureRecognizer: gestureRecognizer, release: false)
 
                 if terminal.mouseMode.sendButtonRelease() {
@@ -1095,7 +1098,7 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
             return
         }
 
-        if allowMouseReporting && !shiftBypassesMouseReporting(for: gestureRecognizer) && terminal.mouseMode.sendButtonPress() {
+        if allowMouseReporting && !modifierForcesLocalSelection(gestureRecognizer) && terminal.mouseMode.sendButtonPress() {
             sharedMouseEvent(gestureRecognizer: gestureRecognizer, release: false)
             
             if terminal.mouseMode.sendButtonRelease() {
@@ -1103,6 +1106,8 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
             }
             return
         } else {
+            // BICTERM-PATCH hunk 9: the selection menu requires first-responder focus.
+            _ = becomeFirstResponder()
             let hit = calculateTapHit(gesture: gestureRecognizer).grid
             selection.selectWordOrExpression(at: hit, in: terminal.displayBuffer)
             selection.selectionMode = .character
@@ -1120,7 +1125,7 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
             return
         }
 
-        if allowMouseReporting && !shiftBypassesMouseReporting(for: gestureRecognizer) && terminal.mouseMode.sendButtonPress() {
+        if allowMouseReporting && !modifierForcesLocalSelection(gestureRecognizer) && terminal.mouseMode.sendButtonPress() {
             sharedMouseEvent(gestureRecognizer: gestureRecognizer, release: false)
 
             if terminal.mouseMode.sendButtonRelease() {
@@ -1128,6 +1133,8 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
             }
             return
         } else {
+            // BICTERM-PATCH hunk 9: the selection menu requires first-responder focus.
+            _ = becomeFirstResponder()
             let hit = calculateTapHit(gesture: gestureRecognizer).grid
             selection.select(row: hit.row)
             enableSelectionPanGesture()
@@ -1214,11 +1221,13 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
         imgView.tintColor = .white
     }
     
-    @objc func panMouseHandler (_ gestureRecognizer: UIPanGestureRecognizer){
+    @objc func panMouseHandler (_ gestureRecognizer: UILongPressGestureRecognizer){
         guard gestureRecognizer.view != nil else { return }
-        if allowMouseReporting && !shiftBypassesMouseReporting(for: gestureRecognizer) && terminal.mouseMode != .off {
+        if allowMouseReporting && terminal.mouseMode != .off {
             switch gestureRecognizer.state {
             case .began:
+                becomeFirstResponder()
+                selection.selectNone()
                 // send the initial tap
                 if terminal.mouseMode.sendButtonPress() {
                     sharedMouseEvent(gestureRecognizer: gestureRecognizer, release: false)
@@ -1229,10 +1238,8 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
                 }
             case .changed:
                 if terminal.mouseMode.sendButtonTracking() {
-                    let hit = calculateTapHit(gesture: gestureRecognizer)
-                    if let grid = hit.grid.toScreenCoordinate(from: terminal.displayBuffer) {
-                        terminal.sendMotion(buttonFlags: encodeFlags(release: false), x: grid.col, y: grid.row, pixelX: hit.pixels.col, pixelY: hit.pixels.row)
-                    }
+                    let hit = mouseReportHit(gestureRecognizer)
+                    terminal.sendMotion(buttonFlags: encodeFlags(release: false, modifiers: gestureRecognizer.modifierFlags), x: hit.grid.col, y: hit.grid.row, pixelX: hit.pixels.col, pixelY: hit.pixels.row)
                 }
             default:
                 break
@@ -1274,6 +1281,12 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
                     extend = true
                 } else if near (selection.end, hit) {
                     selection.pivot = selection.start
+                    extend = true
+                } else {
+                    // BICTERM-PATCH hunk 9: anchor the farther endpoint even away from handles.
+                    let startDistance = abs((selection.start.row - hit.row) * terminal.cols + selection.start.col - hit.col)
+                    let endDistance = abs((selection.end.row - hit.row) * terminal.cols + selection.end.col - hit.col)
+                    selection.pivot = startDistance > endDistance ? selection.start : selection.end
                     extend = true
                 }
                 if extend {
@@ -1324,13 +1337,19 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
         }
     }
     
-    var panMouseGesture: UIPanGestureRecognizer?
+    // BICTERM-PATCH hunk 7: a zero-delay press owns the complete remote
+    // button lifecycle; scroll-view panning must not steal terminal drags.
+    var panMouseGesture: UILongPressGestureRecognizer?
     func enableMousePanGesture () {
         guard panMouseGesture == nil else {
             return
         }
-        let gesture = UIPanGestureRecognizer (target: self, action: #selector(panMouseHandler))
+        let gesture = UILongPressGestureRecognizer (target: self, action: #selector(panMouseHandler))
+        gesture.minimumPressDuration = 0
+        gesture.allowableMovement = .greatestFiniteMagnitude
+        gesture.delegate = self
         addGestureRecognizer(gesture)
+        panGestureRecognizer.require(toFail: gesture)
         panMouseGesture = gesture
     }
     
@@ -1349,6 +1368,7 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
         }
         let gesture = UIPanGestureRecognizer (target: self, action: #selector(panSelectionHandler))
         addGestureRecognizer(gesture)
+        panGestureRecognizer.require(toFail: gesture)
         self.panSelectionGesture = gesture
     }
     
@@ -1362,6 +1382,7 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
     
     func setupGestures ()
     {
+        setupPointerGestures()
         let longPress = UILongPressGestureRecognizer (target: self, action: #selector(longPress(_:)))
         longPress.minimumPressDuration = 0.7
         addGestureRecognizer(longPress)
@@ -1409,6 +1430,11 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
         switch gestureRecognizer.state {
         case .began, .changed:
             let location = gestureRecognizer.location(in: self)
+            if reportsMouse(gestureRecognizer), terminal.mouseMode.sendMotionEvent(),
+               panMouseGesture?.state != .began, panMouseGesture?.state != .changed {
+                let hit = mouseReportHit(gestureRecognizer)
+                terminal.sendMotion(buttonFlags: encodeFlags(release: true, modifiers: gestureRecognizer.modifierFlags), x: hit.grid.col, y: hit.grid.row, pixelX: hit.pixels.col, pixelY: hit.pixels.row)
+            }
             lastPointerLocation = location
             reportLinkIfNeeded(at: location, modifiers: [], force: true)
             updateLinkHighlightIfNeeded(at: location, modifiers: [.command], force: true)
@@ -1422,6 +1448,99 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
             }
         default:
             break
+        }
+    }
+
+    // BICTERM-PATCH hunk 7: keep selection buffer-relative, but report
+    // physical viewport cells (not BiDi logical columns or scrollback rows).
+    func mouseReportHit(_ gesture: UIGestureRecognizer) -> (grid: Position, pixels: Position) {
+        let point = gesture.location(in: self)
+        let x = max(0, min(point.x - bounds.minX, bounds.width - 1))
+        let y = max(0, min(point.y - bounds.minY, bounds.height - 1))
+        return (Position(col: min(terminal.cols - 1, Int(x / cellDimension.width)),
+                         row: min(terminal.rows - 1, Int(y / cellDimension.height))),
+                Position(col: Int(x) + 1, row: Int(y) + 1))
+    }
+
+    private var pointerSelectionGesture: UIPanGestureRecognizer?
+    private var mouseWheelGesture: UIPanGestureRecognizer?
+    private var mouseWheelRemainder: CGFloat = 0
+
+    private func reportsMouse(_ gesture: UIGestureRecognizer) -> Bool {
+        allowMouseReporting && terminal.mouseMode != .off && !modifierForcesLocalSelection(gesture)
+    }
+
+    open override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        if gestureRecognizer === panMouseGesture || gestureRecognizer === mouseWheelGesture {
+            return reportsMouse(gestureRecognizer)
+        }
+        if gestureRecognizer === pointerSelectionGesture || gestureRecognizer === panSelectionGesture {
+            return !reportsMouse(gestureRecognizer)
+        }
+        return super.gestureRecognizerShouldBegin(gestureRecognizer)
+    }
+
+    private func setupPointerGestures() {
+        let selectionDrag = UIPanGestureRecognizer(target: self, action: #selector(pointerSelection(_:)))
+        selectionDrag.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.indirectPointer.rawValue)]
+        selectionDrag.maximumNumberOfTouches = 1
+        addGestureRecognizer(selectionDrag)
+        panGestureRecognizer.require(toFail: selectionDrag)
+        pointerSelectionGesture = selectionDrag
+
+        let wheel = UIPanGestureRecognizer(target: self, action: #selector(mouseWheel(_:)))
+        wheel.minimumNumberOfTouches = 2
+        wheel.allowedScrollTypesMask = .all
+        wheel.delegate = self
+        addGestureRecognizer(wheel)
+        panGestureRecognizer.require(toFail: wheel)
+        mouseWheelGesture = wheel
+    }
+
+    public func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
+                                  shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+        (gestureRecognizer === mouseWheelGesture && otherGestureRecognizer === panMouseGesture) ||
+        (gestureRecognizer === panMouseGesture && otherGestureRecognizer === mouseWheelGesture)
+    }
+
+    @objc private func pointerSelection(_ gesture: UIPanGestureRecognizer) {
+        if gesture.state == .began {
+            let point = gesture.location(in: self)
+            let delta = gesture.translation(in: self)
+            let hit = calculateTapHit(point: CGPoint(x: point.x - delta.x, y: point.y - delta.y)).grid
+            selection.startSelection(row: hit.row - terminal.displayBuffer.yDisp, col: hit.col)
+        }
+        panSelectionHandler(gesture)
+    }
+
+    @objc private func mouseWheel(_ gesture: UIPanGestureRecognizer) {
+        guard reportsMouse(gesture) else { return }
+        if gesture.state == .began {
+            mouseWheelRemainder = 0
+            // A second finger promotes a press/drag to scrolling. Cancel
+            // the held button (sending its release) before wheel reports.
+            panMouseGesture?.isEnabled = false
+            panMouseGesture?.isEnabled = true
+        }
+        guard gesture.state == .began || gesture.state == .changed || gesture.state == .ended else {
+            mouseWheelRemainder = 0
+            return
+        }
+        mouseWheelRemainder += gesture.translation(in: self).y
+        gesture.setTranslation(.zero, in: self)
+        var lines = Int(mouseWheelRemainder / cellDimension.height)
+        if gesture.state == .ended, lines == 0, mouseWheelRemainder != 0 {
+            lines = mouseWheelRemainder > 0 ? 1 : -1
+        }
+        mouseWheelRemainder -= CGFloat(lines) * cellDimension.height
+        guard lines != 0 else { return }
+        let hit = mouseReportHit(gesture)
+        let modifiers = gesture.modifierFlags
+        let flags = terminal.encodeButton(button: lines > 0 ? 4 : 5, release: false,
+                                          shift: modifiers.contains(.shift), meta: modifiers.contains(.alternate),
+                                          control: modifiers.contains(.control))
+        for _ in 0..<abs(lines) {
+            terminal.sendEvent(buttonFlags: flags, x: hit.grid.col, y: hit.grid.row, pixelX: hit.pixels.col, pixelY: hit.pixels.row)
         }
     }
 
@@ -1505,10 +1624,18 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
         }
     }
 
+    // BICTERM-PATCH hunk 8: the app may host a TerminalAccessory in its own
+    // layout (participating in the view hierarchy instead of UIKit's
+    // inputAccessoryView dock, which overlays the terminal's bottom rows
+    // when a hardware keyboard is attached). The hosted instance keeps
+    // feeding the sticky-control state into key encoding below while
+    // `inputAccessoryView` stays nil, so nothing is docked over the content.
+    public weak var hostedAccessory: TerminalAccessory?
+
     /// Returns the inputaccessory in case it is a TerminalAccessory and we can use it
     var terminalAccessory: TerminalAccessory? {
         get {
-            _inputAccessory as? TerminalAccessory
+            (_inputAccessory as? TerminalAccessory) ?? hostedAccessory
         }
     }
 
@@ -1800,8 +1927,8 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
     }
     
     open func linefeed(source: Terminal) {
-        // Preserve manual selection while output is streaming when mouse reporting is disabled.
-        if allowMouseReporting {
+        // BICTERM-PATCH hunk 7: capability alone must not clear local selection.
+        if allowMouseReporting && terminal.mouseMode != .off {
             selection.selectNone()
             disableSelectionPanGesture()
         }

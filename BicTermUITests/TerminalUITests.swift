@@ -253,6 +253,51 @@ final class TerminalUITests: XCTestCase {
         attachScreenshot(named: "task-12-vim")
     }
 
+    func testMouseReportingReachesSSH() {
+        launchPreview(command: #"unsetopt nomatch; stty -isig -icanon -echo; printf \\033\\133?1002h\\033\\133?1006h__MOUSE__\\n; cat -v"#)
+        waitForTail("__MOUSE__")
+        let terminal = app.descendants(matching: .any)["terminalView"].firstMatch
+        let start = terminal.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.3))
+        let end = terminal.coordinate(withNormalizedOffset: CGVector(dx: 0.6, dy: 0.4))
+        start.press(forDuration: 0.1, thenDragTo: end)
+        waitForTail("^[[<0;")
+        waitForTail("^[[<32;")
+        XCTAssertNotNil(tail.range(of: #"\^\[\[<0;\d+;\d+m"#, options: .regularExpression))
+        attachScreenshot(named: "mouse-sgr-ssh")
+    }
+
+    func testLocalSelectionCopyAndPaste() {
+        launchPreview(command: #"unsetopt nomatch; stty -isig -icanon -echo; printf \\033\\1332J\\033\\133HCOPYME; cat -v"#)
+        waitForTail("COPYME")
+        let terminal = app.descendants(matching: .any)["terminalView"].firstMatch
+        let word = terminal.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 25, dy: 8))
+        word.doubleTap()
+        let copy = app.menuItems["Copy"].firstMatch
+        XCTAssertTrue(copy.waitForExistence(timeout: 5), app.debugDescription)
+        attachScreenshot(named: "mouse-local-selection")
+        copy.tap()
+        word.press(forDuration: 1)
+        let paste = app.menuItems["Paste"].firstMatch
+        XCTAssertTrue(paste.waitForExistence(timeout: 5), app.debugDescription)
+        paste.tap()
+        waitForTail("COPYMECOPYME")
+        attachScreenshot(named: "mouse-local-paste-ssh")
+    }
+
+    func testMouseClickMovesVimCursor() {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().path
+        launchPreview(command: "exec vim -Nu NONE -n -i NONE -R -c set\\ mouse=a\\ ttymouse=sgr\\ nowrap -c set\\ laststatus=2\\ statusline=MOUSE_ROW_%l \(root)/README.md")
+        waitForTail("MOUSE_ROW_1")
+        let terminal = app.descendants(matching: .any)["terminalView"].firstMatch
+        let rows = Double(app.staticTexts["previewDims"].label.split(separator: "x").last ?? "0") ?? 0
+        XCTAssertGreaterThan(rows, 10)
+        let beforeClick = tail
+        terminal.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 9.5 / rows)).tap()
+        waitForTail("\u{1b}[10;1H")
+        XCTAssertNotEqual(tail, beforeClick)
+        attachScreenshot(named: "mouse-vim-row-10")
+    }
+
     private func attachScreenshot(named name: String) {
         let screenshot = XCUIScreen.main.screenshot()
         let attachment = XCTAttachment(screenshot: screenshot)

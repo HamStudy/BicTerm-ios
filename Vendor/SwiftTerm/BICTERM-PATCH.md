@@ -36,8 +36,8 @@ production is unaffected by either.
 
 ## Hunks
 
-Every deviation carries an inline `// BICTERM-PATCH hunk N:` marker in
-`Sources/SwiftTerm/iOS/iOSTerminalView.swift`. All hunks are production-inert:
+The original five deviations carry inline `// BICTERM-PATCH hunk N:` markers in
+`Sources/SwiftTerm/iOS/iOSTerminalView.swift`. Hunks 1-5 are production-inert:
 hunks 1/2 are access widenings that change nothing until a subclass uses them;
 hunks 3/4/5 engage only when `installsSoftwareKeyboard == false`, which only
 the app's DEBUG UI-test preview sets (production keeps the `true` default).
@@ -176,3 +176,134 @@ git checkout v1.20.0  # or the upstream tag to rebase against
 If XCTest's `typeKey` ever synthesizes a paired `pressesEnded` and the missing
 special keys, hunks 1–2 and the DEBUG consumers could be reverted; hunks 3–5
 remain harmless even then (default-off).
+
+## Mouse and selection repair (production, hunks 6-7)
+
+### Hunk 6 — X10 event gates (`Terminal.swift`)
+
+`MouseMode.sendButtonPress` now includes X10; `sendButtonRelease` excludes it.
+Previously the two gates contradicted the documented X10 press-only behavior.
+The existing `encodeButton`, `sendEvent`, and `sendMotion` encoders are reused,
+including SGR 1006, legacy coordinates, modifier bits, and wheel buttons 64/65.
+
+### Hunk 7 — UIKit routing (`iOS/iOSTerminalView.swift`)
+
+- Replace the remote pan recognizer with a zero-delay long-press recognizer,
+  so the remote receives the initial press before movement and a release on
+  end/cancellation. Give it precedence over UIScrollView panning. Mode/Shift
+  checks happen when recognition begins, so releasing Shift mid-gesture cannot
+  turn a local drag into remote input or lose an already-required release.
+- `mouseReportHit` uses bounded viewport-relative physical cells, rather than
+  BiDi logical selection columns or buffer-absolute rows. Pixel coordinates are
+  viewport-relative and one-based. Local selection retains buffer coordinates.
+- `encodeFlags` forwards hardware Shift/Option/Control modifiers.
+- `handleHover` forwards unpressed motion only for mode 1003.
+- `setupPointerGestures`, `pointerSelection`, and `mouseWheel` add primary
+  pointer drag selection and vertical discrete/continuous wheel or two-finger
+  scrolling. The wheel recognizer can promote a held press into scrolling,
+  cancelling/releasing the button first. Sub-cell deltas accumulate, and the
+  terminal's native scroll recognizer remains available when reporting is off.
+- Selection-handle drags take precedence over native scrolling. `linefeed`
+  does not clear a local selection just because reporting is *allowed*.
+
+The patch belongs in the fork because selection state, cell dimensions, gesture
+installation, and mouse-mode callbacks are internal to SwiftTerm. No public
+selection API or parallel mouse encoder was added. The app simply removes its
+empty `TerminalContainerView.paste` override; OSC 52 delegates remain unchanged.
+
+Tests: `Tests/SwiftTermTests/BicTermMouseTests.swift` uses XCTest for event gates,
+exact SGR press/release/drag/hover/wheel output, legacy bytes, and modifiers.
+`BicTermUITests/TerminalUITests.swift` verifies actual selection/copy/paste and
+SGR drag delivery against sshd, plus a mouse-enabled Vim cursor move.
+
+Limits: primary button only; vertical wheel only. Physical pointer hover,
+wheel, two-finger scrolling, and Shift bypass need real-device validation.
+Reapply hunks 6-7 in addition to the original five when rebasing the fork.
+
+## Hosted accessory toolbar (production, hunk 8)
+
+### Hunk 8 — `hostedAccessory` fallback (`iOS/iOSTerminalView.swift`)
+
+```diff
++    // BICTERM-PATCH hunk 8: the app may host a TerminalAccessory in its own
++    // layout (…)
++    public weak var hostedAccessory: TerminalAccessory?
++
+     /// Returns the inputaccessory in case it is a TerminalAccessory and we can use it
+     var terminalAccessory: TerminalAccessory? {
+         get {
+-            _inputAccessory as? TerminalAccessory
++            (_inputAccessory as? TerminalAccessory) ?? hostedAccessory
+         }
+     }
+```
+
+BicTerm's session scenes never use UIKit's `inputAccessoryView` dock: with a
+hardware keyboard attached (the common iPad case) UIKit docks the accessory at
+the bottom of the screen OVERLAYING the terminal's bottom rows. Instead the
+app nils `inputAccessoryView` on its `TerminalContainerView` surfaces and hosts
+a `TerminalAccessory` (public initializer, unchanged) inside
+`TerminalToolbarHostView`, where the strip participates in layout — the
+terminal shrinks by the strip's height and the bottom row stays visible.
+
+The hunk exists because the sticky `controlModifier` on the accessory feeds
+hardware-key encoding at three sites (`terminalAccessory?.controlModifier` in
+the presses/insert paths, plus `cancelTimer()` on resign). With
+`_inputAccessory` nil, an app-hosted accessory would silently break sticky
+ctrl; `hostedAccessory` keeps that lookup working. `_inputAccessory` keeps
+precedence when both are set, so upstream behavior is byte-identical for any
+consumer that does not set `hostedAccessory`.
+
+Toolbar visibility policy (default hidden with a hardware keyboard via
+`GCKeyboard.coalesced`, sticky explicit toggle, persistence) lives entirely
+app-side (`BicTerm/Terminal/TerminalToolbar.swift`); the fork carries only
+this lookup widening.
+
+Tests: `BicTermTests/TerminalToolbarModelTests.swift` covers the heuristic,
+persistence, and reset; `BicTermUITests/TerminalToolbarUITests.swift` toggles
+the strip from the scene chrome, asserts the terminal frame shrinks by exactly
+the strip height (no overlay), and verifies the explicit choice across
+relaunches.
+
+Reapply hunk 8 together with hunks 1-7 when rebasing the fork.
+
+## Local selection reliability (production, hunk 9)
+
+### Hunk 9 — feed preservation, drag pivot, Option bypass, and menu focus
+
+- `Apple/AppleTerminalView.swift`: `feedPrepare()` clears selection only when
+  reporting is allowed **and** `terminal.mouseMode != .off`, matching hunk 7's
+  UIKit linefeed gate. Ordinary output chunks preserve local selection; remote
+  mouse applications retain their existing redraw-clears-selection behavior.
+- `iOS/iOSTerminalView.swift`: `panSelectionHandler` seeds the farther endpoint
+  as pivot when an active-selection drag begins outside both handle zones.
+  Distance is measured in buffer-linear cells; existing near-handle precedence,
+  buffer-absolute rows, and pointer selection's `yDisp` conversion are unchanged.
+- `modifierForcesLocalSelection` combines unconditional Option (`.alternate`)
+  bypass with the existing conditional Shift bypass. Single/double/triple taps
+  and `reportsMouse` use it, covering drag admission, wheel, and hover routing.
+  Shift capture cannot override Option. Mouse encoders (including the meta bit),
+  gesture failure chains, indirect-pointer-only drag initiation, and second-finger
+  wheel promotion remain unchanged. Drag ownership is still chosen at admission.
+- Local double/triple taps acquire first-responder focus before selecting and
+  presenting the context menu.
+
+Regression coverage in `Tests/SwiftTermTests/BicTermMouseTests.swift`: view feed
+preserves selected text in mode off (string and byte-array chunks), clears it in
+all four reporting modes, and UIKit-only tests exercise Option+Shift double-tap
+with Shift capture enabled and active-selection dragging away from handles.
+The existing exact-byte mouse tests remain intact. UIKit-only tests require an
+iOS test destination; host `swift test` runs the shared feed and encoder tests.
+
+Validation (2026-09-11): all seven `BicTermMouseTests` pass on the iPhone 17 Pro
+simulator using the `SwiftTerm-Package` scheme. The isolated run sets
+`EXCLUDED_SOURCE_FILE_NAMES=SelectionScrollTests.swift` because that unrelated
+test file references macOS-only `HeadlessTerminal` and prevents the iOS test
+target from compiling. No test source was removed. Host `swift test` passes all
+85 XCTest cases (including the five host mouse tests); the 732-test Swift Testing
+run reports five MetalRendererStatusTests shader-resource lookup failures
+(`Failed to load Metal shader source: Apple/Metal/Shaders.metal`). Thus the full
+fork suite is not green on this host, independently of the selection assertions.
+
+Reapply hunk 9 with hunks 1-8 when rebasing. Search the two view files and the
+regression test file for `BICTERM-PATCH hunk 9` markers.

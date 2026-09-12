@@ -697,13 +697,14 @@ open class Terminal {
         /// Returns true if you should send a button press event (separate from release)
         func sendButtonPress () -> Bool
         {
-            self == .vt200 || self == .buttonEventTracking || self == .anyEvent
+            // BICTERM-PATCH hunk 6: X10 reports presses, never releases.
+            self != .off
         }
         
         /// Returns true if you should send the button release event
         func sendButtonRelease () -> Bool
         {
-            self != .off
+            self == .vt200 || self == .buttonEventTracking || self == .anyEvent
         }
         
         /// Returns true if you should send a motion event when a button is pressed

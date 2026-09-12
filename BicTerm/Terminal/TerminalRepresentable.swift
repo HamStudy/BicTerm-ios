@@ -176,19 +176,13 @@ final class TerminalCoordinator: NSObject, TerminalViewDelegate {
 
 /// SwiftTerm `TerminalView` with BicTerm-specific input hardening:
 ///
-/// - Copy-only clipboard: local selection copy writes the pasteboard;
-///   the responder `paste` action is neutralized (v1 ships no paste
-///   path — plan T12 "copy only"). Remote OSC 52 writes are denied in
+/// - Local user-initiated copy/paste uses SwiftTerm's selection and
+///   bracketed-paste support. Remote OSC 52 writes remain denied in
 ///   the coordinator delegate.
 /// - Grabs first responder status when attached to a window so a
 ///   hardware keyboard (UIKey presses) are delivered to the terminal
 ///   without requiring a tap first.
 final class TerminalContainerView: TerminalView {
-    // SwiftTerm's canPerformAction is non-open (not overridable
-    // cross-module); the paste SELECTOR is therefore blocked at its
-    // delivery point instead.
-    override func paste(_ sender: Any?) {}
-
     override func didMoveToWindow() {
         super.didMoveToWindow()
         if window != nil, !isFirstResponder {
