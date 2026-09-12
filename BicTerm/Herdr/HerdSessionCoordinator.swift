@@ -1,6 +1,7 @@
 import BicTermCore
 import Foundation
 import Observation
+import SwiftUI
 
 /// Herd mode coordinator (herdr-support plan todo 8): opening a herd opens
 /// ONE workspace whose model carries one endpoint per machine, then
@@ -35,6 +36,7 @@ final class HerdSessionCoordinator {
     private var inFlightHerds: Set<UUID> = []
     private var selections: [UUID: HerdrEndpointID] = [:]
     var trustPrompt: TrustPrompt?
+    private var queuedTrustPrompts: [TrustPrompt] = []
 
     #if DEBUG
     private(set) var debugConnectAttempts = 0
@@ -255,15 +257,24 @@ final class HerdSessionCoordinator {
 
     // MARK: - Trust prompt
 
+    /// Machines connect concurrently, so challenges can arrive while a
+    /// prompt is already awaiting its decision; extra challenges queue and
+    /// present one decision at a time (overwriting would strand the first
+    /// machine's continuation in "Connecting" forever).
     func resolveTrustPrompt(_ approved: Bool) {
         guard let prompt = trustPrompt else { return }
-        trustPrompt = nil
+        trustPrompt = queuedTrustPrompts.isEmpty ? nil : queuedTrustPrompts.removeFirst()
         prompt.continuation.resume(returning: approved)
     }
 
     private func approve(_ challenge: HerdrHostTrustChallenge) async -> Bool {
         await withCheckedContinuation { continuation in
-            trustPrompt = TrustPrompt(challenge: challenge, continuation: continuation)
+            let prompt = TrustPrompt(challenge: challenge, continuation: continuation)
+            if trustPrompt == nil {
+                trustPrompt = prompt
+            } else {
+                queuedTrustPrompts.append(prompt)
+            }
         }
     }
 
@@ -336,6 +347,41 @@ final class HerdSessionCoordinator {
         }
         #endif
         return HerdrProbe.defaultSearchPaths
+    }
+}
+
+/// Presents the herd coordinator's pending TOFU challenge as a
+/// ``HostTrustPromptView`` sheet — the same approval surface Mode A and
+/// terminal sessions use. Attached where the HERD WORKSPACE is presented
+/// (full-screen cover content on iPhone, the herdr window on iPad):
+/// machines connect only after the workspace is already on screen, so a
+/// prompt sheet attached to the covered connection list never surfaces.
+struct HerdTrustPromptPresenter: ViewModifier {
+    let herdConnect: HerdSessionCoordinator
+
+    func body(content: Content) -> some View {
+        content.sheet(
+            item: Binding(
+                get: { herdConnect.trustPrompt },
+                set: { herdConnect.trustPrompt = $0 }
+            )
+        ) { prompt in
+            HostTrustPromptView(
+                challenge: SessionStore.HostTrustChallenge(
+                    host: prompt.challenge.host,
+                    port: prompt.challenge.port,
+                    algorithm: prompt.challenge.algorithm,
+                    fingerprint: prompt.challenge.fingerprint,
+                    publicKeyData: prompt.challenge.publicKeyData
+                ),
+                errorMessage: nil,
+                onTrust: { herdConnect.resolveTrustPrompt(true) },
+                onCancel: { herdConnect.resolveTrustPrompt(false) }
+            )
+            .interactiveDismissDisabled(true)
+            .presentationDetents([.large])
+            .terminalStyle()
+        }
     }
 }
 

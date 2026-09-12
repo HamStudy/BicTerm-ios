@@ -9,6 +9,7 @@ struct HerdrWindowRoot: View {
 
     let store: SessionStore
     let center: HerdrWorkspaceCenter
+    let herdConnect: HerdSessionCoordinator
     let windowSessionID: UUID?
 
     var body: some View {
@@ -18,7 +19,7 @@ struct HerdrWindowRoot: View {
                 herdrWorkspace(for: entry)
                     .id(entry.id)
             } else {
-                ConnectionListContainer(store: store)
+                ConnectionListContainer(store: store, herdConnect: herdConnect)
             }
         }
         .terminalStyle()
@@ -39,6 +40,9 @@ struct HerdrWindowRoot: View {
                     herd.apply(machine, in: entry.model)
                 }
             )
+            // Herd machines connect only after this window is up; their
+            // TOFU challenges must present above it (F3-B).
+            .modifier(HerdTrustPromptPresenter(herdConnect: herdConnect))
         } else {
             HerdrWorkspaceView(
                 model: entry.model,

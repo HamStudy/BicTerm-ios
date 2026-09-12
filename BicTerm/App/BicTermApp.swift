@@ -29,13 +29,14 @@ private struct RestoredTerminalWindowHost: View {
     @Environment(\.terminalColors) private var colors
 
     let store: SessionStore
+    let herdConnect: HerdSessionCoordinator
     let sessionID: SessionID
     @State private var resolutionFinished = false
 
     var body: some View {
         Group {
             if resolutionFinished {
-                ConnectionListContainer(store: store)
+                ConnectionListContainer(store: store, herdConnect: herdConnect)
             } else {
                 ProgressView("Restoring session")
             }
@@ -58,6 +59,7 @@ private struct TerminalWindowRoot: View {
     @Environment(\.supportsMultipleWindows) private var supportsMultipleWindows
 
     let store: SessionStore
+    let herdConnect: HerdSessionCoordinator
     let windowSessionID: UUID?
 
     @State private var switchedSessionID: UUID?
@@ -70,9 +72,13 @@ private struct TerminalWindowRoot: View {
                let model = store.sceneModel(for: descriptor.id) {
                 sceneView(model: model)
             } else if forcesConnectionListForUITests {
-                ConnectionListContainer(store: store)
+                ConnectionListContainer(store: store, herdConnect: herdConnect)
             } else if let windowSessionID {
-                RestoredTerminalWindowHost(store: store, sessionID: SessionID(value: windowSessionID))
+                RestoredTerminalWindowHost(
+                    store: store,
+                    herdConnect: herdConnect,
+                    sessionID: SessionID(value: windowSessionID)
+                )
             } else {
                 TerminalPlaceholderView(connectionName: "Terminal Session")
             }
@@ -168,6 +174,10 @@ private struct TerminalWindowRoot: View {
 @main
 struct BicTermApp: App {
     @State private var sessionStore = SessionStore()
+    // App-scoped so the herd workspace presentations (full-screen cover on
+    // iPhone, herdr window on iPad) can surface this coordinator's TOFU
+    // prompts above themselves (F3-B).
+    @State private var herdConnect = HerdSessionCoordinator()
 
     var body: some Scene {
         WindowGroup("BicTerm") {
@@ -177,11 +187,11 @@ struct BicTermApp: App {
                     TerminalPreviewScreen()
                         .terminalStyle()
                 } else {
-                    ConnectionListContainer(store: sessionStore)
+                    ConnectionListContainer(store: sessionStore, herdConnect: herdConnect)
                         .terminalStyle()
                 }
                 #else
-                ConnectionListContainer(store: sessionStore)
+                ConnectionListContainer(store: sessionStore, herdConnect: herdConnect)
                     .terminalStyle()
                 #endif
             }
@@ -195,10 +205,18 @@ struct BicTermApp: App {
                     TerminalPreviewScreen()
                         .terminalStyle()
                 } else {
-                    TerminalWindowRoot(store: sessionStore, windowSessionID: sessionID?.value)
+                    TerminalWindowRoot(
+                        store: sessionStore,
+                        herdConnect: herdConnect,
+                        windowSessionID: sessionID?.value
+                    )
                 }
                 #else
-                TerminalWindowRoot(store: sessionStore, windowSessionID: sessionID?.value)
+                TerminalWindowRoot(
+                    store: sessionStore,
+                    herdConnect: herdConnect,
+                    windowSessionID: sessionID?.value
+                )
                 #endif
             }
             .environment(sessionStore.terminalMargin)
@@ -219,6 +237,7 @@ struct BicTermApp: App {
                     HerdrWindowRoot(
                         store: sessionStore,
                         center: HerdrWorkspaceCenter.shared,
+                        herdConnect: herdConnect,
                         windowSessionID: sessionID?.value
                     )
                 }
@@ -226,6 +245,7 @@ struct BicTermApp: App {
                 HerdrWindowRoot(
                     store: sessionStore,
                     center: HerdrWorkspaceCenter.shared,
+                    herdConnect: herdConnect,
                     windowSessionID: sessionID?.value
                 )
                 #endif

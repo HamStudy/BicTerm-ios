@@ -10,13 +10,13 @@ struct ConnectionListContainer: View {
     @Environment(\.terminalSpacing) private var spacing
 
     let store: SessionStore
+    let herdConnect: HerdSessionCoordinator
 
     @State private var coverDescriptor: SessionStore.SessionDescriptor?
     @State private var herdrCoverSession: HerdrCoverSession?
     @State private var restorableSessions: [SessionStore.RestorableSession] = []
     @State private var switcherPresented = false
     @State private var herdrConnect = HerdrConnectCoordinator()
-    @State private var herdConnect = HerdSessionCoordinator()
 
     private struct HerdrCoverSession: Identifiable {
         let id: UUID
@@ -110,6 +110,9 @@ struct ConnectionListContainer: View {
             if let entry = HerdrWorkspaceCenter.shared.entry(id: cover.id) {
                 herdrWorkspace(for: entry)
                     .id(entry.id)
+                    // Herd machines connect only after this cover is up;
+                    // their TOFU challenges must present ABOVE it (F3-B).
+                    .modifier(HerdTrustPromptPresenter(herdConnect: herdConnect))
                     .terminalStyle()
             }
         }
@@ -135,28 +138,10 @@ struct ConnectionListContainer: View {
             .presentationDetents([.large])
             .terminalStyle()
         }
-        .sheet(
-            item: Binding(
-                get: { herdConnect.trustPrompt },
-                set: { herdConnect.trustPrompt = $0 }
-            )
-        ) { prompt in
-            HostTrustPromptView(
-                challenge: SessionStore.HostTrustChallenge(
-                    host: prompt.challenge.host,
-                    port: prompt.challenge.port,
-                    algorithm: prompt.challenge.algorithm,
-                    fingerprint: prompt.challenge.fingerprint,
-                    publicKeyData: prompt.challenge.publicKeyData
-                ),
-                errorMessage: nil,
-                onTrust: { herdConnect.resolveTrustPrompt(true) },
-                onCancel: { herdConnect.resolveTrustPrompt(false) }
-            )
-            .interactiveDismissDisabled(true)
-            .presentationDetents([.large])
-            .terminalStyle()
-        }
+        // F3-B backstop: herd prompts present from the workspace cover
+        // (or window); this one resolves any prompt left pending when the
+        // workspace presentation is gone (e.g. the user closed it).
+        .modifier(HerdTrustPromptPresenter(herdConnect: herdConnect))
         .alert(
             "Can’t Connect",
             isPresented: Binding(

@@ -161,6 +161,68 @@ final class HerdSwitcherUITests: XCTestCase {
         waitUntil(alphaChip, contains: "Online")
     }
 
+    // MARK: - First-contact trust (F3-B)
+
+    /// A herd's machines connect in the background AFTER the workspace
+    /// cover is already up, so their first-contact TOFU challenges must
+    /// present ABOVE the cover (same ``HostTrustPromptView`` surface Mode A
+    /// uses) — never trapped behind it leaving the machine "Connecting"
+    /// forever. Two first-contact machines also exercise the sequential
+    /// decision queue: one prompt at a time, both machines reachable.
+    func testFirstContactHerdSurfacesTrustPromptAboveTheCoverAndGoesOnline() throws {
+        try XCTSkipUnless(fixturesAvailable(), "requires fixtures-up with both herdr servers")
+
+        app.launchArguments = [
+            "--uitest-reset",
+            "--uitest-herd-reset",
+            "--uitest-seed-keys",
+            "--uitest-pretrust-fixtures",
+            "--uitest-herdr-live",
+            "--uitest-herd-e2e",
+            "--uitest-herd-fixture",
+            "--uitest-herdr-untrusted",
+        ]
+        app.launch()
+
+        let herdRow = app.buttons["herd-Fixture-Herd"]
+        XCTAssertTrue(herdRow.waitForExistence(timeout: 15), "the seeded herd must be listed")
+        waitUntil(herdRow, contains: "2 machines")
+        openHerdWorkspace(byTapping: herdRow)
+
+        let bar = app.descendants(matching: .any)["herd-machine-bar"]
+        XCTAssertTrue(
+            bar.waitForExistence(timeout: 15),
+            "the herd workspace cover must be up before the challenges arrive"
+        )
+
+        for machine in 1...2 {
+            let prompt = app.staticTexts["trust-prompt"]
+            XCTAssertTrue(
+                prompt.waitForExistence(timeout: 20),
+                "machine \(machine): the first-contact TOFU prompt must surface above the herd cover"
+            )
+            XCTAssertTrue(bar.exists, "the workspace stays mounted under the prompt")
+            waitUntil(app.staticTexts["trust-host"], contains: "127.0.0.1")
+            app.buttons["trust-confirm"].tap()
+        }
+
+        let alphaChip = app.buttons["herd-chip-Herd-Alpha"]
+        let betaChip = app.buttons["herd-chip-Herd-Beta"]
+        waitUntil(
+            alphaChip,
+            contains: "Online",
+            timeout: 75,
+            message: "the trusted Alpha machine comes online"
+        )
+        waitUntil(
+            betaChip,
+            contains: "Online",
+            timeout: 75,
+            message: "the trusted Beta machine comes online — no continuation stranded by the cover"
+        )
+        attachScreenshot("herd-trust-both-machines-online")
+    }
+
     // MARK: Helpers
 
     /// Opens the herd workspace from a list row, retrying the tap once —
