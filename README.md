@@ -220,9 +220,11 @@ The fixtures and suites below need the tools listed under [Dependencies](#depend
 ```bash
 # Fetch the pinned prebuilt herdr server (idempotent, sha256-verified),
 # then start local fixtures (sshd on 12222/12223, UDS forwarder, and one
-# herdr server per port — HERDR_SERVERS, default "12222 12223")
+# herdr server per port — HERDR_SERVERS, default "12222 12223").
+# HERDR_LOSSY also starts the lossy proxy the LossyProxySyncIntegrationTests
+# require — without it those 2 tests fail with "Connection refused" on 12322.
 scripts/herdr-server-fetch.sh
-scripts/fixtures-up.sh
+HERDR_LOSSY=12322:delay=80ms scripts/fixtures-up.sh
 
 # Core unit/integration tests
 scripts/test-core.sh
