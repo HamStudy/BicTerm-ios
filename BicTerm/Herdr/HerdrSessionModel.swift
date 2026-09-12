@@ -85,15 +85,26 @@ final class HerdrSessionModel {
     private var lastOnlineLoggedGeneration: [HerdrEndpointID: UInt] = [:]
     private let handshakeTimeout: Duration
     let clipboardSettings: HerdrClipboardSettings
+    /// How long the remote-clipboard banner stays up without a copy or
+    /// dismiss gesture before the pending bytes are dropped. Injectable
+    /// for tests.
+    let remoteClipboardBannerDuration: Duration
+    /// How long a transient input note stays on the feedback strip before
+    /// auto-clearing. Injectable for tests.
+    let inputNoteDuration: Duration
 
     init(
         handshakeTimeout: Duration = .seconds(60),
         clipboardSettings: HerdrClipboardSettings = HerdrClipboardSettings(),
-        reconnectBackoff: HerdrReconnectBackoff = .standard
+        reconnectBackoff: HerdrReconnectBackoff = .standard,
+        remoteClipboardBannerDuration: Duration = .seconds(10),
+        inputNoteDuration: Duration = .seconds(8)
     ) {
         self.handshakeTimeout = handshakeTimeout
         self.clipboardSettings = clipboardSettings
         self.reconnectBackoff = reconnectBackoff
+        self.remoteClipboardBannerDuration = remoteClipboardBannerDuration
+        self.inputNoteDuration = inputNoteDuration
     }
 
     // MARK: - Connection

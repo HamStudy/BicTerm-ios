@@ -227,13 +227,12 @@ struct ConnectionListView: View {
             Spacer()
 
             if !connection.jumpChain.isEmpty {
-                Text("\(connection.jumpChain.count) hops")
-                    .font(typography.caption)
-                    .foregroundColor(colors.accent)
-                    .padding(.horizontal, spacing.xs)
-                    .padding(.vertical, spacing.xxxs)
-                    .background(colors.selection.opacity(0.5), in: Capsule())
-                    .accessibilityIdentifier("hopcount-\(sanitized(connection.name))")
+                TerminalBadge(
+                    "\(connection.jumpChain.count) hops",
+                    tint: colors.accent,
+                    fill: colors.selection.opacity(0.5)
+                )
+                .accessibilityIdentifier("hopcount-\(sanitized(connection.name))")
             }
 
             VStack(alignment: .trailing, spacing: spacing.xxxs) {
@@ -282,19 +281,16 @@ struct ConnectionListView: View {
 
 struct ProtocolBadge: View {
     @Environment(\.terminalColors) var colors
-    @Environment(\.terminalTypography) var typography
-    @Environment(\.terminalSpacing) var spacing
 
     let protocolID: String
 
     var body: some View {
-        Text(protocolID)
-            .font(typography.caption)
-            .foregroundColor(colors.accent)
-            .padding(.horizontal, spacing.xs)
-            .padding(.vertical, spacing.xxxs)
-            .background(colors.accent.opacity(0.18), in: Capsule())
-            .overlay(Capsule().stroke(colors.accent.opacity(0.5), lineWidth: 0.5))
-            .accessibilityIdentifier("badge-\(protocolID)")
+        TerminalBadge(
+            protocolID,
+            tint: colors.accent,
+            stroke: colors.accent.opacity(0.5),
+            strokeWidth: 0.5
+        )
+        .accessibilityIdentifier("badge-\(protocolID)")
     }
 }

@@ -84,12 +84,12 @@ struct KeyDetailView: View {
                         Button {
                             copyPublicKey()
                         } label: {
-                            Label("Copy", systemImage: "doc.on.doc")
-                                .font(typography.caption)
-                                .foregroundColor(colors.accent)
-                                .padding(.horizontal, spacing.sm)
-                                .padding(.vertical, spacing.xs)
-                                .background(colors.accent.opacity(0.18), in: Capsule())
+                            TerminalBadge(
+                                "Copy",
+                                systemImage: "doc.on.doc",
+                                tint: colors.accent,
+                                size: .regular
+                            )
                         }
                         .buttonStyle(.borderless)
                         .frame(minWidth: 44, minHeight: 44)
@@ -97,12 +97,12 @@ struct KeyDetailView: View {
                         .accessibilityIdentifier("copy-public-key")
                         copyConfirmationLabel
                         ShareLink(item: item.authorizedKeysLine) {
-                            Label("Share", systemImage: "square.and.arrow.up")
-                                .font(typography.caption)
-                                .foregroundColor(colors.accent)
-                                .padding(.horizontal, spacing.sm)
-                                .padding(.vertical, spacing.xs)
-                                .background(colors.accent.opacity(0.18), in: Capsule())
+                            TerminalBadge(
+                                "Share",
+                                systemImage: "square.and.arrow.up",
+                                tint: colors.accent,
+                                size: .regular
+                            )
                         }
                         .buttonStyle(.borderless)
                         .frame(minWidth: 44, minHeight: 44)

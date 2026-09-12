@@ -161,18 +161,10 @@ struct SessionSceneView: View {
             .accessibilityIdentifier("scene-close-\(sanitized)")
             .foregroundColor(colors.dimmed)
         }
-        .padding(.leading, chromeLeadingPadding)
+        .windowControlsClearance()
         .padding(.trailing, spacing.sm)
         .padding(.vertical, spacing.xs)
         .background(colors.background)
-    }
-
-    /// iPadOS 26 freeform windows draw the traffic-light window controls over
-    /// the top-leading region, and the top safe area has no leading component,
-    /// so on iPad the chrome clears that region (~80pt: three lights + margins).
-    /// iPhone keeps the original `spacing.sm` leading.
-    private var chromeLeadingPadding: CGFloat {
-        spacing.sm + (UIDevice.current.userInterfaceIdiom == .pad ? 80 : 0)
     }
 
     private var scrollbackReleasedNotice: some View {
@@ -198,16 +190,11 @@ struct SessionSceneView: View {
         }
         .padding(.horizontal, spacing.sm)
         .padding(.vertical, spacing.xxxs)
-        .background(colors.selection.opacity(0.4))
+        .background(colors.selection.opacity(TerminalMetric.bannerFill))
     }
 
     private var statusChip: some View {
-        Text(model.statusText)
-            .font(typography.caption)
-            .foregroundColor(statusColor)
-            .padding(.horizontal, spacing.xs)
-            .padding(.vertical, spacing.xxxs)
-            .background(statusColor.opacity(0.15), in: Capsule())
+        TerminalBadge(model.statusText, tint: statusColor)
             .accessibilityIdentifier("scene-statuschip-\(sanitized)")
     }
 
@@ -253,7 +240,7 @@ struct SessionSceneView: View {
         }
         .padding(.horizontal, spacing.sm)
         .padding(.vertical, spacing.xs)
-        .background(colors.selection.opacity(0.4))
+        .background(colors.selection.opacity(TerminalMetric.bannerFill))
     }
 
     private var bannerIcon: String {

@@ -283,6 +283,88 @@ final class HerdrClipboardTests: XCTestCase {
         await model.disconnectAll()
     }
 
+    // MARK: - Banner dismissal (doc §8.3: arrival alone never consents)
+
+    func testDismissRemoteClipboardDropsPendingWithoutPasteboardWrite() async throws {
+        let model = HerdrSessionModel(clipboardSettings: try ephemeralSettings())
+        let endpoint = HerdrEndpointID(rawValue: "remote-dismiss")
+        _ = try await connectThroughFence(
+            model, endpoint: endpoint,
+            extraChunks: [herdrGolden("clipboard-osc52-hello")]
+        )
+        XCTAssertNotNil(model.endpoints[endpoint]?.pendingRemoteClipboard)
+
+        model.dismissRemoteClipboard(endpoint: endpoint)
+        XCTAssertNil(model.endpoints[endpoint]?.pendingRemoteClipboard)
+        XCTAssertEqual(HerdrPasteboard.writeCount, 0, "dismissal never touches the pasteboard")
+        XCTAssertTrue(model.debugInputEcho.contains("dismissRemote(27B)"))
+
+        await model.disconnectAll()
+    }
+
+    func testPendingRemoteClipboardAutoDismissesAfterBannerDuration() async throws {
+        let model = HerdrSessionModel(
+            clipboardSettings: try ephemeralSettings(),
+            remoteClipboardBannerDuration: .milliseconds(300)
+        )
+        let endpoint = HerdrEndpointID(rawValue: "remote-autodismiss")
+        _ = try await connectThroughFence(
+            model, endpoint: endpoint,
+            extraChunks: [herdrGolden("clipboard-osc52-hello")]
+        )
+        XCTAssertNotNil(model.endpoints[endpoint]?.pendingRemoteClipboard)
+
+        let dismissed = await waitUntil(timeout: 2) {
+            model.endpoints[endpoint]?.pendingRemoteClipboard == nil
+        }
+        XCTAssertTrue(dismissed, "the banner auto-dismiss must drop the pending write")
+        XCTAssertEqual(HerdrPasteboard.writeCount, 0)
+        XCTAssertTrue(model.debugInputEcho.contains("dismissRemote(27B)"))
+
+        await model.disconnectAll()
+    }
+
+    func testStaleAutoDismissTimerDoesNotDropNewerPending() async throws {
+        let model = HerdrSessionModel(
+            clipboardSettings: try ephemeralSettings(),
+            remoteClipboardBannerDuration: .milliseconds(600)
+        )
+        let endpoint = HerdrEndpointID(rawValue: "remote-stale-timer")
+        _ = try await connectThroughFence(
+            model, endpoint: endpoint,
+            extraChunks: [herdrGolden("clipboard-osc52-hello")]
+        )
+        XCTAssertEqual(model.endpoints[endpoint]?.pendingRemoteClipboard?.text, Self.remoteText)
+
+        // A second arrival ~300ms later replaces the pending write and re-arms
+        // the timer; the first timer (firing at ~600ms) must not drop it.
+        try await Task.sleep(for: .milliseconds(300))
+        let generation = try XCTUnwrap(model.endpoints[endpoint]?.generation)
+        model.remoteClipboardArrived(
+            endpoint: endpoint, generation: generation, data: Data("second".utf8)
+        )
+        XCTAssertEqual(model.endpoints[endpoint]?.pendingRemoteClipboard?.text, "second")
+
+        // At ~700ms from the first arrival its timer has already fired.
+        try await Task.sleep(for: .milliseconds(400))
+        XCTAssertEqual(
+            model.endpoints[endpoint]?.pendingRemoteClipboard?.text, "second",
+            "the stale timer must not drop the newer pending write"
+        )
+
+        let dismissed = await waitUntil(timeout: 2) {
+            model.endpoints[endpoint]?.pendingRemoteClipboard == nil
+        }
+        XCTAssertTrue(dismissed, "the newer write's own timer still dismisses it")
+        XCTAssertEqual(
+            model.debugInputEcho.filter { $0.hasPrefix("dismissRemote") },
+            ["dismissRemote(6B)"],
+            "exactly one dismissal — the stale timer stayed inert"
+        )
+
+        await model.disconnectAll()
+    }
+
     // MARK: - Redaction (doc §8.3: never log clipboard content)
 
     func testEchoNeverContainsClipboardContent() async throws {

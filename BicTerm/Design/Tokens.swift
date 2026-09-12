@@ -7,8 +7,7 @@ import UIKit
 /// original dark-first set) and ``light``. The palette is selected from the
 /// effective color scheme at the `terminalStyle()` injection point, so
 /// token call sites never branch on appearance.
-struct TerminalColors: EnvironmentKey {
-    static let defaultValue = TerminalColors.dark
+struct TerminalColors {
 
     let background: Color
     let foreground: Color
@@ -74,8 +73,7 @@ struct TerminalColors: EnvironmentKey {
 }
 
 /// SF Mono typography scale for terminal UI
-struct TerminalTypography: EnvironmentKey {
-    static let defaultValue = TerminalTypography()
+struct TerminalTypography {
 
     let caption: Font
     let body: Font
@@ -96,9 +94,7 @@ struct TerminalTypography: EnvironmentKey {
 }
 
 /// Spacing scale for consistent layout rhythm
-struct TerminalSpacing: EnvironmentKey {
-    static let defaultValue = TerminalSpacing()
-
+struct TerminalSpacing {
     let xxxs: CGFloat = 2
     let xxs: CGFloat = 4
     let xs: CGFloat = 8
@@ -107,6 +103,33 @@ struct TerminalSpacing: EnvironmentKey {
     let lg: CGFloat = 24
     let xl: CGFloat = 32
     let xxl: CGFloat = 48
+}
+
+// MARK: - Fixed shape/opacity bands
+
+/// Scheme-independent shape and opacity bands for badge pills and
+/// text-bearing banners. Fixed constants (not environment tokens): they do
+/// not vary by palette, and no call site injects a variant.
+enum TerminalMetric {
+    /// Corner radius for the rounded (non-capsule) badge shape.
+    static let badgeRadius: CGFloat = 6
+
+    /// Fill band of a badge pill: `tint.opacity(badgeFill)` over the
+    /// surrounding background. 0.15 keeps every palette tint at WCAG AA or
+    /// better against its own chip fill (weakest pair, dark error #F85149
+    /// on error@0.15 over #0D1117, measures ~4.8:1).
+    static let badgeFill: Double = 0.15
+
+    /// Selection band behind TEXT-BEARING banners (status banner,
+    /// scrollback notice, remote-clipboard banner). The previous 0.4 band
+    /// measured 4.37:1 for dark-scheme error text (#F85149 over
+    /// selection@0.4 on #0D1117, blended bg ≈ rgb(23,42,62)) — just under
+    /// WCAG AA 4.5:1. At 0.3 the blended bg is ≈ rgb(20,36,52) and the
+    /// same error text measures ~4.7:1; every brighter banner foreground
+    /// (accent ~6.3:1, dimmed ~5.1:1, foreground) clears AA with more
+    /// margin. Light scheme improves the same way (error #D1242F over
+    /// selection@0.3 on white ≈ 4.8:1).
+    static let bannerFill: Double = 0.3
 }
 
 // MARK: - Environment Values

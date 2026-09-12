@@ -110,10 +110,25 @@ extension HerdrSessionModel {
     }
 
     private func noteAtGate(_ note: HerdrInputNote, endpoint id: HerdrEndpointID) {
-        endpoints[id]?.inputNote = note
+        setInputNote(note, endpoint: id)
         #if DEBUG
         debugRecordEcho(Self.echoLine(for: note))
         #endif
+    }
+
+    /// Sets the transient feedback-strip note and arms its auto-clear: the
+    /// overlay would otherwise pin the note (and its occlusion of the pane
+    /// area's bottom edge) forever. A newer note or a reconnect reset makes
+    /// the armed timer inert via the equality guard.
+    func setInputNote(_ note: HerdrInputNote, endpoint id: HerdrEndpointID) {
+        endpoints[id]?.inputNote = note
+        let duration = inputNoteDuration
+        Task { [weak self] in
+            try? await Task.sleep(for: duration)
+            guard let self, !Task.isCancelled else { return }
+            guard self.endpoints[id]?.inputNote == note else { return }
+            self.endpoints[id]?.inputNote = nil
+        }
     }
 
     // MARK: - Input lane (off-main consumer; FFI stays on its actor)
@@ -188,7 +203,7 @@ extension HerdrSessionModel {
             default:
                 note = .writeFailed(Self.detail(of: error))
             }
-            endpoints[id]?.inputNote = note
+            setInputNote(note, endpoint: id)
             #if DEBUG
             debugRecordEcho(Self.echoLine(for: note))
             #endif

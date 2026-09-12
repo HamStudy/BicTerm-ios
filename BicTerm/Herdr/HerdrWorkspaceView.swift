@@ -235,7 +235,9 @@ struct HerdrWorkspaceView: View {
                 .contentShape(Rectangle())
                 .accessibilityIdentifier("herdr-disconnect")
         }
-        .padding([.horizontal, .top], spacing.sm)
+        // Clearance replaces the leading padding; trailing stays spacing.sm.
+        .windowControlsClearance()
+        .padding([.trailing, .top], spacing.sm)
         .padding(.bottom, spacing.xs)
     }
 
@@ -344,21 +346,19 @@ struct HerdrWorkspaceView: View {
         return ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: spacing.xs) {
                 ForEach(tabs, id: \.tabID) { tab in
-                    Button(action: {}) {
-                        Text(tab.label)
-                            .font(typography.caption)
-                            .padding(.horizontal, spacing.sm)
-                            .padding(.vertical, spacing.xxs)
-                            .background(
-                                tab.focused ? colors.selection : colors.background,
-                                in: RoundedRectangle(cornerRadius: 6)
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 6)
-                                    .stroke(tab.focused ? colors.accent : colors.dimmed, lineWidth: 1)
-                            )
-                    }
-                    .foregroundStyle(tab.focused ? colors.foreground : colors.dimmed)
+                    // Read-only state, not a control: neither the herdr
+                    // protocol core (HerdrClient exposes input/resize/
+                    // clipboard only — no tab activation message) nor the
+                    // session model offers tab activation, so a button here
+                    // could only ever be a dead control.
+                    TerminalBadge(
+                        tab.label,
+                        tint: tab.focused ? colors.foreground : colors.dimmed,
+                        fill: tab.focused ? colors.selection : colors.background,
+                        stroke: tab.focused ? colors.accent : colors.dimmed,
+                        size: .tab,
+                        shape: .rounded
+                    )
                     .accessibilityLabel("Tab \(tab.number): \(tab.label)\(tab.focused ? ", selected" : "")")
                     .accessibilityIdentifier("herdr-tab-\(tab.number)")
                     .accessibilityAddTraits(tab.focused ? [.isSelected] : [])
@@ -434,10 +434,22 @@ struct HerdrWorkspaceView: View {
                 .frame(minHeight: 44)
                 .contentShape(Rectangle())
                 .accessibilityIdentifier("herdr-autocopy-remote")
+                Button {
+                    guard let id = model.selectedEndpointID else { return }
+                    model.dismissRemoteClipboard(endpoint: id)
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.caption)
+                }
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
+                .accessibilityLabel("Dismiss clipboard banner")
+                .accessibilityIdentifier("herdr-dismiss-remote-clipboard")
+                .foregroundStyle(colors.dimmed)
             }
             .padding(.horizontal, spacing.sm)
             .padding(.vertical, spacing.xs)
-            .background(colors.selection.opacity(0.4))
+            .background(colors.selection.opacity(TerminalMetric.bannerFill))
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("herdr-remote-clipboard-banner")
         }

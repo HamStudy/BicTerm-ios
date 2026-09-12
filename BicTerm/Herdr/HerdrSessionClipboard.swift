@@ -21,9 +21,40 @@ extension HerdrSessionModel {
             debugRecordEcho("autoCopyRemote(\(data.count)B)")
             #endif
         } else {
-            endpoints[id]?.pendingRemoteClipboard = HerdrRemoteClipboard(
+            let pending = HerdrRemoteClipboard(
                 data: data, receivedAt: Date()
             )
+            endpoints[id]?.pendingRemoteClipboard = pending
+            scheduleRemoteClipboardAutoDismiss(endpoint: id, pending: pending)
+        }
+    }
+
+    /// Dismissal of the remote-clipboard banner without copying (manual x
+    /// or auto-dismiss): the pending bytes are dropped — doc §8.3 arrival
+    /// alone is never consent to touch the pasteboard, so nothing was or
+    /// will be written.
+    func dismissRemoteClipboard(endpoint id: HerdrEndpointID) {
+        guard let pending = endpoints[id]?.pendingRemoteClipboard else { return }
+        endpoints[id]?.pendingRemoteClipboard = nil
+        #if DEBUG
+        debugRecordEcho("dismissRemote(\(pending.byteCount)B)")
+        #endif
+    }
+
+    /// Arms the banner auto-dismiss: when the delay lapses the SAME pending
+    /// clipboard is dropped through the dismiss path. A newer arrival, an
+    /// explicit copy, or the auto-copy opt-in replaces/nils the slot first,
+    /// and the equality guard keeps the stale timer from touching it.
+    private func scheduleRemoteClipboardAutoDismiss(
+        endpoint id: HerdrEndpointID,
+        pending: HerdrRemoteClipboard
+    ) {
+        let duration = remoteClipboardBannerDuration
+        Task { [weak self] in
+            try? await Task.sleep(for: duration)
+            guard let self, !Task.isCancelled else { return }
+            guard self.endpoints[id]?.pendingRemoteClipboard == pending else { return }
+            self.dismissRemoteClipboard(endpoint: id)
         }
     }
 
@@ -31,7 +62,7 @@ extension HerdrSessionModel {
     /// clipboard frame): the session stays Online; only the note shows.
     func noteClipboardDropped(endpoint id: HerdrEndpointID, generation: UInt, detail: String) {
         guard isActive(endpoint: id, generation: generation) else { return }
-        endpoints[id]?.inputNote = .clipboardDropped(detail)
+        setInputNote(.clipboardDropped(detail), endpoint: id)
         #if DEBUG
         debugRecordEcho("clipboardDropped")
         #endif

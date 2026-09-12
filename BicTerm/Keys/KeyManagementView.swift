@@ -143,20 +143,15 @@ struct KeyRowView: View {
 
 struct KeyTypeBadge: View {
     @Environment(\.terminalColors) var colors
-    @Environment(\.terminalTypography) var typography
 
     let item: KeyListItem
 
     var body: some View {
-        Text(item.typeBadge)
-            .font(typography.caption)
-            .foregroundColor(item.isSecureEnclave ? colors.success : colors.accent)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(
-                (item.isSecureEnclave ? colors.success : colors.accent).opacity(0.18),
-                in: RoundedRectangle(cornerRadius: 4)
-            )
-            .accessibilityIdentifier("key-type-badge")
+        TerminalBadge(
+            item.typeBadge,
+            tint: item.isSecureEnclave ? colors.success : colors.accent,
+            shape: .rounded
+        )
+        .accessibilityIdentifier("key-type-badge")
     }
 }

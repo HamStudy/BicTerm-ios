@@ -152,6 +152,66 @@ final class HerdrSessionInputTests: XCTestCase {
         await model.disconnectAll()
     }
 
+    // MARK: - Feedback-note auto-clear
+
+    func testInputNoteAutoClearsAfterDuration() async throws {
+        let model = HerdrSessionModel(inputNoteDuration: .milliseconds(300))
+        let transport = HerdrReplayTransport(script: [
+            try vendorGolden("server-20"),
+            try herdrGolden("snapshot-2x2"),
+        ])
+        let endpoint = HerdrEndpointID(rawValue: "note-autoclear")
+        model.connect(endpoint: endpoint, transport: transport)
+        let online = await waitUntil { model.endpoints[endpoint]?.phase == .online }
+        XCTAssertTrue(online)
+        XCTAssertNil(model.endpoints[endpoint]?.surface)
+
+        model.sendText("hi", endpoint: endpoint)
+        XCTAssertEqual(model.endpoints[endpoint]?.inputNote, .frozen)
+
+        let cleared = await waitUntil(timeout: 2) {
+            model.endpoints[endpoint]?.inputNote == nil
+        }
+        XCTAssertTrue(cleared, "the feedback note must auto-clear")
+
+        await model.disconnectAll()
+    }
+
+    func testStaleNoteTimerDoesNotClearNewerNote() async throws {
+        let model = HerdrSessionModel(inputNoteDuration: .milliseconds(600))
+        let transport = HerdrReplayTransport(script: [
+            try vendorGolden("server-20"),
+            try herdrGolden("snapshot-2x2"),
+        ])
+        let endpoint = HerdrEndpointID(rawValue: "note-stale-timer")
+        model.connect(endpoint: endpoint, transport: transport)
+        let online = await waitUntil { model.endpoints[endpoint]?.phase == .online }
+        XCTAssertTrue(online)
+
+        model.sendText("hi", endpoint: endpoint)
+        XCTAssertEqual(model.endpoints[endpoint]?.inputNote, .frozen)
+
+        // A newer note re-arms the auto-clear; the first note's timer (firing
+        // at ~600ms) must not clear it.
+        try await Task.sleep(for: .milliseconds(300))
+        model.setInputNote(.pasteTooLarge, endpoint: endpoint)
+        XCTAssertEqual(model.endpoints[endpoint]?.inputNote, .pasteTooLarge)
+
+        // At ~700ms from the first note its timer has already fired.
+        try await Task.sleep(for: .milliseconds(400))
+        XCTAssertEqual(
+            model.endpoints[endpoint]?.inputNote, .pasteTooLarge,
+            "the stale timer must not clear the newer note"
+        )
+
+        let cleared = await waitUntil(timeout: 2) {
+            model.endpoints[endpoint]?.inputNote == nil
+        }
+        XCTAssertTrue(cleared, "the newer note's own timer still clears it")
+
+        await model.disconnectAll()
+    }
+
     // MARK: - Golden wire frames after the fence
 
     func testTextCommitAfterFenceWritesTheGoldenFrame() async throws {

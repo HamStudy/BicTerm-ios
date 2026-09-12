@@ -201,12 +201,7 @@ struct KeyPickerView: View {
     }
 
     private func confirmationChip(_ text: String, systemImage: String, color: Color) -> some View {
-        Label(text, systemImage: systemImage)
-            .font(typography.caption)
-            .foregroundColor(color)
-            .padding(.horizontal, spacing.sm)
-            .padding(.vertical, spacing.xs)
-            .background(colors.background, in: Capsule())
+        TerminalBadge(text, systemImage: systemImage, tint: color, fill: colors.background, size: .regular)
             .padding(.bottom, spacing.xs)
             .accessibilityIdentifier("copy-confirmation")
     }
