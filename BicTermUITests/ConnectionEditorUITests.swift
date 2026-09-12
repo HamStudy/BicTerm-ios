@@ -384,6 +384,12 @@ final class ConnectionEditorUITests: XCTestCase {
         let delete = app.buttons["delete-Swipe-Me-(copy)"]
         XCTAssertTrue(delete.waitForExistence(timeout: 5))
         delete.tap()
+        let confirm = app.buttons["confirm-delete-connection"].firstMatch
+        XCTAssertTrue(
+            confirm.waitForExistence(timeout: 10),
+            "connection deletes ask for confirmation"
+        )
+        confirm.tap()
         let copyGone = NSPredicate(format: "exists == false")
         expectation(for: copyGone, evaluatedWith: app.buttons["connection-Swipe-Me-(copy)"])
         waitForExpectations(timeout: 10)

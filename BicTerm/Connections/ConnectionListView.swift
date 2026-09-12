@@ -6,8 +6,11 @@ struct ConnectionListView: View {
     @Environment(\.terminalTypography) var typography
     @Environment(\.terminalSpacing) var spacing
     @State private var model = ConnectionsModel()
+    @State private var herds = HerdsModel()
     @State private var editorTarget: EditorTarget?
+    @State private var herdEditorTarget: HerdEditorTarget?
     @State private var forgetTarget: Connection?
+    @State private var deleteTarget: Connection?
     let onConnectRequested: (Connection) -> Void
     var onOpenSessions: (() -> Void)?
     var onClose: (() -> Void)?
@@ -18,6 +21,7 @@ struct ConnectionListView: View {
     /// Shared appearance preference handed to the Settings screen (the
     /// Theme row shows its live value; the detail screen edits it).
     let themeModel: ThemeModel
+    var onOpenHerd: ((Herd) -> Void)?
 
     init(
         fontModel: TerminalFontModel,
@@ -25,7 +29,8 @@ struct ConnectionListView: View {
         onConnectRequested: @escaping (Connection) -> Void = { _ in },
         onOpenSessions: (() -> Void)? = nil,
         onClose: (() -> Void)? = nil,
-        onForgetHost: ((Connection) -> Void)? = nil
+        onForgetHost: ((Connection) -> Void)? = nil,
+        onOpenHerd: ((Herd) -> Void)? = nil
     ) {
         self.fontModel = fontModel
         self.themeModel = themeModel
@@ -33,6 +38,7 @@ struct ConnectionListView: View {
         self.onOpenSessions = onOpenSessions
         self.onClose = onClose
         self.onForgetHost = onForgetHost
+        self.onOpenHerd = onOpenHerd
     }
 
     struct EditorTarget: Identifiable {
@@ -52,6 +58,11 @@ struct ConnectionListView: View {
             if let seed { return "duplicate-\(seed.id.uuidString)" }
             return "new"
         }
+    }
+
+    struct HerdEditorTarget: Identifiable {
+        let herd: Herd?
+        var id: String { herd?.id.uuidString ?? "new" }
     }
 
     var body: some View {
@@ -106,6 +117,29 @@ struct ConnectionListView: View {
                 }
                 .presentationDetents([.large])
             }
+            .sheet(item: $herdEditorTarget) { target in
+                HerdEditorView(existing: target.herd, model: herds)
+                    .presentationDetents([.large])
+            }
+            .confirmationDialog(
+                "Delete “\(deleteTarget?.name ?? "")”?",
+                isPresented: Binding(
+                    get: { deleteTarget != nil },
+                    set: { if !$0 { deleteTarget = nil } }
+                ),
+                titleVisibility: .visible
+            ) {
+                Button("Delete Connection", role: .destructive) {
+                    if let target = deleteTarget {
+                        Task { await model.delete(target) }
+                    }
+                    deleteTarget = nil
+                }
+                .accessibilityIdentifier("confirm-delete-connection")
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text(deleteConfirmationMessage)
+            }
             .confirmationDialog(
                 "Forget host data for “\(forgetTarget?.name ?? "")”?",
                 isPresented: Binding(
@@ -129,13 +163,28 @@ struct ConnectionListView: View {
             }
             .task {
                 await model.bootstrap()
+                await herds.bootstrap()
                 presentDebugEditorIfNeeded()
+            }
+            .onChange(of: model.connections) { _, _ in
+                Task { await herds.reload() }
             }
         }
     }
 
+    private var deleteConfirmationMessage: String {
+        var message = "This removes the connection and its stored passwords. Sessions using it are not affected on the remote host."
+        let referencing = deleteTarget.map { herds.herdsReferencing(connectionID: $0.id) } ?? []
+        if !referencing.isEmpty {
+            let names = referencing.map(\.name).sorted().joined(separator: ", ")
+            message += "\n\nAlso used by herd(s): \(names). Those machines stay in their herds but can no longer connect until re-added."
+        }
+        return message
+    }
+
     private var connectionList: some View {
         List {
+            herdsSection
             if model.connections.isEmpty && model.loadError == nil {
                 Text("No connections yet. Tap + to add one.")
                     .font(typography.body)
@@ -152,9 +201,8 @@ struct ConnectionListView: View {
                     }
                     .onDelete { offsets in
                         let doomed = offsets.map { group.connections[$0] }
-                        Task {
-                            for connection in doomed { await model.delete(connection) }
-                        }
+                        guard let first = doomed.first else { return }
+                        deleteTarget = first
                     }
                 } header: {
                     Text(group.title)
@@ -167,6 +215,76 @@ struct ConnectionListView: View {
         .scrollContentBackground(.hidden)
         .background(colors.background)
         .accessibilityIdentifier("connectionList")
+    }
+
+    private var herdsSection: some View {
+        Section {
+            ForEach(herds.herds) { herd in
+                herdRow(herd)
+            }
+            .onDelete { offsets in
+                let doomed = offsets.map { herds.herds[$0] }
+                Task {
+                    for herd in doomed { await herds.delete(herd) }
+                }
+            }
+
+            Button {
+                herdEditorTarget = HerdEditorTarget(herd: nil)
+            } label: {
+                Label("New Herd", systemImage: "plus.circle")
+            }
+            .accessibilityIdentifier("add-herd")
+            .foregroundColor(colors.accent)
+        } header: {
+            Text("Herds")
+                .font(typography.caption)
+                .foregroundColor(colors.dimmed)
+        }
+    }
+
+    private func herdRow(_ herd: Herd) -> some View {
+        Button {
+            onOpenHerd?(herd)
+        } label: {
+            HStack(spacing: spacing.sm) {
+                VStack(alignment: .leading, spacing: spacing.xxxs) {
+                    Text(herd.name)
+                        .font(typography.headline)
+                        .foregroundColor(colors.foreground)
+                    Text(herds.statusSummary(for: herd))
+                        .font(typography.caption)
+                        .foregroundColor(
+                            herd.machines.contains { herds.connection(id: $0.connectionID) == nil }
+                                ? colors.error
+                                : colors.dimmed
+                        )
+                }
+                Spacer()
+                Image(systemName: "square.stack.3d.up")
+                    .foregroundStyle(colors.dimmed)
+            }
+            .padding(.vertical, spacing.xxs)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("herd-\(sanitized(herd.name))")
+        .accessibilityLabel("\(herd.name), \(herds.statusSummary(for: herd))")
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            Button(role: .destructive) {
+                Task { await herds.delete(herd) }
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
+            .accessibilityIdentifier("delete-herd-\(sanitized(herd.name))")
+
+            Button {
+                herdEditorTarget = HerdEditorTarget(herd: herd)
+            } label: {
+                Label("Edit", systemImage: "pencil")
+            }
+            .tint(colors.accent)
+            .accessibilityIdentifier("edit-herd-\(sanitized(herd.name))")
+        }
     }
 
     private func row(
@@ -183,7 +301,7 @@ struct ConnectionListView: View {
         .accessibilityIdentifier("connection-\(sanitized(connection.name))")
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             Button(role: .destructive) {
-                Task { await model.delete(connection) }
+                deleteTarget = connection
             } label: {
                 Label("Delete", systemImage: "trash")
             }
