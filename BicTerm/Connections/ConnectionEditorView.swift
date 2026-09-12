@@ -32,7 +32,7 @@ struct ConnectionEditorView: View {
         case name, host, port, username, password
     }
 
-    struct HopSheetTarget: Identifiable {
+    struct HopSheetTarget: Hashable, Identifiable {
         let index: Int?
         var id: String { index.map(String.init) ?? "new" }
     }
@@ -70,15 +70,18 @@ struct ConnectionEditorView: View {
                         }
             }
         .onAppear {
-            populateDraft()
+            // Populate once: onAppear refires when a pushed editor (key
+            // picker, hop editor) pops back, and re-populating would reset
+            // the in-progress draft to the persisted values.
             if originalDraft == nil {
+                populateDraft()
                 originalDraft = draft
             }
         }
             .onChange(of: draft) {
                 saveError = nil
             }
-            .sheet(item: $hopSheetTarget) { target in
+            .navigationDestination(item: $hopSheetTarget) { target in
                 HopEditorView(
                     draft: target.index.map { draft.hops[$0] } ?? HopDraft(),
                     isEditing: target.index != nil
@@ -89,8 +92,6 @@ struct ConnectionEditorView: View {
                         draft.hops.append(finished)
                     }
                 }
-                .presentationDetents([.large])
-                .presentationCompactAdaptation(.none)
             }
         }
         .environment(\.terminalColors, colors)

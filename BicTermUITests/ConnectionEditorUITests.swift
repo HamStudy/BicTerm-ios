@@ -113,7 +113,7 @@ final class ConnectionEditorUITests: XCTestCase {
         addHop.tap()
         XCTAssertTrue(app.staticTexts["hop-limit-message"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.staticTexts["hop-limit-message"].label, "Maximum 5 hops")
-        XCTAssertFalse(app.textFields["hop-field-host"].exists, "6th hop sheet must not open")
+        XCTAssertFalse(app.textFields["hop-field-host"].exists, "6th hop editor must not open")
 
         let hostField = app.textFields["field-host"]
         scrollToHittable(hostField, swipingUp: false)
@@ -499,8 +499,8 @@ final class ConnectionEditorUITests: XCTestCase {
         )
         dialogButton(identifier: "discard-confirm", label: "Discard Changes").tap()
 
-        let sheetGone = NSPredicate(format: "exists == false")
-        expectation(for: sheetGone, evaluatedWith: hostField)
+        let popped = NSPredicate(format: "exists == false")
+        expectation(for: popped, evaluatedWith: hostField)
         waitForExpectations(timeout: 10)
         XCTAssertTrue(
             app.textFields["field-name"].waitForExistence(timeout: 5),
@@ -509,6 +509,42 @@ final class ConnectionEditorUITests: XCTestCase {
         XCTAssertFalse(app.staticTexts["hop-0-host"].exists, "a discarded hop must not enter the draft")
 
         app.buttons["cancel-editor"].tap()
+    }
+
+    // MARK: Hop push — draft survives the pop
+
+    func testSavedHopPushPreservesConnectionDraft() {
+        launchApp(reset: true)
+
+        openEditorForNewConnection()
+        typeInto(app.textFields["field-name"], "Draft Keeper")
+        typeInto(app.textFields["field-host"], "10.20.30.40")
+        typeInto(app.textFields["field-username"], "carol")
+        selectAuthenticationKey("Fixture Ed25519")
+        app.buttons["save-editor"].tap()
+
+        XCTAssertTrue(app.buttons["connection-Draft-Keeper"].waitForExistence(timeout: 10))
+        openEditorForConnection(named: "Draft-Keeper")
+
+        addHop(host: "127.0.0.1", port: "12222", username: "hopuser", key: "Fixture Ed25519")
+
+        // Saving the hop pops the pushed editor back onto the same editor
+        // instance — the stack kept it alive, so the in-progress draft and
+        // its field values must be exactly as they were before the push.
+        XCTAssertTrue(app.staticTexts["hop-0-host"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["hop-0-host"].label, "127.0.0.1:12222")
+
+        let nameField = app.textFields["field-name"]
+        scrollToHittable(nameField, swipingUp: false)
+        XCTAssertEqual(nameField.value as? String, "Draft Keeper")
+        XCTAssertEqual(app.textFields["field-host"].value as? String, "10.20.30.40")
+        XCTAssertEqual(app.textFields["field-username"].value as? String, "carol")
+
+        // The saved hop lives only in the editor's in-memory draft until the
+        // connection itself is saved, so cancelling here must still prompt.
+        app.buttons["cancel-editor"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["discard-changes-dialog"].waitForExistence(timeout: 5))
+        dialogButton(identifier: "discard-confirm", label: "Discard Changes").tap()
     }
 
     /// SwiftUI confirmationDialog actions surface under their SwiftUI
@@ -740,16 +776,16 @@ final class ConnectionEditorUITests: XCTestCase {
         let save = app.buttons["save-hop"]
         XCTAssertTrue(save.waitForExistence(timeout: 5))
         save.tap()
-        let sheetDismissed = NSPredicate(format: "exists == false")
-        expectation(for: sheetDismissed, evaluatedWith: hostField)
+        let popped = NSPredicate(format: "exists == false")
+        expectation(for: popped, evaluatedWith: hostField)
         waitForExpectations(timeout: 10)
 
-        // A tap issued against a row while the sheet is still unwinding gets
-        // swallowed by the presentation transition; hop N+1 then observes no
-        // Add Hop sheet at all. Gate on the sheet being fully detached and let
-        // the editor settle before the next hop begins.
-        let noSheets = NSPredicate(format: "count == 0")
-        expectation(for: noSheets, evaluatedWith: app.sheets)
+        // The hop editor is pushed, not sheeted: saving pops it back onto the
+        // connection editor. A tap issued while the pop transition is still
+        // unwinding lands on the sliding-away view and is swallowed; gate on
+        // the editor's chrome being interactive again before the next hop.
+        let editorReady = NSPredicate(format: "hittable == true")
+        expectation(for: editorReady, evaluatedWith: app.buttons["cancel-editor"])
         waitForExpectations(timeout: 10)
         Thread.sleep(forTimeInterval: 0.4)
     }

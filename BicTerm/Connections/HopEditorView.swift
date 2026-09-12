@@ -84,116 +84,120 @@ struct HopEditorView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            Form {
-                Section("Hop") {
-                    field("Host", text: $draft.host, identifier: "hop-field-host", error: hostError, focus: .host)
-                        .keyboardType(.URL)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
+        Form {
+            Section("Hop") {
+                field("Host", text: $draft.host, identifier: "hop-field-host", error: hostError, focus: .host)
+                    .keyboardType(.URL)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
 
-                    field("Port", text: $draft.port, identifier: "hop-field-port", error: portError, focus: .port)
-                        .keyboardType(.default)
+                field("Port", text: $draft.port, identifier: "hop-field-port", error: portError, focus: .port)
+                    .keyboardType(.default)
 
-                    field("Username", text: $draft.username, identifier: "hop-field-username", error: usernameError, focus: .username)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
+                field("Username", text: $draft.username, identifier: "hop-field-username", error: usernameError, focus: .username)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
 
-                    Picker("Authentication", selection: Binding(
-                        get: { draft.authMethod },
-                        set: {
-                            draft.switchAuthMethod(to: $0)
-                            if $0 == .password { touchedFields.insert(.password) }
-                        }
-                    )) {
-                        Text("Key").tag(AuthMethod.publickey)
-                        Text("Password").tag(AuthMethod.password)
+                Picker("Authentication", selection: Binding(
+                    get: { draft.authMethod },
+                    set: {
+                        draft.switchAuthMethod(to: $0)
+                        if $0 == .password { touchedFields.insert(.password) }
                     }
-                    .pickerStyle(.segmented)
-                    .accessibilityIdentifier("hop-auth-method-picker")
+                )) {
+                    Text("Key").tag(AuthMethod.publickey)
+                    Text("Password").tag(AuthMethod.password)
+                }
+                .pickerStyle(.segmented)
+                .accessibilityIdentifier("hop-auth-method-picker")
 
-                    if draft.authMethod == .password {
+                if draft.authMethod == .password {
+                    VStack(alignment: .leading, spacing: spacing.xxxs) {
+                        HStack {
+                            Text("Password")
+                                .font(typography.body)
+                                .foregroundColor(colors.foreground)
+                            Spacer()
+                            SecureField("", text: touchedBinding($draft.passwordInput, field: .password))
+                                .font(typography.body)
+                                .foregroundColor(colors.foreground)
+                                .multilineTextAlignment(.trailing)
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled()
+                                .accessibilityLabel("Password")
+                                .accessibilityIdentifier("hop-password-field")
+                        }
+                        if draft.hasSavedPassword, draft.passwordInput.isEmpty {
+                            Text("Saved in Keychain")
+                                .font(typography.caption)
+                                .foregroundColor(colors.success)
+                                .accessibilityIdentifier("hop-password-saved-badge")
+                        }
+                    }
+                } else {
+                    NavigationLink {
+                        KeyPickerView(
+                            selectedReference: draft.keyReference
+                        ) { selected in
+                            draft.keyReference = selected.reference
+                            draft.keyLabel = selected.label
+                        }
+                    } label: {
                         VStack(alignment: .leading, spacing: spacing.xxxs) {
-                            HStack {
-                                Text("Password")
-                                    .font(typography.body)
-                                    .foregroundColor(colors.foreground)
-                                Spacer()
-                                SecureField("", text: touchedBinding($draft.passwordInput, field: .password))
-                                    .font(typography.body)
-                                    .foregroundColor(colors.foreground)
-                                    .multilineTextAlignment(.trailing)
-                                    .textInputAutocapitalization(.never)
-                                    .autocorrectionDisabled()
-                                    .accessibilityLabel("Password")
-                                    .accessibilityIdentifier("hop-password-field")
-                            }
-                            if draft.hasSavedPassword, draft.passwordInput.isEmpty {
-                                Text("Saved in Keychain")
-                                    .font(typography.caption)
-                                    .foregroundColor(colors.success)
-                                    .accessibilityIdentifier("hop-password-saved-badge")
-                            }
+                            Text("Authentication Key")
+                                .font(typography.body)
+                                .foregroundColor(colors.foreground)
+                            Text(draft.keyReference.isEmpty ? "Select a key" : draft.keyLabel)
+                                .font(typography.caption)
+                                .foregroundColor(
+                                    draft.keyReference.isEmpty
+                                        ? (saveAttempted ? colors.error : colors.dimmed)
+                                        : colors.accent
+                                )
                         }
-                    } else {
-                        NavigationLink {
-                            KeyPickerView(
-                                selectedReference: draft.keyReference
-                            ) { selected in
-                                draft.keyReference = selected.reference
-                                draft.keyLabel = selected.label
-                            }
-                        } label: {
-                            VStack(alignment: .leading, spacing: spacing.xxxs) {
-                                Text("Authentication Key")
-                                    .font(typography.body)
-                                    .foregroundColor(colors.foreground)
-                                Text(draft.keyReference.isEmpty ? "Select a key" : draft.keyLabel)
-                                    .font(typography.caption)
-                                    .foregroundColor(
-                                        draft.keyReference.isEmpty
-                                            ? (saveAttempted ? colors.error : colors.dimmed)
-                                            : colors.accent
-                                    )
-                            }
-                        }
-                        .accessibilityIdentifier("hop-key-selector")
                     }
+                    .accessibilityIdentifier("hop-key-selector")
                 }
             }
-            .scrollContentBackground(.hidden)
-            .background(colors.background)
-            .scrollDismissesKeyboard(.immediately)
-            .toolbar {
-                ToolbarItemGroup(placement: .keyboard) {
-                    Spacer()
-                    Button("Done") { focus = nil }
-                }
+        }
+        .scrollContentBackground(.hidden)
+        .background(colors.background)
+        .scrollDismissesKeyboard(.immediately)
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") { focus = nil }
             }
-            .navigationTitle(isEditing ? "Edit Hop" : "Add Hop")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Cancel") { cancelTapped() }
-                        .accessibilityIdentifier("cancel-hop")
+        }
+        .navigationTitle(isEditing ? "Edit Hop" : "Add Hop")
+        .navigationBarTitleDisplayMode(.inline)
+        // Pushed onto the connection editor's stack; the back button is
+        // hidden so the discard-guarded Cancel is the only visible exit and
+        // a dirty hop is never abandoned without the "Discard Changes?"
+        // prompt. The system edge-swipe pop gesture has no SwiftUI guard
+        // hook and stays an unguarded exit — intercepting it would require
+        // UIKit gesture introspection, rejected here as out of scope.
+        .navigationBarBackButtonHidden(true)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button("Cancel") { cancelTapped() }
+                    .accessibilityIdentifier("cancel-hop")
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("Save") {
+                    saveAttempted = true
+                    originalDraft = draft
+                    onFinish(draft)
+                    dismiss()
                 }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Save") {
-                        saveAttempted = true
-                        originalDraft = draft
-                        onFinish(draft)
-                        dismiss()
-                    }
-                    .disabled(!draft.isComplete)
-                    .accessibilityIdentifier("save-hop")
-                    .fontWeight(.semibold)
-                }
+                .disabled(!draft.isComplete)
+                .accessibilityIdentifier("save-hop")
+                .fontWeight(.semibold)
             }
         }
         .environment(\.terminalColors, colors)
         .environment(\.terminalTypography, typography)
         .environment(\.terminalSpacing, spacing)
-        .interactiveDismissDisabled(isDirty)
         .confirmationDialog(
             "Discard Changes?",
             isPresented: $showDiscardConfirmation,
@@ -206,8 +210,8 @@ struct HopEditorView: View {
             Button("Keep Editing") {}
                 .accessibilityIdentifier("discard-cancel")
         }
-        // See ConnectionEditorView: the identifier rides the sheet root and
-        // is present only while the discard dialog is showing.
+        // See ConnectionEditorView: the identifier rides the pushed editor's
+        // root and is present only while the discard dialog is showing.
         .accessibilityIdentifier(showDiscardConfirmation ? "discard-changes-dialog" : "hop-editor")
     }
 
