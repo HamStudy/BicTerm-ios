@@ -81,6 +81,27 @@ targets:
         # yet (T16 wires the UI); the anchor keeps the HerdrCore objects in
         # the app binary (Apache-2.0 is App Store-safe).
         OTHER_LDFLAGS: "$(inherited) -u _herdr_client_create"
+    # iPadOS 26 windowing: the app must DECLARE all four interface
+    # orientations (incl. upside-down portrait on iPad) to be classified as
+    # continuously resizable; a missing/partial declaration falls back to
+    # preset-snapping windows with scaled content (UIKit runtime fault:
+    # "Support for all orientations will soon be required"). The ~ipad
+    # variant cannot be expressed as an INFOPLIST_KEY_ build setting —
+    # xcodebuild silently drops tilde-suffixed INFOPLIST_KEY names — so it
+    # lives in this partial Info.plist, which GENERATE_INFOPLIST_FILE merges
+    # with the INFOPLIST_KEY_* settings above.
+    info:
+      path: BicTerm/Info.plist
+      properties:
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
     dependencies:
       - package: BicTermCore
         product: BicTermCore
