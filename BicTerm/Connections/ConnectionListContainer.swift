@@ -5,6 +5,9 @@ struct ConnectionListContainer: View {
     @Environment(\.openWindow) private var openWindow
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.supportsMultipleWindows) private var supportsMultipleWindows
+    @Environment(\.terminalColors) private var colors
+    @Environment(\.terminalTypography) private var typography
+    @Environment(\.terminalSpacing) private var spacing
 
     let store: SessionStore
 
@@ -12,6 +15,7 @@ struct ConnectionListContainer: View {
     @State private var herdrCoverSession: HerdrCoverSession?
     @State private var restorableSessions: [SessionStore.RestorableSession] = []
     @State private var switcherPresented = false
+    @State private var herdrConnect = HerdrConnectCoordinator()
 
     private struct HerdrCoverSession: Identifiable {
         let id: UUID
@@ -19,6 +23,17 @@ struct ConnectionListContainer: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            #if DEBUG
+            if HerdrWorkspaceUITest.liveConnectEnabled {
+                Text(String(herdrConnect.debugAttemptCount))
+                    .font(typography.caption)
+                    .foregroundStyle(colors.dimmed)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, spacing.sm)
+                    .padding(.vertical, 2)
+                    .accessibilityIdentifier("herdr-connect-attempts")
+            }
+            #endif
             if !restorableSessions.isEmpty {
                 RestorableSessionsSection(entries: restorableSessions) { entry in
                     reconnectRestorable(entry)
@@ -105,6 +120,39 @@ struct ConnectionListContainer: View {
                 .terminalStyle()
             }
         }
+        .sheet(
+            item: Binding(
+                get: { herdrConnect.trustPrompt },
+                set: { herdrConnect.trustPrompt = $0 }
+            )
+        ) { prompt in
+            HostTrustPromptView(
+                challenge: SessionStore.HostTrustChallenge(
+                    host: prompt.challenge.host,
+                    port: prompt.challenge.port,
+                    algorithm: prompt.challenge.algorithm,
+                    fingerprint: prompt.challenge.fingerprint,
+                    publicKeyData: prompt.challenge.publicKeyData
+                ),
+                errorMessage: nil,
+                onTrust: { herdrConnect.resolveTrustPrompt(true) },
+                onCancel: { herdrConnect.resolveTrustPrompt(false) }
+            )
+            .interactiveDismissDisabled(true)
+            .presentationDetents([.large])
+            .terminalStyle()
+        }
+        .alert(
+            "Can’t Connect",
+            isPresented: Binding(
+                get: { herdrConnect.connectError != nil },
+                set: { if !$0 { herdrConnect.connectError = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(herdrConnect.connectError ?? "")
+        }
         .task {
             await reloadRestorableSessions()
             #if DEBUG
@@ -125,7 +173,24 @@ struct ConnectionListContainer: View {
     }
 
     private func handleConnect(_ connection: Connection) {
-        present(store.openSession(for: connection))
+        if connection.herdrEnabled {
+            #if DEBUG
+            if HerdrWorkspaceUITest.doubleConnectRequested {
+                fireHerdrConnect(connection)
+            }
+            #endif
+            fireHerdrConnect(connection)
+        } else {
+            present(store.openSession(for: connection))
+        }
+    }
+
+    private func fireHerdrConnect(_ connection: Connection) {
+        herdrConnect.handleConnect(
+            connection,
+            hostKeyVerifier: store.hostKeyVerifier,
+            present: { sessionID in presentHerdr(sessionID: sessionID) }
+        )
     }
 
     /// Herdr sessions present through the same path as SSH sessions: their
@@ -147,7 +212,7 @@ struct ConnectionListContainer: View {
     /// (observed on iPad); the replay bootstrap therefore runs once, from
     /// the first .active scene-phase transition.
     private func openHerdrFixtureReplayOnce() {
-        guard HerdrWorkspaceUITest.isEnabled, !Self.didOpenHerdrReplay else { return }
+        guard HerdrWorkspaceUITest.wantsReplayBootstrap, !Self.didOpenHerdrReplay else { return }
         Self.didOpenHerdrReplay = true
         let id = HerdrWorkspaceCenter.shared.open { model in
             HerdrWorkspaceUITest.connectReplay(model: model)

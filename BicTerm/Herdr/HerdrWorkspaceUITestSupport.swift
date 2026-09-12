@@ -13,6 +13,20 @@ import UIKit
 ///                                 `lifecycle` (fence + re-attach source),
 ///                                 or `probe-missing` (preflight probe
 ///                                 diagnostic screen, no connection)
+///   --uitest-herdr-live           live-endpoint E2E (todo 6): echo strips
+///                                 on, NO replay bootstrap; the connect flow
+///                                 probes the pinned fixture binary
+///   --uitest-herdr-probe-missing  with --uitest-herdr-live: probe search
+///                                 paths point nowhere, forcing the
+///                                 no-herdr probe diagnostic
+///   --uitest-herdr-untrusted      with --uitest-herdr-live: herdr connects
+///                                 through a FRESH in-memory host-key store,
+///                                 so the TOFU prompt always surfaces
+///   --uitest-herdr-double-connect with --uitest-herdr-live: the first herdr
+///                                 connect is fired TWICE in one turn — the
+///                                 double-tap XCUI cannot deliver reliably
+///                                 (swipe actions close within ~1s) — for
+///                                 the in-flight guard idempotency test
 ///   HERDR_FIXTURE_DIR (env)       absolute fixture dir (committed frames)
 ///   HERDR_UI_TEST_PASTEBOARD (env) seed string written to the system
 ///                                 pasteboard BY THE APP at boot, so the
@@ -28,7 +42,39 @@ import UIKit
 /// entry point (audited like the other --uitest seams).
 enum HerdrWorkspaceUITest {
     static var isEnabled: Bool {
+        wantsReplayBootstrap || liveConnectEnabled
+    }
+
+    static var wantsReplayBootstrap: Bool {
         ProcessInfo.processInfo.arguments.contains("--uitest-herdr-replay")
+    }
+
+    static var liveConnectEnabled: Bool {
+        ProcessInfo.processInfo.arguments.contains("--uitest-herdr-live")
+    }
+
+    static var untrustedStoreRequested: Bool {
+        ProcessInfo.processInfo.arguments.contains("--uitest-herdr-untrusted")
+    }
+
+    static var doubleConnectRequested: Bool {
+        ProcessInfo.processInfo.arguments.contains("--uitest-herdr-double-connect")
+    }
+
+    static var probeSearchPathsForLiveConnect: [String]? {
+        guard liveConnectEnabled else { return nil }
+        if ProcessInfo.processInfo.arguments.contains("--uitest-herdr-probe-missing") {
+            return ["/nonexistent-bicterm-ui/herdr"]
+        }
+        let binary = repoRoot.appendingPathComponent("Fixtures/run/herdr/herdr").path
+        return FileManager.default.fileExists(atPath: binary) ? [binary] : nil
+    }
+
+    private static var repoRoot: URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
     }
 
     static var mode: String {
@@ -203,6 +249,32 @@ enum HerdrWorkspaceUITest {
             load(from: directory, "surface-2x2"),
             load(from: directory, "presentation-ready-2x2"),
         ]
+    }
+
+    /// Live-endpoint E2E: arms the `--uitest-hwkeys` injector for a freshly
+    /// opened live workspace and starts it only once the endpoint is online
+    /// with a committed surface — earlier `insertText` would be dropped by
+    /// the input gate (`.offline`/`.frozen`) instead of queued.
+    @MainActor
+    static func startLiveInjectionWhenReady(
+        model: HerdrSessionModel,
+        endpoint: HerdrEndpointID
+    ) {
+        guard liveConnectEnabled, keyInjector == nil else { return }
+        let injector = TestHardwareKeyInjector(spec: hwkeysSpec)
+        guard let injector else { return }
+        keyInjector = injector
+        Task { @MainActor in
+            let deadline = Date().addingTimeInterval(60)
+            while Date() < deadline {
+                if let state = model.endpoints[endpoint],
+                   state.phase == .online, state.surface != nil {
+                    injector.startNow()
+                    return
+                }
+                try? await Task.sleep(for: .milliseconds(200))
+            }
+        }
     }
 }
 #endif

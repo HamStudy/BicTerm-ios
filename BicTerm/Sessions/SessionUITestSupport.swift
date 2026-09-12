@@ -190,7 +190,7 @@ enum SessionFixtureSeeder {
     /// The fixture sshd runs as the host user owning this checkout; the
     /// simulator app process resolves NSUserName() to "" (the same gap the
     /// core tests work around), so derive the name from `#filePath`.
-    private static func fixtureUsername() -> String {
+    static func fixtureUsername() -> String {
         for candidate in [ProcessInfo.processInfo.environment["USER"],
                           ProcessInfo.processInfo.environment["LOGNAME"]] {
             if let candidate, !candidate.isEmpty { return candidate }

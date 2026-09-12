@@ -141,6 +141,24 @@ extension HerdrSessionModel {
         #endif
     }
 
+    /// Records a typed connect-time failure (herdr-support plan todo 6): the
+    /// SSH establish, probe channel, or bridge open failed before any endpoint
+    /// runtime existed, so there is nothing to tear down — the endpoint
+    /// renders the diagnostic screen instead of the workspace.
+    func failConnect(endpoint id: HerdrEndpointID, diagnostic: HerdrDiagnostic) {
+        var state = endpoints[id] ?? HerdrEndpointState()
+        state.phase = .failed
+        state.diagnostic = diagnostic
+        state.probe = nil
+        state.reconnectAttempt = nil
+        state.surface = nil
+        endpoints[id] = state
+        selectedEndpointID = id
+        #if DEBUG
+        debugLifecycleLog.append("connect-failed:\(id.rawValue)")
+        #endif
+    }
+
     /// Starts the bounded reconnect loop for an endpoint with a live
     /// source. Idempotent while a loop is already running — no retry storms.
     func reconnect(endpoint id: HerdrEndpointID) {

@@ -171,6 +171,8 @@ final class ConnectionsModel {
     //   --uitest-demo           seed a demo 2-hop connection
     //   --uitest-demo-editor    demo connection + auto-open its editor
     //   --uitest-unavailable-connection  seed a known but unregistered protocol
+    //   --uitest-herdr-connection        seed a herdr-enabled fixture connection
+    //                                     (port via --uitest-herdr-connection-port)
 
     #if DEBUG
     private func runUITestHooksIfRequested() async {
@@ -180,6 +182,7 @@ final class ConnectionsModel {
             || arguments.contains("--uitest-demo")
             || arguments.contains("--uitest-demo-editor")
             || arguments.contains("--uitest-unavailable-connection")
+            || arguments.contains("--uitest-herdr-connection")
         else { return }
 
         if arguments.contains("--uitest-reset") || arguments.contains("--uitest-unavailable-connection") {
@@ -197,6 +200,9 @@ final class ConnectionsModel {
         }
         if arguments.contains("--uitest-unavailable-connection") {
             await seedUnavailableConnection()
+        }
+        if arguments.contains("--uitest-herdr-connection") {
+            await seedHerdrConnection()
         }
     }
 
@@ -265,6 +271,31 @@ final class ConnectionsModel {
             port: 2022,
             username: "alice",
             keyReference: keyReference
+        ) else { return }
+        try? await services.connectionStore.save(connection)
+    }
+
+    /// Seeds "Herdr Alpha", the herdr-enabled fixture connection the live
+    /// connect-flow E2E connects to (default hop-1 on 12222).
+    private func seedHerdrConnection() async {
+        let existing = (try? await services.connectionStore.loadConnections()) ?? []
+        guard !existing.contains(where: { $0.name == "Herdr Alpha" }) else { return }
+        let keys = (try? await services.keyRepository.list()) ?? []
+        let keyReference = keys.first { $0.label == "Fixture Ed25519" }?.reference
+            ?? keys.first?.reference ?? "seed-key-missing"
+        let port = TerminalSceneUITest.value(after: "--uitest-herdr-connection-port")
+            .flatMap(Int.init) ?? 12222
+        guard let options = try? ProtocolOptions([
+            ProtocolOptions.herdrEnabledKey: .bool(true)
+        ]) else { return }
+        guard let connection = try? Connection(
+            name: "Herdr Alpha",
+            type: .ssh,
+            host: "127.0.0.1",
+            port: port,
+            username: SessionFixtureSeeder.fixtureUsername(),
+            keyReference: keyReference,
+            protocolOptions: options
         ) else { return }
         try? await services.connectionStore.save(connection)
     }
