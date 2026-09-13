@@ -51,6 +51,24 @@ scripts/herdr-embed-prepare.sh
 
 Evidence: `.sisyphus/evidence/herdr-embed-t1.log`.
 
+## Embed FFI crate (plan task 3)
+
+`Vendor/herdr/herdr-ios-embed/` is a standalone workspace (excluded from the
+Vendor/herdr workspace) that path-depends on the patched working copy above
+and exposes the in-process embed C ABI (`herdr_embed_*`: start/stop,
+write(input), cancellable blocking read(output), winsize+SIGWINCH) with the
+cbindgen header at `herdr-ios-embed/include/HerdrEmbed.h`. Build proof:
+`scripts/herdr-embed-prepare.sh` now (a) defaults
+`HERDR_EMBED_GHOSTTY_VT_A` to the REAL committed aarch64-ios archive from
+plan task 2 (the link stub stays available via the env override), and
+(b) after the herdr binary proofs, builds the embed crate for
+`aarch64-apple-ios` in both feature variants, audits the staticlib for the
+ABI + all 173 `ghostty_*` symbols, and regenerates/verifies the header.
+Host harness tests run the real client against the pinned prebuilt server
+fixture through the shim; evidence `.sisyphus/evidence/herdr-embed-t3.log`.
+No patch-series files were modified for this task; only this script's
+default and appended proof step changed.
+
 ## Rebase instructions
 
 1. Update the `upstream/` checkout to the new herdr commit and record it in

@@ -1,0 +1,40 @@
+[package]
+name = "herdr-ios-embed"
+version = "0.9.0"
+edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/herdrdev/herdr"
+description = "In-process C ABI that runs the real herdr TUI client against a host-owned pty (Apple platforms)"
+build = false
+
+# Standalone workspace on purpose: this crate depends on the PATCHED herdr
+# working copy that scripts/herdr-embed-prepare.sh materializes at
+# ../../../.build-artifacts/herdr-embed (T1's patch series + T2's real
+# libghostty-vt.a). The Vendor/herdr workspace excludes this directory so the
+# stock herdr-ios-ffi builds never require the working copy to exist.
+[lib]
+crate-type = ["lib", "staticlib"]
+name = "herdr_ios_embed"
+
+[dependencies]
+herdr = { path = "../../../.build-artifacts/herdr-embed" }
+libc = "0.2"
+
+[features]
+# Forwards to the patched herdr crate's host-injected transport seam (T5).
+bicterm-transport = ["herdr/bicterm-transport"]
+
+# The patched herdr crate redirects its portable-pty dependency to its own
+# vendored copy; patches only apply from the workspace root, which this
+# standalone crate is, so the redirect must be repeated here.
+[patch.crates-io]
+portable-pty = { path = "../../../.build-artifacts/herdr-embed/vendor/portable-pty" }
+
+# Workspace lints of Vendor/herdr do not reach this standalone crate; the
+# same override rationale as herdr-ios-ffi applies: this crate IS the audited
+# FFI boundary and carries its reviewed `unsafe` blocks.
+[lints.rust]
+unsafe_code = "allow"
+unused_must_use = "deny"
+non_camel_case_types = "allow"
+non_snake_case = "allow"

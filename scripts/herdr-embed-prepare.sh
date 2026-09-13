@@ -12,6 +12,7 @@
 #                              committed link stub (LINK STUB ONLY — it cannot
 #                              parse VT; task T2 replaces it with a real build)
 #   HERDR_EMBED_SKIP_BUILD     set 1 to skip the post-apply iOS build proof
+#   HERDR_EMBED_SKIP_FFI       set 1 to skip the embed FFI build proof (T3)
 #
 # On success the tree is build-proven with:
 #   cargo build --locked --target aarch64-apple-ios
@@ -72,7 +73,10 @@ grep -q "bicterm-transport" "$OUT/Cargo.toml" ||
 echo "== installing libghostty-vt.a"
 VT_DIR="$OUT/vendor/libghostty-vt/zig-out/lib"
 mkdir -p "$VT_DIR"
-VT_A="${HERDR_EMBED_GHOSTTY_VT_A:-$PATCHES/libghostty-vt.linkstub-aarch64-ios.a}"
+# T3 default: the REAL committed aarch64-ios archive (Vendor/herdr/embed/,
+# plan task 2). The link stub remains available via HERDR_EMBED_GHOSTTY_VT_A
+# for reproducing T1's stub-linked build proof.
+VT_A="${HERDR_EMBED_GHOSTTY_VT_A:-$ROOT/Vendor/herdr/embed/libghostty-vt/aarch64-ios/libghostty-vt.a}"
 test -f "$VT_A" || { echo "missing $VT_A" >&2; exit 1; }
 cp "$VT_A" "$VT_DIR/libghostty-vt.a"
 file "$VT_DIR/libghostty-vt.a"
@@ -94,4 +98,55 @@ cargo build --locked --manifest-path "$OUT/Cargo.toml" \
     --features bicterm-transport --target aarch64-apple-ios
 BIN="$CARGO_TARGET_DIR/aarch64-apple-ios/debug/herdr"
 file "$BIN"
-echo "PREPARED AND BUILD-PROVEN: $OUT"
+
+# ---- embed FFI build proof (plan task 3) ------------------------------------
+# Builds Vendor/herdr/herdr-ios-embed against the patched working copy for
+# aarch64-apple-ios, both feature variants, and regenerates the committed
+# cbindgen header with a loud drift check (build-herdr-core.sh pattern).
+if [ "${HERDR_EMBED_SKIP_FFI:-0}" = "1" ]; then
+    echo "PREPARED AND BUILD-PROVEN: $OUT (embed FFI proof skipped)"
+    exit 0
+fi
+
+if [ ! -x "$ROOT/.build-artifacts/tools/bin/cbindgen" ]; then
+    echo "installing cbindgen repo-locally"
+    cargo install --locked --root "$ROOT/.build-artifacts/tools" cbindgen
+fi
+CBINDGEN="$ROOT/.build-artifacts/tools/bin/cbindgen"
+
+EMBED_CRATE="$ROOT/Vendor/herdr/herdr-ios-embed"
+HEADER="$EMBED_CRATE/include/HerdrEmbed.h"
+echo "== embed FFI build proof (aarch64-apple-ios, both variants)"
+(
+    cd "$EMBED_CRATE"
+    cargo build --locked --target aarch64-apple-ios
+    cargo build --locked --features bicterm-transport --target aarch64-apple-ios
+)
+STATICLIB="$CARGO_TARGET_DIR/aarch64-apple-ios/debug/libherdr_ios_embed.a"
+test -s "$STATICLIB" || { echo "embed staticlib missing: $STATICLIB" >&2; exit 1; }
+# nm exits nonzero on precompiled rust-std members (LLVM bitcode); only the
+# workspace-crate symbols matter, so nm's exit is ignored (same as
+# build-herdr-core.sh's audit).
+embed_symbols="$(nm "$STATICLIB" 2>/dev/null || true)"
+grep -q "_herdr_embed_start" <<<"$embed_symbols" ||
+    { echo "embed ABI symbol missing from $STATICLIB" >&2; exit 1; }
+grep -q "_ghostty_terminal_vt_write" <<<"$embed_symbols" ||
+    { echo "libghostty-vt symbols missing from $STATICLIB" >&2; exit 1; }
+
+echo "== cbindgen header (HerdrEmbed.h)"
+mkdir -p "$ROOT/.scratch/tmp"
+"$CBINDGEN" "$EMBED_CRATE" --crate herdr-ios-embed \
+    --config "$EMBED_CRATE/cbindgen.toml" -o "$ROOT/.scratch/tmp/HerdrEmbed.h"
+test -s "$ROOT/.scratch/tmp/HerdrEmbed.h"
+if ! cmp -s "$ROOT/.scratch/tmp/HerdrEmbed.h" "$HEADER" 2>/dev/null; then
+    if [ -f "$HEADER" ]; then
+        cp "$ROOT/.scratch/tmp/HerdrEmbed.h" "$HEADER"
+        echo "ERROR: HerdrEmbed.h drifted from the generated ABI; committed copy updated — review and re-run" >&2
+        exit 1
+    fi
+    mkdir -p "$EMBED_CRATE/include"
+    cp "$ROOT/.scratch/tmp/HerdrEmbed.h" "$HEADER"
+    echo "HerdrEmbed.h generated for the first time — commit it"
+fi
+rm -f "$ROOT/.scratch/tmp/HerdrEmbed.h"
+echo "PREPARED AND BUILD-PROVEN: $OUT (embed FFI ok)"
