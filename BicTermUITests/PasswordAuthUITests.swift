@@ -194,11 +194,15 @@ final class PasswordAuthUITests: XCTestCase {
         XCTAssertTrue(app.buttons["connection-Password-Auth-(copy)"].waitForExistence(timeout: 10))
 
         // Deleting the source must not orphan the shared entry: the copy
-        // still opens with the saved-password badge.
+        // still opens with the saved-password badge. Delete is herd-aware
+        // and asks for confirmation first.
         swipeRow(named: "Password-Auth")
         let delete = app.buttons["delete-Password-Auth"]
         XCTAssertTrue(delete.waitForExistence(timeout: 5))
         delete.tap()
+        let confirm = app.buttons["confirm-delete-connection"].firstMatch
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5))
+        confirm.tap()
         let originalGone = NSPredicate(format: "exists == false")
         expectation(for: originalGone, evaluatedWith: app.buttons["connection-Password-Auth"])
         waitForExpectations(timeout: 10)

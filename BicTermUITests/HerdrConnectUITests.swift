@@ -105,8 +105,12 @@ final class HerdrConnectUITests: XCTestCase {
             app.buttons["add-connection"].waitForExistence(timeout: 15),
             "disconnecting must return to the connection list"
         )
-        XCTAssertEqual(
-            app.staticTexts["herdr-connect-attempts"].label, "1",
+        // Every open window's connection list renders this strip (the herdr
+        // window's fallback list shows its own coordinator's count of 0);
+        // exactly one attempt means the connecting window's strip reads 1.
+        let attempts = app.staticTexts.matching(identifier: "herdr-connect-attempts")
+        XCTAssertTrue(
+            (0..<attempts.count).contains { attempts.element(boundBy: $0).label == "1" },
             "repeated taps while one attempt is in flight must yield exactly one attempt"
         )
     }

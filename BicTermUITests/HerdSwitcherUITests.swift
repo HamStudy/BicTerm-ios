@@ -202,8 +202,11 @@ final class HerdSwitcherUITests: XCTestCase {
                 "machine \(machine): the first-contact TOFU prompt must surface above the herd cover"
             )
             XCTAssertTrue(bar.exists, "the workspace stays mounted under the prompt")
-            waitUntil(app.staticTexts["trust-host"], contains: "127.0.0.1")
-            app.buttons["trust-confirm"].tap()
+            // The same prompt sheet mounts on every window watching this
+            // coordinator (herdr window presenter + main-window backstop);
+            // either copy resolves the same challenge, so firstMatch is safe.
+            waitUntil(app.staticTexts["trust-host"].firstMatch, contains: "127.0.0.1")
+            app.buttons["trust-confirm"].firstMatch.tap()
         }
 
         let alphaChip = app.buttons["herd-chip-Herd-Alpha"]
