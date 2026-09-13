@@ -19,16 +19,20 @@ FIX="$ROOT/Fixtures"
 RUN="$FIX/run"
 KEYS="$FIX/keys"
 SSHD_DIR="$FIX/sshd"
-# Trailing slash anchors the match to a path boundary: "/BicTerm/" must never
-# match the "/BicTerm-ios/" checkout or every run appends another "-ios".
+# Trailing slash anchors each match to a path boundary: "/BicTerm/" must never
+# match the "/BicTerm-ios/" checkout or every run appends another "-ios". The
+# second pattern normalizes configs still carrying the OLD "/BicTerm-ios/"
+# checkout prefix (this repo moved from BicTerm-ios to BicTerm); rewriting to
+# "$ROOT/" in the checkout a path already names is a no-op.
 OLD_PATH_PREFIX="/Users/richard/code/BicTerm/"
+OLD_PATH_PREFIX_IOS="/Users/richard/code/BicTerm-ios/"
 
 mkdir -p "$RUN" "$SSHD_DIR/host_keys" "$SSHD_DIR/host_key_alt"
 
 # ---- 1. Rewrite committed configs to this checkout's absolute paths --------
 for cfg in hop1_config hop1_config.alt hop2_config; do
   if [ -f "$SSHD_DIR/$cfg" ]; then
-    sed -i '' "s|$OLD_PATH_PREFIX|$ROOT/|g" "$SSHD_DIR/$cfg"
+    sed -i '' -e "s|$OLD_PATH_PREFIX_IOS|$ROOT/|g" -e "s|$OLD_PATH_PREFIX|$ROOT/|g" "$SSHD_DIR/$cfg"
   fi
 done
 
