@@ -127,6 +127,44 @@ final class HerdrConnectionUITests: XCTestCase {
         app.buttons["cancel-editor"].tap()
     }
 
+    /// Rebase seam: password auth (upstream) and the Herdr section (ours)
+    /// coexist in one editor — one save flow exercising both.
+    func testPasswordAuthAndHerdrSessionSaveTogether() {
+        app.launchArguments = ["--uitest-reset", "--uitest-seed-keys"]
+        app.launch()
+
+        openEditorForNewConnection()
+        typeInto(app.textFields["field-name"], "Pwd Herdr")
+        typeInto(app.textFields["field-host"], "10.4.5.8")
+        typeInto(app.textFields["field-username"], "alice")
+        dismissKeyboard()
+        let picker = app.segmentedControls["auth-method-picker"]
+        XCTAssertTrue(picker.waitForExistence(timeout: 5))
+        picker.buttons["Password"].tap()
+        typeInto(app.secureTextFields["password-field"], "bicterm-uitest-fixture-password")
+
+        let toggle = app.switches["herdr-toggle"]
+        scrollTo(toggle)
+        XCTAssertTrue(setToggle(toggle, on: true), "the herdr toggle must flip on")
+        let sessionField = app.textFields["herdr-session-field"]
+        XCTAssertTrue(sessionField.waitForExistence(timeout: 5), "enabling herdr reveals the session field")
+        typeInto(sessionField, "work")
+
+        scrollTo(app.buttons["save-editor"])
+        app.buttons["save-editor"].tap()
+
+        let row = app.buttons["connection-Pwd-Herdr"]
+        XCTAssertTrue(row.waitForExistence(timeout: 10), "the combined connection must save")
+        XCTAssertTrue(
+            row.label.contains("Password"),
+            "the row shows the password auth label: \(row.label)"
+        )
+        XCTAssertTrue(
+            app.staticTexts["badge-herdr"].waitForExistence(timeout: 5),
+            "the same connection carries the Herdr badge"
+        )
+    }
+
     // MARK: Helpers
 
     private func openEditorForNewConnection() {
