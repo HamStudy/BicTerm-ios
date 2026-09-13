@@ -1,12 +1,5 @@
 import Foundation
 
-/// Fatal bridging failures surfaced on ``inboundBytes()``.
-public enum HerdrTransportError: Error, Equatable {
-    /// The bounded inbound bridge overflowed (slow consumer). Bytes are
-    /// never dropped silently — the stream finishes with this error.
-    case inboundOverflow
-}
-
 /// ``HerdrByteTransport`` over a non-PTY SSH exec session running herdr's
 /// `remote-client-bridge` (integration doc §5).
 ///
@@ -22,18 +15,18 @@ public enum HerdrTransportError: Error, Equatable {
 /// The session's stderr stream remains reachable on ``session`` for
 /// callers that want it.
 ///
-/// Inbound bridging policy: a producer task pulls the session's
-/// demand-driven stdout stream (lossless, SSH-window backpressured) and
-/// yields into an `AsyncThrowingStream` bounded at 64 chunks × 32 KiB
-/// (≈2 MiB). Overflow finishes the stream with
-/// ``HerdrTransportError/inboundOverflow`` — bounded and loud, never a
-/// silent drop.
+/// Inbound bridging policy (T14): demand-driven and LOSSLESS. The stream
+/// handed out by ``inboundBytes()`` pulls the session's stdout once per
+/// consumer demand, so the bridge itself buffers at most one chunk; a slow
+/// consumer suspends the pull chain and the bound lives one layer down —
+/// ``ExecChannelCore``'s 256 KiB per-stream high-water mark plus the SSH
+/// receive window (~2 MiB), which blocks the remote instead of ever
+/// discarding bytes. (The previous `.bufferingNewest(64)` bridge had no
+/// backpressure: a consumer that fell 64 chunks behind killed the session
+/// with a typed overflow error.)
 public final class HerdrSSHTransport: HerdrByteTransport, @unchecked Sendable {
     // @unchecked Sendable: lock-confined lazy bridge state; the wrapped
     // session is Sendable.
-
-    /// Inbound bridge bound: 64 chunks × ≤32 KiB ≈ 2 MiB (see class docs).
-    static let inboundChunkLimit = 64
 
     public let session: SSHExecSession
 
@@ -44,7 +37,6 @@ public final class HerdrSSHTransport: HerdrByteTransport, @unchecked Sendable {
 
     private let lock = NSLock()
     private var inboundStream: AsyncThrowingStream<Data, Error>?
-    private var bridgeTask: Task<Void, Never>?
     private var isClosed = false
 
     /// Wraps an already-open exec session (any transport source); the
@@ -84,20 +76,17 @@ public final class HerdrSSHTransport: HerdrByteTransport, @unchecked Sendable {
         if let inboundStream {
             return inboundStream
         }
-        let (stream, continuation) = AsyncThrowingStream.makeStream(
-            of: Data.self,
-            bufferingPolicy: .bufferingNewest(Self.inboundChunkLimit)
-        )
-        inboundStream = stream
-        bridgeTask = Task { [session] in
-            for await chunk in session.stdout {
-                if case .dropped = continuation.yield(chunk) {
-                    continuation.finish(throwing: HerdrTransportError.inboundOverflow)
-                    return
-                }
-            }
-            continuation.finish()
+        // Demand-driven handoff: the unfolding closure runs once per
+        // consumer pull, so nothing is bridged ahead of demand and the
+        // backpressure chain (bridge → ExecChannelCore → SSH window →
+        // remote) stays intact. EOF from stdout (remote EOF or close())
+        // returns nil here, which finishes the stream cleanly.
+        let stdout = session.stdout
+        let stream = AsyncThrowingStream<Data, Error> {
+            var iterator = stdout.makeAsyncIterator()
+            return await iterator.next()
         }
+        inboundStream = stream
         return stream
     }
 
@@ -117,9 +106,8 @@ public final class HerdrSSHTransport: HerdrByteTransport, @unchecked Sendable {
     }
 
     public func close() async {
-        let (shouldClose, task, carrier) = claimClose()
+        let (shouldClose, carrier) = claimClose()
         guard shouldClose else { return }
-        task?.cancel()
         await session.close()
         if let carrier {
             await carrier.close()
@@ -128,13 +116,11 @@ public final class HerdrSSHTransport: HerdrByteTransport, @unchecked Sendable {
 
     /// Sync lock-confined close claiming (NSLock is unavailable from async
     /// contexts; locked state never straddles an await). Idempotent.
-    private func claimClose() -> (Bool, Task<Void, Never>?, (any SSHExecCapableConnection)?) {
+    private func claimClose() -> (Bool, (any SSHExecCapableConnection)?) {
         lock.lock()
         defer { lock.unlock() }
-        guard !isClosed else { return (false, nil, nil) }
+        guard !isClosed else { return (false, nil) }
         isClosed = true
-        let task = bridgeTask
-        bridgeTask = nil
-        return (true, task, ownedCarrier)
+        return (true, ownedCarrier)
     }
 }

@@ -25,9 +25,11 @@ public protocol HerdrByteTransport: Sendable {
     /// instead of queueing unbounded writes.
     func write(_ bytes: Data) async throws
 
-    /// Inbound stdout bytes. Bounded buffering; overflow is surfaced as an
-    /// error, never silent loss. Single consumer; finishes on remote EOF
-    /// or `close()`.
+    /// Inbound stdout bytes. Demand-driven and lossless: a slow consumer
+    /// suspends the producer via transport-level backpressure instead of
+    /// losing bytes; memory stays bounded by the conformer's own flow
+    /// control (see conformer docs for the bound). Single consumer;
+    /// finishes on remote EOF or `close()`.
     func inboundBytes() -> AsyncThrowingStream<Data, Error>
 
     /// Write half-close (SSH EOF): signals no further client frames.

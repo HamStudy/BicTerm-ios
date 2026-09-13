@@ -282,6 +282,71 @@ final class HerdrSSHTransportTests: XCTestCase {
         XCTAssertNil(sawError, "close() must finish the inbound stream cleanly")
     }
 
+    // MARK: - Lossless inbound bridging under burst (T14)
+
+    /// The real-iPad failure shape: a surface-output burst floods stdout
+    /// faster than the decode consumer drains it (main-actor contention),
+    /// and the inbound bridge must deliver EVERY byte while the consumer
+    /// is slow — no drops, no overflow teardown. The consumer runs
+    /// concurrently with the flood writes because a demand-driven bridge
+    /// (SSH-window backpressure) otherwise legitimately throttles the
+    /// remote: that coupling IS the contract under test.
+    func testInboundBridgeIsLosslessUnderBurstFloodWithSlowConsumer() async throws {
+        let transport = try await makeDirectTransport()
+        let herdr = try await HerdrSSHTransport(
+            transport: transport,
+            executablePath: Self.shimPath
+        )
+
+        // 4 MiB deterministic echo flood in 16 KiB frames (256 frames).
+        var entropy = Data()
+        var seed: UInt64 = 0x9E3779B97F4A7C15
+        while entropy.count < 16 * 1024 {
+            seed = seed &* 6364136223846793005 &+ 1442695040888963407
+            var value = seed
+            withUnsafeBytes(of: &value) { entropy.append(contentsOf: $0) }
+        }
+        let payload = Data(entropy.prefix(16 * 1024))
+
+        // Slow decode consumer: 4 ms per ≤32 KiB chunk, mirroring a decode
+        // pump that hops to the main actor per chunk under load.
+        let consumer = Task<(received: Data, streamError: String?), Never> {
+            var received = Data()
+            do {
+                for try await chunk in herdr.inboundBytes() {
+                    received.append(chunk)
+                    try? await Task.sleep(for: .milliseconds(4))
+                }
+                return (received, nil)
+            } catch {
+                return (received, "\(error)")
+            }
+        }
+
+        try await herdr.write(frame(Data("hello".utf8)))
+        let floodFrames = (0..<256).map { _ in frame(payload) }
+        for floodFrame in floodFrames {
+            try await herdr.write(floodFrame)
+        }
+        try await herdr.closeWrite()
+
+        let (received, streamError) = await consumer.value
+        let expected = expectedWelcomeAndSnapshot + floodFrames.reduce(Data(), +)
+        print(
+            "T14 flood: expected \(expected.count) bytes, received \(received.count) bytes"
+                + (streamError.map { ", stream finished with \($0)" } ?? "")
+        )
+        XCTAssertNil(
+            streamError,
+            "the inbound bridge must stay lossless, not die on overflow: \(streamError ?? "")"
+        )
+        XCTAssertEqual(
+            received,
+            expected,
+            "burst flood with a slow consumer must arrive byte-exactly"
+        )
+    }
+
     // MARK: - Hostile shim materialization
 
     /// Per-run unique hostile dir: no shared Fixtures/run state, immune to
