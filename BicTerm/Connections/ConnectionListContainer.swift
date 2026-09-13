@@ -174,12 +174,19 @@ struct ConnectionListContainer: View {
 
     private func handleConnect(_ connection: Connection) {
         if connection.herdrEnabled {
+            #if HERDR_EMBED
+            // T4: the embedded client owns the connection (local socket);
+            // BicTermCore SSH transport injection is plan T5, so Mode A
+            // presents the embedded workspace directly.
+            presentHerdr(sessionID: HerdrWorkspaceCenter.shared.open { _ in connection.name })
+            #else
             #if DEBUG
             if HerdrWorkspaceUITest.doubleConnectRequested {
                 fireHerdrConnect(connection)
             }
             #endif
             fireHerdrConnect(connection)
+            #endif
         } else {
             present(store.openSession(for: connection))
         }
@@ -194,15 +201,35 @@ struct ConnectionListContainer: View {
     }
 
     private func openHerd(_ herd: Herd) {
+        #if HERDR_EMBED
+        presentHerdr(sessionID: HerdrWorkspaceCenter.shared.openHerd(
+            HerdDescriptor(herdID: herd.id, herdName: herd.name, machines: [])
+        ))
+        #else
         herdConnect.open(
             herd,
             hostKeyVerifier: store.hostKeyVerifier,
             present: { sessionID in presentHerdr(sessionID: sessionID) }
         )
+        #endif
     }
 
     @ViewBuilder
     private func herdrWorkspace(for entry: HerdrWorkspaceCenter.Entry) -> some View {
+        #if HERDR_EMBED
+        // Embedded TUI replaces the native workspace interior here too
+        // (iPhone cover path; plan herdr-embed T4 — see HerdrWindowRoot).
+        HerdrEmbedWorkspaceView(
+            endpointLabel: entry.label,
+            onClose: {
+                Task {
+                    await HerdrWorkspaceCenter.shared.close(id: entry.id)
+                }
+                herdrCoverSession = nil
+            },
+            fontModel: store.terminalFont
+        )
+        #else
         if let herd = entry.herd {
             HerdWorkspaceChromeView(
                 model: entry.model,
@@ -231,6 +258,7 @@ struct ConnectionListContainer: View {
                 fontModel: store.terminalFont
             )
         }
+        #endif
     }
 
     /// Herdr sessions present through the same path as SSH sessions: their
@@ -252,8 +280,15 @@ struct ConnectionListContainer: View {
     /// (observed on iPad); the replay bootstrap therefore runs once, from
     /// the first .active scene-phase transition.
     private func openHerdrFixtureReplayOnce() {
-        guard HerdrWorkspaceUITest.wantsReplayBootstrap, !Self.didOpenHerdrReplay else { return }
+        guard !Self.didOpenHerdrReplay else { return }
         Self.didOpenHerdrReplay = true
+        #if HERDR_EMBED
+        if ProcessInfo.processInfo.arguments.contains("--uitest-herdr-embed") {
+            presentHerdr(sessionID: HerdrWorkspaceCenter.shared.open { _ in "Fixture" })
+            return
+        }
+        #endif
+        guard HerdrWorkspaceUITest.wantsReplayBootstrap else { return }
         let id = HerdrWorkspaceCenter.shared.open { model in
             HerdrWorkspaceUITest.connectReplay(model: model)
         }

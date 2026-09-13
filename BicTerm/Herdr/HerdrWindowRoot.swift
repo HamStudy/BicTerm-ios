@@ -27,6 +27,22 @@ struct HerdrWindowRoot: View {
 
     @ViewBuilder
     private func herdrWorkspace(for entry: HerdrWorkspaceCenter.Entry) -> some View {
+        #if HERDR_EMBED
+        // Embedded TUI (plan herdr-embed T4): the real herdr client's own
+        // surface replaces the native workspace interior for both single
+        // endpoints and herds (its machine sidebar owns multi-machine until
+        // T6 seeds the catalog). Header composition is preserved by the
+        // embed chrome; the native path survives below until T7 sign-off.
+        HerdrEmbedWorkspaceView(
+            endpointLabel: entry.label,
+            onClose: {
+                Task {
+                    await center.close(id: entry.id)
+                }
+            },
+            fontModel: store.terminalFont
+        )
+        #else
         if let herd = entry.herd {
             HerdWorkspaceChromeView(
                 model: entry.model,
@@ -56,5 +72,6 @@ struct HerdrWindowRoot: View {
                 fontModel: store.terminalFont
             )
         }
+        #endif
     }
 }
