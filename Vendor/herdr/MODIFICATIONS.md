@@ -204,3 +204,21 @@ instructions live in `EMBED-PATCHES.md`. Summary:
 | `0004-transport-add-bicterm-transport-feature-for-host-inj.patch` | `Cargo.toml`/`src/remote/saved.rs`: feature-gated host-injected SSH transport seam |
 
 Without the `bicterm-transport` feature the patched tree is stock herdr.
+
+## Embedded libghostty-vt artifacts (herdr-embed task 2)
+
+| Local path | Upstream source | Change | Reason |
+| --- | --- | --- | --- |
+| `embed/libghostty-vt/aarch64-ios/libghostty-vt.a` | `upstream/vendor/libghostty-vt` @ `c5a21edf` | New vendored static library (6.1 MB, sha256 `109705d00299c886dda9549ccc84bd8a76ee67228c3cdb37533dfdf2e0a944a7`) | iOS build of the vendored Ghostty VT library for the embedded client; below the 10 MB commit threshold, so vendored instead of built on demand |
+| `embed/libghostty-vt/README.md` | None | New provenance/regeneration record | Document digest, build configuration deltas (simd off, no bundled compiler-rt), and `scripts/herdr-vt-build.sh` reproduction |
+
+The upstream tree is not modified: `scripts/herdr-vt-build.sh` builds from
+the pristine vendored source into `.build-artifacts/herdr-vt/` and the
+committed artifact is a copy of that output (verified: 173 `ghostty_*`
+exports exactly matching `upstream/src/ghostty/bindings.rs`; linked into
+the patched herdr iOS binary via `HERDR_EMBED_GHOSTTY_VT_A`; evidence
+`.sisyphus/evidence/herdr-embed-t2.log`). Configuration mirrors upstream
+`GhosttyLibVt.initStatic()` (`ReleaseFast`, PIC, LLVM, `c_abi`) with two
+documented deltas: `simd` off (no C++ SIMD deps; identical C ABI) and no
+bundled compiler-rt/ubsan-rt (zig 0.15.2 emits macOS objects for iOS
+there; consumers provide their own runtime symbols).

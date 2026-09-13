@@ -157,6 +157,7 @@ do not brew anything for them.
 | Python 3 | 3.9+ (stdlib only) | Runs the UDS forwarder (`Fixtures/bin/uds-forward.py`) and the readiness helpers inside `fixtures-up.sh` | Ships with the Xcode Command Line Tools; Homebrew alternative: `brew install python` |
 | Rust (rustup + cargo) | stable, with targets `aarch64-apple-ios` and `aarch64-apple-ios-sim` | Builds the herdr FFI core in `scripts/build-herdr-core.sh` and `Vendor/herdr/check.sh`. Both scripts override `RUSTUP_HOME` to the repo-local `.build-artifacts/rustup`, so add the targets with that env set: `RUSTUP_HOME=.build-artifacts/rustup rustup target add aarch64-apple-ios aarch64-apple-ios-sim` | `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \| sh` (or `brew install rustup-init` + `rustup-init`) |
 | cbindgen | pinned by `cargo install --locked` | Generates `HerdrCore.h`; `build-herdr-core.sh` installs it repo-locally into `.build-artifacts/tools/` on first run | No action needed |
+| Zig | 0.15.2 (aarch64-macos tarball, sha256-pinned) | Builds the vendored libghostty-vt static library for iOS in `scripts/herdr-vt-build.sh`; downloaded repo-locally on first run — but only needed to regenerate the artifact, since a prebuilt `libghostty-vt.a` is committed under `Vendor/herdr/embed/libghostty-vt/` | No action needed |
 | cargo-deny | latest | License and advisory policy checks in `Vendor/herdr/check.sh` | `cargo install cargo-deny` |
 | jq | 1.6+ | License inventory assembly in `Vendor/herdr/check.sh` | `brew install jq` |
 | OpenSSH (`/usr/sbin/sshd`, `ssh`, `ssh-keygen`), `nc`, `curl` | system versions | SSH fixtures on ports 12222/12223 | Preinstalled on macOS; nothing to install |
@@ -170,13 +171,16 @@ do not brew anything for them.
 | Basic app build (`xcodegen generate`, open Xcode, build) | Xcode, XcodeGen |
 | Test fixtures (`scripts/fixtures-up.sh`) | Python 3 and the preinstalled OpenSSH/curl tools; for the herdr servers, the pinned prebuilt binary via `scripts/herdr-server-fetch.sh` (curl download, sha256-verified — never built from source) |
 | herdr FFI build (`scripts/build-herdr-core.sh`) | Rust with both iOS targets (cbindgen self-installs) |
+| Regenerating the vendored iOS libghostty-vt (`scripts/herdr-vt-build.sh`) | Zig 0.15.2 (self-downloads, sha256-verified); network on first run for the zig tarball and the pinned uucode 0.2.0 dependency |
 | Hardening / SBOM (`Vendor/herdr/check.sh`, fuzz targets) | cargo-deny, jq; cargo-audit and cargo-fuzz for the optional audit/fuzz passes |
 
-Not required: Docker (no container is used anywhere in the fixture flow) and
-zig. The herdr server fixture is a pinned prebuilt release binary
-(`herdr-macos-aarch64`, v0.9.0) fetched and sha256-verified by
-`scripts/herdr-server-fetch.sh`; no test script builds the server from
-source.
+Not required: Docker (no container is used anywhere in the fixture flow).
+Zig is only needed to regenerate the vendored iOS libghostty-vt artifact
+(`scripts/herdr-vt-build.sh`); every normal build and test path uses the
+committed `.a` and needs no zig. The herdr server fixture is a pinned
+prebuilt release binary (`herdr-macos-aarch64`, v0.9.0) fetched and
+sha256-verified by `scripts/herdr-server-fetch.sh`; no test script builds
+the server from source.
 
 ### Common-case install
 

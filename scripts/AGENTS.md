@@ -3,7 +3,7 @@
 Per-script contracts and gotchas for the build/test/fixture shell harness. Root `AGENTS.md` has the command list and containment policy; this file covers what each script actually does and where it bites.
 
 ## OVERVIEW
-7 bash scripts: cache pinning, Rust FFI xcframework build, SSH fixture lifecycle, core/UI test runners, module-isolation check.
+10 bash scripts: cache pinning, Rust FFI xcframework build, herdr embed working-copy prep, libghostty-vt iOS build, SSH fixture lifecycle, core/UI test runners, module-isolation check.
 
 ## WHERE TO LOOK
 | Script | Role | Gotchas |
@@ -15,6 +15,7 @@ Per-script contracts and gotchas for the build/test/fixture shell harness. Root 
 | `test-core.sh` | `xcodebuild test -scheme BicTermCore` from the BicTermCore package dir, iPhone 17 Pro sim default | Env overrides below. Greps log for `** TEST SUCCEEDED **`; exit 0 without it becomes 1. |
 | `test-ui.sh` | `xcodebuild test -scheme BicTerm` from repo root, iPad Pro 13-inch (M5) sim default | Same overrides. Adds `-skipPackagePluginValidation -skipMacroValidation`. |
 | `check-isolation.sh` | Greps `BicTermCore/Sources/` for `import SwiftUI/UIKit`; exit 1 with file:line on hits | Despite the name this is the module-isolation check, not a repo-containment audit. |
+| `herdr-vt-build.sh` | Builds the vendored libghostty-vt `.a` for iOS (device default; simulator via `HERDR_VT_TARGETS`) from the pristine upstream source; sha-pinned zig 0.15.2 self-downloads | Bypasses the broken `zig build` runner: materializes the generated modules itself and links the host table generators by replaying zig's `--verbose-link` line through `xcrun ld` (macOS 26 host-link bug). `-target` must precede `--dep`/`-M` args (zig silently ignores it otherwise). `HERDR_VT_BUILD=0` verifies existing artifacts only. A committed copy lives at `Vendor/herdr/embed/libghostty-vt/`; normal builds never run this script. |
 
 ## CONVENTIONS
 - Env-override contract (test-core.sh, test-ui.sh; all optional):
