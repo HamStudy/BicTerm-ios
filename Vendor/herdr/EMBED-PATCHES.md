@@ -80,3 +80,67 @@ default and appended proof step changed.
 4. Regenerate the link stub only if `src/ghostty/bindings.rs` gained symbols
    (extract `extern "C"` fn names, emit stub definitions, `zig cc -target
    aarch64-ios`, `zig ar`), and update the sha256 here.
+
+## Updating the pinned herdr ref (HERDR-UPDATE runbook)
+
+`scripts/herdr-embed-update.sh` is the ONLY sanctioned path for moving the
+embed stack to a new herdr release:
+
+```sh
+HERDR_NEW_REF=<sha|tag|branch> scripts/herdr-embed-update.sh
+```
+
+What it does, in order:
+
+1. Fetches the ref in `Vendor/herdr/upstream/` and resolves the commit.
+2. Extracts a pristine tree to `.build-artifacts/herdr-embed-update/` (own
+   git repo, so `git apply` behaves — same trap as the prepare script).
+3. Replays this patch series with `git apply --3way`. **Rejects are the
+   only acceptable failure point**: fix the `.patch` files in
+   `embed-patches/` (or resolve in the tree and re-split the diff), never
+   the pristine sources. A proof failure after a clean apply also means the
+   corresponding patch drifted semantically — fix it at the patch layer.
+4. Runs the contract check (below).
+5. Runs the mechanical proofs: herdr binary builds for
+   `aarch64-apple-ios` (both feature variants), the embed FFI builds
+   (both variants, against the replay tree via a temporary working-copy
+   swap), a report-only cbindgen drift check, and the T3 behavioral
+   harness (`lifecycle`, `headless_frame`, `headless_detach`,
+   `headless_resize` — the last three need the pinned prebuilt server
+   fixture binary from `scripts/herdr-server-fetch.sh`).
+6. Prints the promotion checklist (bump `BASE=` in
+   `scripts/herdr-embed-prepare.sh`, `MODIFICATIONS.md`, the provenance
+   tar/sha256; re-run prepare + `scripts/herdr-embed-core.sh`; rebuild the
+   app).
+
+### Swift↔herdr contract rule (enforced)
+
+The generated `HerdrEmbed.h` ABI is the **only** Swift↔herdr contract.
+Swift code must never depend on herdr internals — no vendored-source
+reach-throughs, no re-declared types, no other herdr headers. Concretely:
+
+* `herdr_embed_*` C symbols may appear ONLY in the app's Embed wrapper
+  (`BicTerm/Herdr/Embed/`), its tests (`BicTermTests/Herdr/`), and the
+  clang-module header itself (`HerdrEmbedC/include/HerdrEmbed.h`, the
+  committed cbindgen copy — never hand-edited; `scripts/herdr-embed-core.sh`
+  fails loudly on drift).
+* Swift files may import herdr code only through the module hosts
+  (`HerdrEmbed`, the module name of the `HerdrEmbedC` clang host, for the embed ABI, `HerdrClientCore` for the older
+  workspace client).
+* New herdr capabilities needed by Swift go through the runbook: extend
+  the embed FFI crate's C ABI first (`Vendor/herdr/herdr-ios-embed`), then
+  regenerate the header, then consume it from Swift.
+
+The update script greps for both rules and fails the run on violations;
+`scripts/herdr-embed-core.sh` re-checks the header drift on every build.
+
+## Swift embedding (plan task 4)
+
+`scripts/herdr-embed-core.sh` assembles
+`.build-artifacts/herdr/HerdrEmbed.xcframework` (headerless, device +
+simulator, release profile) from the embed staticlib and drift-checks the
+committed `HerdrEmbedC/include/HerdrEmbed.h`. The simulator slice swaps
+the simulator `libghostty-vt.a` into the working copy for its build and
+restores the device archive afterwards. No dSYM is produced at this
+profile (release, no DWARF); crash symbolication for the embed archive is
+plan-task-8 hardening.
