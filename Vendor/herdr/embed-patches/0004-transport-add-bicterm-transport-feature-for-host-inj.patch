@@ -1,0 +1,140 @@
+From 8c02922ca012aeb34fe86792519b77409074843b Mon Sep 17 00:00:00 2001
+From: BicTerm <embed@bicterm.invalid>
+Date: Sun, 13 Sep 2026 08:09:29 -0600
+Subject: [PATCH 4/4] transport: add bicterm-transport feature for
+ host-injected ssh streams
+
+behind the feature, connect_saved_ssh drops the local ssh subprocess
+bridge and connects to a host-provided per-machine socket under
+HERDR_EMBED_TRANSPORT_DIR instead; default builds keep the stock bridge
+byte for byte.
+---
+ Cargo.toml          |  9 +++++++
+ src/remote/saved.rs | 59 +++++++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 68 insertions(+)
+
+diff --git a/Cargo.toml b/Cargo.toml
+index d28ba46..1c1c03c 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -50,6 +50,15 @@ schemars = { version = "1.2.1", features = ["derive"] }
+ [patch.crates-io]
+ portable-pty = { path = "vendor/portable-pty" }
+ 
++[features]
++default = []
++# Replacement for the local `ssh` subprocess bridge on saved SSH endpoints:
++# the embedding host binds one local socket per machine under
++# HERDR_EMBED_TRANSPORT_DIR and forwards every accepted connection to
++# `herdr remote-client-bridge` over its own SSH implementation. Stock
++# builds never enable this.
++bicterm-transport = []
++
+ [target.'cfg(windows)'.dependencies]
+ # UTF-16 SDDL input for interprocess security descriptors.
+ widestring = "1.2"
+diff --git a/src/remote/saved.rs b/src/remote/saved.rs
+index 5b570af..7a140b7 100644
+--- a/src/remote/saved.rs
++++ b/src/remote/saved.rs
+@@ -1,17 +1,64 @@
+ use std::io;
+ use std::path::PathBuf;
+ 
++#[cfg(not(feature = "bicterm-transport"))]
+ use super::attach::{find_installed_remote_herdr, RemoteSsh, SshStdioBridge};
+ 
++#[cfg(not(feature = "bicterm-transport"))]
+ pub(crate) struct SavedSshBridge {
+     _bridge: SshStdioBridge,
+ }
+ 
++/// With `bicterm-transport` the embedding host owns the byte stream, so the
++/// bridge lifetime lives outside this process and nothing is held here.
++#[cfg(feature = "bicterm-transport")]
++pub(crate) struct SavedSshBridge {}
++
+ pub(crate) struct SavedSshStream {
+     pub(crate) stream: crate::ipc::LocalStream,
+     pub(crate) bridge: SavedSshBridge,
+ }
+ 
++/// Connects a saved SSH endpoint through the host-provided bridge socket.
++///
++/// Replaces the `ssh` subprocess bridge: the embedding host binds one local
++/// socket per machine at `{HERDR_EMBED_TRANSPORT_DIR}/{profile id}.sock` and
++/// forwards every accepted connection to `herdr remote-client-bridge` over
++/// its own SSH implementation. Handshake and supervision are unchanged.
++#[cfg(feature = "bicterm-transport")]
++pub(crate) fn connect_saved_ssh(
++    profile_id: &str,
++    _target: &str,
++    session: &str,
++) -> io::Result<SavedSshStream> {
++    validate_profile_path_id(profile_id)?;
++    crate::session::validate_name(session)
++        .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
++    let dir = std::env::var_os(EMBED_TRANSPORT_DIR_ENV).ok_or_else(|| {
++        io::Error::new(
++            io::ErrorKind::InvalidInput,
++            "bicterm-transport requires HERDR_EMBED_TRANSPORT_DIR to point at the \
++             embedding host's per-machine bridge socket directory",
++        )
++    })?;
++    let path = embed_bridge_path(dir, profile_id);
++    let stream = crate::ipc::connect_local_stream(&path)
++        .map_err(|error| io::Error::new(error.kind(), format!("{}: {error}", path.display())))?;
++    Ok(SavedSshStream {
++        stream,
++        bridge: SavedSshBridge {},
++    })
++}
++
++#[cfg(feature = "bicterm-transport")]
++const EMBED_TRANSPORT_DIR_ENV: &str = "HERDR_EMBED_TRANSPORT_DIR";
++
++#[cfg(feature = "bicterm-transport")]
++fn embed_bridge_path(dir: std::ffi::OsString, profile_id: &str) -> PathBuf {
++    PathBuf::from(dir).join(format!("{profile_id}.sock"))
++}
++
++#[cfg(not(feature = "bicterm-transport"))]
+ pub(crate) fn connect_saved_ssh(
+     profile_id: &str,
+     target: &str,
+@@ -73,6 +120,7 @@ pub(crate) fn saved_ssh_failure_needs_attention(error: &io::Error) -> bool {
+     .any(|needle| message.contains(needle))
+ }
+ 
++#[cfg(not(feature = "bicterm-transport"))]
+ fn saved_bridge_path(profile_id: &str) -> PathBuf {
+     let pid = std::process::id();
+     let readable = format!("herdr-ssh-{pid}-{profile_id}.sock");
+@@ -100,6 +148,7 @@ mod tests {
+     use super::*;
+ 
+     #[test]
++    #[cfg(not(feature = "bicterm-transport"))]
+     fn bridge_paths_use_profile_identity_not_target_or_session() {
+         let first = saved_bridge_path("0123456789abcdef0123456789abcdef");
+         let second = saved_bridge_path("fedcba9876543210fedcba9876543210");
+@@ -108,6 +157,16 @@ mod tests {
+         assert!(!first.to_string_lossy().contains("default"));
+     }
+ 
++    #[test]
++    #[cfg(feature = "bicterm-transport")]
++    fn embed_bridge_sockets_are_per_profile() {
++        let dir = std::ffi::OsString::from("/tmp/herdr-embed-transport");
++        let first = embed_bridge_path(dir.clone(), "0123456789abcdef0123456789abcdef");
++        let second = embed_bridge_path(dir, "fedcba9876543210fedcba9876543210");
++        assert_ne!(first, second);
++        assert!(first.to_string_lossy().ends_with("0123456789abcdef0123456789abcdef.sock"));
++    }
++
+     #[test]
+     fn bootstrap_command_preserves_the_explicit_remote_session() {
+         assert_eq!(
+-- 
+2.38.0
+

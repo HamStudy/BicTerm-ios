@@ -187,3 +187,20 @@ its external dependencies are ledgered here.
   limit only rejects claims larger than the largest conforming frame.
   Regression: `tests/upstream_framing.rs::
   hostile_container_length_claim_is_rejected_not_allocated`.
+
+## Embed patch series (herdr-embed task 1)
+
+The pristine `upstream/` checkout remains untouched. The full-client embed
+work applies a numbered patch series from `embed-patches/` onto a working
+copy under `.build-artifacts/herdr-embed/` via `scripts/herdr-embed-prepare.sh`;
+per-patch rationale, upstreamability, the link-stub digest, and rebase
+instructions live in `EMBED-PATCHES.md`. Summary:
+
+| Patch | Change |
+| --- | --- |
+| `0001-build-map-iOS-zig-targets-and-allow-a-prebuilt-libgh.patch` | `build.rs`: iOS zig target mapping + `HERDR_LIBGHOSTTY_VT_PREBUILT` prebuilt-lib escape |
+| `0002-platform-cover-remaining-unix-helpers-in-the-fallbac.patch` | `src/platform/fallback.rs`: unix re-exports + `tcgetpgrp` helper for fallback targets |
+| `0003-lib-split-the-crate-into-a-library-plus-a-thin-herdr.patch` | `src/lib.rs`/`src/main.rs`: lib/bin split exposing `run()` and `run_client()` |
+| `0004-transport-add-bicterm-transport-feature-for-host-inj.patch` | `Cargo.toml`/`src/remote/saved.rs`: feature-gated host-injected SSH transport seam |
+
+Without the `bicterm-transport` feature the patched tree is stock herdr.
