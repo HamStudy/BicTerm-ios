@@ -134,6 +134,50 @@ final class HerdrEmbedBridgeServerTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: stale))
     }
 
+    /// T6 regression (sever-one-machine): after the SSH carrier dies, the
+    /// client's supervisor redials the still-listening bridge socket; the
+    /// freshly accepted child's exec open fails and the child must be
+    /// discarded WITHOUT NIOAsyncWriter's deinit trap — dropping an
+    /// unrelayed child without `finish()` precondition-fails and kills the
+    /// whole process (the embedded-client crash this test pins).
+    func testRedialAgainstDeadCarrierDiscardsChildWithoutTrapping() async throws {
+        try Self.requireFixture(serverPort: 12222)
+        let probed = try await establishProbed(connection: try SSHTestFixture.makeConnection())
+        let socketPath = try Self.bridgeSocketPath(profile: "redialdead0000000000000000000")
+
+        let server = await makeServer(probed: probed, socketPath: socketPath)
+        try await server.start()
+
+        let live = try UnixStreamClient.connect(path: socketPath)
+        try live.writeAll(Self.helloFrame)
+        _ = try await live.readFirstFrame(
+            containing: "endpoint.welcome.v1",
+            timeout: .seconds(10)
+        )
+        live.close()
+
+        await probed.carrier.close()
+
+        let redial = try UnixStreamClient.connect(path: socketPath)
+        defer { redial.close() }
+        try redial.writeAll(Self.helloFrame)
+
+        let lostEvent = await eventLog.firstCarrierLost(timeout: .seconds(10))
+        XCTAssertNotNil(
+            lostEvent,
+            "the dead carrier surfaced as a typed carrierLost event, not a trap"
+        )
+
+        await server.stop()
+        let stoppedEvent = await eventLog.firstStopped()
+        let stopped = try XCTUnwrap(stoppedEvent, "stop receipt arrived after the redial cycle")
+        XCTAssertTrue(stopped.isStopped, "stop receipt arrived (got \(stopped))")
+        XCTAssertFalse(
+            FileManager.default.fileExists(atPath: socketPath),
+            "no leaked socket file after the redial cycle"
+        )
+    }
+
     /// Split out of the test body: an inline `do/catch` around the typed
     /// start error crashes the SIL verifier (LinearLifetimeChecker, the
     /// same Swift 6.x family documented on JumpChainBuilder).
@@ -260,6 +304,15 @@ private final class EventLog: @unchecked Sendable {
 
     func firstStopped() async -> HerdrEmbedBridgeEvent? {
         await firstMatch(where: \.isStopped)
+    }
+
+    func firstCarrierLost(timeout: Duration) async -> String? {
+        let match: HerdrEmbedBridgeEvent? = await firstMatch(
+            where: { if case .carrierLost = $0 { return true } else { return false } },
+            timeout: timeout
+        )
+        guard case let .carrierLost(reason) = match else { return nil }
+        return reason
     }
 
     func firstRelayEnd(timeout: Duration) async -> (clean: Bool, bytesUp: Int, bytesDown: Int)? {

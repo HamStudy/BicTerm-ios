@@ -30,11 +30,12 @@ struct HerdrWindowRoot: View {
         #if HERDR_EMBED
         // Embedded TUI (plan herdr-embed T4): the real herdr client's own
         // surface replaces the native workspace interior for both single
-        // endpoints and herds (its machine sidebar owns multi-machine until
-        // T6 seeds the catalog). Header composition is preserved by the
-        // embed chrome; the native path survives below until T7 sign-off.
-        // T5: entries opened from a Mode-A connection carry it, and the
-        // embed runtime builds its SSH bridge transport from it.
+        // endpoints and herds (T6 seeds its machine catalog per open — the
+        // client's own sidebar owns multi-machine selection/input/health).
+        // Header composition is preserved by the embed chrome; the native
+        // path survives below until T7 sign-off. T5: entries opened from a
+        // Mode-A connection carry it, and the embed runtime builds its SSH
+        // bridge transport from it.
         HerdrEmbedWorkspaceView(
             endpointLabel: entry.label,
             onClose: {
@@ -44,6 +45,8 @@ struct HerdrWindowRoot: View {
             },
             fontModel: store.terminalFont,
             embedConnection: entry.embedConnection,
+            embedHerd: entry.herd,
+            ownerID: entry.id,
             hostKeyVerifier: store.hostKeyVerifier
         )
         #else

@@ -5,9 +5,8 @@ import Observation
 
 /// One machine in the embedded client's endpoint catalog (plan herdr-embed
 /// T5): the profile the Rust client dials through
-/// `{HERDR_EMBED_TRANSPORT_DIR}/{profile id}.sock`. v1 maps the single
-/// Mode-A connection; the type is the herd seam — T6 seeds N machines into
-/// the same catalog, each profile id backed by its own bridge socket.
+/// `{HERDR_EMBED_TRANSPORT_DIR}/{profile id}.sock`. T6 seeds N machines
+/// into the same catalog, each profile id backed by its own bridge socket.
 struct HerdrEmbedMachine: Equatable, Sendable {
     let profileID: String
     let label: String
@@ -19,6 +18,30 @@ struct HerdrEmbedMachine: Equatable, Sendable {
             .replacingOccurrences(of: "-", with: "")
             .lowercased()
     }
+
+    /// Catalog entry derived from a connection (Mode A and each herd
+    /// machine use the same derivation).
+    static func forConnection(_ connection: Connection) -> HerdrEmbedMachine {
+        HerdrEmbedMachine(
+            profileID: profileID(for: connection.id),
+            label: connection.name,
+            target: "\(connection.username)@\(connection.host):\(connection.port)",
+            sessionName: connection.herdrSessionName ?? "default"
+        )
+    }
+}
+
+/// One herd machine's transport link (plan herdr-embed T6): the catalog
+/// entry plus the connection that backs it. `connection` carries the
+/// herd-local session-name override (applied at link-build time the same
+/// way `HerdSessionCoordinator.connection(_:sessionName:)` applies it for
+/// the native path), so the probe and the bridge both see it.
+struct HerdrEmbedMachineLink: Equatable, Sendable {
+    let machine: HerdrEmbedMachine
+    let connection: Connection
+    /// Session name for the bridge command; nil = herdr's default (mirrors
+    /// the connection's raw `herdrSessionName` semantics from T5).
+    let bridgeSessionName: String?
 }
 
 /// Seeds the embedded client's saved-endpoint catalog and transport
@@ -33,6 +56,10 @@ enum HerdrEmbedClientCatalog {
     /// (both the Swift listener and the in-process Rust client share it).
     static let transportDirectoryName = "herdr-embed-transport"
 
+    /// Re-seeding semantics (T6): the file set is rewritten atomically per
+    /// open — machines added/removed in the herd editor are reflected on
+    /// the NEXT open of that herd; a live embedded instance is NOT
+    /// re-seeded mid-run (v1 single-instance rule).
     static func seed(
         machines: [HerdrEmbedMachine],
         selectedProfileID: String?,
@@ -83,18 +110,55 @@ enum HerdrEmbedClientCatalog {
     }
 }
 
+/// Resolves an open herd into transport links (plan herdr-embed T6): one
+/// connection lookup per machine, with the machine's herd-local session
+/// name applied the same way the native herd path applies it
+/// (`HerdSessionCoordinator.connection(_:sessionName:)`), so the probe and
+/// the bridge both see the override. Machines whose connection no longer
+/// resolves are skipped (the client catalog reflects the rest).
+enum HerdrEmbedHerdSeeder {
+    @MainActor
+    static func links(
+        for herd: HerdDescriptor,
+        lookup: HerdSessionCoordinator.ConnectionLookup = HerdSessionCoordinator.liveLookup()
+    ) async -> [HerdrEmbedMachineLink] {
+        var links: [HerdrEmbedMachineLink] = []
+        for machine in herd.machines {
+            guard let connection = await lookup(machine.connectionID) else { continue }
+            let effective = (try? HerdSessionCoordinator.connection(
+                connection, sessionName: machine.sessionName
+            )) ?? connection
+            links.append(HerdrEmbedMachineLink(
+                machine: HerdrEmbedMachine(
+                    profileID: HerdrEmbedMachine.profileID(for: effective.id),
+                    label: machine.label,
+                    target: "\(effective.username)@\(effective.host):\(effective.port)",
+                    sessionName: effective.herdrSessionName ?? "default"
+                ),
+                connection: effective,
+                bridgeSessionName: effective.herdrSessionName
+            ))
+        }
+        return links
+    }
+}
+
 /// Typed failure of one embedded-transport bring-up.
 enum HerdrEmbedTransportFailure: Error {
     case connector(HerdrEndpointConnectorError)
     case bridge(HerdrEmbedBridgeError)
 }
 
-/// Drives the embedded client's SSH transport (plan herdr-embed T5): one
-/// Mode-A ``Connection`` → TOFU-gated establish + probe (the SAME
-/// ``HerdrEndpointConnector`` flow the native workspace rides) →
-/// ``HerdrEmbedBridgeServer`` listening at the client's expected socket
-/// path. The coordinator owns the cwd pin (relative bridge socket paths)
-/// and restores it at teardown.
+/// Drives the embedded client's SSH transport (plan herdr-embed T5/T6):
+/// N machines (Mode A = 1; a herd = one link per machine) → TOFU-gated
+/// establish + probe per machine (the SAME ``HerdrEndpointConnector`` flow
+/// the native workspace rides) → one ``HerdrEmbedBridgeServer`` listening
+/// at each machine's expected socket path → the client catalog seeded with
+/// every machine. Bring-up failure isolation mirrors the native herd: one
+/// dead machine never blocks the others (it stays in the catalog and the
+/// client renders its own dial-failure state); only a TOTAL failure
+/// surfaces as a transport error. The coordinator owns the cwd pin
+/// (relative bridge socket paths) and restores it at teardown.
 @MainActor
 @Observable
 final class HerdrEmbedTransportCoordinator {
@@ -104,18 +168,23 @@ final class HerdrEmbedTransportCoordinator {
         let continuation: CheckedContinuation<Bool, Never>
     }
 
-    /// Byte-flow + lifecycle lines surfaced to the runtime (evidence log).
+    /// Byte-flow + lifecycle lines surfaced to the runtime (evidence log);
+    /// each line is prefixed with its machine's label.
     private(set) var eventLines: [String] = []
 
     private(set) var trustPrompt: TrustPrompt?
     private var queuedTrustPrompts: [TrustPrompt] = []
 
-    private let connection: Connection
+    private let links: [HerdrEmbedMachineLink]
+    /// Profile the client should select at boot (the herd's persisted
+    /// machine choice); nil = first catalog machine.
+    private let preferredSelection: String?
     private let connectorFactory: (@Sendable () async -> HerdrEndpointConnector)?
     private let providedVerifier: HostKeyVerifier?
     private let searchPaths: [String]
 
-    private var server: HerdrEmbedBridgeServer?
+    private var servers: [HerdrEmbedBridgeServer] = []
+    private var carriers: [String: any SSHExecCapableConnection] = [:]
     private var previousCWD: String?
 
     init(
@@ -123,17 +192,55 @@ final class HerdrEmbedTransportCoordinator {
         hostKeyVerifier: HostKeyVerifier?,
         searchPaths: [String] = HerdrProbe.defaultSearchPaths
     ) {
-        self.connection = connection
+        self.links = [Self.link(for: connection)]
+        self.preferredSelection = nil
         self.providedVerifier = hostKeyVerifier
         self.searchPaths = searchPaths
         self.connectorFactory = nil
     }
 
     init(connection: Connection, connector: @escaping @Sendable () async -> HerdrEndpointConnector) {
-        self.connection = connection
+        self.links = [Self.link(for: connection)]
+        self.preferredSelection = nil
         self.connectorFactory = connector
         self.providedVerifier = nil
         self.searchPaths = HerdrProbe.defaultSearchPaths
+    }
+
+    /// Herd bring-up (plan herdr-embed T6): one link per machine, each with
+    /// its own SSH connection (jump chains included), TOFU pass, bridge
+    /// socket, and catalog entry.
+    init(
+        machines: [HerdrEmbedMachineLink],
+        preferredSelection: String? = nil,
+        hostKeyVerifier: HostKeyVerifier?,
+        searchPaths: [String] = HerdrProbe.defaultSearchPaths
+    ) {
+        self.links = machines
+        self.preferredSelection = preferredSelection
+        self.providedVerifier = hostKeyVerifier
+        self.searchPaths = searchPaths
+        self.connectorFactory = nil
+    }
+
+    init(
+        machines: [HerdrEmbedMachineLink],
+        preferredSelection: String? = nil,
+        connector: @escaping @Sendable () async -> HerdrEndpointConnector
+    ) {
+        self.links = machines
+        self.preferredSelection = preferredSelection
+        self.connectorFactory = connector
+        self.providedVerifier = nil
+        self.searchPaths = HerdrProbe.defaultSearchPaths
+    }
+
+    private static func link(for connection: Connection) -> HerdrEmbedMachineLink {
+        HerdrEmbedMachineLink(
+            machine: HerdrEmbedMachine.forConnection(connection),
+            connection: connection,
+            bridgeSessionName: connection.herdrSessionName
+        )
     }
 
     /// Built per attempt (not captured in init — the approval closure
@@ -168,31 +275,18 @@ final class HerdrEmbedTransportCoordinator {
         )
     }
 
-    /// Establishes the carrier, starts the bridge listener, seeds the
-    /// client catalog, and applies the transport environment. Returns the
-    /// LOCAL endpoint socket path the embed crate should point at (no
-    /// local server exists in the embed scenario — the client treats it as
-    /// an unavailable Local and federates the seeded machine).
+    /// Establishes every machine's carrier (concurrently — challenges queue
+    /// one decision at a time), starts one bridge listener per success,
+    /// seeds the client catalog with ALL machines, and applies the
+    /// transport environment. Returns the LOCAL endpoint socket path the
+    /// embed crate should point at (no local server exists in the embed
+    /// scenario — the client treats it as an unavailable Local and
+    /// federates the seeded machines).
     func prepare() async throws(HerdrEmbedTransportFailure) -> String {
-        let machine = HerdrEmbedMachine(
-            profileID: HerdrEmbedMachine.profileID(for: connection.id),
-            label: connection.name,
-            target: "\(connection.username)@\(connection.host):\(connection.port)",
-            sessionName: connection.herdrSessionName ?? "default"
-        )
+        let (established, establishFailure) = await establishAll()
 
-        let connector = await makeConnector()
-        let probed: HerdrProbedCarrier
-        do {
-            probed = try await connector.establishProbed(connection)
-        } catch let error as HerdrEndpointConnectorError {
-            throw .connector(error)
-        } catch {
-            throw .connector(.sshEstablish(.channelDenied))
-        }
-
-        // Pin the cwd BEFORE the bind: the socket path is relative (the
-        // container's absolute paths exceed sun_path) and NIO resolves it
+        // Pin the cwd BEFORE the binds: socket paths are relative (the
+        // container's absolute paths exceed sun_path) and NIO resolves them
         // against the process cwd on its own event-loop threads.
         pinCWDIfNeeded()
         let transportDirectory = URL(
@@ -208,28 +302,48 @@ final class HerdrEmbedTransportCoordinator {
             withIntermediateDirectories: true
         )
 
-        let bridge = HerdrEmbedBridgeServer(
-            socketPath: Self.socketPath(machine: machine),
-            carrier: probed.carrier,
-            executablePath: probed.executablePath,
-            sessionName: connection.herdrSessionName
-        )
-        let eventSink = EventSink()
-        eventSink.onLine = { [weak self] line in
-            Task { @MainActor [weak self] in
-                self?.eventLines.append(line)
+        var started: [(link: HerdrEmbedMachineLink, bridge: HerdrEmbedBridgeServer)] = []
+        var bridgeFailure: HerdrEmbedTransportFailure?
+        for item in established {
+            let bridge = HerdrEmbedBridgeServer(
+                socketPath: Self.socketPath(machine: item.link.machine),
+                carrier: item.probed.carrier,
+                executablePath: item.probed.executablePath,
+                sessionName: item.link.bridgeSessionName
+            )
+            let eventSink = EventSink(label: item.link.machine.label) { [weak self] line in
+                Task { @MainActor [weak self] in
+                    self?.eventLines.append(line)
+                }
+            }
+            await bridge.setOnEvent(eventSink.handle)
+            do {
+                try await bridge.start()
+                started.append((item.link, bridge))
+                carriers[item.link.machine.profileID] = item.probed.carrier
+            } catch let error as HerdrEmbedBridgeError {
+                await item.probed.carrier.close()
+                if bridgeFailure == nil { bridgeFailure = .bridge(error) }
+            } catch {
+                await item.probed.carrier.close()
+                if bridgeFailure == nil {
+                    bridgeFailure = .bridge(.bindFailed(
+                        path: Self.socketPath(machine: item.link.machine),
+                        reason: "\(error)"
+                    ))
+                }
             }
         }
-        await bridge.setOnEvent(eventSink.handle)
-        do {
-            try await bridge.start()
-        } catch let error as HerdrEmbedBridgeError {
-            await probed.carrier.close()
-            throw .bridge(error)
-        } catch {
-            await probed.carrier.close()
-            throw .bridge(.bindFailed(path: Self.socketPath(machine: machine), reason: "\(error)"))
+        guard !started.isEmpty else {
+            restoreCWD()
+            // Total failure: the first ESTABLISH failure wins (T5 maps
+            // trustDeclined/invalidSessionName from the connector case);
+            // bridge failures only when establish succeeded but no bind did.
+            throw establishFailure ?? bridgeFailure ?? .bridge(.bindFailed(
+                path: "transport", reason: "no machine could be established"
+            ))
         }
+        servers = started.map(\.bridge)
 
         let support = URL.applicationSupportDirectory
             .appendingPathComponent("herdr-embed", isDirectory: true)
@@ -239,13 +353,19 @@ final class HerdrEmbedTransportCoordinator {
             withIntermediateDirectories: true
         )
         do {
+            // Every link is seeded — machines whose bring-up failed stay in
+            // the catalog so the client's own sidebar renders their state.
             try HerdrEmbedClientCatalog.seed(
-                machines: [machine],
-                selectedProfileID: machine.profileID,
+                machines: links.map(\.machine),
+                selectedProfileID: preferredSelection ?? links.first?.machine.profileID,
                 stateHome: stateHome
             )
         } catch {
-            await bridge.stop()
+            for (_, bridge) in started {
+                await bridge.stop()
+            }
+            servers.removeAll()
+            carriers.removeAll()
             restoreCWD()
             throw .bridge(.bindFailed(
                 path: "client catalog",
@@ -257,16 +377,28 @@ final class HerdrEmbedTransportCoordinator {
             stateHome: stateHome
         )
 
-        server = bridge
         return "\(HerdrEmbedClientCatalog.transportDirectoryName)/local.sock"
     }
 
-    /// Idempotent: stops the bridge (which closes the carrier and unlinks
-    /// the socket) and restores the process cwd.
+    /// Server-death analog for one machine (E2E seam + debugging): closes
+    /// the machine's SSH carrier — the bridge stays listening, its relays
+    /// cascade, and the client renders the machine's own unhealthy state
+    /// while the other machines keep flowing.
+    func severMachineTransport(profileID: String) async {
+        guard let carrier = carriers.removeValue(forKey: profileID) else { return }
+        eventLines.append("sever requested for \(profileID)")
+        await carrier.close()
+    }
+
+    /// Idempotent: stops every bridge (which closes the carriers and
+    /// unlinks the sockets) and restores the process cwd.
     func teardown() async {
-        guard let bridge = server else { return }
-        server = nil
-        await bridge.stop()
+        let bridges = servers
+        servers.removeAll()
+        carriers.removeAll()
+        for bridge in bridges {
+            await bridge.stop()
+        }
         restoreCWD()
     }
 
@@ -291,6 +423,59 @@ final class HerdrEmbedTransportCoordinator {
         "\(HerdrEmbedClientCatalog.transportDirectoryName)/\(machine.profileID).sock"
     }
 
+    // MARK: - Establish
+
+    private struct Established {
+        let link: HerdrEmbedMachineLink
+        let probed: HerdrProbedCarrier
+    }
+
+    /// One carrier per machine, concurrently (the native herd's
+    /// machineTasks shape); failures are recorded per machine and never
+    /// block the others. Returns the first failure for the total-failure
+    /// path (its connector case carries T5's typed mapping).
+    private func establishAll() async -> ([Established], HerdrEmbedTransportFailure?) {
+        let tasks = links.map { link in
+            Task { @MainActor in
+                await self.establishOne(link)
+            }
+        }
+        var established: [Established] = []
+        var firstFailure: HerdrEmbedTransportFailure?
+        for (task, link) in zip(tasks, links) {
+            switch await task.value {
+            case let .success(probed):
+                established.append(Established(link: link, probed: probed))
+            case let .failure(failure):
+                if firstFailure == nil { firstFailure = failure }
+                eventLines.append(
+                    "\(link.machine.label): bring-up failed — \(Self.describe(failure))"
+                )
+            }
+        }
+        return (established, firstFailure)
+    }
+
+    private func establishOne(
+        _ link: HerdrEmbedMachineLink
+    ) async -> Result<HerdrProbedCarrier, HerdrEmbedTransportFailure> {
+        let connector = await makeConnector()
+        do {
+            return .success(try await connector.establishProbed(link.connection))
+        } catch let error as HerdrEndpointConnectorError {
+            return .failure(.connector(error))
+        } catch {
+            return .failure(.connector(.sshEstablish(.channelDenied)))
+        }
+    }
+
+    private static func describe(_ failure: HerdrEmbedTransportFailure) -> String {
+        switch failure {
+        case let .connector(error): "connector: \(error)"
+        case let .bridge(error): "bridge: \(error)"
+        }
+    }
+
     // MARK: - cwd pin
 
     private func pinCWDIfNeeded() {
@@ -309,9 +494,16 @@ final class HerdrEmbedTransportCoordinator {
 }
 
 /// Event sink bridging the actor's arbitrary-executor callbacks into
-/// MainActor-observed lines.
+/// MainActor-observed lines, prefixed with the machine's label so
+/// multi-machine evidence lines attribute themselves.
 private final class EventSink: @unchecked Sendable {
-    var onLine: (@Sendable (String) -> Void)?
+    private let label: String
+    private let emit: @Sendable (String) -> Void
+
+    init(label: String, emit: @escaping @Sendable (String) -> Void) {
+        self.label = label
+        self.emit = emit
+    }
 
     func handle(_ event: HerdrEmbedBridgeEvent) {
         let line: String
@@ -327,7 +519,7 @@ private final class EventSink: @unchecked Sendable {
         case let .stopped(unlinked, relaysTornDown):
             line = "bridge stopped unlinked=\(unlinked) relays=\(relaysTornDown)"
         }
-        onLine?(line)
+        emit("\(label): \(line)")
     }
 }
 #endif

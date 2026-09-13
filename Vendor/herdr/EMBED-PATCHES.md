@@ -160,3 +160,19 @@ directory is a SHORT RELATIVE path (`herdr-embed-transport`) resolved
 against the process cwd the coordinator pins — `sockaddr_un.sun_path`
 holds 104 bytes on Darwin and app-container paths exceed that. Evidence:
 `.sisyphus/evidence/herdr-embed-t5.log`.
+
+## Herds through the real client (plan task 6)
+
+No Rust-side change (patch set frozen since T5): T6 is entirely host-side.
+A herd seeds the client catalog with one entry per machine — each link
+resolves the machine's connection at open time, applies the herd-local
+session-name override the same way the native path does, and gets its own
+bridge socket on its own established carrier (jump chains included).
+Bring-up failure isolation mirrors the native herd: one dead machine
+never blocks the others (it stays in the catalog and the client renders
+its own dial-failure state); only a total failure surfaces as a typed
+transport error. One Swift-side core fix shipped with it: an accepted
+child whose exec open fails on a dead carrier (the redial the client's
+supervisor performs after a server dies) must finish its `NIOAsyncWriter`
+before being dropped — NIO's writer deinit precondition-fails otherwise
+and kills the whole process. Evidence: `.sisyphus/evidence/herdr-embed-t6.log`.

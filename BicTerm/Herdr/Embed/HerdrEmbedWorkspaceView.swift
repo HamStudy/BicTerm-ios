@@ -5,12 +5,17 @@ import SwiftUI
 /// Chrome for the embedded herdr TUI (plan herdr-embed T4): the native
 /// workspace header composition — "Herdr — {label}", status line,
 /// Disconnect — around ``HerdrTUIHostingView`` instead of the native pane
-/// area. Herd entries present the same surface: the embedded client's own
-/// machine sidebar owns multi-machine until T6 seeds the catalog.
+/// area. Herds present the same surface with the client's machine catalog
+/// seeded per open (T6): each herd machine rides its own profile socket
+/// through the bridge transport, and the REAL client's own sidebar owns
+/// multi-machine selection/input/health.
 ///
 /// Lifecycle: the view owns the process-single embedded instance while it
 /// is on screen — appearing starts the client, disappearing stops it (the
-/// embed shim allows one TUI per process; a herd re-open restarts it).
+/// embed shim allows one TUI per process). `ownerID` (the workspace entry
+/// id) scopes that ownership: opening herd B closes herd A's run cleanly,
+/// and herd A's surface renders a superseded state instead of mirroring
+/// herd B's client.
 ///
 /// T5: an `embedConnection` (Mode A) makes the runtime establish the SSH
 /// bridge transport before the client boots; its TOFU challenge presents
@@ -26,6 +31,8 @@ struct HerdrEmbedWorkspaceView: View {
     let onClose: () -> Void
     var fontModel: TerminalFontModel? = nil
     var embedConnection: Connection? = nil
+    var embedHerd: HerdDescriptor? = nil
+    var ownerID: UUID? = nil
     var hostKeyVerifier: HostKeyVerifier? = nil
 
     @State private var runtime = HerdrEmbedRuntime.shared
@@ -36,12 +43,16 @@ struct HerdrEmbedWorkspaceView: View {
         fontModel: TerminalFontModel? = nil,
         runtime: HerdrEmbedRuntime = .shared,
         embedConnection: Connection? = nil,
+        embedHerd: HerdDescriptor? = nil,
+        ownerID: UUID? = nil,
         hostKeyVerifier: HostKeyVerifier? = nil
     ) {
         self.endpointLabel = endpointLabel
         self.onClose = onClose
         self.fontModel = fontModel
         self.embedConnection = embedConnection
+        self.embedHerd = embedHerd
+        self.ownerID = ownerID
         self.hostKeyVerifier = hostKeyVerifier
         _runtime = State(initialValue: runtime)
     }
@@ -67,28 +78,52 @@ struct HerdrEmbedWorkspaceView: View {
         // instead of compressing it (same contract as the native chrome).
         .ignoresSafeArea(.keyboard)
         .task {
-            if let embedConnection, runtime.phase == .idle {
-                let coordinator = HerdrEmbedTransportCoordinator(
-                    connection: embedConnection,
-                    hostKeyVerifier: hostKeyVerifier
-                )
+            if let coordinator = await makeTransportCoordinator() {
                 runtime.attachTransport(coordinator)
                 trustCoordinator = coordinator
             }
-            await runtime.startIfNeeded()
+            await runtime.startIfNeeded(ownerID: ownerID)
         }
         .onChange(of: colorScheme, initial: true) { _, scheme in
             runtime.setHostAppearance(dark: scheme == .dark)
         }
         .onDisappear {
-            Task { await runtime.requestStop() }
+            Task { await runtime.requestStop(ownerID: ownerID) }
         }
         .modifier(EmbedTrustPromptPresenter(coordinator: trustCoordinator))
     }
 
     @State private var trustCoordinator: HerdrEmbedTransportCoordinator?
 
+    private func makeTransportCoordinator() async -> HerdrEmbedTransportCoordinator? {
+        if let embedHerd {
+            let links = await HerdrEmbedHerdSeeder.links(for: embedHerd)
+            guard !links.isEmpty else { return nil }
+            return HerdrEmbedTransportCoordinator(
+                machines: links,
+                preferredSelection: embedHerd
+                    .restoredSelection(defaults: .standard)
+                    .map { HerdrEmbedMachine.profileID(for: $0.connectionID) },
+                hostKeyVerifier: hostKeyVerifier
+            )
+        }
+        if let embedConnection {
+            return HerdrEmbedTransportCoordinator(
+                connection: embedConnection,
+                hostKeyVerifier: hostKeyVerifier
+            )
+        }
+        return nil
+    }
+
     private var phase: HerdrEmbedRuntime.Phase { runtime.phase }
+
+    /// True when THIS surface's identity owns (or would own) the live run;
+    /// a superseded surface must not host or stop another workspace's
+    /// client. Nil owners (tests, legacy hosting) behave as owners.
+    private var ownsLiveRun: Bool {
+        runtime.currentOwner == nil || runtime.currentOwner == ownerID
+    }
 
     private var header: some View {
         HStack(spacing: spacing.sm) {
@@ -103,9 +138,9 @@ struct HerdrEmbedWorkspaceView: View {
                     .accessibilityIdentifier("herdr-embed-status")
             }
             Spacer()
-            if phase == .running {
+            if phase == .running, ownsLiveRun {
                 Button("Disconnect") {
-                    Task { await runtime.requestStop() }
+                    Task { await runtime.requestStop(ownerID: ownerID) }
                 }
                 .font(typography.body)
                 .buttonStyle(.bordered)
@@ -130,6 +165,23 @@ struct HerdrEmbedWorkspaceView: View {
                     .foregroundStyle(colors.dimmed)
             }
             .accessibilityIdentifier("herdr-connecting")
+        case .running where !ownsLiveRun:
+            VStack(spacing: spacing.sm) {
+                Image(systemName: "square.slash")
+                    .font(typography.headline)
+                    .foregroundStyle(colors.dimmed)
+                Text("Another herdr workspace took over the embedded client. Close this window and reopen the herd to use it here.")
+                    .font(typography.body)
+                    .foregroundStyle(colors.dimmed)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, spacing.sm)
+                Button("Close", action: onClose)
+                    .font(typography.body)
+                    .buttonStyle(.bordered)
+                    .frame(minHeight: 44)
+                    .accessibilityIdentifier("herdr-embed-close")
+            }
+            .accessibilityIdentifier("herdr-embed-superseded")
         case .running:
             HerdrTUIHostingView(runtime: runtime, fontModel: fontModel)
         case let .failed(message):
@@ -174,6 +226,7 @@ struct HerdrEmbedWorkspaceView: View {
     private var statusText: String {
         switch phase {
         case .idle, .starting: "connecting"
+        case .running where !ownsLiveRun: "superseded"
         case .running: "embedded client running"
         case .stopped: "disconnected"
         case .failed: "failed"
@@ -183,6 +236,7 @@ struct HerdrEmbedWorkspaceView: View {
     private var statusColor: Color {
         switch phase {
         case .idle, .starting: colors.dimmed
+        case .running where !ownsLiveRun: colors.dimmed
         case .running: colors.success
         case .stopped, .failed: colors.error
         }
@@ -198,7 +252,7 @@ struct HerdrEmbedWorkspaceView: View {
 
     #if DEBUG
     private var ioFootnote: String? {
-        guard phase == .running else { return nil }
+        guard phase == .running, ownsLiveRun else { return nil }
         return "embed io ↑\(runtime.bytesWritten) ↓\(runtime.bytesRead)"
     }
     #else

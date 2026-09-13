@@ -39,6 +39,10 @@ final class HerdrEmbedRuntime {
     private(set) var failureDiagnostic: HerdrDiagnostic?
     /// Bridge byte-flow/lifecycle lines from the transport coordinator.
     private(set) var transportLines: [String] = []
+    /// Identity (workspace-entry id) that owns the live run. Opening a
+    /// second workspace while one runs REPLACES the run (v1: one embedded
+    /// TUI per process); superseded surfaces render a closed state.
+    private(set) var currentOwner: UUID?
 
     /// Output chunks toward the hosting view; one stream per run.
     private var outputContinuation: AsyncStream<Data>.Continuation?
@@ -46,9 +50,12 @@ final class HerdrEmbedRuntime {
 
     private var session: HerdrEmbedSession?
     private let sessionFactory: @Sendable () -> HerdrEmbedSession
-    /// T5 transport (Mode A): when attached, startIfNeeded brings up the
-    /// SSH bridge instead of reading a launch-time socket path.
-    private var transport: HerdrEmbedTransportCoordinator?
+    /// T5+T6 transport, split in two: the run's ACTIVE coordinator (torn
+    /// down with it) and the coordinator STAGED by the next view's task.
+    /// The split matters at takeover — the staged coordinator must not be
+    /// torn down in place of the live run's.
+    private var activeTransport: HerdrEmbedTransportCoordinator?
+    private var stagedTransport: HerdrEmbedTransportCoordinator?
 
     /// Streaming scanner state for the color-scheme query (read thread).
     private var queryTail = Data()
@@ -62,20 +69,30 @@ final class HerdrEmbedRuntime {
 
     // MARK: - Lifecycle
 
-    /// T5: attach the Mode-A transport. Must be set before
-    /// ``startIfNeeded()``; a stale coordinator from a previous run is
-    /// torn down with it.
+    /// Stages a transport for the NEXT start (T5 Mode A / T6 herd). A
+    /// staged coordinator is inert until that start consumes it; the
+    /// ACTIVE run's coordinator is torn down with that run, never by a
+    /// later stage call.
     func attachTransport(_ coordinator: HerdrEmbedTransportCoordinator) {
-        transport = coordinator
+        stagedTransport = coordinator
     }
 
     /// Starts the embedded client if no run is alive; a live run is reused
-    /// (single-instance rule). With a transport attached (T5), the SSH
-    /// bridge is established first — TOFU prompt, probe, bridge listener,
-    /// client catalog seeding — and the legacy launch-time socket path is
-    /// ignored. Initial geometry is a placeholder — the hosting view's
-    /// first layout resize delivers SwiftTerm's real grid.
-    func startIfNeeded(defaultCols: Int = 80, defaultRows: Int = 24) async {
+    /// (single-instance rule) unless the caller owns a DIFFERENT identity —
+    /// opening herd B closes herd A's run cleanly first (v1: one embedded
+    /// TUI per process). With a transport staged, the SSH bridges are
+    /// established first — TOFU prompts, probes, per-machine listeners,
+    /// catalog seeding — and the legacy launch-time socket path is ignored.
+    /// Initial geometry is a placeholder — the hosting view's first layout
+    /// resize delivers SwiftTerm's real grid.
+    func startIfNeeded(
+        ownerID: UUID? = nil,
+        defaultCols: Int = 80,
+        defaultRows: Int = 24
+    ) async {
+        if let ownerID, (phase == .running || phase == .starting), currentOwner != ownerID {
+            await requestStop()
+        }
         switch phase {
         case .idle, .stopped, .failed:
             break
@@ -85,21 +102,25 @@ final class HerdrEmbedRuntime {
 
         failureDiagnostic = nil
         transportLines = []
+        if let staged = stagedTransport {
+            stagedTransport = nil
+            activeTransport = staged
+        }
 
         let resolvedSocketPath: String
-        if let transport {
+        if let activeTransport {
             do {
-                resolvedSocketPath = try await transport.prepare()
-                transportLines = transport.eventLines
+                resolvedSocketPath = try await activeTransport.prepare()
+                transportLines = activeTransport.eventLines
             } catch let failure as HerdrEmbedTransportFailure {
                 presentTransportFailure(failure)
-                await transport.teardown()
+                await teardownTransport()
                 return
             } catch {
                 presentTransportFailure(.bridge(
                     .bindFailed(path: "transport", reason: "\(error)")
                 ))
-                await transport.teardown()
+                await teardownTransport()
                 return
             }
         } else if let legacy = Self.resolveSocketPath() {
@@ -107,7 +128,7 @@ final class HerdrEmbedRuntime {
         } else {
             phase = .failed(
                 "No herdr transport configured. Connect a Herdr-enabled"
-                    + " connection (Mode A), or launch with"
+                    + " connection (Mode A), open a herd, or launch with"
                     + " -herdr-embed-socket <path> / HERDR_EMBED_SOCKET_PATH"
                     + " for the fixture harness."
             )
@@ -116,6 +137,7 @@ final class HerdrEmbedRuntime {
         self.socketPath = resolvedSocketPath
 
         phase = .starting
+        currentOwner = ownerID
         let session = sessionFactory()
         prepareClientEnvironment()
 
@@ -161,13 +183,18 @@ final class HerdrEmbedRuntime {
     }
 
     /// Stops the live run (window/cover closed or Disconnect). Off-main.
-    /// The transport (when attached) tears down AFTER the client joined —
-    /// its supervisor may still be dialing the bridge socket, which
-    /// resolves relative to the cwd the coordinator pinned.
-    func requestStop() async {
+    /// An `ownerID` scopes the stop to the run's owning workspace — a
+    /// superseded surface closing its window must not kill the run that
+    /// replaced it; nil stops unconditionally (the owner's own Disconnect,
+    /// tests). The transport (when attached) tears down AFTER the client
+    /// joined — its supervisor may still be dialing the bridge socket,
+    /// which resolves relative to the cwd the coordinator pinned.
+    func requestStop(ownerID: UUID? = nil) async {
         guard phase == .running || phase == .starting else { return }
+        if let ownerID, currentOwner != ownerID { return }
         let session = session
         phase = .stopped(exit: nil)
+        currentOwner = nil
         finishStream()
         self.session = nil
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
@@ -183,16 +210,17 @@ final class HerdrEmbedRuntime {
         guard session != nil else { return }
         session = nil
         finishStream()
+        currentOwner = nil
         phase = .stopped(exit: detail)
-        let transport = transport
+        let transport = activeTransport
         Task { @MainActor in
             await self.teardownTransport(transport)
         }
     }
 
     private func teardownTransport(_ explicit: HerdrEmbedTransportCoordinator? = nil) async {
-        guard let transport = explicit ?? transport else { return }
-        self.transport = nil
+        guard let transport = explicit ?? activeTransport else { return }
+        activeTransport = nil
         transportLines = transport.eventLines
         await transport.teardown()
     }

@@ -210,8 +210,7 @@ public actor HerdrEmbedBridgeServer {
         do {
             session = try await carrier.openExecChannel(command: command)
         } catch {
-            child.channel.close(promise: nil)
-            endRelay(child)
+            discardUnrelayedChild(child)
             if !didStop {
                 onEvent(.carrierLost(reason: "\(error)"))
             }
@@ -221,8 +220,7 @@ public actor HerdrEmbedBridgeServer {
         // else would tear this fresh session down.
         if didStop {
             await session.close()
-            child.channel.close(promise: nil)
-            endRelay(child)
+            discardUnrelayedChild(child)
             return
         }
         onEvent(.relayOpened)
@@ -309,6 +307,17 @@ public actor HerdrEmbedBridgeServer {
 
     private func endRelay(_ child: NIOAsyncChannel<ByteBuffer, ByteBuffer>) {
         liveRelayChannels.removeValue(forKey: ObjectIdentifier(child.channel))
+    }
+
+    /// Drops an accepted child that never entered a relay (exec open
+    /// refused — e.g. the carrier died and the client redialed). The
+    /// scoped `executeThenClose` finish is unreachable for these, and
+    /// NIOAsyncWriter's deinit precondition-fails without an explicit
+    /// `finish()` — a hard trap, not an error.
+    private func discardUnrelayedChild(_ child: NIOAsyncChannel<ByteBuffer, ByteBuffer>) {
+        child.outbound.finish()
+        child.channel.close(promise: nil)
+        endRelay(child)
     }
 
     // MARK: - Socket path hygiene (uds-forward.py contract)

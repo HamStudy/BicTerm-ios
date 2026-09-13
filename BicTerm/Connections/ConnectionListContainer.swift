@@ -205,9 +205,27 @@ struct ConnectionListContainer: View {
 
     private func openHerd(_ herd: Herd) {
         #if HERDR_EMBED
-        presentHerdr(sessionID: HerdrWorkspaceCenter.shared.openHerd(
-            HerdDescriptor(herdID: herd.id, herdName: herd.name, machines: [])
-        ))
+        // T6: the herd entry carries its machines; the embed view resolves
+        // one transport link per machine when it appears — herd edits are
+        // reflected on the next open; a live instance is not re-seeded.
+        Task { @MainActor in
+            let lookup = HerdSessionCoordinator.liveLookup()
+            var machines: [HerdMachineDescriptor] = []
+            for machine in herd.machines {
+                let connection = await lookup(machine.connectionID)
+                machines.append(HerdMachineDescriptor(
+                    endpointID: HerdDescriptor.endpointID(
+                        herdID: herd.id, connectionID: machine.connectionID
+                    ),
+                    connectionID: machine.connectionID,
+                    label: machine.label ?? connection?.name ?? "Missing connection",
+                    sessionName: machine.sessionName
+                ))
+            }
+            presentHerdr(sessionID: HerdrWorkspaceCenter.shared.openHerd(
+                HerdDescriptor(herdID: herd.id, herdName: herd.name, machines: machines)
+            ))
+        }
         #else
         herdConnect.open(
             herd,
@@ -232,6 +250,8 @@ struct ConnectionListContainer: View {
             },
             fontModel: store.terminalFont,
             embedConnection: entry.embedConnection,
+            embedHerd: entry.herd,
+            ownerID: entry.id,
             hostKeyVerifier: store.hostKeyVerifier
         )
         #else
