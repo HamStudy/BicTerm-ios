@@ -1,4 +1,5 @@
 #if HERDR_EMBED
+import BicTermCore
 import SwiftUI
 
 /// Chrome for the embedded herdr TUI (plan herdr-embed T4): the native
@@ -10,6 +11,11 @@ import SwiftUI
 /// Lifecycle: the view owns the process-single embedded instance while it
 /// is on screen — appearing starts the client, disappearing stops it (the
 /// embed shim allows one TUI per process; a herd re-open restarts it).
+///
+/// T5: an `embedConnection` (Mode A) makes the runtime establish the SSH
+/// bridge transport before the client boots; its TOFU challenge presents
+/// here and transport failures render through the native diagnostic
+/// taxonomy instead of a bare string.
 struct HerdrEmbedWorkspaceView: View {
     @Environment(\.terminalColors) private var colors
     @Environment(\.terminalTypography) private var typography
@@ -19,6 +25,8 @@ struct HerdrEmbedWorkspaceView: View {
     let endpointLabel: String
     let onClose: () -> Void
     var fontModel: TerminalFontModel? = nil
+    var embedConnection: Connection? = nil
+    var hostKeyVerifier: HostKeyVerifier? = nil
 
     @State private var runtime = HerdrEmbedRuntime.shared
 
@@ -26,11 +34,15 @@ struct HerdrEmbedWorkspaceView: View {
         endpointLabel: String,
         onClose: @escaping () -> Void,
         fontModel: TerminalFontModel? = nil,
-        runtime: HerdrEmbedRuntime = .shared
+        runtime: HerdrEmbedRuntime = .shared,
+        embedConnection: Connection? = nil,
+        hostKeyVerifier: HostKeyVerifier? = nil
     ) {
         self.endpointLabel = endpointLabel
         self.onClose = onClose
         self.fontModel = fontModel
+        self.embedConnection = embedConnection
+        self.hostKeyVerifier = hostKeyVerifier
         _runtime = State(initialValue: runtime)
     }
 
@@ -55,6 +67,14 @@ struct HerdrEmbedWorkspaceView: View {
         // instead of compressing it (same contract as the native chrome).
         .ignoresSafeArea(.keyboard)
         .task {
+            if let embedConnection, runtime.phase == .idle {
+                let coordinator = HerdrEmbedTransportCoordinator(
+                    connection: embedConnection,
+                    hostKeyVerifier: hostKeyVerifier
+                )
+                runtime.attachTransport(coordinator)
+                trustCoordinator = coordinator
+            }
             await runtime.startIfNeeded()
         }
         .onChange(of: colorScheme, initial: true) { _, scheme in
@@ -63,7 +83,10 @@ struct HerdrEmbedWorkspaceView: View {
         .onDisappear {
             Task { await runtime.requestStop() }
         }
+        .modifier(EmbedTrustPromptPresenter(coordinator: trustCoordinator))
     }
+
+    @State private var trustCoordinator: HerdrEmbedTransportCoordinator?
 
     private var phase: HerdrEmbedRuntime.Phase { runtime.phase }
 
@@ -111,6 +134,15 @@ struct HerdrEmbedWorkspaceView: View {
             HerdrTUIHostingView(runtime: runtime, fontModel: fontModel)
         case let .failed(message):
             VStack(spacing: spacing.sm) {
+                if let diagnostic = runtime.failureDiagnostic {
+                    Label(
+                        diagnostic.title,
+                        systemImage: diagnostic.kind == .authLost
+                            ? "person.badge.key" : "wifi.exclamationmark"
+                    )
+                    .font(typography.headline)
+                    .foregroundStyle(colors.error)
+                }
                 Text(message)
                     .font(typography.body)
                     .foregroundStyle(colors.foreground)
@@ -172,5 +204,38 @@ struct HerdrEmbedWorkspaceView: View {
     #else
     private var ioFootnote: String? { nil }
     #endif
+}
+
+/// Presents the embed transport's pending TOFU challenge above the
+/// workspace (the carrier connects while this surface is already on
+/// screen; a prompt attached to the covered connection list would never
+/// surface). Mirrors ``HerdTrustPromptPresenter``.
+private struct EmbedTrustPromptPresenter: ViewModifier {
+    let coordinator: HerdrEmbedTransportCoordinator?
+
+    func body(content: Content) -> some View {
+        content.sheet(
+            item: Binding(
+                get: { coordinator?.trustPrompt },
+                set: { _ in }
+            )
+        ) { prompt in
+            HostTrustPromptView(
+                challenge: SessionStore.HostTrustChallenge(
+                    host: prompt.challenge.host,
+                    port: prompt.challenge.port,
+                    algorithm: prompt.challenge.algorithm,
+                    fingerprint: prompt.challenge.fingerprint,
+                    publicKeyData: prompt.challenge.publicKeyData
+                ),
+                errorMessage: nil,
+                onTrust: { coordinator?.resolveTrustPrompt(true) },
+                onCancel: { coordinator?.resolveTrustPrompt(false) }
+            )
+            .interactiveDismissDisabled(true)
+            .presentationDetents([.large])
+            .terminalStyle()
+        }
+    }
 }
 #endif

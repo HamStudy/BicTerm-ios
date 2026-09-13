@@ -1,4 +1,5 @@
 #if HERDR_EMBED
+import BicTermCore
 import Foundation
 import Observation
 import os
@@ -33,6 +34,11 @@ final class HerdrEmbedRuntime {
     private(set) var bytesRead: Int = 0
     private(set) var bytesWritten: Int = 0
     private(set) var socketPath: String?
+    /// Typed explanation for a failed transport bring-up (T5): kind +
+    /// detail mirror the native workspace's diagnostic taxonomy.
+    private(set) var failureDiagnostic: HerdrDiagnostic?
+    /// Bridge byte-flow/lifecycle lines from the transport coordinator.
+    private(set) var transportLines: [String] = []
 
     /// Output chunks toward the hosting view; one stream per run.
     private var outputContinuation: AsyncStream<Data>.Continuation?
@@ -40,6 +46,9 @@ final class HerdrEmbedRuntime {
 
     private var session: HerdrEmbedSession?
     private let sessionFactory: @Sendable () -> HerdrEmbedSession
+    /// T5 transport (Mode A): when attached, startIfNeeded brings up the
+    /// SSH bridge instead of reading a launch-time socket path.
+    private var transport: HerdrEmbedTransportCoordinator?
 
     /// Streaming scanner state for the color-scheme query (read thread).
     private var queryTail = Data()
@@ -53,9 +62,19 @@ final class HerdrEmbedRuntime {
 
     // MARK: - Lifecycle
 
+    /// T5: attach the Mode-A transport. Must be set before
+    /// ``startIfNeeded()``; a stale coordinator from a previous run is
+    /// torn down with it.
+    func attachTransport(_ coordinator: HerdrEmbedTransportCoordinator) {
+        transport = coordinator
+    }
+
     /// Starts the embedded client if no run is alive; a live run is reused
-    /// (single-instance rule). Initial geometry is a placeholder — the
-    /// hosting view's first layout resize delivers SwiftTerm's real grid.
+    /// (single-instance rule). With a transport attached (T5), the SSH
+    /// bridge is established first — TOFU prompt, probe, bridge listener,
+    /// client catalog seeding — and the legacy launch-time socket path is
+    /// ignored. Initial geometry is a placeholder — the hosting view's
+    /// first layout resize delivers SwiftTerm's real grid.
     func startIfNeeded(defaultCols: Int = 80, defaultRows: Int = 24) async {
         switch phase {
         case .idle, .stopped, .failed:
@@ -64,22 +83,44 @@ final class HerdrEmbedRuntime {
             return
         }
 
-        guard let socketPath = Self.resolveSocketPath() else {
+        failureDiagnostic = nil
+        transportLines = []
+
+        let resolvedSocketPath: String
+        if let transport {
+            do {
+                resolvedSocketPath = try await transport.prepare()
+                transportLines = transport.eventLines
+            } catch let failure as HerdrEmbedTransportFailure {
+                presentTransportFailure(failure)
+                await transport.teardown()
+                return
+            } catch {
+                presentTransportFailure(.bridge(
+                    .bindFailed(path: "transport", reason: "\(error)")
+                ))
+                await transport.teardown()
+                return
+            }
+        } else if let legacy = Self.resolveSocketPath() {
+            resolvedSocketPath = legacy
+        } else {
             phase = .failed(
-                "No herdr server socket configured. Launch with"
-                    + " -herdr-embed-socket <path> or set HERDR_EMBED_SOCKET_PATH."
-                    + " (Transport injection — plan T5 — replaces this.)"
+                "No herdr transport configured. Connect a Herdr-enabled"
+                    + " connection (Mode A), or launch with"
+                    + " -herdr-embed-socket <path> / HERDR_EMBED_SOCKET_PATH"
+                    + " for the fixture harness."
             )
             return
         }
-        self.socketPath = socketPath
+        self.socketPath = resolvedSocketPath
 
         phase = .starting
         let session = sessionFactory()
         prepareClientEnvironment()
 
         let config = HerdrEmbedSessionConfig(
-            socketPath: socketPath,
+            socketPath: resolvedSocketPath,
             cols: defaultCols,
             rows: defaultRows
         )
@@ -120,6 +161,9 @@ final class HerdrEmbedRuntime {
     }
 
     /// Stops the live run (window/cover closed or Disconnect). Off-main.
+    /// The transport (when attached) tears down AFTER the client joined —
+    /// its supervisor may still be dialing the bridge socket, which
+    /// resolves relative to the cwd the coordinator pinned.
     func requestStop() async {
         guard phase == .running || phase == .starting else { return }
         let session = session
@@ -131,6 +175,79 @@ final class HerdrEmbedRuntime {
                 session?.stopBlocking()
                 continuation.resume()
             }
+        }
+        await teardownTransport()
+    }
+
+    private func handleExit(_ detail: String?) {
+        guard session != nil else { return }
+        session = nil
+        finishStream()
+        phase = .stopped(exit: detail)
+        let transport = transport
+        Task { @MainActor in
+            await self.teardownTransport(transport)
+        }
+    }
+
+    private func teardownTransport(_ explicit: HerdrEmbedTransportCoordinator? = nil) async {
+        guard let transport = explicit ?? transport else { return }
+        self.transport = nil
+        transportLines = transport.eventLines
+        await transport.teardown()
+    }
+
+    // MARK: - Transport failure mapping (T5)
+
+    /// Maps a transport bring-up failure onto the run state: trust
+    /// declined ends quietly (user cancellation), everything else surfaces
+    /// as a typed ``HerdrDiagnostic`` using the native taxonomy's kinds.
+    private func presentTransportFailure(_ failure: HerdrEmbedTransportFailure) {
+        switch failure {
+        case let .connector(error):
+            switch error {
+            case .trustDeclined:
+                phase = .stopped(exit: nil)
+                return
+            case let .invalidSessionName(name):
+                failureDiagnostic = .simple(
+                    .transportLost,
+                    detail: "The Remote Session name “\(name)” isn’t valid for herdr."
+                )
+                phase = .failed("The Remote Session name “\(name)” isn’t valid for herdr.")
+            case let .incompatibleEndpoint(result, _):
+                failureDiagnostic = .incompatibleGeneration(
+                    detail: HerdrEndpointConnector.diagnosticDetail(for: result)
+                )
+                phase = .failed(failureDiagnostic!.detail)
+            case let .probeFailed(cause):
+                let detail: String
+                switch cause {
+                case .execChannelFailed:
+                    detail = "the herdr probe channel could not open on the host"
+                case let .hostileSearchPath(path):
+                    detail = "refused an unsafe herdr search path: \(path)"
+                }
+                failureDiagnostic = .simple(.transportLost, detail: detail)
+                phase = .failed(detail)
+            case let .sshEstablish(cause), let .bridgeChannelFailed(cause):
+                let diagnostic = Self.diagnostic(for: cause)
+                failureDiagnostic = diagnostic
+                phase = .failed(diagnostic.detail)
+            }
+        case let .bridge(error):
+            let detail = "The herdr bridge could not start: \(error)"
+            failureDiagnostic = .simple(.transportLost, detail: detail)
+            phase = .failed(detail)
+        }
+    }
+
+    private static func diagnostic(for cause: SSHTransportError) -> HerdrDiagnostic {
+        switch cause {
+        case .authenticationFailed, .authRequired:
+            .simple(.authLost, detail: cause.localizedDescription)
+        default:
+            .simple(.transportLost, detail: cause.localizedDescription)
         }
     }
 
@@ -171,13 +288,6 @@ final class HerdrEmbedRuntime {
             writeInput(response)
         }
         outputContinuation?.yield(chunk)
-    }
-
-    private func handleExit(_ detail: String?) {
-        guard session != nil else { return }
-        session = nil
-        finishStream()
-        phase = .stopped(exit: detail)
     }
 
     private func finishStream() {

@@ -175,10 +175,13 @@ struct ConnectionListContainer: View {
     private func handleConnect(_ connection: Connection) {
         if connection.herdrEnabled {
             #if HERDR_EMBED
-            // T4: the embedded client owns the connection (local socket);
-            // BicTermCore SSH transport injection is plan T5, so Mode A
-            // presents the embedded workspace directly.
-            presentHerdr(sessionID: HerdrWorkspaceCenter.shared.open { _ in connection.name })
+            // T5: the embedded client reaches this machine through the
+            // BicTermCore SSH bridge — the connection rides the workspace
+            // entry and the embed runtime establishes the carrier (TOFU
+            // prompt, probe, bridge socket).
+            presentHerdr(
+                sessionID: HerdrWorkspaceCenter.shared.openEmbed(connection: connection)
+            )
             #else
             #if DEBUG
             if HerdrWorkspaceUITest.doubleConnectRequested {
@@ -227,7 +230,9 @@ struct ConnectionListContainer: View {
                 }
                 herdrCoverSession = nil
             },
-            fontModel: store.terminalFont
+            fontModel: store.terminalFont,
+            embedConnection: entry.embedConnection,
+            hostKeyVerifier: store.hostKeyVerifier
         )
         #else
         if let herd = entry.herd {

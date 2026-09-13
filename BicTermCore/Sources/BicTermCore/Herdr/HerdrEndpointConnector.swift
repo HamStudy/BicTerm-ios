@@ -80,6 +80,31 @@ public enum HerdrEndpointConnectorError: Error, Equatable, Sendable {
 /// this connector never constructs a HerdrClient. An incompatible probe is
 /// ``HerdrEndpointConnectorError/incompatibleEndpoint(result:diagnosticDetail:)``
 /// with no bridge exec (doc §11 read-only boundary).
+/// Result of ``HerdrEndpointConnector/establishProbed(_:)``: an ESTABLISHED
+/// SSH carrier whose probe passed, with the remote herdr executable the
+/// bridge command should exec. The carrier is NOT yet bound to any exec
+/// channel — the embed transport (plan herdr-embed T5) keeps it alive and
+/// opens one fresh `remote-client-bridge` exec channel per local bridge
+/// connection on it.
+public struct HerdrProbedCarrier: Sendable {
+    /// Established exec-capable connection (direct or jump-chained). The
+    /// caller owns its lifetime from here on.
+    public let carrier: any SSHExecCapableConnection
+    public let probe: HerdrProbe.Result
+    /// Absolute path of the remote herdr binary the probe verified.
+    public let executablePath: String
+
+    init(
+        carrier: any SSHExecCapableConnection,
+        probe: HerdrProbe.Result,
+        executablePath: String
+    ) {
+        self.carrier = carrier
+        self.probe = probe
+        self.executablePath = executablePath
+    }
+}
+
 public struct HerdrEndpointConnector: Sendable {
     public typealias HostKeyApproval = @Sendable (HerdrHostTrustChallenge) async -> Bool
 
@@ -112,6 +137,34 @@ public struct HerdrEndpointConnector: Sendable {
     public func connect(
         _ connection: Connection
     ) async throws(HerdrEndpointConnectorError) -> HerdrSSHTransport {
+        let probed = try await establishProbed(connection)
+        do {
+            return try await HerdrSSHTransport(
+                transport: probed.carrier,
+                executablePath: probed.executablePath,
+                sessionName: connection.herdrSessionName
+            )
+        } catch let error as SSHTransportError {
+            await probed.carrier.close()
+            throw .bridgeChannelFailed(error)
+        } catch {
+            // HerdrCommandBuilder.BuildError — unreachable: the session
+            // name passed the same grammar check at entry.
+            await probed.carrier.close()
+            throw .invalidSessionName(connection.herdrSessionName ?? "")
+        }
+    }
+
+    /// Establish + probe WITHOUT opening the bridge channel (plan
+    /// herdr-embed T5): hands back the live carrier so the embed transport
+    /// can open `remote-client-bridge` exec channels on demand, one per
+    /// local bridge connection, while keeping ONE established connection
+    /// for the whole embed session (§3.5 shared-connection shape). Same
+    /// ordering invariant as ``connect(_:)`` — the probe gate runs before
+    /// any caller can open a bridge exec on the returned carrier.
+    public func establishProbed(
+        _ connection: Connection
+    ) async throws(HerdrEndpointConnectorError) -> HerdrProbedCarrier {
         if let sessionName = connection.herdrSessionName,
            !HerdrCommandBuilder.isValidSessionName(sessionName) {
             throw .invalidSessionName(sessionName)
@@ -140,22 +193,7 @@ public struct HerdrEndpointConnector: Sendable {
                 diagnosticDetail: Self.diagnosticDetail(for: probe)
             )
         }
-
-        do {
-            return try await HerdrSSHTransport(
-                transport: carrier,
-                executablePath: executablePath,
-                sessionName: connection.herdrSessionName
-            )
-        } catch let error as SSHTransportError {
-            await carrier.close()
-            throw .bridgeChannelFailed(error)
-        } catch {
-            // HerdrCommandBuilder.BuildError — unreachable: the session
-            // name passed the same grammar check at entry.
-            await carrier.close()
-            throw .invalidSessionName(connection.herdrSessionName ?? "")
-        }
+        return HerdrProbedCarrier(carrier: carrier, probe: probe, executablePath: executablePath)
     }
 
     // MARK: - Establish

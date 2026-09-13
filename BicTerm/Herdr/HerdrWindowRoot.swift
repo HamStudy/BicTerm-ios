@@ -33,6 +33,8 @@ struct HerdrWindowRoot: View {
         // endpoints and herds (its machine sidebar owns multi-machine until
         // T6 seeds the catalog). Header composition is preserved by the
         // embed chrome; the native path survives below until T7 sign-off.
+        // T5: entries opened from a Mode-A connection carry it, and the
+        // embed runtime builds its SSH bridge transport from it.
         HerdrEmbedWorkspaceView(
             endpointLabel: entry.label,
             onClose: {
@@ -40,7 +42,9 @@ struct HerdrWindowRoot: View {
                     await center.close(id: entry.id)
                 }
             },
-            fontModel: store.terminalFont
+            fontModel: store.terminalFont,
+            embedConnection: entry.embedConnection,
+            hostKeyVerifier: store.hostKeyVerifier
         )
         #else
         if let herd = entry.herd {

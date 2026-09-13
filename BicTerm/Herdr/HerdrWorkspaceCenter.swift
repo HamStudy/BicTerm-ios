@@ -1,3 +1,4 @@
+import BicTermCore
 import Foundation
 import Observation
 
@@ -16,17 +17,23 @@ final class HerdrWorkspaceCenter {
         let label: String
         let model: HerdrSessionModel
         let herd: HerdDescriptor?
+        /// HERDR_EMBED Mode A (plan herdr-embed T5): the connection whose
+        /// SSH carrier backs the embedded client's bridge transport. Nil on
+        /// the legacy fixture/harness path and on herd entries (T6).
+        let embedConnection: Connection?
 
         init(
             id: UUID,
             label: String,
             model: HerdrSessionModel,
-            herd: HerdDescriptor? = nil
+            herd: HerdDescriptor? = nil,
+            embedConnection: Connection? = nil
         ) {
             self.id = id
             self.label = label
             self.model = model
             self.herd = herd
+            self.embedConnection = embedConnection
         }
     }
 
@@ -37,6 +44,17 @@ final class HerdrWorkspaceCenter {
         let model = HerdrSessionModel()
         let label = connect(model)
         entries.append(Entry(id: id, label: label, model: model))
+        return id
+    }
+
+    /// Mode A embedded workspace (plan herdr-embed T5): the connection
+    /// rides the entry so the embed runtime can establish its SSH bridge.
+    func openEmbed(connection: Connection) -> UUID {
+        let id = UUID()
+        let model = HerdrSessionModel()
+        entries.append(
+            Entry(id: id, label: connection.name, model: model, embedConnection: connection)
+        )
         return id
     }
 

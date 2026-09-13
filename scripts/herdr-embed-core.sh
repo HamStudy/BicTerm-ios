@@ -49,19 +49,19 @@ test -f "$VT_SIM" || { echo "missing $VT_SIM" >&2; exit 1; }
 export HERDR_LIBGHOSTTY_VT_PREBUILT=1
 cd "$EMBED_CRATE"
 
-echo "== embed staticlib: aarch64-apple-ios (release, default features)"
-cargo build --locked --release --target aarch64-apple-ios
+echo "== embed staticlib: aarch64-apple-ios (release, bicterm-transport)"
+cargo build --locked --release --features bicterm-transport --target aarch64-apple-ios
 DEVICE_A="$CARGO_TARGET_DIR/aarch64-apple-ios/release/libherdr_ios_embed.a"
 test -s "$DEVICE_A" || { echo "device staticlib missing" >&2; exit 1; }
 
-echo "== embed staticlib: aarch64-apple-ios-sim (release, default features)"
+echo "== embed staticlib: aarch64-apple-ios-sim (release, bicterm-transport)"
 # The patched build.rs links whatever .a sits at the vendored zig-out path for
 # the requested target; swap the simulator slice in for this build, then put
 # the device slice back so the working copy stays device-consistent.
 cp "$VT_DEVICE" "$VT_LIB"
 trap 'cp "$VT_DEVICE" "$VT_LIB"' EXIT
 cp "$VT_SIM" "$VT_LIB"
-cargo build --locked --release --target aarch64-apple-ios-sim
+cargo build --locked --release --features bicterm-transport --target aarch64-apple-ios-sim
 SIM_A="$CARGO_TARGET_DIR/aarch64-apple-ios-sim/release/libherdr_ios_embed.a"
 test -s "$SIM_A" || { echo "simulator staticlib missing" >&2; exit 1; }
 cp "$VT_DEVICE" "$VT_LIB"
