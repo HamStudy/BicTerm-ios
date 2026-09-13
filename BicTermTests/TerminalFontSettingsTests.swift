@@ -1,3 +1,5 @@
+import CoreText
+import UIKit
 import XCTest
 @testable import BicTerm
 
@@ -130,5 +132,99 @@ final class TerminalFontSettingsTests: XCTestCase {
         // Resetting at default is a no-op (no redundant re-font).
         model.reset()
         XCTAssertEqual(applied, [14])
+    }
+
+    // MARK: - Cell metrics (herdr surface parity with the terminal)
+
+    /// The cell math IS SwiftTerm's `computeFontDimensions`: "W" advance
+    /// rounded to the pixel grid for width, CTFont ascent+descent+leading
+    /// ceiled for height, over the same monospaced system font the
+    /// terminal renders with. Any drift here renders herdr panes at a
+    /// different density than terminal sessions.
+    func testCellMetricsMatchSwiftTermFormula() {
+        for size in [9.0, 14, 20.5, 32] {
+            for scale in [CGFloat(2), 3] {
+                let metrics = TerminalCellMetrics.compute(fontSize: size, displayScale: scale)
+                let font = UIFont.monospacedSystemFont(ofSize: size, weight: .regular)
+                let ctFont = font as CTFont
+                let advance = "W".size(withAttributes: [.font: font]).width
+                let lineHeight = CTFontGetAscent(ctFont) + CTFontGetDescent(ctFont) + CTFontGetLeading(ctFont)
+
+                XCTAssertEqual(
+                    metrics.width,
+                    (advance * scale).rounded() / scale,
+                    accuracy: 0.0001,
+                    "width at \(size)pt scale \(scale)"
+                )
+                XCTAssertEqual(
+                    metrics.height,
+                    (ceil(lineHeight) * scale).rounded(.up) / scale,
+                    accuracy: 0.0001,
+                    "height at \(size)pt scale \(scale)"
+                )
+            }
+        }
+    }
+
+    /// The height must use CTFont's positive descent, never
+    /// `UIFont.ascender + UIFont.descender` — UIFont.descender is negative
+    /// on this SDK, and the UIFont sum undercounts the line height by
+    /// twice the descent (10pt instead of ~17pt at 14pt), producing a grid
+    /// denser than the terminal's with vertically overlapping glyphs.
+    func testCellHeightUsesPositiveDescent() {
+        let metrics = TerminalCellMetrics.compute(fontSize: 14, displayScale: 3)
+        let font = UIFont.monospacedSystemFont(ofSize: 14, weight: .regular)
+        XCTAssertGreaterThan(metrics.height, CGFloat(14), "cell must be taller than the point size")
+        XCTAssertEqual(metrics.lineRatio, 1.2, accuracy: 0.15)
+        XCTAssertNotEqual(
+            metrics.height,
+            ceil(font.ascender + font.descender + font.leading),
+            "must not reproduce the UIFont signed-descent undercount"
+        )
+    }
+
+    /// At the requested grid, a glyph drawn at the font's own point size
+    /// fits its cell up to pixel-snapping slack: the advance can round
+    /// down by up to half a pixel, so each fit clamp in the herdr
+    /// surface's `min(fontSize, cellWidth/advanceRatio,
+    /// cellHeight/lineRatio)` may bind by at most half a point — the
+    /// steady-state herdr glyph size stays visually identical to the
+    /// terminal's.
+    func testCellMetricsNeverClampGlyphAtOwnFontSize() {
+        var size = 9.0
+        while size <= 32 {
+            let metrics = TerminalCellMetrics.compute(fontSize: size, displayScale: 3)
+            XCTAssertGreaterThanOrEqual(
+                metrics.width / metrics.advanceRatio, CGFloat(size) - 0.5,
+                "advance clamp binds beyond half a point at \(size)pt"
+            )
+            XCTAssertGreaterThanOrEqual(
+                metrics.height / metrics.lineRatio, CGFloat(size) - 0.5,
+                "line clamp binds beyond half a point at \(size)pt"
+            )
+            size += 0.5
+        }
+    }
+
+    /// Cell dimensions grow (never shrink) with the font size across the
+    /// whole settings range — a zoomed-in surface is never denser.
+    func testCellMetricsGrowWithFontSize() {
+        var previous = TerminalCellMetrics.compute(fontSize: 9, displayScale: 3)
+        var size = 9.5
+        while size <= 32 {
+            let metrics = TerminalCellMetrics.compute(fontSize: size, displayScale: 3)
+            XCTAssertGreaterThanOrEqual(metrics.width, previous.width, "width regressed at \(size)pt")
+            XCTAssertGreaterThanOrEqual(metrics.height, previous.height, "height regressed at \(size)pt")
+            previous = metrics
+            size += 0.5
+        }
+    }
+
+    /// At the 14pt default the derived cell sits in the neighborhood of
+    /// the old hard-coded 8x16 quantization — parity, not a density jump.
+    func testDefaultSizeCellNeighborhood() {
+        let metrics = TerminalCellMetrics.compute(fontSize: 14, displayScale: 3)
+        XCTAssertEqual(metrics.width, 8.5, accuracy: 0.75)
+        XCTAssertEqual(metrics.height, 16.75, accuracy: 1.25)
     }
 }

@@ -16,6 +16,7 @@ struct HerdWorkspaceChromeView: View {
     let herd: HerdDescriptor
     let onClose: () -> Void
     let onSelectMachine: (HerdMachineDescriptor) -> Void
+    var fontModel: TerminalFontModel? = nil
 
     var body: some View {
         VStack(spacing: 0) {
@@ -23,7 +24,8 @@ struct HerdWorkspaceChromeView: View {
             HerdrWorkspaceView(
                 model: model,
                 endpointLabel: herd.herdName,
-                onClose: onClose
+                onClose: onClose,
+                fontModel: fontModel
             )
         }
         .background {

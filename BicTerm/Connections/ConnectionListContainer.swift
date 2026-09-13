@@ -215,7 +215,8 @@ struct ConnectionListContainer: View {
                 },
                 onSelectMachine: { machine in
                     herdConnect.select(machine, in: entry.model)
-                }
+                },
+                fontModel: store.terminalFont
             )
         } else {
             HerdrWorkspaceView(
@@ -226,7 +227,8 @@ struct ConnectionListContainer: View {
                         await HerdrWorkspaceCenter.shared.close(id: entry.id)
                     }
                     herdrCoverSession = nil
-                }
+                },
+                fontModel: store.terminalFont
             )
         }
     }

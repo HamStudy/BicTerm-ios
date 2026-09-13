@@ -71,7 +71,10 @@ An iOS 18+ SSH terminal client for iPhone and iPad, built on
   apply immediately to every session without a font override
   (the font change recomputes the grid and emits an SSH window-change to the
   remote pty). Terminal font size is deliberately independent of Dynamic
-  Type — the terminal is a fixed character grid, not body text.
+  Type — the terminal is a fixed character grid, not body text. Herdr pane
+  surfaces render at the same global size with the same cell metrics the
+  terminal computes, so a herdr workspace's type matches its terminal
+  sessions exactly.
 
 ### Appearance theme
 

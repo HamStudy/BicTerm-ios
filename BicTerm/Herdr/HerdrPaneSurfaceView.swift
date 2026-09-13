@@ -94,15 +94,25 @@ struct HerdrTerminalPalette {
 /// from that same geometry.
 struct HerdrPaneSurfaceView: View {
     @Environment(\.terminalColors) private var colors
+    @Environment(\.displayScale) private var displayScale
 
     let surface: HerdrPaneSurface
     let paneMetadata: [String: String]
     var inputTargetID: String?
     var onPaneTap: ((String) -> Void)?
     var onGridChange: ((Int, Int) -> Void)?
+    /// Effective terminal font point size — the same global setting the
+    /// SwiftTerm sessions render at (per-window overrides are a session
+    /// concept; herdr windows follow the global default, like a session
+    /// without an override). Independent of Dynamic Type by design.
+    var fontSize: Double = TerminalFontSettings.defaultSize
 
     @State private var reportedCols = 0
     @State private var reportedRows = 0
+
+    private var cellMetrics: TerminalCellMetrics {
+        TerminalCellMetrics.compute(fontSize: fontSize, displayScale: displayScale)
+    }
 
     private var palette: HerdrTerminalPalette {
         HerdrTerminalPalette(
@@ -129,13 +139,18 @@ struct HerdrPaneSurfaceView: View {
         .background(colors.background)
     }
 
-    /// Desired grid at the current pixel size, quantized to the 8x16 cell
-    /// the FFI is configured with. The first layout is a silent baseline —
-    /// the connect-time fence geometry stands until the geometry genuinely
-    /// changes (rotation, window resize), and only then is a resize sent.
+    /// Desired grid at the current pixel size, quantized to the SAME
+    /// font-derived cell the terminal view computes (SwiftTerm's
+    /// `computeFontDimensions`) — cols/rows match a terminal session at
+    /// the same font size. The first layout is a silent baseline: the
+    /// connect-time fence geometry stands (a mid-activation resize would
+    /// restart the fence evidence). Only a genuine geometry change after
+    /// that (rotation, window resize) sends a live resize — a font-size
+    /// change only re-renders glyphs into the committed grid.
     private func reportGrid(for size: CGSize) {
-        let cols = Int(size.width / 8)
-        let rows = Int(size.height / 16)
+        let metrics = cellMetrics
+        let cols = Int(size.width / metrics.width)
+        let rows = Int(size.height / metrics.height)
         guard cols > 0, rows > 0 else { return }
         if reportedCols == 0 && reportedRows == 0 {
             reportedCols = cols
@@ -149,10 +164,16 @@ struct HerdrPaneSurfaceView: View {
     }
 
     private func drawCells(context: GraphicsContext, cellWidth: CGFloat, cellHeight: CGFloat) {
-        // Fit glyphs inside the cell box in BOTH axes: a monospaced advance
-        // is ~0.6em, so the width constraint binds whenever the grid is
-        // wider than a terminal-aspect layout (phone-width 80-column grid).
-        let fontSize = min(cellHeight * 0.78, cellWidth / 0.62)
+        // The app font size whenever the committed grid matches the
+        // requested one (cellWidth/cellHeight then equal the font's own
+        // metrics, so neither clamp binds); the clamps shrink glyphs only
+        // inside a stretched fence frame whose grid does not match.
+        let metrics = cellMetrics
+        let drawSize = min(
+            CGFloat(fontSize),
+            cellWidth / metrics.advanceRatio,
+            cellHeight / metrics.lineRatio
+        )
         for y in 0..<surface.frame.height {
             for x in 0..<surface.frame.width {
                 guard let index = surface.frame.cellIndex(x: x, y: y) else { continue }
@@ -177,7 +198,7 @@ struct HerdrPaneSurfaceView: View {
                     context.fill(Path(rect), with: .color(fill))
                 }
                 var text = Text(symbol)
-                    .font(.system(size: fontSize, weight: cell.modifier & HerdrCellModifier.bold != 0 ? .semibold : .regular, design: .monospaced))
+                    .font(.system(size: drawSize, weight: cell.modifier & HerdrCellModifier.bold != 0 ? .semibold : .regular, design: .monospaced))
                     .foregroundStyle(reversed ? background : foreground)
                 if cell.modifier & HerdrCellModifier.italic != 0 {
                     text = text.italic()

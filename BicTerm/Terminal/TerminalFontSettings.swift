@@ -1,4 +1,44 @@
+import CoreText
 import Foundation
+import UIKit
+
+/// Cell metrics for one terminal-font point size, computed exactly like
+/// SwiftTerm's `computeFontDimensions`: the monospaced advance of "W" for
+/// the width, ascent + descent + leading for the height, both snapped to
+/// the pixel grid. The herdr native pane surface quantizes its grid with
+/// the same math the SwiftTerm terminal view uses, so both render the
+/// same point size at the same grid density — and like the terminal, the
+/// herdr pane font follows the app's terminal font setting, never
+/// Dynamic Type.
+struct TerminalCellMetrics: Equatable {
+    /// Snapped monospaced advance ("W") per cell.
+    let width: CGFloat
+    /// Snapped ascent + descent + leading per cell.
+    let height: CGFloat
+    /// advance ÷ point size; clamps glyphs inside cells of a frame whose
+    /// grid does not match the requested one (the connect-time fence).
+    let advanceRatio: CGFloat
+    /// line height ÷ point size; same clamp purpose as ``advanceRatio``.
+    let lineRatio: CGFloat
+
+    static func compute(fontSize: Double, displayScale: CGFloat) -> TerminalCellMetrics {
+        let size = CGFloat(TerminalFontSettings.normalize(fontSize))
+        let font = UIFont.monospacedSystemFont(ofSize: size, weight: .regular)
+        let advance = "W".size(withAttributes: [.font: font]).width
+        // CTFont metrics, not UIFont.ascender/descender: CTFontGetDescent
+        // returns the positive magnitude (UIFont.descender is negative on
+        // this SDK), matching SwiftTerm's computeFontDimensions exactly.
+        let ctFont = font as CTFont
+        let lineHeight = CTFontGetAscent(ctFont) + CTFontGetDescent(ctFont) + CTFontGetLeading(ctFont)
+        let scale = max(1, displayScale)
+        return TerminalCellMetrics(
+            width: max(1, (advance * scale).rounded() / scale),
+            height: max(1, (ceil(lineHeight) * scale).rounded(.up) / scale),
+            advanceRatio: advance / size,
+            lineRatio: lineHeight / size
+        )
+    }
+}
 
 /// UserDefaults-backed persistence for the terminal font point size (same
 /// struct-over-UserDefaults convention as `HerdrClipboardSettings` /

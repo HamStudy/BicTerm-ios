@@ -38,7 +38,8 @@ struct HerdrWindowRoot: View {
                 },
                 onSelectMachine: { machine in
                     herd.apply(machine, in: entry.model)
-                }
+                },
+                fontModel: store.terminalFont
             )
             // Herd machines connect only after this window is up; their
             // TOFU challenges must present above it (F3-B).
@@ -51,7 +52,8 @@ struct HerdrWindowRoot: View {
                     Task {
                         await center.close(id: entry.id)
                     }
-                }
+                },
+                fontModel: store.terminalFont
             )
         }
     }

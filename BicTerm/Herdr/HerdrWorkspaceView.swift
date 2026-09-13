@@ -21,6 +21,9 @@ struct HerdrWorkspaceView: View {
     let model: HerdrSessionModel
     let endpointLabel: String
     let onClose: () -> Void
+    /// Global terminal font model: the pane surface renders at its live
+    /// size, exactly like a terminal session without a per-window override.
+    var fontModel: TerminalFontModel? = nil
 
     @State private var photoSelection: PhotosPickerItem?
     @State private var textPasteConfirmation: TextPasteConfirmation?
@@ -211,6 +214,7 @@ struct HerdrWorkspaceView: View {
                 // §8.2); hardware cmd+v keeps the consented `paste(_:)`
                 // path in the input field.
                 Button("Paste", action: beginPaste)
+                    .font(typography.body)
                     .buttonStyle(.bordered)
                     .frame(width: 88, height: 44)
                     .contentShape(Rectangle())
@@ -269,6 +273,13 @@ struct HerdrWorkspaceView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityIdentifier("herdr-connecting")
+    }
+
+    /// Global terminal font size — the same value a terminal session
+    /// without a per-window override renders at. The pane surface draws
+    /// its glyphs at this size (fit-clamped to the committed grid).
+    private var effectiveFontSize: Double {
+        fontModel?.size ?? TerminalFontSettings.defaultSize
     }
 
     /// Doc §6.3 visible reconnect state: bounded jittered backoff in
@@ -387,7 +398,8 @@ struct HerdrWorkspaceView: View {
                     },
                     onGridChange: { cols, rows in
                         model.resize(cols: cols, rows: rows)
-                    }
+                    },
+                    fontSize: effectiveFontSize
                 )
             } else {
                 snapshotPaneGrid(snapshot: snapshot)

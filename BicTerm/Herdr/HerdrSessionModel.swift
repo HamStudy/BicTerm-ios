@@ -167,6 +167,10 @@ final class HerdrSessionModel {
         endpoints[id] = state
         selectedEndpointID = id
 
+        // Cell px stays the canonical 8x16 the protocol goldens encode:
+        // the server lays panes out by cols/rows (the surface view's
+        // font-derived resize drives those), while wire cell px only feeds
+        // remote pixel reporting this client never consumes.
         let config = HerdrClientConfig(
             cols: state.desiredCols,
             rows: state.desiredRows,
@@ -268,13 +272,18 @@ final class HerdrSessionModel {
     /// connection's hello — mid-activation resizes would restart fence
     /// evidence, so the committed fence geometry wins. Once online with a
     /// committed surface it also routes through the FFI's live
-    /// `herdr_client_resize` on the ordered input lane.
+    /// `herdr_client_resize` on the ordered input lane — but only for an
+    /// endpoint whose grid actually changed: SwiftUI layout passes can
+    /// re-report identical geometry, and a repeated no-op resize must not
+    /// restart a fence cycle.
     func resize(cols: Int, rows: Int) {
         guard cols > 0, rows > 0 else { return }
         for id in endpoints.keys {
+            guard let state = endpoints[id] else { continue }
+            let changed = state.desiredCols != UInt32(cols) || state.desiredRows != UInt32(rows)
             endpoints[id]?.desiredCols = UInt32(cols)
             endpoints[id]?.desiredRows = UInt32(rows)
-            guard let runtime = runtimes[id], let state = endpoints[id],
+            guard changed, let runtime = runtimes[id],
                   state.phase == .online, state.surface != nil else { continue }
             runtime.inputContinuation.yield(.resize(cols: UInt32(cols), rows: UInt32(rows)))
         }
