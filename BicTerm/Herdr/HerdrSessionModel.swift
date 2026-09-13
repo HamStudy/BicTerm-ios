@@ -335,7 +335,12 @@ final class HerdrSessionModel {
                         )
                         continue
                     }
-                    await model?.handleClientError(error, endpoint: id, generation: generation)
+                    await model?.handleClientError(
+                        error,
+                        endpoint: id,
+                        generation: generation,
+                        context: Self.decodeBoundaryContext(chunk)
+                    )
                     return
                 }
                 // The FFI queues activation/control frames mid-session (the
@@ -461,7 +466,8 @@ final class HerdrSessionModel {
     private func handleClientError(
         _ error: HerdrClientError,
         endpoint id: HerdrEndpointID,
-        generation: UInt
+        generation: UInt,
+        context: String? = nil
     ) {
         switch error {
         case .surfaceRejected:
@@ -476,31 +482,39 @@ final class HerdrSessionModel {
             failAndTeardown(
                 endpoint: id,
                 generation: generation,
-                diagnostic: .incompatibleGeneration(detail: Self.detail(of: error))
+                diagnostic: .incompatibleGeneration(
+                    detail: Self.detail(of: error, context: context)
+                )
             )
         case .handshakeRejected:
             failAndTeardown(
                 endpoint: id,
                 generation: generation,
-                diagnostic: .handshakeRejected(detail: Self.detail(of: error))
+                diagnostic: .handshakeRejected(detail: Self.detail(of: error, context: context))
             )
         case .handshakeTimedOut, .handshakeExpectedWelcome:
             failAndTeardown(
                 endpoint: id,
                 generation: generation,
-                diagnostic: .simple(.handshakeTimedOut, detail: Self.detail(of: error))
+                diagnostic: .simple(
+                    .handshakeTimedOut, detail: Self.detail(of: error, context: context)
+                )
             )
         case .protocolViolation:
             failAndTeardown(
                 endpoint: id,
                 generation: generation,
-                diagnostic: .simple(.protocolViolation, detail: Self.detail(of: error))
+                diagnostic: .simple(
+                    .protocolViolation, detail: Self.detail(of: error, context: context)
+                )
             )
         default:
             failAndTeardown(
                 endpoint: id,
                 generation: generation,
-                diagnostic: .simple(.transportLost, detail: Self.detail(of: error))
+                diagnostic: .simple(
+                    .transportLost, detail: Self.detail(of: error, context: context)
+                )
             )
         }
     }
@@ -626,7 +640,9 @@ final class HerdrSessionModel {
         return .unknown
     }
 
-    static func detail(of error: HerdrClientError) -> String {        switch error {
+    static func detail(of error: HerdrClientError, context: String? = nil) -> String {
+        let base: String
+        switch error {
         case .invalidArgument(let detail),
              .panic(let detail),
              .disconnected(let detail),
@@ -643,9 +659,24 @@ final class HerdrSessionModel {
              .surfaceRejected(let detail),
              .clientFailed(let detail),
              .clipboardDropped(let detail):
-            detail
+            base = detail
         case .unknown(let code, let detail):
-            "code \(code): \(detail)"
+            base = "code \(code): \(detail)"
         }
+        guard let context else { return base }
+        return "\(base) [\(context)]"
+    }
+
+    /// T14 defense in depth: when the decoder rejects a chunk, the
+    /// diagnostic carries the protocol-core version plus a bounded hex
+    /// head of the chunk at the failure boundary — enough to adjudicate
+    /// foreign bytes on stdout (shell rc output) against server-side
+    /// malformation from a field report. 32 bytes of wire framing only;
+    /// the app never places key material in this stream.
+    static func decodeBoundaryContext(_ chunk: Data) -> String {
+        let head = chunk.prefix(32)
+            .map { String(format: "%02x", $0) }
+            .joined(separator: " ")
+        return "core \(HerdrClient.coreVersion); failing chunk head (32 B): \(head)"
     }
 }

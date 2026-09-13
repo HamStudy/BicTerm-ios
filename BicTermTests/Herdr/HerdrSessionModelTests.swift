@@ -139,7 +139,40 @@ final class HerdrSessionModelTests: XCTestCase {
         XCTAssertTrue(failed, "an oversized frame length must fail the session")
         let diagnostic = try XCTUnwrap(model.endpoints[endpoint]?.diagnostic)
         XCTAssertEqual(diagnostic.kind, .protocolViolation)
+        XCTAssertTrue(
+            diagnostic.detail.contains("core \(HerdrClient.coreVersion)"),
+            "decode-boundary diagnostics must carry the protocol core version"
+        )
+        XCTAssertTrue(
+            diagnostic.detail.contains("ff ff ff 7f"),
+            "decode-boundary diagnostics must carry the failing chunk's hex head: \(diagnostic.detail)"
+        )
         XCTAssertEqual(model.endpoints[endpoint]?.snapshot?.revision, 1, "last good snapshot stays visible as stale metadata")
+
+        await model.disconnectAll()
+    }
+
+    /// T14: shell rc output (zsh sources .zshenv even for `zsh -c`) is the
+    /// suspected foreign-bytes source behind field-reported decode errors —
+    /// text before the first frame must fail typed, never decode as state.
+    func testForeignPrefixBytesBeforeWelcomeFailTypedWithoutDecoding() async throws {
+        let model = makeModel()
+        let shellNoise = Data("1 new mail; last login: Sat Sep 12\n".utf8)
+        let transport = HerdrReplayTransport(script: [
+            shellNoise + (try vendorGolden("server-20")),
+        ])
+        let endpoint = HerdrEndpointID(rawValue: "rc-noise")
+        model.connect(endpoint: endpoint, transport: transport)
+
+        let failed = await waitUntil { model.endpoints[endpoint]?.phase == .failed }
+        XCTAssertTrue(failed, "foreign stdout bytes before the welcome must fail the session")
+        let diagnostic = try XCTUnwrap(model.endpoints[endpoint]?.diagnostic)
+        XCTAssertNotEqual(diagnostic.kind, .userDetach)
+        XCTAssertFalse([HerdrDiagnostic.Kind.remoteClosed, .serverShutdown].contains(diagnostic.kind))
+        XCTAssertTrue(
+            diagnostic.detail.contains("31 20 6e 65 77"),
+            "the diagnostic must show the foreign prefix bytes at the boundary: \(diagnostic.detail)"
+        )
 
         await model.disconnectAll()
     }

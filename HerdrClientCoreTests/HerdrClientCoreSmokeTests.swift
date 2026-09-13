@@ -138,6 +138,29 @@ final class HerdrClientCoreSmokeTests: XCTestCase {
         let drainedAgain = try await client.drainOutbound()
         XCTAssertTrue(drainedAgain.isEmpty)
     }
+
+    /// T14 characterization: foreign stdout bytes before the first frame —
+    /// the shape of shell rc output on the exec channel (zsh sources
+    /// .zshenv even for `zsh -c`) — must fail the decoder typed, never
+    /// decode as protocol state. Pinning the observed error class gives
+    /// the app-side hex-head diagnostic its provenance.
+    func testForeignPrefixBytesBeforeWelcomeFailTypedDecode() async throws {
+        let client = try HerdrClient(config: Self.goldenConfig)
+        defer { client.destroy() }
+        _ = try await client.drainOutbound()
+
+        let shellNoise = Data("1 new mail; last login: Sat\n".utf8)
+        do {
+            try await client.receive(shellNoise)
+            XCTFail("foreign bytes before the welcome must fail the decode")
+        } catch let error as HerdrClientError {
+            guard case .protocolViolation = error else {
+                return XCTFail("expected protocolViolation, got \(error)")
+            }
+        }
+        let phase = await client.phase
+        XCTAssertEqual(phase, .failed, "a decode violation must fail the client deterministically")
+    }
 }
 
 /// Deterministic SplitMix64 so the fuzz smoke is reproducible.
