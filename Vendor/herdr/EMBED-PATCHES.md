@@ -144,3 +144,19 @@ the simulator `libghostty-vt.a` into the working copy for its build and
 restores the device archive afterwards. No dSYM is produced at this
 profile (release, no DWARF); crash symbolication for the embed archive is
 plan-task-8 hardening.
+
+## Transport injection (plan task 5)
+
+Since T5 the same script builds BOTH staticlib slices with
+`--features bicterm-transport` (patch 0004's seam): the embed archive
+drops the local `ssh` subprocess bridge and dials the host socket at
+`{HERDR_EMBED_TRANSPORT_DIR}/{profile id}.sock` instead. The Swift host
+side lives outside the vendor tree (`BicTermCore/.../HerdrEmbedBridgeServer`
+UDS listener + per-connection `remote-client-bridge` exec relay;
+`BicTerm/Herdr/Embed/HerdrEmbedTransport` coordinator, catalog seeding,
+TOFU reuse) and seeds the client's saved-endpoint catalog under
+`{App Support}/herdr-embed/state-home/herdr/client/`. The transport
+directory is a SHORT RELATIVE path (`herdr-embed-transport`) resolved
+against the process cwd the coordinator pins — `sockaddr_un.sun_path`
+holds 104 bytes on Darwin and app-container paths exceed that. Evidence:
+`.sisyphus/evidence/herdr-embed-t5.log`.
