@@ -248,8 +248,9 @@ final class HerdSessionCoordinator {
             host: connection.host,
             port: connection.port,
             username: connection.username,
-            keyReference: connection.keyReference,
-            authMethod: connection.authMethod,
+            offersKeys: connection.offersKeys,
+            customKeys: connection.customKeys,
+            passwordTag: connection.passwordTag,
             jumpChain: connection.jumpChain,
             protocolOptions: options
         )
@@ -384,4 +385,3 @@ struct HerdTrustPromptPresenter: ViewModifier {
         }
     }
 }
-

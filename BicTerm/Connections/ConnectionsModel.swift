@@ -140,12 +140,12 @@ final class ConnectionsModel {
     /// so cleanup is driven entirely from the model.
     static func passwordTags(in connection: Connection) -> [String] {
         var tags: [String] = [connection.promptedPasswordTag]
-        if connection.authMethod == .password, !connection.keyReference.isEmpty {
-            tags.append(connection.keyReference)
+        if let tag = connection.passwordTag, !tag.isEmpty {
+            tags.append(tag)
         }
-        for hop in connection.jumpChain where hop.authMethod == .password {
-            if !hop.keyReference.isEmpty {
-                tags.append(hop.keyReference)
+        for hop in connection.jumpChain {
+            if let tag = hop.passwordTag, !tag.isEmpty {
+                tags.append(tag)
             }
         }
         return tags
@@ -253,15 +253,15 @@ final class ConnectionsModel {
         let keys = (try? await services.keyRepository.list()) ?? []
         let keyReference = keys.first { $0.label == "Fixture Ed25519" }?.reference
             ?? keys.first?.reference ?? "seed-key-missing"
-        let hop1 = Hop(host: "127.0.0.1", port: 12222, username: "hop1user", keyReference: keyReference)
-        let hop2 = Hop(host: "127.0.0.1", port: 12223, username: "hop2user", keyReference: keyReference)
+        let hop1 = Hop(host: "127.0.0.1", port: 12222, username: "hop1user", customKeys: [keyReference])
+        let hop2 = Hop(host: "127.0.0.1", port: 12223, username: "hop2user", customKeys: [keyReference])
         guard let demo = try? Connection(
             name: "Demo Jump Chain",
             type: .ssh,
             host: "10.2.4.9",
             port: 22,
             username: "alice",
-            keyReference: keyReference,
+            customKeys: [keyReference],
             jumpChain: [hop1, hop2]
         ) else { return }
         try? await services.connectionStore.save(demo)
@@ -276,7 +276,7 @@ final class ConnectionsModel {
             host: "future.example.com",
             port: 2022,
             username: "alice",
-            keyReference: keyReference
+            customKeys: [keyReference]
         ) else { return }
         try? await services.connectionStore.save(connection)
     }
@@ -300,7 +300,7 @@ final class ConnectionsModel {
             host: "127.0.0.1",
             port: port,
             username: SessionFixtureSeeder.fixtureUsername(),
-            keyReference: keyReference,
+            customKeys: [keyReference],
             protocolOptions: options
         ) else { return }
         try? await services.connectionStore.save(connection)
@@ -322,7 +322,7 @@ final class ConnectionsModel {
                 host: "127.0.0.1",
                 port: port,
                 username: SessionFixtureSeeder.fixtureUsername(),
-                keyReference: keyReference
+                customKeys: [keyReference]
             ) else { continue }
             try? await services.connectionStore.save(connection)
         }

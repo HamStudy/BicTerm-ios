@@ -97,8 +97,8 @@ public struct JumpChainBuilder: Sendable {
             host: connection.host,
             port: connection.port,
             username: connection.username,
-            keyReference: connection.keyReference,
-            authMethod: connection.authMethod,
+            keyReference: connection.offersKeys ? (connection.customKeys?.first ?? "") : (connection.passwordTag ?? connection.promptedPasswordTag),
+            authMethod: connection.offersKeys ? .publickey : .password,
             promptedPasswordTag: connection.promptedPasswordTag,
             canRemember: true
         )
@@ -121,8 +121,8 @@ public struct JumpChainBuilder: Sendable {
             host: connection.host,
             port: connection.port,
             username: connection.username,
-            keyReference: connection.keyReference,
-            authMethod: connection.authMethod
+            keyReference: connection.offersKeys ? (connection.customKeys?.first ?? "") : (connection.passwordTag ?? ""),
+            authMethod: connection.offersKeys ? .publickey : .password
         )
         let jumps = connection.jumpChain.map(JumpHopEndpoint.init(hop:))
         try Self.validate(jumps: jumps, destination: destination)

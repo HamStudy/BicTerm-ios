@@ -211,6 +211,6 @@ func makeUnitConnection(name: String = "unit", id: UUID = UUID()) throws -> Conn
         host: "unit.invalid",
         port: 22,
         username: "unit",
-        keyReference: "unit-key"
+            customKeys: ["unit-key"]
     )
 }

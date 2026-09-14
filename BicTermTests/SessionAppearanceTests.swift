@@ -41,7 +41,7 @@ final class SessionAppearanceTests: XCTestCase {
         let store = makeStore()
         store.terminalFont.setSize(14)
         let connection = try Connection(name: "test", type: .ssh, host: "localhost", port: 22,
-                                        username: "test", keyReference: "test")
+                       username: "test", customKeys: ["test"])
         let a = store.openSession(for: connection)
         let b = store.openSession(for: connection)
         let modelA = try XCTUnwrap(store.sceneModel(for: a.id))

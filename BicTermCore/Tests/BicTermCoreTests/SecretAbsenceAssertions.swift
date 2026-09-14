@@ -10,7 +10,7 @@ enum TestModels {
             host: "hop\(index).example.com",
             port: 2200 + index,
             username: "hop-user-\(index)",
-            keyReference: "keychain://keys/hop-\(index)"
+            customKeys: ["keychain://keys/hop-\(index)"]
         )
     }
 
@@ -34,7 +34,7 @@ enum TestModels {
             host: "workspace.example.com",
             port: 22,
             username: "fixture-user",
-            keyReference: "keychain://keys/main",
+            customKeys: ["keychain://keys/main"],
             jumpChain: jumpChain,
             protocolOptions: protocolOptions()
         )

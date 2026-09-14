@@ -262,7 +262,7 @@ final class HerdrEndpointConnectorTests: XCTestCase {
             host: "127.0.0.1",
             port: 1,
             username: "u",
-            keyReference: "fixture-ed25519"
+            customKeys: ["fixture-ed25519"]
         )
 
         do {
@@ -282,7 +282,7 @@ final class HerdrEndpointConnectorTests: XCTestCase {
             host: SSHTestFixture.hop1Host,
             port: SSHTestFixture.hop1Port,
             username: SSHTestFixture.username,
-            keyReference: "fixture-ed25519",
+            customKeys: ["fixture-ed25519"],
             protocolOptions: ProtocolOptions([
                 ProtocolOptions.herdrSessionKey: .string("work; rm -rf /")
             ])
@@ -342,7 +342,9 @@ final class HerdrEndpointConnectorTests: XCTestCase {
             host: keyed.host,
             port: keyed.port,
             username: keyed.username,
-            keyReference: keyed.keyReference,
+            offersKeys: keyed.offersKeys,
+            customKeys: keyed.customKeys,
+            passwordTag: keyed.passwordTag,
             protocolOptions: ProtocolOptions([
                 ProtocolOptions.herdrSessionKey: .string("team-session")
             ])

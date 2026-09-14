@@ -105,7 +105,7 @@ final class HerdrHostForgetTests: XCTestCase {
     ) throws -> Connection {
         var chain: [Hop] = []
         if let jumpTag {
-            chain = [Hop(host: "jump.example.com", port: 22, username: "jump", keyReference: jumpTag, authMethod: .password)]
+            chain = [Hop(host: "jump.example.com", port: 22, username: "jump", offersKeys: false, passwordTag: jumpTag)]
         }
         return try Connection(
             name: name,
@@ -113,8 +113,8 @@ final class HerdrHostForgetTests: XCTestCase {
             host: host,
             port: 22,
             username: "alice",
-            keyReference: tag,
-            authMethod: .password,
+            offersKeys: false,
+            passwordTag: tag,
             jumpChain: chain
         )
     }
@@ -227,7 +227,7 @@ final class HerdrHostForgetTests: XCTestCase {
 
     func testForgetRemovesRememberedKeyFallbackPassword() async throws {
         let connection = try Connection(name: "Key and password", type: .ssh, host: "web.example.com",
-                                        port: 22, username: "alice", keyReference: "signing-key")
+                                   port: 22, username: "alice", customKeys: ["signing-key"])
         let passwordStore = MemoryPasswordStore()
         try await passwordStore.save("remembered", for: connection.promptedPasswordTag)
         let service = HerdrHostForgetService(dependencies: .init(
@@ -250,7 +250,7 @@ final class HerdrHostForgetTests: XCTestCase {
         let renamed = try Connection(
             name: "Renamed", type: connection.type, host: connection.host,
             port: connection.port, username: connection.username,
-            keyReference: "t", jumpChain: []
+            customKeys: ["t"], jumpChain: []
         )
         XCTAssertEqual(
             HerdrHostIdentity.endpointRawValue(connection: renamed),

@@ -69,7 +69,7 @@ final class PasswordAuthTests: XCTestCase {
     func testConnectionDefaultsToPublicKeyAuthWhenOmitted() throws {
         let connection = try SSHTestFixture.makeConnection()
 
-        XCTAssertEqual(connection.authMethod, .publickey)
+        XCTAssertTrue(connection.offersKeys)
     }
 
     func testConnectionRoundTripsPasswordAuthMethod() throws {
@@ -77,8 +77,8 @@ final class PasswordAuthTests: XCTestCase {
             host: "hop.example.com",
             port: 2201,
             username: "hop-user",
-            keyReference: "keychain://passwords/hop-1",
-            authMethod: .password
+            offersKeys: false,
+            passwordTag: "keychain://passwords/hop-1"
         )
         let connection = try Connection(
             name: "password auth",
@@ -86,16 +86,16 @@ final class PasswordAuthTests: XCTestCase {
             host: "ssh.example.com",
             port: 22,
             username: "fixture-user",
-            keyReference: "keychain://passwords/main",
-            authMethod: .password,
+            offersKeys: false,
+            passwordTag: "keychain://passwords/main",
             jumpChain: [hop]
         )
 
         let decoded = try JSONDecoder().decode(Connection.self, from: JSONEncoder().encode(connection))
 
         XCTAssertEqual(decoded, connection)
-        XCTAssertEqual(decoded.authMethod, .password)
-        XCTAssertEqual(decoded.jumpChain.first?.authMethod, .password)
+        XCTAssertFalse(decoded.offersKeys)
+        XCTAssertEqual(decoded.jumpChain.first?.offersKeys, false)
     }
 
     func testLegacyConnectionPayloadMissingAuthMethodDecodesAsPublicKey() throws {
@@ -119,14 +119,14 @@ final class PasswordAuthTests: XCTestCase {
 
         let decoded = try JSONDecoder().decode(Connection.self, from: data)
 
-        XCTAssertEqual(decoded.authMethod, .publickey)
-        XCTAssertEqual(decoded.jumpChain.first?.authMethod, .publickey)
+        XCTAssertTrue(decoded.offersKeys)
+        XCTAssertEqual(decoded.jumpChain.first?.offersKeys, true)
     }
 
     func testHopDefaultsToPublicKeyAuthWhenOmitted() {
         let hop = TestModels.hop()
 
-        XCTAssertEqual(hop.authMethod, .publickey)
+        XCTAssertTrue(hop.offersKeys)
     }
 
     func testUnknownAuthMethodFailsDecoding() throws {
@@ -278,7 +278,7 @@ final class PasswordAuthTests: XCTestCase {
             let port = try await server.start(port: 0)
             let verifier = try await pretrustingVerifier(for: server, port: port)
             let connection = try Connection(name: "dual", type: .ssh, host: "127.0.0.1", port: port,
-                                            username: "pwduser", keyReference: "fixture-ed25519")
+                                            username: "pwduser", customKeys: ["fixture-ed25519"])
             let store = InMemoryPasswordStore()
             let prompt = RecordingPasswordPrompt(answer: Self.correctPassword, store: store)
             let key = try await SSHTestFixture.loadFixtureEd25519Key()
@@ -331,8 +331,8 @@ final class PasswordAuthTests: XCTestCase {
         let builder = JumpChainBuilder(hostKeyVerifier: verifier, authenticationKeyProvider: StaticKeyProvider(key: key),
                                        passwordStore: store, passwordPrompt: prompt)
         let connection = try Connection(name: "jump-password", type: .ssh, host: "127.0.0.1", port: port,
-                                        username: "pwduser", keyReference: "fixture", jumpChain: [
-                                            Hop(host: "127.0.0.1", port: 12222, username: SSHTestFixture.username, keyReference: "fixture")
+                                        username: "pwduser", customKeys: ["fixture"], jumpChain: [
+                                            Hop(host: "127.0.0.1", port: 12222, username: SSHTestFixture.username, customKeys: ["fixture"])
                                         ])
         let transport = try await builder.build(connection: connection, cols: 80, rows: 24)
         let requests = await prompt.requests
@@ -366,8 +366,8 @@ final class PasswordAuthTests: XCTestCase {
             host: "127.0.0.1",
             port: port,
             username: username,
-            keyReference: tag,
-            authMethod: .password
+            offersKeys: false,
+            passwordTag: tag
         )
     }
 
@@ -471,7 +471,7 @@ final class PasswordAuthTests: XCTestCase {
             host: "127.0.0.1",
             port: port,
             username: "pwduser",
-            keyReference: "some-ref"
+            customKeys: ["some-ref"]
         )
 
         await assertThrowsSSHError(.authenticationFailed) {
@@ -492,8 +492,8 @@ final class PasswordAuthTests: XCTestCase {
             host: "hop.example.com",
             port: 2201,
             username: "hop-user",
-            keyReference: "keychain://passwords/hop-1",
-            authMethod: .password
+            offersKeys: false,
+            passwordTag: "keychain://passwords/hop-1"
         )
         let connection = try Connection(
             name: "password auth",
@@ -501,8 +501,8 @@ final class PasswordAuthTests: XCTestCase {
             host: "ssh.example.com",
             port: 22,
             username: "fixture-user",
-            keyReference: "keychain://passwords/main",
-            authMethod: .password,
+            offersKeys: false,
+            passwordTag: "keychain://passwords/main",
             jumpChain: [hop]
         )
         let encoded = [

@@ -51,7 +51,7 @@ final class LossyProxySyncIntegrationTests: XCTestCase {
             host: "127.0.0.1",
             port: 12322,
             username: SSHTestFixture.username,
-            keyReference: "fixture-ed25519"
+            customKeys: ["fixture-ed25519"]
         )
     }
 

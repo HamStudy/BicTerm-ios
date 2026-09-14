@@ -127,7 +127,7 @@ final class AgentApprovalFlowTests: XCTestCase {
             host: "127.0.0.1",
             port: 22,
             username: "unit",
-            keyReference: "unit-key"
+            customKeys: ["unit-key"]
         )
         let store = SessionStore(
             transportFactory: factory,

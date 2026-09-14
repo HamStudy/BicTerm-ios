@@ -102,12 +102,11 @@ public actor SSHTransport {
     func userAuthDelegate(
         for connection: Connection
     ) async throws(SSHTransportError) -> any NIOSSHClientUserAuthenticationDelegate {
-        switch connection.authMethod {
-        case .publickey:
+        if connection.offersKeys {
             let privateKey: NIOSSHPrivateKey
             do {
                 privateKey = try await authenticationKeyProvider.authenticationPrivateKey(
-                    with: connection.keyReference,
+                    with: connection.customKeys?.first ?? "",
                     reason: "Authenticate to \(connection.host)"
                 )
             } catch {
@@ -118,17 +117,17 @@ public actor SSHTransport {
                 key: privateKey, passwordTag: connection.promptedPasswordTag, canRemember: true,
                 passwordStore: passwordStore, prompt: passwordPrompt
             )
-        case .password:
+        } else {
             if let passwordPrompt {
                 return CascadeUserAuthenticationDelegate(
                     host: connection.host, port: connection.port, username: connection.username,
-                    key: nil, passwordTag: connection.keyReference, canRemember: true,
+                    key: nil, passwordTag: connection.passwordTag ?? connection.promptedPasswordTag, canRemember: true,
                     passwordStore: passwordStore, prompt: passwordPrompt
                 )
             }
             return PasswordUserAuthenticationDelegate(
                 username: connection.username,
-                password: try await resolvedPassword(forTag: connection.keyReference)
+                password: try await resolvedPassword(forTag: connection.passwordTag ?? connection.promptedPasswordTag)
             )
         }
     }

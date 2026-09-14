@@ -21,8 +21,8 @@ struct JumpHopEndpoint: Equatable, Sendable {
             host: hop.host,
             port: hop.port,
             username: hop.username,
-            keyReference: hop.keyReference,
-            authMethod: hop.authMethod
+            keyReference: hop.offersKeys ? (hop.customKeys?.first ?? "") : (hop.passwordTag ?? ""),
+            authMethod: hop.offersKeys ? .publickey : .password
         )
     }
 

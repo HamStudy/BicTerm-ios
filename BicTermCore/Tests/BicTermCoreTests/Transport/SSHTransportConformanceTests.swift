@@ -78,7 +78,7 @@ final class SSHTransportConformanceTests: XCTestCase {
                     host: "127.0.0.1",
                     port: 9,
                     username: SSHTestFixture.username,
-                    keyReference: "fixture-ed25519"
+            customKeys: ["fixture-ed25519"]
                 )
                 try await transport.connect(to: connection, cols: 80, rows: 24)
             },

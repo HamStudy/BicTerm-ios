@@ -47,7 +47,7 @@ enum SSHTestFixture {
             host: hop1Host,
             port: hop1Port,
             username: username,
-            keyReference: keyReference
+            customKeys: [keyReference]
         )
     }
 

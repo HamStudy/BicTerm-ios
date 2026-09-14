@@ -6,13 +6,24 @@ struct HopDraft: Identifiable, Equatable {
     var host = ""
     var port = "22"
     var username = ""
-    var keyReference = ""
+    var offersKeys = true
+    var customKeys: [String]?
+    var keyReference: String {
+        get { customKeys?.first ?? "" }
+        set { customKeys = newValue.isEmpty ? [] : [newValue] }
+    }
     var keyLabel = ""
-    var authMethod: AuthMethod = .publickey
-    /// Keychain tag hosting the hop password (persisted as `Hop.keyReference`
-    /// for password hops). Generated once when the picker switches to
+    var authMethod: AuthMethod {
+        get { offersKeys ? .publickey : .password }
+        set { offersKeys = newValue == .publickey }
+    }
+    /// Keychain tag hosting the hop password. Generated once when the picker switches to
     /// password mode; reused on later edits so retyping overwrites in place.
-    var passwordTag = ""
+    private var storedPasswordTag: String?
+    var passwordTag: String {
+        get { storedPasswordTag ?? "" }
+        set { storedPasswordTag = newValue }
+    }
     /// Unsaved editor input — written to the Keychain only at connection-save
     /// time, never persisted with the model.
     var passwordInput = ""
@@ -28,14 +39,10 @@ struct HopDraft: Identifiable, Equatable {
         host = hop.host
         port = String(hop.port)
         username = hop.username
-        authMethod = hop.authMethod
-        switch hop.authMethod {
-        case .publickey:
-            keyReference = hop.keyReference
-            self.keyLabel = keyLabel ?? ""
-        case .password:
-            passwordTag = hop.keyReference
-        }
+        offersKeys = hop.offersKeys
+        customKeys = hop.customKeys
+        storedPasswordTag = hop.passwordTag
+        self.keyLabel = keyLabel ?? ""
     }
 
     var portValue: Int? { HopPort.parse(port) }
@@ -62,12 +69,7 @@ struct HopDraft: Identifiable, Equatable {
     }
 
     var credentialSatisfied: Bool {
-        switch authMethod {
-        case .publickey:
-            !keyReference.isEmpty
-        case .password:
-            !passwordTag.isEmpty
-        }
+        true
     }
 
     var isComplete: Bool {
@@ -83,8 +85,9 @@ struct HopDraft: Identifiable, Equatable {
             host: host.trimmingCharacters(in: .whitespaces),
             port: portValue,
             username: username,
-            keyReference: authMethod == .password ? passwordTag : keyReference,
-            authMethod: authMethod
+            offersKeys: offersKeys,
+            customKeys: customKeys,
+            passwordTag: storedPasswordTag
         )
     }
 }
@@ -100,12 +103,23 @@ struct ConnectionDraft: Equatable {
     var host = ""
     var port = "22"
     var username = ""
-    var keyReference = ""
+    var offersKeys = true
+    var customKeys: [String]?
+    var keyReference: String {
+        get { customKeys?.first ?? "" }
+        set { customKeys = newValue.isEmpty ? [] : [newValue] }
+    }
     var keyLabel = ""
-    var authMethod: AuthMethod = .publickey
-    /// Keychain tag hosting the destination password (persisted as
-    /// `Connection.keyReference` for password connections). See `HopDraft`.
-    var passwordTag = ""
+    var authMethod: AuthMethod {
+        get { offersKeys ? .publickey : .password }
+        set { offersKeys = newValue == .publickey }
+    }
+    /// Keychain tag hosting the destination password. See `HopDraft`.
+    private var storedPasswordTag: String?
+    var passwordTag: String {
+        get { storedPasswordTag ?? "" }
+        set { storedPasswordTag = newValue }
+    }
     /// Unsaved editor input — Keychain-only on save, never persisted.
     var passwordInput = ""
     var hasSavedPassword = false
@@ -129,14 +143,10 @@ struct ConnectionDraft: Equatable {
         host = connection.host
         port = String(connection.port)
         username = connection.username
-        authMethod = connection.authMethod
-        switch connection.authMethod {
-        case .publickey:
-            keyReference = connection.keyReference
-            self.keyLabel = keyLabel ?? ""
-        case .password:
-            passwordTag = connection.keyReference
-        }
+        offersKeys = connection.offersKeys
+        customKeys = connection.customKeys
+        storedPasswordTag = connection.passwordTag
+        self.keyLabel = keyLabel ?? ""
         hops = connection.jumpChain.map { HopDraft(hop: $0, keyLabel: nil) }
         agentForwarding = connection.protocolOptions["agentForwarding"]?.boolValue == true
         herdrEnabled = connection.herdrEnabled
@@ -172,8 +182,7 @@ struct ConnectionDraft: Equatable {
     }
 
     var keyError: String? {
-        guard authMethod == .publickey else { return nil }
-        return keyReference.isEmpty ? "Select an authentication key" : nil
+        nil
     }
 
     /// Mirrors herdr's own session-name grammar (`HerdrCommandBuilder.isValidSessionName`)
@@ -189,8 +198,6 @@ struct ConnectionDraft: Equatable {
     }
 
     var passwordError: String? {
-        guard authMethod == .password else { return nil }
-        if passwordTag.isEmpty { return "Password storage tag unavailable" }
         return nil
     }
 
@@ -223,10 +230,6 @@ struct ConnectionDraft: Equatable {
                 errors[index] = "Invalid hop port"
             } else if !ConnectionFieldValidation.isValidUsername(hop.username) {
                 errors[index] = "Hop username is required"
-            } else if hop.authMethod == .publickey && hop.keyReference.isEmpty {
-                errors[index] = "Hop key is required"
-            } else if hop.authMethod == .password && !hop.credentialSatisfied {
-                errors[index] = "Hop password is required"
             }
         }
         return errors
@@ -318,8 +321,9 @@ struct ConnectionDraft: Equatable {
             host: host.trimmingCharacters(in: .whitespaces),
             port: destinationPort,
             username: username.trimmingCharacters(in: .whitespaces),
-            keyReference: authMethod == .password ? passwordTag : keyReference,
-            authMethod: authMethod,
+            offersKeys: offersKeys,
+            customKeys: customKeys,
+            passwordTag: storedPasswordTag,
             jumpChain: jumpChain,
             protocolOptions: options
         )

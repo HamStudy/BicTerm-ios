@@ -28,11 +28,9 @@ public struct Connection: Codable, Equatable, Identifiable, Sendable {
     public let host: String
     public let port: Int
     public let username: String
-    /// Credential reference: a key-store reference when `authMethod` is
-    /// `.publickey`, an opaque Keychain password tag when it is `.password`.
-    /// Never credential bytes themselves.
-    public let keyReference: String
-    public let authMethod: AuthMethod
+    public let offersKeys: Bool
+    public let customKeys: [String]?
+    public let passwordTag: String?
     public let jumpChain: [Hop]
     public let protocolOptions: ProtocolOptions
 
@@ -43,8 +41,9 @@ public struct Connection: Codable, Equatable, Identifiable, Sendable {
         host: String,
         port: Int,
         username: String,
-        keyReference: String,
-        authMethod: AuthMethod = .publickey,
+        offersKeys: Bool = true,
+        customKeys: [String]? = nil,
+        passwordTag: String? = nil,
         jumpChain: [Hop] = [],
         protocolOptions: ProtocolOptions = ProtocolOptions()
     ) throws(ConnectionValidationError) {
@@ -61,14 +60,49 @@ public struct Connection: Codable, Equatable, Identifiable, Sendable {
         self.host = host
         self.port = port
         self.username = username
-        self.keyReference = keyReference
-        self.authMethod = authMethod
+        self.offersKeys = offersKeys
+        self.customKeys = customKeys
+        self.passwordTag = passwordTag == "" ? nil : passwordTag
         self.jumpChain = jumpChain
         self.protocolOptions = protocolOptions
     }
 
+    private enum CodingKeys: String, CodingKey {
+        case id, name, type, host, port, username, keyReference, authMethod
+        case jumpChain, protocolOptions, offersKeys, customKeys, passwordTag
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encode(type, forKey: .type)
+        try container.encode(host, forKey: .host)
+        try container.encode(port, forKey: .port)
+        try container.encode(username, forKey: .username)
+        try container.encode(jumpChain, forKey: .jumpChain)
+        try container.encode(protocolOptions, forKey: .protocolOptions)
+        try container.encode(offersKeys, forKey: .offersKeys)
+        try container.encodeIfPresent(customKeys, forKey: .customKeys)
+        try container.encodeIfPresent(passwordTag, forKey: .passwordTag)
+    }
+
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        let offersKeys: Bool
+        let customKeys: [String]?
+        let passwordTag: String?
+        if container.contains(.offersKeys) || container.contains(.customKeys) || container.contains(.passwordTag) {
+            offersKeys = try container.decodeIfPresent(Bool.self, forKey: .offersKeys) ?? true
+            customKeys = try container.decodeIfPresent([String].self, forKey: .customKeys)
+            passwordTag = try container.decodeIfPresent(String.self, forKey: .passwordTag)
+        } else {
+            let legacyKey = try container.decode(String.self, forKey: .keyReference)
+            let method = try container.decodeIfPresent(AuthMethod.self, forKey: .authMethod) ?? .publickey
+            offersKeys = method == .publickey
+            customKeys = method == .publickey ? (legacyKey.isEmpty ? [] : [legacyKey]) : nil
+            passwordTag = method == .password ? legacyKey : nil
+        }
         try self.init(
             id: container.decode(UUID.self, forKey: .id),
             name: container.decode(String.self, forKey: .name),
@@ -79,10 +113,9 @@ public struct Connection: Codable, Equatable, Identifiable, Sendable {
             host: container.decode(String.self, forKey: .host),
             port: container.decode(Int.self, forKey: .port),
             username: container.decode(String.self, forKey: .username),
-            keyReference: container.decode(String.self, forKey: .keyReference),
-            // Backward compatibility: payloads written before password
-            // support carry no authMethod and always meant key auth.
-            authMethod: container.decodeIfPresent(AuthMethod.self, forKey: .authMethod) ?? .publickey,
+            offersKeys: offersKeys,
+            customKeys: customKeys,
+            passwordTag: passwordTag,
             jumpChain: container.decode([Hop].self, forKey: .jumpChain),
             protocolOptions: container.decode(ProtocolOptions.self, forKey: .protocolOptions)
         )

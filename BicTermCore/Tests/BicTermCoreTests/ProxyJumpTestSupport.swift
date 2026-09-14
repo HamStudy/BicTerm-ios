@@ -43,7 +43,7 @@ enum JumpFixture {
     static let hop2UnauthorizedKeyReference = "fixture-ed25519-hop2-unauthorized"
 
     static var jumpHop1: Hop {
-        Hop(host: host, port: hop1Port, username: SSHTestFixture.username, keyReference: goodKeyReference)
+        Hop(host: host, port: hop1Port, username: SSHTestFixture.username, customKeys: [goodKeyReference])
     }
 
     static func twoHopConnection(destinationKeyReference: String = goodKeyReference) throws -> Connection {
@@ -53,7 +53,7 @@ enum JumpFixture {
             host: host,
             port: hop2Port,
             username: SSHTestFixture.username,
-            keyReference: destinationKeyReference,
+            customKeys: [destinationKeyReference],
             jumpChain: [jumpHop1]
         )
     }

@@ -21,7 +21,7 @@ final class HostTrustFlowTests: XCTestCase {
             host: host,
             port: port,
             username: "unit",
-            keyReference: "unit-key"
+            customKeys: ["unit-key"]
         )
     }
 

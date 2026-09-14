@@ -137,7 +137,7 @@ final class ExtensionGuideProofTests: XCTestCase {
             host: "loopback.invalid",
             port: ProtocolDescriptor.uppercaseEcho.defaultPort,
             username: "proof",
-            keyReference: "none"
+            customKeys: ["none"]
         )
     }
 

@@ -227,7 +227,7 @@ final class TerminalPreviewController: ObservableObject {
             host: "127.0.0.1",
             port: 12222,
             username: fixtureUsername,
-            keyReference: "fixture-ed25519"
+                customKeys: ["fixture-ed25519"]
         )
     }
 

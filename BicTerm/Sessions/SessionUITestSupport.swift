@@ -181,7 +181,7 @@ enum SessionFixtureSeeder {
                 host: "127.0.0.1",
                 port: port,
                 username: fixtureUsername(),
-                keyReference: keyReference
+            customKeys: [keyReference]
             ) else { continue }
             try? await store.save(connection)
         }

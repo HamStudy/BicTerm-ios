@@ -16,7 +16,7 @@ final class ConnectionHerdrOptionsTests: XCTestCase {
             host: "workspace.example.com",
             port: 22,
             username: "fixture-user",
-            keyReference: "keychain://keys/main",
+            customKeys: ["keychain://keys/main"],
             protocolOptions: options()
         )
     }

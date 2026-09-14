@@ -588,14 +588,14 @@ struct ConnectionEditorView: View {
         if let existing {
             draft = ConnectionDraft(
                 connection: existing,
-                keyLabel: model.keyLabel(forReference: existing.keyReference)
+                keyLabel: model.keyLabel(forReference: existing.customKeys?.first ?? "")
             )
             applyHopKeyLabels(from: existing)
         } else if let seed {
             draft = ConnectionDraft(
                 duplicating: seed,
                 name: model.nextDuplicateName(of: seed.name),
-                keyLabel: model.keyLabel(forReference: seed.keyReference)
+                keyLabel: model.keyLabel(forReference: seed.customKeys?.first ?? "")
             )
             applyHopKeyLabels(from: seed)
         }
@@ -606,7 +606,7 @@ struct ConnectionEditorView: View {
     private func applyHopKeyLabels(from connection: Connection) {
         for index in draft.hops.indices {
             draft.hops[index].keyLabel =
-                model.keyLabel(forReference: connection.jumpChain[index].keyReference) ?? ""
+                model.keyLabel(forReference: connection.jumpChain[index].customKeys?.first ?? "") ?? ""
         }
     }
 

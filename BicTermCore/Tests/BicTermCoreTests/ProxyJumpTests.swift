@@ -57,7 +57,7 @@ final class ProxyJumpTests: XCTestCase {
             host: JumpFixture.host,
             port: 1,
             username: SSHTestFixture.username,
-            keyReference: JumpFixture.goodKeyReference
+            customKeys: [JumpFixture.goodKeyReference]
         )
         let connection = try Connection(
             name: "first-hop-refused",
@@ -65,7 +65,7 @@ final class ProxyJumpTests: XCTestCase {
             host: JumpFixture.host,
             port: JumpFixture.hop2Port,
             username: SSHTestFixture.username,
-            keyReference: JumpFixture.goodKeyReference,
+            customKeys: [JumpFixture.goodKeyReference],
             jumpChain: [refusedFirstHop]
         )
 

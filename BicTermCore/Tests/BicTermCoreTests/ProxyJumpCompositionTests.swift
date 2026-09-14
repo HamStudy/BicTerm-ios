@@ -153,8 +153,8 @@ final class ProxyJumpCompositionTests: XCTestCase {
             host: host,
             port: destinationPort,
             username: "u",
-            keyReference: "key-\(destinationPort)",
-            jumpChain: ports.map { Hop(host: host, port: $0, username: "u", keyReference: "key-\($0)") }
+            customKeys: ["key-\(destinationPort)"],
+            jumpChain: ports.map { Hop(host: host, port: $0, username: "u", customKeys: ["key-\($0)"]) }
         )
     }
 
@@ -354,10 +354,10 @@ final class ProxyJumpCompositionTests: XCTestCase {
             host: host,
             port: 2001,
             username: "u",
-            keyReference: "key-2001",
+            customKeys: ["key-2001"],
             jumpChain: [
-                Hop(host: host, port: 2001, username: "u", keyReference: "key-2001"),
-                Hop(host: host, port: 2002, username: "u", keyReference: "key-2002"),
+                Hop(host: host, port: 2001, username: "u", customKeys: ["key-2001"]),
+                Hop(host: host, port: 2002, username: "u", customKeys: ["key-2002"]),
             ]
         )
 
@@ -376,11 +376,11 @@ final class ProxyJumpCompositionTests: XCTestCase {
             host: host,
             port: 2003,
             username: "u",
-            keyReference: "key-2003",
+            customKeys: ["key-2003"],
             jumpChain: [
-                Hop(host: host, port: 2001, username: "u", keyReference: "key-2001a"),
-                Hop(host: host, port: 2002, username: "u", keyReference: "key-2002"),
-                Hop(host: host, port: 2001, username: "u", keyReference: "key-2001b"),
+                Hop(host: host, port: 2001, username: "u", customKeys: ["key-2001a"]),
+                Hop(host: host, port: 2002, username: "u", customKeys: ["key-2002"]),
+                Hop(host: host, port: 2001, username: "u", customKeys: ["key-2001b"]),
             ]
         )
         await assertThrowsJumpError(.cycleDetected(host: host, port: 2001)) {

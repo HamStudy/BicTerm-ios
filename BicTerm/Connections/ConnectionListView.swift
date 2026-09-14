@@ -360,8 +360,8 @@ struct ConnectionListView: View {
 
                 if connection.type == .ssh {
                     TerminalBadge(
-                        connection.authMethod == .password
-                            ? "Password" : "Key: \(model.keyLabel(forReference: connection.keyReference) ?? "Unavailable")",
+                        !connection.offersKeys
+                            ? "Password" : "Key: \(model.keyLabel(forReference: connection.customKeys?.first ?? "") ?? "Unavailable")",
                         tint: colors.dimmed
                     )
                     .accessibilityIdentifier("auth-method-\(sanitized(connection.name))")

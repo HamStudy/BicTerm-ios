@@ -73,7 +73,7 @@ final class HerdSessionCoordinatorTests: XCTestCase {
             host: "127.0.0.1",
             port: 12222,
             username: "fixture",
-            keyReference: "seed-key"
+            customKeys: ["seed-key"]
         )
     }
 

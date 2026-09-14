@@ -110,7 +110,7 @@ final class TransportAbstractionTests: XCTestCase {
             host: "echo.invalid",
             port: 2022,
             username: "unit",
-            keyReference: "unit-key"
+            customKeys: ["unit-key"]
         )
         await assertThrowsTransportError(.protocolUnavailable(protocolID: "uppercase-echo")) {
             _ = try registry.makeTransport(for: echoConnection)
@@ -179,7 +179,7 @@ final class TransportAbstractionTests: XCTestCase {
             host: "echo.invalid",
             port: 2022,
             username: "unit",
-            keyReference: "unit-key"
+            customKeys: ["unit-key"]
         )
         await assertThrowsTransportError(.protocolUnavailable(protocolID: "uppercase-echo")) {
             _ = try factory.makeTransport(for: echoConnection)
