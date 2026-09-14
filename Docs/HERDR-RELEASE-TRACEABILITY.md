@@ -194,3 +194,59 @@ cite the zig-blocked live-server path (server-authoritative selection,
 multi-client resize ownership, `pane.selection.read`) remain OPEN because
 those server-side features are not exercised by the shipped flows — their
 scheduling is still a user decision, now unconstrained by the fixture.
+
+## herdr-embed T7 amendment (2026-09-13)
+
+The shipped herdr surface is the embedded real herdr client (T4–T7); the
+native SwiftUI herdr workspace interior (`HerdrWorkspaceView`,
+`HerdMachineSwitcher` / `HerdWorkspaceChromeView`, `HerdrPaneSurfaceView`,
+`HerdrInputField`, `HerdrKeyMapper`, `HerdrImagePasteSheet`,
+`HerdrDiagnosticView`, `HerdrProbeDiagnosticView`, the Mode-A native
+`HerdrConnectCoordinator`) retired behind the embed. Rows above that
+named a native component are now superseded-by-embed:
+
+- **Missing/incompatible Herdr → diagnostics only** — flip:
+  delivered (T19 probe; the embed runtime maps every connector error onto
+  the same `HerdrDiagnostic` kinds — authLost / transportLost /
+  incompatibleGeneration — and renders them inline as the embed view's
+  `.failed` phase with a `Label(diagnostic.title)` and the typed message;
+  `HerdrEmbedTransportTests` covers every mapping). Boundary tests
+  (`HerdrInstallBoundaryTests`) and T20 App Review notes unchanged.
+- **Two hosts + two named sessions without merging state** — flip the
+  disposition footnote: the multi-machine selection/health UI is the
+  embedded client's own sidebar (T6 herd seeding via
+  `HerdrEmbedHerdSeeder.links(for:)`); the native `HerdMachineSwitcher` /
+  `HerdWorkspaceChromeView` retired. Live two-machine E2E moved into
+  `HerdrEmbedHerdTests` (evidence `.sisyphus/evidence/herdr-embed-t6.log`).
+- **Inactive endpoints update metadata without pane streaming** — flip:
+  the real herdr client owns selection/surface-interest; the native
+  per-machine status-chip UI retired.
+- **Switching freezes input until coherent target activation** — flip the
+  app-side footnote: the embed runtime's owner-scoped `startIfNeeded`
+  (T6) is the activation gate; herd-machine takeover coherence covered by
+  `HerdrEmbedHerdTests.testOpeningSecondHerdClosesFirstAndIsolatesSocketsAndCatalog`.
+- **Hardware keyboard / modifiers / navigation keys** — flip: the embed
+  TUI receives input through the SwiftTerm delegate on
+  `HerdrTUIHostingView` (no app-layer `HerdrKeyMapper` / `HerdrInputField`);
+  `HerdrEmbedHostingTests.testCellSizeQueryIsAnsweredBySwiftTermThroughInputPath`
+  + `testLayoutResizeReachesSessionWinsize` cover the path.
+- **Software keyboard / IME / CJK / no duplicates** — flip the footer:
+  the embed TUI is the IME-committed surface; the CJK needles moved into
+  the embed TUI's own logs (out of the prior echo-strip assertion).
+- **Scene focus transitions and resizes reach the remote in order** —
+  flip: `HerdrEmbedRuntime.writeInput` + `setWinsize` + the embed crate's
+  TIOCSWINSZ/SIGWINCH contract; `HerdrEmbedHostingTests.testLayoutResize…`
+  asserts the round trip.
+
+The connector / coordinator / endpoint-model / probe pieces referenced
+(`HerdrEndpointConnector`, `HerdSessionCoordinator` `liveLookup`,
+`HerdrEndpointModels`, `HerdrProbe`) are **kept** as embed-shared infra:
+the embed runtime owns TOFU / probe / bridge per machine through them,
+and `HerdSessionCoordinator.liveLookup` is the connection resolver the
+embed herd seeder calls. `HerdrEmbedWorkspaceView` is the only herdr UI;
+its chrome (header `Herdr — {label}`, `embedded client running` status,
+`Disconnect` button, `EmbedTrustPromptPresenter` for TOFU) is the
+deliverable, and `HerdrConnectUITests` (rewritten T7) exercises it on
+both simulators. Evidence: `.sisyphus/evidence/herdr-embed-t7.log`,
+`.sisyphus/evidence/herdr-embed-t7/`.
+

@@ -176,3 +176,23 @@ child whose exec open fails on a dead carrier (the redial the client's
 supervisor performs after a server dies) must finish its `NIOAsyncWriter`
 before being dropped — NIO's writer deinit precondition-fails otherwise
 and kills the whole process. Evidence: `.sisyphus/evidence/herdr-embed-t6.log`.
+
+## Switch + retire (herdr-embed task 7, 2026-09-13)
+
+No patch-series change — the embed stack (1–4 + libghostty-vt iOS) is
+unchanged from T5/T6. T7 is the host-side switch: the `HERDR_EMBED`
+Swift compile flag (added in T4 for the trial pair) is removed from
+`project.yml`; the embed path is the only build path now. The native
+SwiftUI herdr workspace interior (`HerdrWorkspaceView` + `HerdMachineSwitcher`
++ `HerdrPaneSurfaceView` + `HerdrInputField` + `HerdrKeyMapper` +
+`HerdrImagePasteSheet` + `HerdrDiagnosticView` + `HerdrProbeDiagnosticView`)
+retires; the connector/coordinator/endpoint-model/probe pieces stay (the
+embed runtime owns TOFU/probe/bridge through them, and
+`HerdSessionCoordinator.liveLookup` is the herd-seed resolver).
+`HerdrConnectUITests` rewrites against the embed surface; `HerdrEmbedUITests`
+gains a `XCUIDevice.orientation` landscape parity test. The Swift↔herdr
+contract is unchanged — `HerdrEmbed.h` is still the only seam
+(`HerdrEmbedC/include/HerdrEmbed.h`, cbindgen-committed, drift-checked
+on every `herdr-embed-core.sh` build). Evidence:
+`.sisyphus/evidence/herdr-embed-t7.log`,
+`.sisyphus/evidence/herdr-embed-t7/`.

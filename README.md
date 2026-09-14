@@ -23,8 +23,8 @@ An iOS 18+ SSH terminal client for iPhone and iPad, built on
 - **Terminal UI** — SwiftTerm-based, hardware keyboard, IME/CJK composition, multi-window on iPad with freeform resizing (iPadOS 26 classifies the app as continuously resizable — drag the window's corner grip to any size or aspect ratio; declared via the orientation arrays in the xcodegen-generated `BicTerm/Info.plist`, guarded by `BicTermUITests/FreeformResizeUITests.swift`)
 - **Multiple concurrent sessions** — session switcher with detach/reattach that preserves terminal state, on iPhone and iPad. The scene's top-right **session menu** (ellipsis) lists every live session with its state for jump-to-session (on iPad it focuses the window already hosting the session, or gives a detached session its own window), opens the full switcher via **Manage Sessions…**, starts a **New Session**, and opens **Settings…** (its own window on iPad, a sheet on iPhone)
 - **Graceful reconnect** — network drops reconnect automatically; a clean remote shell exit stays disconnected until manual Retry. Background suspends live sessions and foreground re-handshakes; app relaunch requires manual reconnect. Reconnect resets terminal mouse, paste, and keyboard modes and exits the alternate screen while preserving normal scrollback. New connections reuse dead iPad terminal windows; active sessions keep separate windows.
-- **Herdr client** — workspace handshake, native surface rendering, semantic keyboard/focus/resize input, clipboard text and bounded image paste, probe diagnostics, detach/reconnect
-- **Herdr in two modes** — (A) a per-connection "Use Herdr" toggle that opens one machine's herdr workspace over that SSH connection, and (B) Herd mode: named herds of existing connections that background-connect every machine behind one machine switcher (status chips, selection-driven surface interest, per-machine failure isolation, orphan badges)
+- **Herdr** — the real herdr 0.9.0 TUI client compiled for iOS and embedded in-process. Its surface renders through the vendored SwiftTerm view inside the BicTerm host; its protocol networking rides the BicTermCore SSH stack via a per-machine bridge socket (no OpenSSH subprocess on device); its own native multi-machine sidebar drives Mode A and herd selection; its own input/clipboard/capability-query handling replaces the prior app-layer panes. Embed patch series in `Vendor/herdr/EMBED-PATCHES.md`; xcframework build in `scripts/herdr-embed-core.sh` (idempotent after `scripts/herdr-server-fetch.sh` + `scripts/fixtures-up.sh`).
+- **Herdr in two modes** — (A) a per-connection "Use Herdr" toggle that opens one machine's herdr workspace over that SSH connection, and (B) Herd mode: named herds of existing connections that seed the embedded client's machine catalog so its own sidebar selects / dials / reports health per machine (selection-driven surface interest, per-machine failure isolation, one transport link per machine over the same SSH bridge)
 - **Multi-endpoint hardening** — one aggregate reconnect budget across every machine in a workspace (no reconnect storms), parallel background detach (an N-machine herd suspends in one drain window), bounded per-machine surface caches, and a typed authentication-lost diagnostic that never auto-retries
 - **Transport abstraction** — SSH is one conformer; ET/mosh can be added later without touching session layers
 - **Accessibility** — VoiceOver labels on every icon-only control (session chrome, switcher, key management, herdr header) and on editor text fields; 44×44pt minimum touch targets on app-layer controls (the vendored SwiftTerm accessory strip excepted); editor validation arms only after a field is touched, so pristine blank forms show no red; SSH key fingerprints render full-length over two lines — the distinguishing tail is never middle-truncated or shrunk
@@ -49,7 +49,7 @@ An iOS 18+ SSH terminal client for iPhone and iPad, built on
   Option-forced local selection, and moving a real Vim cursor by tapping. Physical trackpad hover, wheel, and
   two-finger gestures still need device validation. Secondary/middle-button
   reporting and horizontal wheel reporting are not implemented. These changes
-  apply to the SSH terminal, not the separate herdr pane surface.
+  apply to the SSH terminal; the herdr surface is the embedded real client (T7).
 
 ### Terminal toolbar
 
@@ -71,10 +71,9 @@ An iOS 18+ SSH terminal client for iPhone and iPad, built on
   apply immediately to every session without a font override
   (the font change recomputes the grid and emits an SSH window-change to the
   remote pty). Terminal font size is deliberately independent of Dynamic
-  Type — the terminal is a fixed character grid, not body text. Herdr pane
-  surfaces render at the same global size with the same cell metrics the
-  terminal computes, so a herdr workspace's type matches its terminal
-  sessions exactly.
+  Type — the terminal is a fixed character grid, not body text. The embedded
+  herdr TUI rides the same SwiftTerm view at the same font size, so its
+  character metrics match SSH terminal sessions exactly.
 
 ### Appearance theme
 
@@ -111,7 +110,7 @@ An iOS 18+ SSH terminal client for iPhone and iPad, built on
 ## What Doesn't Work Yet
 
 - **No mosh or Eternal Terminal** — architecture supports adding them, but they are not implemented in v1.
-- **Pointer/touch routing for herdr panes, graphics scenes, OSC 8 safe-open** — triaged as future-phase work in `Docs/HERDR-RELEASE-TRACEABILITY.md`.
+- **Pointer/touch routing for herdr TUI scenes, graphics scenes, OSC 8 safe-open** — triaged as future-phase work in `Docs/HERDR-RELEASE-TRACEABILITY.md`.
 
 ## What's Not In Scope (v1)
 
@@ -212,8 +211,9 @@ Install the tools above first: see [Dependencies](#dependencies).
 xcodegen generate
 open BicTerm.xcodeproj
 # Scheme BicTerm, destination iPhone 17 Pro or iPad Pro 13-inch (M5).
-# The herdr FFI core must exist first:
+# The herdr FFI core + embed xcframework must exist first:
 scripts/build-herdr-core.sh   # builds .build-artifacts/herdr/HerdrCore.xcframework
+scripts/herdr-embed-core.sh   # builds .build-artifacts/herdr/HerdrEmbed.xcframework
 ```
 
 `BicTerm.xcodeproj` is generated by XcodeGen from `project.yml` and intentionally
@@ -247,7 +247,7 @@ scripts/fixtures-down.sh
 
 - [swift-nio-ssh](https://github.com/apple/swift-nio-ssh) 0.15.0 (Apache 2.0) — vendored fork with agent-forwarding patches
 - [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) 1.20.0 (MIT) — vendored fork
-- [herdr](https://github.com/herdrdev/herdr) 0.9.0 (Apache 2.0) — vendored protocol core + iOS FFI
+- [herdr](https://github.com/herdrdev/herdr) 0.9.0 (Apache 2.0) — vendored protocol core + iOS FFI, **embedded in-process** in this app as the herdr TUI. The embed patch series lives under `Vendor/herdr/embed-patches/` and is replayed by `scripts/herdr-embed-prepare.sh`; the resulting staticlib ships as `HerdrEmbed.xcframework` (built by `scripts/herdr-embed-core.sh`). Full ledger of every patch and provenance step: `Vendor/herdr/EMBED-PATCHES.md`. Runbook for moving the embed stack to a new herdr release: `scripts/herdr-embed-update.sh` (enforces the embed ABI contract; regenerates `HerdrCore.h`; rebuilds the xcframework).
 
 See [DEPENDENCIES.md](DEPENDENCIES.md) for the full license inventory.
 
