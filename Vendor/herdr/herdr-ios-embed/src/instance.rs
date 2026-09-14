@@ -327,6 +327,23 @@ fn client_thread(inner: Arc<Inner>, slave: RawFd) {
 
     let outcome = herdr::run_client();
     inner.record_exit(&outcome);
+
+    // Self-exit cleanup (detach key or loop error): an embedder that never
+    // calls herdr_embed_stop would otherwise leak the master and leave the
+    // process stdio dup2'd onto a dead pty — the NEXT instance's dup2 over
+    // fds 0/1/2 then deadlocks on the fd lock an abandoned slave reader
+    // holds (the Darwin lesson, self-exit edition). Master close first
+    // (wakes blocked slave readers with EOF/EIO), then neuter; stop() keeps
+    // working afterwards — its master swap sees -1 and skips, the join is
+    // instant, and it still owns the saved-stdio restore and wake-pipe
+    // close. Concurrent stop() is safe: the master close races through the
+    // same atomic, so exactly one side closes it.
+    let master = inner.master.swap(-1, Ordering::AcqRel);
+    if master >= 0 {
+        // SAFETY: close(2) of the master fd this instance owns exactly once.
+        let _ = unsafe { libc::close(master) };
+        neuter_stdio();
+    }
 }
 
 impl EmbedInstance {
@@ -583,8 +600,10 @@ impl EmbedInstance {
             // wakes any thread blocked reading the pty (a dup2 over an fd
             // another thread is blocked reading deadlocks on Darwin), and
             // the client's later writes must land on /dev/null rather than
-            // fail with EIO on the closed pty (an EIO write maps to a client
-            // error path that calls process::exit(1) — fatal in-process).
+            // fail with EIO on the closed pty (an EIO write maps to a
+            // client error path; since embed patch 0005 that path returns
+            // an error instead of exiting the process, but a clean stop
+            // still owes the client a quiescent stdio).
             neuter_stdio();
         }
         let join_deadline = std::time::Instant::now() + STOP_JOIN_TIMEOUT;

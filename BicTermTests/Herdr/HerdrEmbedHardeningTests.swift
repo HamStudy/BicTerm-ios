@@ -230,14 +230,14 @@ final class HerdrEmbedHardeningTests: XCTestCase {
     // MARK: - (a) Sync honesty through live cycles (fixtures)
 
     /// T8 probe (env-gated: `HERDR_EMBED_DETACH_PROBE=1`, run SOLO): the
-    /// detach key ends the embedded run honestly from the app's side —
-    /// `.stopped` with a clean drain, socket unlinked, cwd restored — but
-    /// the client then takes the WHOLE HOST PROCESS down with it (the
-    /// embed crate's `run_client` calls `std::process::exit` after a
-    /// non-detached loop error; verified via the unified log's clean exit
-    /// handlers). The gate keeps the poison out of the shared suite: any
-    /// later test in the same process would hang on the dead session.
-    /// Rust-side fix is a runbook item (new embed patch), not app code.
+    /// detach key ends the embedded run honestly — `.stopped` with a clean
+    /// drain, socket unlinked, cwd restored — and since embed patch 0005
+    /// (`run_client` returns its loop error instead of
+    /// `std::process::exit`) the host process SURVIVES the non-detached
+    /// error paths that follow teardown. The gate remains because the
+    /// detach key itself is timing-sensitive through the SwiftUI-hosted
+    /// TUI (T3/T5 learnings) — this is a solo evidence probe, not a
+    /// shared-suite test.
     func testDetachKeySequenceEndsLiveRunWithCleanTeardown() async throws {
         guard Self.detachProbeEnabled else {
             throw XCTSkip("set HERDR_EMBED_DETACH_PROBE=1 and run this test solo (evidence runs)")
@@ -357,7 +357,7 @@ final class HerdrEmbedHardeningTests: XCTestCase {
             throw XCTSkip("fixture herdr server pid unavailable")
         }
         addTeardownBlock { @MainActor in
-            Self.restoreFixtureServer(port: 12222)
+            Self.reseedFixtureServerForNextTest(port: 12222)
         }
 
         let connection = try makeDirectConnection(label: "kill")
@@ -383,10 +383,11 @@ final class HerdrEmbedHardeningTests: XCTestCase {
         await waitFor(runtime.bytesWritten > writtenBefore, "input still accepted after server death")
         XCTAssertEqual(runtime.bytesDropped, 0, "no silent drops during the server-death cycle")
 
-        // Restart the fixture server from the app process (the same
-        // command fixtures-up.sh runs) and record whether the client
+        // Wait for the fixture server to come back (the bridge's
+        // remote-client-bridge auto-starts one on its next redial; a
+        // direct spawn is the fallback) and record whether the client
         // recovers on its own — honest documentation either way.
-        try Self.restoreFixtureServer(port: 12222)
+        Self.ensureFixtureServerBack(port: 12222, timeout: 15)
         let readBefore = runtime.bytesRead
         try await Task.sleep(for: .seconds(6))
         let recovered = runtime.bytesRead > readBefore
@@ -845,18 +846,109 @@ final class HerdrEmbedHardeningTests: XCTestCase {
         )
     }
 
-    /// Restarts the fixture herdr server for `port` exactly the way
+    /// Restarted-state reconciliation for `port` after the test kills the
+    /// fixture server. The honest recovery picture: the client's bridge
+    /// (`remote-client-bridge`, run through the fixture sshd with
+    /// HERDR_SOCKET_PATH set) AUTO-STARTS a replacement server on its next
+    /// redial — that server belongs to no pidfile. So the body path only
+    /// WAITS for it (spawning itself as a fallback), and the teardown path
+    /// reseeds deterministically: `herdr server stop` against whatever
+    /// owner exists, socket files cleared, then one fresh spawn whose pid
+    /// IS written — leaving pidfile == live owner for the next consumer.
+    private static let restoreClaimLock = NSLock()
+    private static var restoredPorts: Set<Int> = []
+
+    private static func fixtureServerDirectory(port: Int) -> URL {
+        repoRoot.appendingPathComponent("Fixtures/run/herdr/server-\(port)", isDirectory: true)
+    }
+
+    /// Body path: waits for the bridge-autostarted server (up to
+    /// `timeout` seconds); spawns one itself only if none appeared.
+    private static func ensureFixtureServerBack(port: Int, timeout: TimeInterval) {
+        let sdir = fixtureServerDirectory(port: port)
+        let clientSocket = sdir.appendingPathComponent("herdr-client.sock").path
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if probeUnixSocket(path: clientSocket) {
+                note("[server-death] bridge auto-started the replacement server")
+                return
+            }
+            Thread.sleep(forTimeInterval: 0.2)
+        }
+        note("[server-death] no auto-start within \(timeout)s; spawning directly")
+        spawnFixtureServer(port: port)
+    }
+
+    /// Teardown path (once per port per run): stop any owner, clear the
+    /// socket files and pidfile, spawn fresh, and record the spawned pid.
+    private static func reseedFixtureServerForNextTest(port: Int) {
+        restoreClaimLock.lock()
+        let alreadyRestored = restoredPorts.contains(port)
+        restoredPorts.insert(port)
+        restoreClaimLock.unlock()
+        if alreadyRestored {
+            return
+        }
+        stopFixtureServer(port: port)
+        spawnFixtureServer(port: port)
+    }
+
+    /// `herdr server stop` against the fixture env, then the socket files
+    /// and pidfile are removed — a clean slate whether or not the current
+    /// owner is the one the pidfile names.
+    private static func stopFixtureServer(port: Int) {
+        let sdir = fixtureServerDirectory(port: port)
+        runFixtureHerdr(port: port, arguments: ["server", "stop"])
+        let serverSocket = sdir.appendingPathComponent("herdr.sock").path
+        let deadline = Date().addingTimeInterval(5)
+        while Date() < deadline && probeUnixSocket(path: serverSocket) {
+            Thread.sleep(forTimeInterval: 0.1)
+        }
+        let fm = FileManager.default
+        try? fm.removeItem(at: sdir.appendingPathComponent("herdr.sock"))
+        try? fm.removeItem(at: sdir.appendingPathComponent("herdr-client.sock"))
+        try? fm.removeItem(at: sdir.appendingPathComponent("server.pid"))
+    }
+
+    /// posix_spawn of `<fixture herdr> server` exactly the way
     /// `scripts/fixtures-up.sh` does (own HERDR_SOCKET_PATH + HOME,
-    /// detached, pidfile refreshed) and waits for its client socket.
-    private static func restoreFixtureServer(port: Int) {
-        let sdir = repoRoot.appendingPathComponent("Fixtures/run/herdr/server-\(port)", isDirectory: true)
+    /// detached), pidfile written with the spawned pid, then waits for the
+    /// server socket to accept.
+    private static func spawnFixtureServer(port: Int) {
+        let sdir = fixtureServerDirectory(port: port)
+        guard !probeUnixSocket(path: sdir.appendingPathComponent("herdr-client.sock").path) else {
+            return
+        }
+        let pid = runFixtureHerdr(port: port, arguments: ["server"])
+        guard pid > 0 else { return }
+        do {
+            let pidFile = sdir.appendingPathComponent("server.pid")
+            try String(pid).write(to: pidFile, atomically: true, encoding: .utf8)
+        } catch {
+            note("[server-restore] pidfile write failed: \(error)")
+        }
+        let serverSocket = sdir.appendingPathComponent("herdr.sock").path
+        let deadline = Date().addingTimeInterval(15)
+        while Date() < deadline {
+            if probeUnixSocket(path: serverSocket) {
+                return
+            }
+            Thread.sleep(forTimeInterval: 0.1)
+        }
+    }
+
+    /// posix_spawn `<fixture herdr> <arguments>` with the fixture server
+    /// environment (HERDR_SOCKET_PATH + HOME pinned to the server dir,
+    /// output to /dev/null, new session). Returns the spawned pid, or -1.
+    private static func runFixtureHerdr(port: Int, arguments: [String]) -> pid_t {
+        let sdir = fixtureServerDirectory(port: port)
         let binary = repoRoot.appendingPathComponent("Fixtures/run/herdr/herdr").path
         let socketPath = sdir.appendingPathComponent("herdr.sock").path
         let home = sdir.appendingPathComponent("home").path
 
-        var pid: pid_t = 0
-        let argv: [UnsafeMutablePointer<CChar>?] = [strdup(binary), strdup("server"), nil]
-        defer { for case let pointer? in argv { free(UnsafeMutableRawPointer(pointer)) } }
+        var argvPointers: [UnsafeMutablePointer<CChar>?] =
+            [strdup(binary)] + arguments.map { strdup($0) } + [nil]
+        defer { for case let pointer? in argvPointers { free(UnsafeMutableRawPointer(pointer)) } }
         let environment = [
             "HERDR_SOCKET_PATH=\(socketPath)",
             "HOME=\(home)",
@@ -867,7 +959,7 @@ final class HerdrEmbedHardeningTests: XCTestCase {
         env.append(nil)
 
         let devnull = open("/dev/null", O_RDWR)
-        guard devnull >= 0 else { return }
+        guard devnull >= 0 else { return -1 }
         defer { close(devnull) }
 
         var actions: posix_spawn_file_actions_t? = nil
@@ -879,43 +971,38 @@ final class HerdrEmbedHardeningTests: XCTestCase {
         posix_spawnattr_init(&attributes)
         posix_spawnattr_setflags(&attributes, Int16(POSIX_SPAWN_SETSID))
 
-        let result = posix_spawn(
-            &pid, binary, &actions, &attributes, argv, env
-        )
+        var pid: pid_t = 0
+        let result = posix_spawn(&pid, binary, &actions, &attributes, argvPointers, env)
         posix_spawn_file_actions_destroy(&actions)
         posix_spawnattr_destroy(&attributes)
-        guard result == 0, pid > 0 else { return }
-        try? String(pid).write(
-            to: sdir.appendingPathComponent("server.pid"),
-            atomically: true,
-            encoding: .utf8
-        )
+        guard result == 0, pid > 0 else {
+            note("[server-restore] posix_spawn \(arguments) failed: \(result)")
+            return -1
+        }
+        return pid
+    }
 
+    /// Connect(2) probe against a Unix domain socket: true when something
+    /// is listening and accepting at `path` (the same live-vs-stale
+    /// distinction `Fixtures/bin/uds-forward.py` and the Swift bridge's
+    /// stale-socket sweep enforce).
+    private static func probeUnixSocket(path: String) -> Bool {
         var address = sockaddr_un()
         address.sun_family = sa_family_t(AF_UNIX)
-        let bytes = Array(socketPath.utf8) + [0]
-        let deadline = Date().addingTimeInterval(15)
-        while Date() < deadline {
-            if bytes.count <= MemoryLayout.size(ofValue: address.sun_path) {
-                let probe = socket(AF_UNIX, SOCK_STREAM, 0)
-                if probe >= 0 {
-                    withUnsafeMutableBytes(of: &address.sun_path) { destination in
-                        destination.copyBytes(from: bytes)
-                    }
-                    let connected = withUnsafePointer(to: &address) { pointer in
-                        pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockaddrPointer in
-                            Darwin.connect(
-                                probe, sockaddrPointer,
-                                socklen_t(MemoryLayout<sockaddr_un>.size)
-                            )
-                        }
-                    }
-                    close(probe)
-                    if connected == 0 { return }
-                }
-            }
-            Thread.sleep(forTimeInterval: 0.1)
+        let bytes = Array(path.utf8) + [0]
+        guard bytes.count <= MemoryLayout.size(ofValue: address.sun_path) else { return false }
+        let probe = socket(AF_UNIX, SOCK_STREAM, 0)
+        guard probe >= 0 else { return false }
+        defer { close(probe) }
+        withUnsafeMutableBytes(of: &address.sun_path) { destination in
+            destination.copyBytes(from: bytes)
         }
+        let connected = withUnsafePointer(to: &address) { pointer in
+            pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockaddrPointer in
+                Darwin.connect(probe, sockaddrPointer, socklen_t(MemoryLayout<sockaddr_un>.size))
+            }
+        }
+        return connected == 0
     }
 
     /// Appends a line to the T8 evidence notes file (host-readable via the

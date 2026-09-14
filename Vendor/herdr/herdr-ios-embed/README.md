@@ -73,8 +73,12 @@ the crate pins toolchain 1.96.1 to match the working copy.
 * **teardown order** — stop closes the pty master before neutering the
   client's stdio onto /dev/null: closing the master wakes threads blocked
   reading it, and a dup2 over an fd another thread is blocked reading
-  deadlocks on Darwin. The neuter matters because the client maps an EIO
-  write to an error path that calls `process::exit(1)` — fatal in-process.
+  deadlocks on Darwin. The neuter keeps the client's post-teardown writes
+  quiescent: an EIO write maps to a client error path that (since embed
+  patch 0005's `bicterm-embed` feature, always enabled by this crate)
+  returns an error from `run_client` instead of `process::exit(1)` — the
+  host process survives either way, but a clean stop owes the client a
+  quiet stdio.
 * **diagnostics** — set `HERDR_EMBED_STDERR_LOG=<path>` to route the
   client's stderr to a file instead of the pty (on iOS the process stderr
   is /dev/null anyway); final client error messages survive teardown there.

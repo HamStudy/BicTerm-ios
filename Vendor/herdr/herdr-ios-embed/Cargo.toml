@@ -17,12 +17,24 @@ crate-type = ["lib", "staticlib"]
 name = "herdr_ios_embed"
 
 [dependencies]
-herdr = { path = "../../../.build-artifacts/herdr-embed" }
+# features = ["bicterm-embed"]: this crate IS the embedded frontend, so the
+# patched herdr client surfaces loop failures through run_client's Result
+# instead of std::process::exit (embed patch 0005) unconditionally here.
+herdr = { path = "../../../.build-artifacts/herdr-embed", features = ["bicterm-embed"] }
 libc = "0.2"
 
 [features]
 # Forwards to the patched herdr crate's host-injected transport seam (T5).
 bicterm-transport = ["herdr/bicterm-transport"]
+
+# Release keeps full DWARF and stays LTO-free so herdr-embed-core.sh can
+# archive a dSYM for crash symbolication (plan herdr-embed T8); rustc's
+# LLVM bitcode is newer than Apple's linker/nm readers (same rationale as
+# Vendor/herdr's ios-release profile).
+[profile.release]
+lto = false
+debug = 2
+strip = "none"
 
 # The patched herdr crate redirects its portable-pty dependency to its own
 # vendored copy; patches only apply from the workspace root, which this

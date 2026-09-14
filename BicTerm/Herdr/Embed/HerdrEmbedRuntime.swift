@@ -219,12 +219,25 @@ final class HerdrEmbedRuntime {
 
     private func handleExit(_ detail: String?) {
         guard session != nil else { return }
+        let exitedSession = session
         session = nil
         finishStream()
         currentOwner = nil
         phase = .stopped(exit: detail)
         let transport = activeTransport
         Task { @MainActor in
+            // A self-exited client (detach key or loop error) still owes
+            // the FFI instance its stop — join, restore process stdio,
+            // close the master — otherwise the leaked pty deadlocks the
+            // NEXT client's dup2 over stdio (same stop→transport ordering
+            // as requestStop; stopBlocking is a fast path once the client
+            // thread has ended).
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                DispatchQueue.global(qos: .userInitiated).async {
+                    exitedSession?.stopBlocking()
+                    continuation.resume()
+                }
+            }
             await self.teardownTransport(transport)
         }
     }

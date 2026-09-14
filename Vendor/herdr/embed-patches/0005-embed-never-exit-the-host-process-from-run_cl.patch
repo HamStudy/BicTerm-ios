@@ -1,0 +1,53 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: BicTerm <embed@bicterm.invalid>
+Date: Mon, 14 Sep 2026 15:38:14 -0600
+Subject: [PATCH] embed: never exit the host process from run_client
+
+behind the bicterm-embed feature, a non-detached client-loop failure
+returns an io::Error from run_client instead of std::process::exit(1),
+so an embedding host records the exit detail and keeps running; stock
+CLI builds keep the exit contract byte for byte.
+---
+ Cargo.toml        | 5 +++++
+ src/client/mod.rs | 9 +++++++++
+ 2 files changed, 14 insertions(+)
+
+diff --git a/Cargo.toml b/Cargo.toml
+index 1c1c03c..03dc96b 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -58,6 +58,11 @@ default = []
+ # `herdr remote-client-bridge` over its own SSH implementation. Stock
+ # builds never enable this.
+ bicterm-transport = []
++# Embedding builds must never end the host process: run_client surfaces
++# loop failures through its io::Result instead of std::process::exit so
++# the embed ABI records the exit detail and the host keeps running.
++# Stock CLI builds keep the exit contract byte for byte.
++bicterm-embed = []
+ 
+ [target.'cfg(windows)'.dependencies]
+ # UTF-16 SDDL input for interprocess security descriptors.
+diff --git a/src/client/mod.rs b/src/client/mod.rs
+index b815a05..6e461ae 100644
+--- a/src/client/mod.rs
++++ b/src/client/mod.rs
+@@ -340,6 +340,15 @@ fn run_client_with_mode(
+             return Ok(());
+         }
+ 
++        // BICTERM-PATCH (embed): an embedding host owns the process
++        // lifetime — surface the loop failure through run_client's
++        // io::Result so the embed ABI records the exit detail instead of
++        // taking the whole host process down. Stock CLI builds keep the
++        // exit(1) contract.
++        #[cfg(feature = "bicterm-embed")]
++        return Err(io::Error::other(format!("client loop failed: {err}")));
++
++        #[cfg(not(feature = "bicterm-embed"))]
+         std::process::exit(1);
+     }
+ 
+-- 
+2.38.0
+

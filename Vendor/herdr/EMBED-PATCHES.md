@@ -18,13 +18,16 @@ upstreamable; patch 4 is BicTerm-specific and feature-gated.
 | `0002-platform-cover-remaining-unix-helpers-in-the-fallbac.patch` | `src/platform/fallback.rs` (+9) | Re-export `wait_client_stream_readable` and define `foreground_process_group_id_for_tty_fd` (tcgetpgrp, identical to macos.rs/linux.rs) under `cfg(unix)` so unix fallback targets compile | yes |
 | `0003-lib-split-the-crate-into-a-library-plus-a-thin-herdr.patch` | `src/lib.rs` (new, verbatim move of the former `src/main.rs` plus 12 lines), `src/main.rs` (reduced to a 5-line shim) | Crate root moves to `src/lib.rs`; exposes `pub fn run()` (the old `fn main` body) and `pub use client::run_client` so embedding frontends link the client instead of spawning a process | yes |
 | `0004-transport-add-bicterm-transport-feature-for-host-inj.patch` | `Cargo.toml` (+8), `src/remote/saved.rs` (+~60) | New `bicterm-transport` cargo feature: `connect_saved_ssh` drops the `ssh` subprocess bridge (`RemoteSsh` probes + `SshStdioBridge`) and connects to a host-provided per-machine socket at `{HERDR_EMBED_TRANSPORT_DIR}/{profile id}.sock`; handshake/supervision unchanged. Default builds keep the stock body byte for byte | no (BicTerm embed) |
+| `0005-embed-never-exit-the-host-process-from-run_cl.patch` | `Cargo.toml` (+5), `src/client/mod.rs` (+9) | New `bicterm-embed` cargo feature: `run_client_with_mode`'s non-detached loop-failure path returns `io::Error` from `run_client` instead of `std::process::exit(1)` — an embedding host owns the process lifetime and records the exit detail. Stock CLI builds keep the exit contract byte for byte. `herdr-ios-embed` enables the feature on its dependency unconditionally | yes (upstream may want a no-exit embedding mode) |
 
 ## Feature-gating contract
 
 Without `--features bicterm-transport` the patched tree behaves exactly like
 stock herdr: the default `connect_saved_ssh` body is unchanged, no new
 dependencies, no behavior change. The feature is never enabled by BicTerm's
-stock builds.
+stock builds. Same shape for `bicterm-embed` (patch 0005): without it
+`run_client` keeps the upstream `std::process::exit(1)` contract; only the
+`herdr-ios-embed` staticlib selects the error-return path.
 
 ## libghostty-vt link stub
 
@@ -141,9 +144,8 @@ The update script greps for both rules and fails the run on violations;
 simulator, release profile) from the embed staticlib and drift-checks the
 committed `HerdrEmbedC/include/HerdrEmbed.h`. The simulator slice swaps
 the simulator `libghostty-vt.a` into the working copy for its build and
-restores the device archive afterwards. No dSYM is produced at this
-profile (release, no DWARF); crash symbolication for the embed archive is
-plan-task-8 hardening.
+restores the device archive afterwards. dSYMs are archived per slice
+since T8 (see "Hardening" below).
 
 ## Transport injection (plan task 5)
 
@@ -196,3 +198,50 @@ contract is unchanged — `HerdrEmbed.h` is still the only seam
 on every `herdr-embed-core.sh` build). Evidence:
 `.sisyphus/evidence/herdr-embed-t7.log`,
 `.sisyphus/evidence/herdr-embed-t7/`.
+
+## Hardening (herdr-embed task 8, 2026-09-14)
+
+Sync honesty (bounded `bufferingNewest(256)` output pipeline with loud
+drop counting + T12-style VT-reset/SIGWINCH resync), memory/CPU bounds
+(flood bound, fd/thread audits, bounded redial churn), authLost + trust
+edge tests, and automatic font parity from SwiftTerm metrics all landed
+host-side in commit `713dcfe` (`HerdrEmbedHardeningTests`).
+
+Rust side adds patch 0005 (`bicterm-embed`): `run_client`'s non-detached
+loop-failure path returns an `io::Error` instead of
+`std::process::exit(1)`, which used to take the whole iOS host process
+down after a detach-key stop (the T8 probe documented the poison).
+`herdr-ios-embed` enables the feature on its dependency, so every embed
+staticlib gets the error-return path; the stock CLI contract is
+unchanged. The env-gated detach probe
+(`HERDR_EMBED_DETACH_PROBE=1`, solo) now ends with the host process
+alive — gate kept for detach-key timing sensitivity, not poison.
+
+Keeping the process alive exposed a second, latent detach bug (previously
+masked by the process death): a self-exited client was never stopped —
+the leaked instance kept the pty master open with process stdio still
+dup2'd onto the dead slave, and the NEXT client's `dup2` deadlocked on
+the fd lock an abandoned slave reader held. Two-sided fix: the embed
+crate's client thread now performs self-exit cleanup (master close first,
+then stdio neuter — stop() stays the owner of the saved-stdio restore),
+and the Swift runtime's `handleExit` runs `stopBlocking` on the same
+stop→transport ordering as `requestStop`. Proofs: the detach probe plus a
+canary class in one app process (next live boot works, 0.24s).
+
+Fixture honesty follow-up (test-only): the server-death hardening test
+learned that `remote-client-bridge` (exec'd through the fixture sshd with
+HERDR_SOCKET_PATH set) AUTO-STARTS a replacement server on its next
+redial — that server belongs to no pidfile, which is why the old
+restore's second spawn raced and left pidfile→dead-pid receipts. The test
+now waits for the auto-started server (direct spawn as fallback) and its
+teardown reseeds deterministically (`herdr server stop` → clear sockets
+and pidfile → one fresh spawn whose pid is recorded), leaving
+pidfile == live owner for the next consumer.
+
+dSYMs for the embed archive (T4 residual): `herdr-ios-embed`'s release
+profile carries `debug = 2` (LTO off — rustc bitcode vs Apple linker,
+same rationale as `Vendor/herdr`'s `ios-release`), and
+`scripts/herdr-embed-core.sh` archives
+`.build-artifacts/herdr/embed-dsym/{device,simulator}/HerdrEmbed.<slice>.dSYM`
+via the same throwaway stub-dylib + `dsymutil` pattern as
+`build-herdr-core.sh`. Evidence: `.sisyphus/evidence/herdr-embed-t8.log`.

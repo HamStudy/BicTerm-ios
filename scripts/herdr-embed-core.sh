@@ -11,8 +11,9 @@
 # libghostty-vt.a for aarch64-ios-simulator — built on demand by
 # scripts/herdr-embed-vt-sim.sh rules below (herdr-vt-build.sh).
 #
-# Profile: --release (no DWARF). Crash symbolication for the embed archive is
-# a hardening follow-up (plan T8); HerdrCore.xcframework keeps its dSYMs.
+# Profile: --release with debug=2 DWARF (herdr-ios-embed [profile.release])
+# so each slice archives a dSYM for crash symbolication (plan T8), the same
+# stub-dylib + dsymutil pattern as build-herdr-core.sh.
 #
 # Idempotent: re-runs reuse cargo's target cache and re-assemble the
 # xcframework. Prerequisite for building the BicTerm app (next to
@@ -34,6 +35,7 @@ VT_SIM="$ROOT/.build-artifacts/herdr-vt/aarch64-ios-simulator/libghostty-vt.a"
 EMBED_CRATE="$ROOT/Vendor/herdr/herdr-ios-embed"
 OUT="$ROOT/.build-artifacts/herdr"
 XCF="$OUT/HerdrEmbed.xcframework"
+DSYM="$OUT/embed-dsym"
 
 if [ ! -f "$WORK/src/lib.rs" ]; then
     echo "== bootstrapping patched working copy (prepare, no build proof)"
@@ -73,6 +75,36 @@ rm -rf "$XCF"
 mkdir -p "$OUT/embed-device" "$OUT/embed-simulator"
 cp "$DEVICE_A" "$OUT/embed-device/HerdrEmbed.a"
 cp "$SIM_A" "$OUT/embed-simulator/HerdrEmbed.a"
+
+# dSYM archive for crash symbolication (debug=2 DWARF in the release
+# profile, plan T8). dsymutil needs a linked debug map, so each slice's
+# archive is linked into a throwaway stub dylib that references the ABI
+# entry point; the stub never ships, its dSYM carries the Rust DWARF
+# (same pattern as build-herdr-core.sh).
+mkdir -p "$DSYM/device" "$DSYM/simulator" "$ROOT/.scratch/tmp"
+for slice in device simulator; do
+    sdk_flag="--sdk iphoneos"
+    min_flag="-miphoneos-version-min=18.0"
+    if [ "$slice" = "simulator" ]; then
+        sdk_flag="--sdk iphonesimulator"
+        min_flag="-mios-simulator-version-min=18.0"
+    fi
+    cat > "$DSYM/$slice/stub.c" <<'EOF'
+struct herdr_embed;
+struct HerdrEmbedResult;
+struct herdr_embed *herdr_embed_start(const void *config,
+                                      struct HerdrEmbedResult *error_out);
+void herdr_embed_dsym_link_stub(void) {
+    herdr_embed_start(0, 0);
+}
+EOF
+    (cd "$DSYM/$slice" && xcrun $sdk_flag clang -arch arm64 $min_flag \
+        -dynamiclib stub.c "$OUT/embed-$slice/HerdrEmbed.a" -o stub.dylib)
+    xcrun dsymutil "$DSYM/$slice/stub.dylib" \
+        -o "$DSYM/$slice/HerdrEmbed.$slice.dSYM"
+    rm -f "$DSYM/$slice/stub.dylib" "$DSYM/$slice/stub.c"
+done
+
 xcodebuild -create-xcframework \
     -library "$OUT/embed-device/HerdrEmbed.a" \
     -library "$OUT/embed-simulator/HerdrEmbed.a" \
@@ -93,6 +125,10 @@ rm -f "$ROOT/.scratch/tmp/HerdrEmbed.h"
 echo "== symbol audit"
 test -d "$XCF/ios-arm64" || { echo "missing ios-arm64 slice" >&2; exit 1; }
 test -d "$XCF/ios-arm64-simulator" || { echo "missing ios-arm64-simulator slice" >&2; exit 1; }
+test -d "$DSYM/device/HerdrEmbed.device.dSYM" ||
+    { echo "missing device dSYM" >&2; exit 1; }
+test -d "$DSYM/simulator/HerdrEmbed.simulator.dSYM" ||
+    { echo "missing simulator dSYM" >&2; exit 1; }
 for slice in ios-arm64 ios-arm64-simulator; do
     # nm exits nonzero on precompiled rust-std members (LLVM bitcode); only
     # the ABI + vt symbols matter (same pattern as build-herdr-core.sh).
@@ -103,4 +139,4 @@ for slice in ios-arm64 ios-arm64-simulator; do
         { echo "libghostty-vt symbols missing from $slice" >&2; exit 1; }
 done
 
-echo "BUILD SUCCESS: $XCF (device+simulator, release, headerless)"
+echo "BUILD SUCCESS: $XCF (device+simulator, release DWARF, dSYMs, headerless)"

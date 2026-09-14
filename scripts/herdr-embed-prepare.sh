@@ -69,6 +69,8 @@ test -f "$OUT/src/lib.rs" ||
     { echo "patch 0003 did not land" >&2; exit 1; }
 grep -q "bicterm-transport" "$OUT/Cargo.toml" ||
     { echo "patch 0004 did not land" >&2; exit 1; }
+grep -q "bicterm-embed" "$OUT/src/client/mod.rs" ||
+    { echo "patch 0005 did not land" >&2; exit 1; }
 
 echo "== installing libghostty-vt.a"
 VT_DIR="$OUT/vendor/libghostty-vt/zig-out/lib"
