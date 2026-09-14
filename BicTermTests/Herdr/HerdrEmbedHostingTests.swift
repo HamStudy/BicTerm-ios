@@ -1,4 +1,3 @@
-#if HERDR_EMBED
 import SwiftTerm
 import SwiftUI
 import UIKit
@@ -326,4 +325,3 @@ private extension UIView {
         return nil
     }
 }
-#endif

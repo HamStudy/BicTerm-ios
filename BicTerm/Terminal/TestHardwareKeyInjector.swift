@@ -46,9 +46,6 @@ import UIKit
         enum Step: Equatable {
             case key(SyntheticKeystroke)
             case awaitTail(String)
-            case text(String)
-            case awaitEcho(String)
-            case paste
         }
 
     /// The ready signal as PRINTED by the `-uitest-command` shell probe —
@@ -65,11 +62,6 @@ import UIKit
     /// to be encoded and delivered before the next one begins (the paired
     /// release must preempt the 0.4 s repeat delay, which 50 ms honors).
     private static let interKeyDelay: DispatchTimeInterval = .milliseconds(50)
-
-    /// Herdr replay sessions have no terminal container; the workspace's
-    /// input field registers here (didMoveToWindow) so injected presses
-    /// traverse the same mapper/gate/lane path as physical hardware.
-    static var herdrInputField: HerdrInputField?
 
     private let steps: [Step]
     private var started = false
@@ -122,6 +114,8 @@ import UIKit
         }
     }
 
+
+
     private static func byteContents(_ tail: String, _ marker: String) -> Bool {
         tail.utf8.firstRange(of: marker.utf8) != nil
     }
@@ -137,17 +131,6 @@ import UIKit
         case .awaitTail(let marker):
             pendingResume = (marker, index + 1)
             NSLog("TestHardwareKeyInjector: awaiting marker %@", marker.debugDescription)
-        case .awaitEcho(let needle):
-            awaitEcho(needle, from: index, generation: generation)
-        case .text(let string):
-            guard deliverText(string) else {
-                retryStep(from: index, generation: generation)
-                return
-            }
-            missingContainerRetries = 0
-            DispatchQueue.main.asyncAfter(deadline: .now() + Self.interKeyDelay) { [weak self] in
-                self?.runSteps(from: index + 1, generation: generation)
-            }
         case .key(let keystroke):
             guard deliver(keystroke) else {
                 retryStep(from: index, generation: generation)
@@ -160,37 +143,6 @@ import UIKit
             DispatchQueue.main.asyncAfter(deadline: .now() + Self.interKeyDelay) { [weak self] in
                 self?.runSteps(from: index + 1, generation: generation)
             }
-        case .paste:
-            guard deliverPaste() else {
-                retryStep(from: index, generation: generation)
-                return
-            }
-            missingContainerRetries = 0
-            DispatchQueue.main.asyncAfter(deadline: .now() + Self.interKeyDelay) { [weak self] in
-                self?.runSteps(from: index + 1, generation: generation)
-            }
-        }
-    }
-
-    /// The replay scene has no terminal tail, so ordering against the
-    /// workspace (e.g. text only after a tap retargets) polls the echo the
-    /// workspace view mirrors into `HerdrWorkspaceUITest.currentInputEcho`.
-    private func awaitEcho(_ needle: String, from index: Int, generation: Int, polls: Int = 0) {
-        guard self.generation == generation else { return }
-        if HerdrWorkspaceUITest.currentInputEcho?.contains(needle) == true {
-            NSLog("TestHardwareKeyInjector: echo needle %@ observed, resuming at step %d", needle.debugDescription, index + 1)
-            runSteps(from: index + 1, generation: generation)
-            return
-        }
-        guard polls < 100 else {
-            NSLog("TestHardwareKeyInjector: echo needle %@ never appeared; steps from %d dropped", needle.debugDescription, index)
-            return
-        }
-        if polls == 0 {
-            NSLog("TestHardwareKeyInjector: awaiting echo needle %@", needle.debugDescription)
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(100)) { [weak self] in
-            self?.awaitEcho(needle, from: index, generation: generation, polls: polls + 1)
         }
     }
 
@@ -208,21 +160,16 @@ import UIKit
         }
     }
 
-    /// Herdr replay mode has no terminal tail with a go-marker; the
-    /// workspace starts injection itself once the replay script is fully
-    /// applied (`herdr-replay-ready`).
     func startNow() {
         guard !started else { return }
         started = true
-        NSLog("TestHardwareKeyInjector: replay ready, starting injection")
+        NSLog("TestHardwareKeyInjector: starting injection")
         runSteps(from: 0, generation: generation)
     }
 
-    /// One complete hardware-keypress lifecycle: began runs the real input
-    /// pipeline (SwiftTerm's encoder on the terminal container, the herdr
-    /// key mapper on the workspace field); the paired ended mirrors real
-    /// hardware so repeat-timer invariants hold (XCTest itself never sends
-    /// it).
+    /// The paired release event mirrors real hardware; XCTest itself never
+    /// sends it, and SwiftTerm's encoder depends on it for repeat-timer
+    /// invariants.
     private func deliver(_ keystroke: SyntheticKeystroke) -> Bool {
         let key = TestKeySyntheticUIKey(
             code: keystroke.code,
@@ -237,34 +184,7 @@ import UIKit
             container.pressesEnded([press], with: nil)
             return true
         }
-        if let field = Self.herdrInputField, field.window != nil {
-            field.pressesBegan([press], with: nil)
-            field.pressesEnded([press], with: nil)
-            return true
-        }
         return false
-    }
-
-    /// One `insertText` commit per grapheme — the soft keyboard's own
-    /// granularity, so the model's IME-commit path runs verbatim.
-    private func deliverText(_ string: String) -> Bool {
-        guard let field = Self.herdrInputField, field.window != nil else { return false }
-        for character in string {
-            field.insertText(String(character))
-        }
-        return true
-    }
-
-    /// Synthetic cmd+v cannot ride UIKit's consented paste delivery —
-    /// synthetic presses carry no UIPressesEvent the field could forward to
-    /// super — so the token invokes the field's `paste(_:)` directly. The
-    /// resulting system paste prompt (an unconsented-read response) is the
-    /// test's to dismiss via the springboard; real hardware takes the
-    /// consented super path instead.
-    private func deliverPaste() -> Bool {
-        guard let field = Self.herdrInputField, field.window != nil else { return false }
-        field.paste(nil)
-        return true
     }
 
     private static func parse(_ spec: String) -> [Step]? {
@@ -294,29 +214,9 @@ import UIKit
                 steps.append(.key(SyntheticKeystroke(code: .keyboardRightArrow, modifiers: [], characters: "", charactersIgnoringModifiers: "")))
             case "await:decckm":
                 steps.append(.awaitTail(decckmSetMarker))
-            case "nav+up":
-                steps.append(.key(SyntheticKeystroke(code: .keyboardUpArrow, modifiers: [.control, .shift], characters: "", charactersIgnoringModifiers: "")))
-            case "nav+down":
-                steps.append(.key(SyntheticKeystroke(code: .keyboardDownArrow, modifiers: [.control, .shift], characters: "", charactersIgnoringModifiers: "")))
-            case "nav+left":
-                steps.append(.key(SyntheticKeystroke(code: .keyboardLeftArrow, modifiers: [.control, .shift], characters: "", charactersIgnoringModifiers: "")))
-            case "nav+right":
-                steps.append(.key(SyntheticKeystroke(code: .keyboardRightArrow, modifiers: [.control, .shift], characters: "", charactersIgnoringModifiers: "")))
-            case "cmd+v":
-                steps.append(.paste)
             default:
-                if token.hasPrefix("text:") {
-                    let payload = String(token.dropFirst(5))
-                    guard !payload.isEmpty else { return nil }
-                    steps.append(.text(payload))
-                } else if token.hasPrefix("await:echo:") {
-                    let needle = String(token.dropFirst(11))
-                    guard !needle.isEmpty else { return nil }
-                    steps.append(.awaitEcho(needle))
-                } else {
-                    guard let keystroke = parseModifiedLetter(token) else { return nil }
-                    steps.append(.key(keystroke))
-                }
+                guard let keystroke = parseModifiedLetter(token) else { return nil }
+                steps.append(.key(keystroke))
             }
         }
         return steps

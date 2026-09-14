@@ -610,26 +610,6 @@ final class HerdrClipboardTests: XCTestCase {
         XCTAssertNil(drained, "the slot is one-shot")
     }
 
-    // MARK: - Keyboard gesture mapping
-
-    func testCommandVResolvesToThePasteGesture() {
-        let paste = HerdrKeyStroke(
-            keyCode: .keyboardV,
-            modifierFlags: [.command],
-            characters: "v",
-            charactersIgnoringModifiers: "v"
-        )
-        XCTAssertEqual(HerdrKeyMapper.resolve(paste), .paste)
-
-        let copy = HerdrKeyStroke(
-            keyCode: .keyboardC,
-            modifierFlags: [.command],
-            characters: "c",
-            charactersIgnoringModifiers: "c"
-        )
-        XCTAssertEqual(HerdrKeyMapper.resolve(copy), .ignored, "other command chords stay local-ignored")
-    }
-
     // MARK: - Test image construction
 
     private func makeNoisePNG(pixelSize: Int) throws -> Data {

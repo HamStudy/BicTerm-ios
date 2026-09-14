@@ -1,4 +1,3 @@
-#if HERDR_EMBED
 import XCTest
 
 @testable import BicTerm
@@ -102,4 +101,3 @@ final class HerdEmbedCatalogTests: XCTestCase {
         XCTAssertEqual(try seededSelection(), "")
     }
 }
-#endif

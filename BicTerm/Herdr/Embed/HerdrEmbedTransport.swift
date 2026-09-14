@@ -1,4 +1,3 @@
-#if HERDR_EMBED
 import BicTermCore
 import Foundation
 import Observation
@@ -522,4 +521,3 @@ private final class EventSink: @unchecked Sendable {
         emit("\(label): \(line)")
     }
 }
-#endif

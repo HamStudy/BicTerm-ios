@@ -1,4 +1,3 @@
-#if HERDR_EMBED
 import BicTermCore
 import SwiftUI
 
@@ -292,4 +291,3 @@ private struct EmbedTrustPromptPresenter: ViewModifier {
         }
     }
 }
-#endif

@@ -1,4 +1,3 @@
-#if HERDR_EMBED
 import BicTermCore
 import NIOSSH
 import SwiftTerm
@@ -554,4 +553,3 @@ private extension UIView {
         return nil
     }
 }
-#endif

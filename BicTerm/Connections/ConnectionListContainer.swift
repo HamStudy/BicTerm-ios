@@ -16,7 +16,6 @@ struct ConnectionListContainer: View {
     @State private var herdrCoverSession: HerdrCoverSession?
     @State private var restorableSessions: [SessionStore.RestorableSession] = []
     @State private var switcherPresented = false
-    @State private var herdrConnect = HerdrConnectCoordinator()
 
     private struct HerdrCoverSession: Identifiable {
         let id: UUID
@@ -24,17 +23,6 @@ struct ConnectionListContainer: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            #if DEBUG
-            if HerdrWorkspaceUITest.liveConnectEnabled {
-                Text(String(herdrConnect.debugAttemptCount))
-                    .font(typography.caption)
-                    .foregroundStyle(colors.dimmed)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, spacing.sm)
-                    .padding(.vertical, 2)
-                    .accessibilityIdentifier("herdr-connect-attempts")
-            }
-            #endif
             if !restorableSessions.isEmpty {
                 RestorableSessionsSection(entries: restorableSessions) { entry in
                     reconnectRestorable(entry)
@@ -116,43 +104,10 @@ struct ConnectionListContainer: View {
                     .terminalStyle()
             }
         }
-        .sheet(
-            item: Binding(
-                get: { herdrConnect.trustPrompt },
-                set: { herdrConnect.trustPrompt = $0 }
-            )
-        ) { prompt in
-            HostTrustPromptView(
-                challenge: SessionStore.HostTrustChallenge(
-                    host: prompt.challenge.host,
-                    port: prompt.challenge.port,
-                    algorithm: prompt.challenge.algorithm,
-                    fingerprint: prompt.challenge.fingerprint,
-                    publicKeyData: prompt.challenge.publicKeyData
-                ),
-                errorMessage: nil,
-                onTrust: { herdrConnect.resolveTrustPrompt(true) },
-                onCancel: { herdrConnect.resolveTrustPrompt(false) }
-            )
-            .interactiveDismissDisabled(true)
-            .presentationDetents([.large])
-            .terminalStyle()
-        }
         // F3-B backstop: herd prompts present from the workspace cover
         // (or window); this one resolves any prompt left pending when the
         // workspace presentation is gone (e.g. the user closed it).
         .modifier(HerdTrustPromptPresenter(herdConnect: herdConnect))
-        .alert(
-            "Can’t Connect",
-            isPresented: Binding(
-                get: { herdrConnect.connectError != nil },
-                set: { if !$0 { herdrConnect.connectError = nil } }
-            )
-        ) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(herdrConnect.connectError ?? "")
-        }
         .task {
             await reloadRestorableSessions()
             #if DEBUG
@@ -174,37 +129,18 @@ struct ConnectionListContainer: View {
 
     private func handleConnect(_ connection: Connection) {
         if connection.herdrEnabled {
-            #if HERDR_EMBED
-            // T5: the embedded client reaches this machine through the
-            // BicTermCore SSH bridge — the connection rides the workspace
-            // entry and the embed runtime establishes the carrier (TOFU
-            // prompt, probe, bridge socket).
+            // Embedded TUI (T5): the connection rides the workspace entry;
+            // the embed runtime establishes the SSH bridge carrier (TOFU,
+            // probe, per-machine bridge socket).
             presentHerdr(
                 sessionID: HerdrWorkspaceCenter.shared.openEmbed(connection: connection)
             )
-            #else
-            #if DEBUG
-            if HerdrWorkspaceUITest.doubleConnectRequested {
-                fireHerdrConnect(connection)
-            }
-            #endif
-            fireHerdrConnect(connection)
-            #endif
         } else {
             present(store.openSession(for: connection))
         }
     }
 
-    private func fireHerdrConnect(_ connection: Connection) {
-        herdrConnect.handleConnect(
-            connection,
-            hostKeyVerifier: store.hostKeyVerifier,
-            present: { sessionID in presentHerdr(sessionID: sessionID) }
-        )
-    }
-
     private func openHerd(_ herd: Herd) {
-        #if HERDR_EMBED
         // T6: the herd entry carries its machines; the embed view resolves
         // one transport link per machine when it appears — herd edits are
         // reflected on the next open; a live instance is not re-seeded.
@@ -226,20 +162,10 @@ struct ConnectionListContainer: View {
                 HerdDescriptor(herdID: herd.id, herdName: herd.name, machines: machines)
             ))
         }
-        #else
-        herdConnect.open(
-            herd,
-            hostKeyVerifier: store.hostKeyVerifier,
-            present: { sessionID in presentHerdr(sessionID: sessionID) }
-        )
-        #endif
     }
 
     @ViewBuilder
     private func herdrWorkspace(for entry: HerdrWorkspaceCenter.Entry) -> some View {
-        #if HERDR_EMBED
-        // Embedded TUI replaces the native workspace interior here too
-        // (iPhone cover path; plan herdr-embed T4 — see HerdrWindowRoot).
         HerdrEmbedWorkspaceView(
             endpointLabel: entry.label,
             onClose: {
@@ -254,42 +180,12 @@ struct ConnectionListContainer: View {
             ownerID: entry.id,
             hostKeyVerifier: store.hostKeyVerifier
         )
-        #else
-        if let herd = entry.herd {
-            HerdWorkspaceChromeView(
-                model: entry.model,
-                herd: herd,
-                onClose: {
-                    Task {
-                        await HerdrWorkspaceCenter.shared.close(id: entry.id)
-                    }
-                    herdrCoverSession = nil
-                },
-                onSelectMachine: { machine in
-                    herdConnect.select(machine, in: entry.model)
-                },
-                fontModel: store.terminalFont
-            )
-        } else {
-            HerdrWorkspaceView(
-                model: entry.model,
-                endpointLabel: entry.label,
-                onClose: {
-                    Task {
-                        await HerdrWorkspaceCenter.shared.close(id: entry.id)
-                    }
-                    herdrCoverSession = nil
-                },
-                fontModel: store.terminalFont
-            )
-        }
-        #endif
     }
 
     /// Herdr sessions present through the same path as SSH sessions: their
     /// own window on iPad (T12 user directive), a full-screen cover on
-    /// iPhone. T16's entry replays committed fixture frames; T19's endpoint
-    /// profiles open real SSH-backed sessions through this same presenter.
+    /// iPhone. Mode-A connections carry the SSH bridge the embed runtime
+    /// establishes; herds carry the machine catalog the embed view seeds.
     private func presentHerdr(sessionID: UUID) {
         if supportsMultipleWindows {
             openWindow(id: "herdr", value: SessionID(value: sessionID))
@@ -299,25 +195,18 @@ struct ConnectionListContainer: View {
     }
 
     #if DEBUG
-    @MainActor private static var didOpenHerdrReplay = false
+    @MainActor private static var didOpenHerdrFixture = false
 
-    /// openWindow during scene STARTUP creates windows that never surface
-    /// (observed on iPad); the replay bootstrap therefore runs once, from
-    /// the first .active scene-phase transition.
+    /// UI-test surface (`--uitest-herdr-embed`): the embedded TUI needs a
+    /// workspace entry whose transport reads from the env-injected
+    /// `HERDR_EMBED_SOCKET_PATH`; this fires the bare fixture entry from
+    /// the first .active scene-phase transition (openWindow during scene
+    /// startup creates windows that never surface on iPad).
     private func openHerdrFixtureReplayOnce() {
-        guard !Self.didOpenHerdrReplay else { return }
-        Self.didOpenHerdrReplay = true
-        #if HERDR_EMBED
-        if ProcessInfo.processInfo.arguments.contains("--uitest-herdr-embed") {
-            presentHerdr(sessionID: HerdrWorkspaceCenter.shared.open { _ in "Fixture" })
-            return
-        }
-        #endif
-        guard HerdrWorkspaceUITest.wantsReplayBootstrap else { return }
-        let id = HerdrWorkspaceCenter.shared.open { model in
-            HerdrWorkspaceUITest.connectReplay(model: model)
-        }
-        presentHerdr(sessionID: id)
+        guard !Self.didOpenHerdrFixture else { return }
+        Self.didOpenHerdrFixture = true
+        guard ProcessInfo.processInfo.arguments.contains("--uitest-herdr-embed") else { return }
+        presentHerdr(sessionID: HerdrWorkspaceCenter.shared.open { _ in "Fixture" })
     }
     #endif
 

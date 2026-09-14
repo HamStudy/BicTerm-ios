@@ -1,4 +1,3 @@
-#if HERDR_EMBED
 import Foundation
 import HerdrEmbed
 
@@ -200,4 +199,3 @@ private final class HandleBox: @unchecked Sendable {
     let pointer: UnsafeMutablePointer<herdr_embed>
     init(_ pointer: UnsafeMutablePointer<herdr_embed>) { self.pointer = pointer }
 }
-#endif

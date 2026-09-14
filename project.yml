@@ -101,11 +101,9 @@ targets:
         SWIFT_VERSION: "6.0"
         MARKETING_VERSION: "0.1.0"
         CURRENT_PROJECT_VERSION: "1"
-        # HERDR_EMBED: herdr-embed plan T4 switch — the embedded real herdr
-        # TUI (HerdrEmbedWorkspaceView) replaces the native workspace
-        # interior; the native path stays compiled under #else until T7
-        # parity sign-off. Flip off to compare against the native UI.
-        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) HERDR_EMBED"
+        # Plan herdr-embed T7: the embedded real herdr TUI is the only
+        # shipped herdr surface (HerdrEmbedWorkspaceView replaces the
+        # native workspace interior unconditionally).
         # -u _herdr_client_create: the app target does not reference Herdr code
         # yet (T16 wires the UI); the anchor keeps the HerdrCore objects in
         # the app binary (Apache-2.0 is App Store-safe).
@@ -145,8 +143,8 @@ targets:
       - target: HerdrClientCore
         embed: false
       # Embed ABI clang module + the headerless static xcframework
-      # (scripts/herdr-embed-core.sh). With HERDR_EMBED off nothing
-      # references the archive, so it is simply never pulled in.
+      # (scripts/herdr-embed-core.sh). The embed runtime is the only
+      # herdr surface after plan herdr-embed T7.
       - target: HerdrEmbedC
       - framework: .build-artifacts/herdr/HerdrEmbed.xcframework
         embed: false
@@ -190,9 +188,6 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         TARGETED_DEVICE_FAMILY: "1,2"
         SWIFT_VERSION: "6.0"
-        # Mirror of the app target's HERDR_EMBED switch (plan herdr-embed
-        # T4): the embed hosting tests compile only when the app does.
-        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) HERDR_EMBED"
     dependencies:
       - target: BicTerm
 schemes:

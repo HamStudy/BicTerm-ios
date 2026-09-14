@@ -27,15 +27,11 @@ struct HerdrWindowRoot: View {
 
     @ViewBuilder
     private func herdrWorkspace(for entry: HerdrWorkspaceCenter.Entry) -> some View {
-        #if HERDR_EMBED
-        // Embedded TUI (plan herdr-embed T4): the real herdr client's own
-        // surface replaces the native workspace interior for both single
-        // endpoints and herds (T6 seeds its machine catalog per open — the
-        // client's own sidebar owns multi-machine selection/input/health).
-        // Header composition is preserved by the embed chrome; the native
-        // path survives below until T7 sign-off. T5: entries opened from a
-        // Mode-A connection carry it, and the embed runtime builds its SSH
-        // bridge transport from it.
+        // Embedded TUI (plan herdr-embed T4-T7): the real herdr client's
+        // surface replaces the native workspace interior; herds seed the
+        // client's machine catalog per open so its own sidebar owns
+        // multi-machine selection/input/health; Mode-A entries carry the
+        // connection the embed runtime bridges through.
         HerdrEmbedWorkspaceView(
             endpointLabel: entry.label,
             onClose: {
@@ -49,36 +45,5 @@ struct HerdrWindowRoot: View {
             ownerID: entry.id,
             hostKeyVerifier: store.hostKeyVerifier
         )
-        #else
-        if let herd = entry.herd {
-            HerdWorkspaceChromeView(
-                model: entry.model,
-                herd: herd,
-                onClose: {
-                    Task {
-                        await center.close(id: entry.id)
-                    }
-                },
-                onSelectMachine: { machine in
-                    herd.apply(machine, in: entry.model)
-                },
-                fontModel: store.terminalFont
-            )
-            // Herd machines connect only after this window is up; their
-            // TOFU challenges must present above it (F3-B).
-            .modifier(HerdTrustPromptPresenter(herdConnect: herdConnect))
-        } else {
-            HerdrWorkspaceView(
-                model: entry.model,
-                endpointLabel: entry.label,
-                onClose: {
-                    Task {
-                        await center.close(id: entry.id)
-                    }
-                },
-                fontModel: store.terminalFont
-            )
-        }
-        #endif
     }
 }

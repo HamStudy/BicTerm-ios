@@ -1,4 +1,3 @@
-#if HERDR_EMBED
 import BicTermCore
 import Foundation
 import Observation
@@ -383,4 +382,3 @@ final class HerdrEmbedRuntime {
         return nil
     }
 }
-#endif

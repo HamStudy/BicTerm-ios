@@ -1,4 +1,3 @@
-#if HERDR_EMBED
 import SwiftTerm
 import SwiftUI
 import UIKit
@@ -112,4 +111,3 @@ struct HerdrTUIHostingView: UIViewRepresentable {
         func requestOpenLink(source: TerminalView, link: String, params: [String: String]) {}
     }
 }
-#endif

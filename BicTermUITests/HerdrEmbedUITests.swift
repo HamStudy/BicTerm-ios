@@ -66,6 +66,36 @@ final class HerdrEmbedUITests: XCTestCase {
         )
     }
 
+    /// Landscape parity (plan herdr-embed T7): the embed chrome + SwiftTerm
+    /// surface must re-layout coherently when the device rotates. Sets
+    /// `XCUIDevice` orientation, then waits for the embed run to reach
+    /// running — same fixtures, same surface contract as the portrait test.
+    func testEmbeddedTUIReachesRunningInLandscape() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--uitest-herdr-embed"]
+        app.launchEnvironment["HERDR_EMBED_SOCKET_PATH"] = fixtureSocket
+        app.launch()
+
+        XCUIDevice.shared.orientation = .landscapeLeft
+        defer { XCUIDevice.shared.orientation = .portrait }
+
+        let status = app.descendants(matching: .any)["herdr-embed-status"]
+        let running = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "label == %@", "embedded client running"),
+            object: status
+        )
+        XCTAssertEqual(
+            XCTWaiter.wait(for: [running], timeout: 20),
+            .completed,
+            "embedded client reached running in landscape (status: \(status.label))"
+        )
+
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = "herdr-embed-landscape"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
     /// The DEBUG io strip reads `embed io ↑<written> ↓<read>`; the write
     /// count strictly increases after a keystroke, so parse it out.
     private func ioWriteCount(_ app: XCUIApplication) -> Int {

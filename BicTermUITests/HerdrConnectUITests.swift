@@ -1,12 +1,13 @@
 import XCTest
 
-/// T6 Mode A connect-flow UI tests. The live E2E runs against the real
-/// fixture sshd + prebuilt herdr 0.9.0 server on 12222 (start with
-/// `scripts/fixtures-up.sh`); the idempotency and diagnostic scenarios
-/// exercise the same surface with deterministic failures. The needle-echo
-/// assertion reads the DEBUG input echo strip — per-grapheme commits
-/// through the real input lane, which the gate only accepts once the
-/// endpoint is online with a committed surface.
+/// Mode A embed E2E (plan herdr-embed T7). The native Mode A UI is gone;
+/// this file exercises the same shipped flow against the embedded TUI:
+/// connect from a herdr-enabled connection → SSH bridge carrier establishes
+/// through BicTermCore (TOFU prompt surfaces through the shared
+/// HostTrustPromptView) → the embedded real-herdr client boots → typed
+/// keystrokes reach the client. Requires fixtures-up with the prebuilt
+/// herdr v0.9.0 server (`scripts/herdr-server-fetch.sh`,
+/// `HERDR_LOSSY=12322:delay=80ms scripts/fixtures-up.sh`).
 @MainActor
 final class HerdrConnectUITests: XCTestCase {
     private static let hop1HostFingerprint = "SHA256:pT2cNum6IkFhCplSQfWE5oW2CU4Bg51qD1/1HtirjBs"
@@ -19,14 +20,11 @@ final class HerdrConnectUITests: XCTestCase {
         app = XCUIApplication()
     }
 
-    // MARK: - Live E2E (fixture server on 12222)
-
-    func testHerdrConnectTrustsHostAndReachesOnlineWithNeedleEcho() {
+    func testHerdrConnectTrustsHostAndReachesEmbeddedClientRunning() {
         launch(
             extra: [
                 "--uitest-herdr-live",
                 "--uitest-herdr-untrusted",
-                "--uitest-hwkeys", "text:Zq9x",
             ],
             port: nil
         )
@@ -38,9 +36,8 @@ final class HerdrConnectUITests: XCTestCase {
         swipeRow(named: "Herdr-Alpha")
         app.buttons["connect-Herdr-Alpha"].tap()
 
-        // Fresh in-memory trust store (--uitest-herdr-untrusted): the TOFU
-        // prompt must surface through the same host-key approval surface
-        // terminal sessions use.
+        // Fresh in-memory trust store: TOFU must surface through the same
+        // host-key approval view terminal sessions use.
         let prompt = app.staticTexts["trust-prompt"]
         XCTAssertTrue(prompt.waitForExistence(timeout: 15), "first contact must surface the trust prompt")
         waitUntil(app.staticTexts["trust-host"], contains: "127.0.0.1")
@@ -50,134 +47,104 @@ final class HerdrConnectUITests: XCTestCase {
             contains: Self.hop1HostFingerprint,
             message: "prompt must show hop-1's committed host key"
         )
-        attachScreenshot("herdr-trust-prompt")
+        attachScreenshot("herdr-embed-trust-prompt")
         app.buttons["trust-confirm"].tap()
 
-        waitForOnline(timeout: 60)
+        let status = app.descendants(matching: .any)["herdr-embed-status"]
+        let running = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "label == %@", "embedded client running"),
+            object: status
+        )
+        XCTAssertEqual(
+            XCTWaiter.wait(for: [running], timeout: 60),
+            .completed,
+            "embedded client must reach running (status: \(status.label))"
+        )
 
+        XCTAssertTrue(
+            app.descendants(matching: .any)["herdr-embed-tui"].waitForExistence(timeout: 10),
+            "the embedded SwiftTerm surface must be present"
+        )
+        XCTAssertTrue(
+            app.descendants(matching: .any)["herdr-endpoint-label"].waitForExistence(timeout: 5),
+            "the embed chrome names its connection"
+        )
         waitUntil(
             app.descendants(matching: .any)["herdr-endpoint-label"],
             contains: "Herdr Alpha",
-            message: "the workspace names its connection"
-        )
-        XCTAssertTrue(
-            app.descendants(matching: .any).matching(
-                NSPredicate(format: "identifier BEGINSWITH %@", "herdr-pane-")
-            ).firstMatch.waitForExistence(timeout: 15),
-            "the live server's committed surface must render panes"
-        )
-        waitUntil(
-            app.staticTexts["herdr-lifecycle-echo"],
-            contains: "online:connection/",
-            message: "the lifecycle log records the live endpoint generation"
+            message: "the embed header must name the seeded connection"
         )
 
-        // Needle echo: the injector commits one grapheme at a time; the
-        // first and last characters bracket the whole needle.
-        waitUntil(app.staticTexts["herdr-input-echo"], contains: "text(\"Z\"", message: "needle head")
-        waitUntil(app.staticTexts["herdr-input-echo"], contains: "text(\"x\"→", message: "needle tail")
-        XCTAssertFalse(
-            app.descendants(matching: .any)["herdr-input-note"].exists,
-            "a successful send never raises the note strip"
+        // Keystroke acceptance: the io counter's write side must advance
+        // after keys reach the embedded client (the same DEBUG-only strip
+        // HerdrEmbedUITests uses on the cover path).
+        let before = ioWriteCount(app)
+        app.typeText("Z")
+        let moved = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "label CONTAINS %@", ioMarker(after: before)),
+            object: app.descendants(matching: .any)["herdr-embed-io"]
         )
-        attachScreenshot("herdr-live-workspace")
+        XCTAssertEqual(
+            XCTWaiter.wait(for: [moved], timeout: 10),
+            .completed,
+            "keystroke must reach the embedded client"
+        )
+        attachScreenshot("herdr-embed-running")
     }
-
-    func testRepeatedConnectTapsYieldExactlyOneAttempt() {
-        // The double-tap is fired app-side (--uitest-herdr-double-connect):
-        // two handleConnect calls in one turn, the strictest form of a
-        // double-tap — XCUI cannot deliver a second tap on swipe actions
-        // that close within ~1s of the first.
-        launch(extra: ["--uitest-herdr-live", "--uitest-herdr-double-connect"], port: nil)
-
-        let row = app.buttons["connection-Herdr-Alpha"]
-        XCTAssertTrue(row.waitForExistence(timeout: 15))
-
-        swipeRow(named: "Herdr-Alpha")
-        let connect = app.buttons["connect-Herdr-Alpha"]
-        XCTAssertTrue(connect.waitForExistence(timeout: 5))
-        connect.tap()
-
-        waitForOnline(timeout: 60)
-
-        app.descendants(matching: .any)["herdr-disconnect"].tap()
-        XCTAssertTrue(
-            app.buttons["add-connection"].waitForExistence(timeout: 15),
-            "disconnecting must return to the connection list"
-        )
-        // Every open window's connection list renders this strip (the herdr
-        // window's fallback list shows its own coordinator's count of 0);
-        // exactly one attempt means the connecting window's strip reads 1.
-        let attempts = app.staticTexts.matching(identifier: "herdr-connect-attempts")
-        XCTAssertTrue(
-            (0..<attempts.count).contains { attempts.element(boundBy: $0).label == "1" },
-            "repeated taps while one attempt is in flight must yield exactly one attempt"
-        )
-    }
-
-    // MARK: - Typed diagnostics (deterministic, no fixture server needed)
 
     func testUnreachableHostSurfacesTypedTransportDiagnostic() {
         launch(extra: [], port: 12299)
 
         connectSeededHerdrAlpha()
-        let diagnostic = app.descendants(matching: .any)["herdr-diagnostic"]
-        XCTAssertTrue(
-            diagnostic.waitForExistence(timeout: 30),
-            "an unreachable SSH host must surface the typed diagnostic screen"
+        let status = app.descendants(matching: .any)["herdr-embed-status"]
+        let failed = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "label == %@", "failed"),
+            object: status
         )
-        waitUntil(
-            app.descendants(matching: .any)["herdr-diagnostic-title"],
-            contains: "Connection lost",
-            message: "SSH establish failures map to transportLost"
+        XCTAssertEqual(
+            XCTWaiter.wait(for: [failed], timeout: 30),
+            .completed,
+            "an unreachable SSH host must land the embed run in failed state (status: \(status.label))"
         )
+        let failedMessage = app.descendants(matching: .any)["herdr-embed-failed"]
+        XCTAssertTrue(failedMessage.waitForExistence(timeout: 5))
         waitUntil(
-            app.descendants(matching: .any)["herdr-diagnostic-detail"],
+            failedMessage,
             contains: "unreachable",
-            message: "the typed cause is shown"
+            message: "the typed transport-lost diagnostic must surface"
         )
-        XCTAssertFalse(
-            app.descendants(matching: .any)["herdr-probe-diagnostic"].exists,
-            "no probe ran — the probe screen must not render"
-        )
-        attachScreenshot("herdr-unreachable-diagnostic")
+        attachScreenshot("herdr-embed-unreachable")
     }
 
-    func testHostWithoutHerdrSurfacesProbeDiagnosticScreen() {
+    func testProbeMissingSurfacesIncompatibleGeneration() {
         launch(extra: ["--uitest-herdr-live", "--uitest-herdr-probe-missing"], port: nil)
 
         connectSeededHerdrAlpha()
-        let screen = app.descendants(matching: .any)["herdr-probe-diagnostic"]
-        XCTAssertTrue(
-            screen.waitForExistence(timeout: 30),
-            "a probe-incompatible endpoint must open the probe diagnostic screen"
+        let status = app.descendants(matching: .any)["herdr-embed-status"]
+        let failed = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "label == %@", "failed"),
+            object: status
         )
         XCTAssertEqual(
-            app.descendants(matching: .any)["herdr-probe-title"].label,
-            "No Herdr found on the host"
+            XCTWaiter.wait(for: [failed], timeout: 30),
+            .completed,
+            "a probe-incompatible endpoint must land the embed run in failed state (status: \(status.label))"
         )
-        XCTAssertTrue(app.descendants(matching: .any)["herdr-probe-host"].label.contains("127.0.0.1"))
+        let failedMessage = app.descendants(matching: .any)["herdr-embed-failed"]
+        XCTAssertTrue(failedMessage.waitForExistence(timeout: 5))
         XCTAssertFalse(
-            app.descendants(matching: .any)["herdr-reattach"].exists,
-            "no bridge channel exists to re-attach to"
+            failedMessage.label.isEmpty,
+            "the embed failure screen must carry a non-empty diagnostic"
         )
-        XCTAssertFalse(
-            app.descendants(matching: .any)["herdr-diagnostic"].exists,
-            "the probe screen is not the generic diagnostic"
-        )
-        attachScreenshot("herdr-probe-missing-diagnostic")
+        attachScreenshot("herdr-embed-probe-missing")
     }
 
     /// Requires the fixture knob `HERDR_SERVERS="12222"` (12223's herdr
-    /// server stopped, sshd still up). herdr 0.9.0 self-heals a missing
-    /// server through its own daemon spawner (observed: the fixture binary
-    /// respawns bound to the same HERDR_SOCKET_PATH), so the honest
-    /// assertion is a TYPED terminal state — Online after the self-heal, or
-    /// a typed diagnostic (the handshake watchdog when the heal loses the
-    /// race) — never a silent hang. Self-validates the fixture state (the
-    /// runner reads the repo FS like the app reads fixture dirs) so the
-    /// suite stays green with both fixture servers running.
-    func testMissingHerdrServerTerminatesInTypedState() throws {
+    /// server stopped, sshd still up). The honest assertion is a TYPED
+    /// terminal state — running after the client bridges through (the
+    /// fixture binary self-heals a missing server in practice, see
+    /// herdr-embed-t6), or a typed diagnostic — never a silent hang.
+    func testMissingHerdrServerReachesTypedEmbedState() throws {
         let repoRoot = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -191,25 +158,22 @@ final class HerdrConnectUITests: XCTestCase {
         launch(extra: ["--uitest-herdr-live"], port: 12223)
 
         connectSeededHerdrAlpha()
-        let badge = app.descendants(matching: .any)["herdr-status-badge"]
-        let diagnostic = app.descendants(matching: .any)["herdr-diagnostic"]
+        let status = app.descendants(matching: .any)["herdr-embed-status"]
 
         var reachedTypedState = false
         let deadline = Date().addingTimeInterval(75)
         while Date() < deadline && !reachedTypedState {
-            if badge.exists, badge.label == "Online" { reachedTypedState = true }
-            if diagnostic.exists { reachedTypedState = true }
+            if status.exists,
+               status.label == "embedded client running" || status.label == "failed" {
+                reachedTypedState = true
+            }
             if !reachedTypedState { Thread.sleep(forTimeInterval: 0.5) }
         }
         XCTAssertTrue(
             reachedTypedState,
-            "a missing herdr server must terminate in a typed state (Online after self-heal or a diagnostic), never hang"
+            "a missing herdr server must terminate in a typed state, never hang (status: \(status.label))"
         )
-        XCTAssertFalse(
-            app.descendants(matching: .any)["herdr-probe-diagnostic"].exists,
-            "the probe succeeded — the probe screen must not render"
-        )
-        attachScreenshot("herdr-missing-server-typed-state")
+        attachScreenshot("herdr-embed-missing-server")
     }
 
     // MARK: Helpers
@@ -238,16 +202,16 @@ final class HerdrConnectUITests: XCTestCase {
         connect.tap()
     }
 
-    private func waitForOnline(timeout: TimeInterval) {
-        let badge = app.descendants(matching: .any)["herdr-status-badge"]
-        let online = XCTNSPredicateExpectation(
-            predicate: NSPredicate(format: "label == %@", "Online"),
-            object: badge
-        )
-        XCTAssertEqual(
-            XCTWaiter.wait(for: [online], timeout: timeout), .completed,
-            "the endpoint must reach Online (badge: \(badge.label))"
-        )
+    private func ioWriteCount(_ app: XCUIApplication) -> Int {
+        let label = app.descendants(matching: .any)["herdr-embed-io"].label
+        guard let range = label.range(of: "↑") else { return 0 }
+        let tail = label[range.upperBound...]
+        let digits = tail.prefix { $0.isNumber }
+        return Int(digits) ?? 0
+    }
+
+    private func ioMarker(after count: Int) -> String {
+        "↑\(count + 1)"
     }
 
     @discardableResult
