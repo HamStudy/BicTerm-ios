@@ -21,16 +21,29 @@ public protocol AgentKeyProvider: Sendable {
 public struct DefaultAgentKeyProvider: AgentKeyProvider {
     private let keychainRepository: KeychainKeyRepository
     private let secureEnclaveService: SecureEnclaveKeyService
+    private let metadataLoader: @Sendable () throws -> [KeyMetadata]
 
     public init() {
+        self.init(metadataLoader: {
+            let ed25519Keys = try KeychainMetadataStore.list(service: KeychainKeyRepository().keychainService)
+            let enclaveKeys = try KeychainMetadataStore.list(service: SecureEnclaveKeyService().keychainService)
+            return ed25519Keys + enclaveKeys
+        })
+    }
+
+    init(metadataLoader: @escaping @Sendable () throws -> [KeyMetadata]) {
         self.keychainRepository = KeychainKeyRepository()
         self.secureEnclaveService = SecureEnclaveKeyService()
+        self.metadataLoader = metadataLoader
     }
 
     public func publicKeys() async throws -> [KeyMetadata] {
-        let ed25519Keys = try KeychainMetadataStore.list(service: keychainRepository.keychainService)
-        let enclaveKeys = try KeychainMetadataStore.list(service: secureEnclaveService.keychainService)
-        return ed25519Keys + enclaveKeys
+        let keys = canonicalKeyMetadata(try metadataLoader())
+        let references = Set(KeyOfferResolver().resolve(
+            KeyOfferRequest(offersKeys: true, customKeys: nil, hardwareKeysEnabledByDefault: true),
+            keys: keys
+        ))
+        return keys.filter { references.contains($0.reference) }
     }
 
     public func sign(data: Data, publicKeyBlob: Data) async throws -> KeySignature {

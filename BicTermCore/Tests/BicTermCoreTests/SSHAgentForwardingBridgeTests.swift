@@ -115,6 +115,54 @@ final class SSHAgentForwardingBridgeTests: XCTestCase {
         XCTAssertEqual(prompt.callCount, 1)
     }
 
+    func testGloballyDisabledKeyIsExcludedFromAgentIdentitiesAndSigning() async throws {
+        let software = KeyMetadata(
+            reference: "software", label: "Zulu", algorithm: .ed25519,
+            fingerprint: "synthetic-software", publicKeyBlob: Data("software".utf8),
+            requiresBiometry: false
+        )
+        let hardware = KeyMetadata(
+            reference: "hardware", label: "Alpha", algorithm: .ecdsaP256,
+            fingerprint: "synthetic-hardware", publicKeyBlob: Data("hardware".utf8),
+            requiresBiometry: true
+        )
+        let disabled = KeyMetadata(
+            reference: "disabled", label: "Disabled", algorithm: .ed25519,
+            fingerprint: "synthetic-disabled", publicKeyBlob: Data("disabled".utf8),
+            requiresBiometry: false, enabledByDefault: false
+        )
+        let provider = DefaultAgentKeyProvider(metadataLoader: { [software, disabled, hardware, software] })
+        let keys = try await provider.publicKeys()
+        XCTAssertEqual(keys, [hardware, software])
+        let prompt = BridgeTestPrompt(decision: .allowOnce)
+        let bridge = AgentForwardingBridge(
+            keyProvider: provider,
+            authorizer: AgentAuthorizationService(prompt: prompt, lockState: InteractiveLock(isInteractive: true)),
+            sessionID: "enabled-pool", host: "127.0.0.1"
+        )
+        let identities = await bridge.respond(to: .requestIdentities)
+        let (opcode, payload) = try decodeSingleFrame(identities)
+        XCTAssertEqual(opcode, SSHAgentCodec.opcodeIdentitiesAnswer)
+        var reader = SSHWireReader(payload.subdata(in: payload.startIndex + 1..<payload.endIndex))
+        XCTAssertEqual(try reader.readUInt32(), 2)
+        for metadata in [hardware, software] {
+            XCTAssertEqual(try reader.readString(), metadata.publicKeyBlob)
+            XCTAssertEqual(try reader.readString(), Data(metadata.label.utf8))
+        }
+        XCTAssertTrue(reader.isAtEnd)
+        let response = await bridge.respond(
+            to: .signRequest(keyBlob: disabled.publicKeyBlob, data: Data("x".utf8), flags: 0)
+        )
+        XCTAssertEqual(try decodeSingleFrame(response).opcode, SSHAgentCodec.opcodeFailure)
+        XCTAssertEqual(prompt.callCount, 0)
+        do {
+            _ = try await provider.sign(data: Data("x".utf8), publicKeyBlob: disabled.publicKeyBlob)
+            XCTFail("Disabled identities must not reach the signing stores")
+        } catch {
+            XCTAssertEqual(error as? KeyRepositoryError, .keyNotFound)
+        }
+    }
+
     func testDeniedSignRequestReturnsFailureAndNeverSigns() async throws {
         let (bridge, provider, _) = makeBridge(decision: .deny)
         let response = await bridge.respond(
