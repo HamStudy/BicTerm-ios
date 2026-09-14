@@ -252,7 +252,11 @@ struct HerdrEmbedWorkspaceView: View {
     #if DEBUG
     private var ioFootnote: String? {
         guard phase == .running, ownsLiveRun else { return nil }
-        return "embed io ↑\(runtime.bytesWritten) ↓\(runtime.bytesRead)"
+        var line = "embed io ↑\(runtime.bytesWritten) ↓\(runtime.bytesRead)"
+        if runtime.bytesDropped > 0 {
+            line += " dropped=\(runtime.bytesDropped)"
+        }
+        return line
     }
     #else
     private var ioFootnote: String? { nil }

@@ -32,9 +32,12 @@ protocol HerdrEmbedSession: AnyObject, Sendable {
 
     /// Boots the client; throws `HerdrEmbedError` on failure.
     func start(config: HerdrEmbedSessionConfig) throws
-    /// Queues input bytes toward the pty master (drops after stop).
+    /// Queues input bytes toward the pty master (drops after stop). Safe
+    /// from any thread — the runtime's read-thread output pipeline writes
+    /// capability-query answers without a main-actor hop.
     func writeInput(_ data: Data)
-    /// Applies TIOCSWINSZ + SIGWINCH (embed crate contract).
+    /// Applies TIOCSWINSZ + SIGWINCH (embed crate contract). Safe from any
+    /// thread (same serialization as ``writeInput(_:)``).
     func setWinsize(cols: Int, rows: Int)
     var isRunning: Bool { get }
     /// Graceful stop: detach input/SIGTERM, join, restore stdio. Blocks up

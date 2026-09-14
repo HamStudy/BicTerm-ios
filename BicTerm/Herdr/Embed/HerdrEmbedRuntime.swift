@@ -1,7 +1,6 @@
 import BicTermCore
 import Foundation
 import Observation
-import os
 
 /// App-level lifecycle for the embedded herdr TUI client (plan herdr-embed
 /// T4). v1 contract: **one embedded TUI per process** — the embed shim's
@@ -30,9 +29,12 @@ final class HerdrEmbedRuntime {
     }
 
     private(set) var phase: Phase = .idle
-    private(set) var bytesRead: Int = 0
     private(set) var bytesWritten: Int = 0
     private(set) var socketPath: String?
+    /// True while a drop-triggered resync is pending or in flight (the
+    /// T12 sync-honesty signal for the embed surface: the VT stream was
+    /// cut, a full redraw was requested).
+    private(set) var syncSuspect = false
     /// Typed explanation for a failed transport bring-up (T5): kind +
     /// detail mirror the native workspace's diagnostic taxonomy.
     private(set) var failureDiagnostic: HerdrDiagnostic?
@@ -43,8 +45,10 @@ final class HerdrEmbedRuntime {
     /// TUI per process); superseded surfaces render a closed state.
     private(set) var currentOwner: UUID?
 
-    /// Output chunks toward the hosting view; one stream per run.
-    private var outputContinuation: AsyncStream<Data>.Continuation?
+    /// Output chunks toward the hosting view; one stream per run, BOUNDED
+    /// (``OutputPipeline/bufferChunkLimit`` newest chunks) so a slow view
+    /// consumer can never accumulate unbounded memory — drops are counted
+    /// loudly and trigger an automatic resync instead of garbling silently.
     private var outputStream: AsyncStream<Data>?
 
     private var session: HerdrEmbedSession?
@@ -56,11 +60,10 @@ final class HerdrEmbedRuntime {
     private var activeTransport: HerdrEmbedTransportCoordinator?
     private var stagedTransport: HerdrEmbedTransportCoordinator?
 
-    /// Streaming scanner state for the color-scheme query (read thread).
-    private var queryTail = Data()
-    /// Current appearance for the answer; updated from the hosting view's
-    /// traits. Default dark (the app's design tokens are dark-first).
-    private let appearanceDark = OSAllocatedUnfairLock(initialState: true)
+    /// Read-thread side of the output path (lock-confined, no MainActor
+    /// hops): byte counters, the color-scheme query scanner, the bounded
+    /// continuation, and the drop-triggered resync poker.
+    private let outputPipeline = OutputPipeline()
 
     init(sessionFactory: @escaping @Sendable () -> HerdrEmbedSession = { HerdrEmbedClient() }) {
         self.sessionFactory = sessionFactory
@@ -145,10 +148,8 @@ final class HerdrEmbedRuntime {
             cols: defaultCols,
             rows: defaultRows
         )
-        session.onOutput = { [weak self] chunk in
-            Task { @MainActor [weak self] in
-                self?.handleOutput(chunk)
-            }
+        session.onOutput = { [outputPipeline] chunk in
+            outputPipeline.ingest(chunk)
         }
         session.onExit = { [weak self] detail in
             Task { @MainActor [weak self] in
@@ -156,11 +157,22 @@ final class HerdrEmbedRuntime {
             }
         }
 
-        let stream = AsyncStream<Data> { continuation in
-            self.outputContinuation = continuation
+        let stream = AsyncStream(
+            Data.self,
+            bufferingPolicy: .bufferingNewest(OutputPipeline.bufferChunkLimit)
+        ) { continuation in
+            self.outputPipeline.attach(continuation)
         }
         outputStream = stream
         self.session = session
+        outputPipeline.bind(
+            sendInput: { [weak session] data in session?.writeInput(data) },
+            onSuspectChanged: { [weak self] suspect in
+                Task { @MainActor [weak self] in
+                    self?.syncSuspect = suspect
+                }
+            }
+        )
 
         do {
             try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
@@ -291,54 +303,47 @@ final class HerdrEmbedRuntime {
 
     func setWinsize(cols: Int, rows: Int) {
         guard let session else { return }
+        outputPipeline.noteWinsize(cols: cols, rows: rows)
         session.setWinsize(cols: cols, rows: rows)
     }
+
+    /// Bytes the client produced this run (any thread; monotonic).
+    nonisolated var bytesRead: Int { outputPipeline.totalBytesRead }
+
+    /// View-buffer chunks dropped ahead of a slow consumer (any thread;
+    /// monotonic). Zero for a lossless run; every increment is announced
+    /// by a resync poke, never silently absorbed.
+    nonisolated var bytesDropped: Int { outputPipeline.bytesDropped }
 
     /// The hosting view's current stream (nil outside a run).
     var output: AsyncStream<Data>? { outputStream }
 
-    /// Appearance for the `CSI ? 996 n` answer, from the hosting view's
-    /// traits (main thread).
-    func setHostAppearance(dark: Bool) {
-        appearanceDark.withLock { $0 = dark }
+    /// Consumed by the hosting view's feed loop at the top of the next
+    /// iteration after a drop episode: the surface performs the local VT
+    /// reset, then ``resyncPokeRedraw()`` orders the client's full redraw.
+    /// Together this is the T12 resync pair (reset + remote redraw poke)
+    /// for the embed surface.
+    func takeResyncIfPending() -> Bool {
+        outputPipeline.takeResync()
     }
 
-    // MARK: - Output path
+    func resyncPokeRedraw() {
+        guard let session, let size = outputPipeline.pendingWinsize else { return }
+        session.setWinsize(cols: size.cols, rows: size.rows)
+        outputPipeline.announceHandled()
+    }
 
-    private func handleOutput(_ chunk: Data) {
-        guard session != nil else { return }
-        bytesRead &+= chunk.count
-
-        // The color-scheme query is the one herdr probe SwiftTerm cannot
-        // answer; the response must not depend on the view being attached.
-        if let response = colorSchemeResponse(in: chunk) {
-            writeInput(response)
-        }
-        outputContinuation?.yield(chunk)
+    /// Appearance for the `CSI ? 996 n` answer, from the hosting view's
+    /// traits (main thread). Default dark (the app's design tokens are
+    /// dark-first).
+    func setHostAppearance(dark: Bool) {
+        outputPipeline.setAppearance(dark: dark)
     }
 
     private func finishStream() {
-        outputContinuation?.finish()
-        outputContinuation = nil
+        outputPipeline.finish()
         outputStream = nil
-    }
-
-    /// Streaming search for `\x1b[?996n` (9 bytes) across chunk boundaries;
-    /// answers with the ghostty-documented report `CSI ? 997 ; Ps n`
-    /// (herdr's `HostAppearance::color_scheme_report`).
-    private func colorSchemeResponse(in chunk: Data) -> Data? {
-        let query: [UInt8] = [0x1b, 0x5b, 0x3f, 0x39, 0x39, 0x36, 0x6e] // ESC [ ? 9 9 6 n
-        queryTail.append(chunk)
-        if queryTail.count > query.count + 8 {
-            queryTail.removeFirst(queryTail.count - (query.count + 8))
-        }
-        guard queryTail.range(of: Data(query)) != nil else { return nil }
-        queryTail.removeAll()
-        let dark = appearanceDark.withLock { $0 }
-        // Dark: CSI ? 997 ; 1 n — Light: CSI ? 997 ; 2 n
-        return dark
-            ? Data([0x1b, 0x5b, 0x3f, 0x39, 0x39, 0x37, 0x3b, 0x31, 0x6e])
-            : Data([0x1b, 0x5b, 0x3f, 0x39, 0x39, 0x37, 0x3b, 0x32, 0x6e])
+        syncSuspect = false
     }
 
     // MARK: - Client environment
@@ -380,5 +385,148 @@ final class HerdrEmbedRuntime {
             return value
         }
         return nil
+    }
+}
+
+/// Read-thread output path for one embed run (plan herdr-embed T8):
+/// everything here is lock-confined and callable from the client's reader
+/// thread with NO MainActor hop, so a flood cannot enqueue unbounded
+/// main-actor work. The view stream is bounded (`.bufferingNewest`) after
+/// the T12 view-buffer shape; a drop is never silent — it is counted and
+/// arms a resync that the hosting view's feed loop performs when it
+/// resumes: local VT reset (`resetToInitialState`) then a winsize re-apply
+/// that SIGWINCHes the client into a full TUI redraw.
+private final class OutputPipeline: @unchecked Sendable {
+    /// Newest chunks retained while the view consumer lags — matches the
+    /// T12 view buffer depth (`SessionSceneModel`'s 256-chunk stream).
+    static let bufferChunkLimit = 256
+
+    private let lock = NSLock()
+    private var continuation: AsyncStream<Data>.Continuation?
+    private var totalRead = 0
+    private var dropped = 0
+    private var queryTail = Data()
+    private var appearanceDark = true
+    private var lastWinsize: (cols: Int, rows: Int)?
+    private var resyncPending = false
+
+    private var sendInput: (@Sendable (Data) -> Void)?
+    private var suspectChanged: (@Sendable (Bool) -> Void)?
+
+    func attach(_ continuation: AsyncStream<Data>.Continuation) {
+        lock.lock()
+        defer { lock.unlock() }
+        self.continuation = continuation
+    }
+
+    func bind(
+        sendInput: @escaping @Sendable (Data) -> Void,
+        onSuspectChanged: @escaping @Sendable (Bool) -> Void
+    ) {
+        lock.lock()
+        defer { lock.unlock() }
+        self.sendInput = sendInput
+        self.suspectChanged = onSuspectChanged
+    }
+
+    func setAppearance(dark: Bool) {
+        lock.lock()
+        defer { lock.unlock() }
+        appearanceDark = dark
+    }
+
+    func noteWinsize(cols: Int, rows: Int) {
+        lock.lock()
+        defer { lock.unlock() }
+        lastWinsize = (cols, rows)
+    }
+
+    var totalBytesRead: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return totalRead
+    }
+
+    var bytesDropped: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return dropped
+    }
+
+    var pendingWinsize: (cols: Int, rows: Int)? {
+        lock.lock()
+        defer { lock.unlock() }
+        return lastWinsize
+    }
+
+    func ingest(_ chunk: Data) {
+        var response: Data?
+        var announceDrop = false
+        lock.lock()
+        totalRead += chunk.count
+        response = colorSchemeResponseLocked(in: chunk)
+        if let continuation {
+            if case let .dropped(evicted) = continuation.yield(chunk) {
+                dropped += evicted.count
+                if !resyncPending {
+                    resyncPending = true
+                    announceDrop = true
+                }
+            }
+        }
+        let input = sendInput
+        let announce = suspectChanged
+        lock.unlock()
+
+        if let response {
+            input?(response)
+        }
+        if announceDrop {
+            announce?(true)
+        }
+    }
+
+    /// One-shot consume for the hosting view's feed loop: true exactly
+    /// once per drop episode.
+    func takeResync() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        let pending = resyncPending
+        resyncPending = false
+        return pending
+    }
+
+    func announceHandled() {
+        lock.lock()
+        let announce = suspectChanged
+        lock.unlock()
+        announce?(false)
+    }
+
+    func finish() {
+        lock.lock()
+        resyncPending = false
+        continuation?.finish()
+        continuation = nil
+        sendInput = nil
+        suspectChanged = nil
+        lock.unlock()
+    }
+
+    /// Streaming search for `\x1b[?996n` across chunk boundaries; answers
+    /// with the ghostty-documented report `CSI ? 997 ; Ps n` (herdr's
+    /// `HostAppearance::color_scheme_report`). Callers hold `lock`.
+    private func colorSchemeResponseLocked(in chunk: Data) -> Data? {
+        let query: [UInt8] = [0x1b, 0x5b, 0x3f, 0x39, 0x39, 0x36, 0x6e] // ESC [ ? 9 9 6 n
+        queryTail.append(chunk)
+        if queryTail.count > query.count + 8 {
+            queryTail.removeFirst(queryTail.count - (query.count + 8))
+        }
+        guard queryTail.range(of: Data(query)) != nil else { return nil }
+        queryTail.removeAll()
+        // Dark: CSI ? 997 ; 1 n — Light: CSI ? 997 ; 2 n
+        return appearanceDark
+            ? Data([0x1b, 0x5b, 0x3f, 0x39, 0x39, 0x37, 0x3b, 0x31, 0x6e])
+            : Data([0x1b, 0x5b, 0x3f, 0x39, 0x39, 0x37, 0x3b, 0x32, 0x6e])
     }
 }

@@ -71,6 +71,14 @@ struct HerdrTUIHostingView: UIViewRepresentable {
                     guard let view else { return }
                     let slice = Array(chunk)[...]
                     await MainActor.run {
+                        // A drop episode was armed while the consumer was
+                        // stalled: reset the local VT state BEFORE feeding
+                        // any post-drop byte, then poke the client's full
+                        // redraw (the T12 resync pair).
+                        if runtime.takeResyncIfPending() {
+                            view.getTerminal().resetToInitialState()
+                            runtime.resyncPokeRedraw()
+                        }
                         view.feed(byteArray: slice)
                     }
                 }

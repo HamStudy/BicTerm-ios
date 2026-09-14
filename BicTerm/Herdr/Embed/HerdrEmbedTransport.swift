@@ -180,6 +180,7 @@ final class HerdrEmbedTransportCoordinator {
     private let preferredSelection: String?
     private let connectorFactory: (@Sendable () async -> HerdrEndpointConnector)?
     private let providedVerifier: HostKeyVerifier?
+    private let authenticationKeyProvider: (@Sendable () async -> any SSHAuthenticationKeyProvider)?
     private let searchPaths: [String]
 
     private var servers: [HerdrEmbedBridgeServer] = []
@@ -196,6 +197,25 @@ final class HerdrEmbedTransportCoordinator {
         self.providedVerifier = hostKeyVerifier
         self.searchPaths = searchPaths
         self.connectorFactory = nil
+        self.authenticationKeyProvider = nil
+    }
+
+    /// Trust-prompt-coverable bring-up with an injected authentication
+    /// key (the fixture path in tests: the app process holds no Keychain
+    /// entry for fixture keys, and TOFU challenges must reach this
+    /// coordinator's prompt queue, not a factory closure's answer).
+    init(
+        connection: Connection,
+        hostKeyVerifier: HostKeyVerifier?,
+        authenticationKeyProvider: @escaping @Sendable () async -> any SSHAuthenticationKeyProvider,
+        searchPaths: [String] = HerdrProbe.defaultSearchPaths
+    ) {
+        self.links = [Self.link(for: connection)]
+        self.preferredSelection = nil
+        self.providedVerifier = hostKeyVerifier
+        self.searchPaths = searchPaths
+        self.authenticationKeyProvider = authenticationKeyProvider
+        self.connectorFactory = nil
     }
 
     init(connection: Connection, connector: @escaping @Sendable () async -> HerdrEndpointConnector) {
@@ -203,12 +223,29 @@ final class HerdrEmbedTransportCoordinator {
         self.preferredSelection = nil
         self.connectorFactory = connector
         self.providedVerifier = nil
+        self.authenticationKeyProvider = nil
         self.searchPaths = HerdrProbe.defaultSearchPaths
     }
 
     /// Herd bring-up (plan herdr-embed T6): one link per machine, each with
     /// its own SSH connection (jump chains included), TOFU pass, bridge
-    /// socket, and catalog entry.
+    /// socket, and catalog entry. The key-provider variant is the fixture
+    /// path in tests (see the single-connection variant above).
+    init(
+        machines: [HerdrEmbedMachineLink],
+        preferredSelection: String? = nil,
+        hostKeyVerifier: HostKeyVerifier?,
+        authenticationKeyProvider: @escaping @Sendable () async -> any SSHAuthenticationKeyProvider,
+        searchPaths: [String] = HerdrProbe.defaultSearchPaths
+    ) {
+        self.links = machines
+        self.preferredSelection = preferredSelection
+        self.providedVerifier = hostKeyVerifier
+        self.authenticationKeyProvider = authenticationKeyProvider
+        self.searchPaths = searchPaths
+        self.connectorFactory = nil
+    }
+
     init(
         machines: [HerdrEmbedMachineLink],
         preferredSelection: String? = nil,
@@ -218,6 +255,7 @@ final class HerdrEmbedTransportCoordinator {
         self.links = machines
         self.preferredSelection = preferredSelection
         self.providedVerifier = hostKeyVerifier
+        self.authenticationKeyProvider = nil
         self.searchPaths = searchPaths
         self.connectorFactory = nil
     }
@@ -231,6 +269,7 @@ final class HerdrEmbedTransportCoordinator {
         self.preferredSelection = preferredSelection
         self.connectorFactory = connector
         self.providedVerifier = nil
+        self.authenticationKeyProvider = nil
         self.searchPaths = HerdrProbe.defaultSearchPaths
     }
 
@@ -256,6 +295,10 @@ final class HerdrEmbedTransportCoordinator {
                 store: await SessionStore.defaultHostKeyStoreForLiveUse()
             )
         }
+        var keyProvider: any SSHAuthenticationKeyProvider = DefaultSSHAuthenticationKeyProvider()
+        if let authenticationKeyProvider {
+            keyProvider = await authenticationKeyProvider()
+        }
         var resolvedPaths = searchPaths
         #if DEBUG
         if HerdrWorkspaceUITest.untrustedStoreRequested {
@@ -267,6 +310,7 @@ final class HerdrEmbedTransportCoordinator {
         #endif
         return HerdrEndpointConnector(
             hostKeyVerifier: verifier,
+            authenticationKeyProvider: keyProvider,
             searchPaths: resolvedPaths,
             approveHostKey: { [weak self] challenge in
                 await self?.approve(challenge) ?? false
