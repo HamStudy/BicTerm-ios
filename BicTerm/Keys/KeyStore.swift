@@ -118,7 +118,7 @@ final class KeyStore {
     func connectionsReferencing(_ item: KeyListItem) async -> [Connection] {
         guard let store = try? PersistenceStoreFactory.makeConfigurationStore() else { return [] }
         guard let connections = try? await store.loadConnections() else { return [] }
-        return connections.filter { $0.keyReference == item.metadata.reference }
+        return connections.filter { $0.customKeys?.contains(item.metadata.reference) == true }
     }
 }
 

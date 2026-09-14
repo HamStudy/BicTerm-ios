@@ -35,6 +35,10 @@ public final class KeychainKeyRepository: @unchecked Sendable {
         try KeychainMetadataStore.list(service: keychainService)
     }
 
+    public func setEnabled(_ enabled: Bool, reference: String) throws {
+        try KeychainMetadataStore.setEnabled(service: keychainService, reference: reference, enabled: enabled)
+    }
+
     public func delete(reference: String) async throws {
         let status = SecItemDelete(KeychainMetadataStore.baseQuery(
             service: keychainService,
@@ -84,7 +88,8 @@ public final class KeychainKeyRepository: @unchecked Sendable {
             algorithm: .ed25519,
             fingerprint: OpenSSHFingerprint.sha256(publicKeyBlob: publicBlob),
             publicKeyBlob: publicBlob,
-            requiresBiometry: requiresBiometry
+            requiresBiometry: requiresBiometry,
+            enabledByDefault: true
         )
         try KeychainMetadataStore.add(
             service: keychainService,
@@ -167,6 +172,25 @@ enum KeychainMetadataStore {
             throw status == errSecSuccess ? KeyRepositoryError.invalidStoredKey : error(status)
         }
         return metadata
+    }
+
+    static func setEnabled(service: String, reference: String, enabled: Bool) throws {
+        let current = try metadata(service: service, reference: reference)
+        let updated = KeyMetadata(
+            reference: current.reference,
+            label: current.label,
+            algorithm: current.algorithm,
+            fingerprint: current.fingerprint,
+            publicKeyBlob: current.publicKeyBlob,
+            requiresBiometry: current.requiresBiometry,
+            enabledByDefault: enabled
+        )
+        let attributes = [kSecAttrGeneric as String: try JSONEncoder().encode(updated)]
+        let status = SecItemUpdate(
+            baseQuery(service: service, reference: reference) as CFDictionary,
+            attributes as CFDictionary
+        )
+        guard status == errSecSuccess else { throw error(status) }
     }
 
     static func list(service: String) throws -> [KeyMetadata] {

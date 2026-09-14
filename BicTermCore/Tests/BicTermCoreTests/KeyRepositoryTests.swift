@@ -50,6 +50,7 @@ final class KeyRepositoryTests: XCTestCase {
         let listed = try await repository.list()
         XCTAssertEqual(listed, [metadata])
         XCTAssertEqual(metadata.algorithm, .ed25519)
+        XCTAssertTrue(metadata.enabledByDefault)
 
         let message = Data("bicterm-signature-test".utf8)
         let signature = try await repository.sign(data: message, with: metadata.reference)
@@ -103,6 +104,7 @@ final class KeyRepositoryTests: XCTestCase {
         )
         let listedKeys = try await repository.list()
         XCTAssertEqual(listedKeys, [metadata])
+        XCTAssertTrue(metadata.enabledByDefault)
     }
 
     func testCreatesOpaqueNIOSSHAuthenticationKey() async throws {
@@ -140,6 +142,87 @@ final class KeyRepositoryTests: XCTestCase {
             encodedMetadata.range(of: privateData.base64EncodedData()),
             "Encoded metadata contained Base64 private bytes"
         )
+    }
+
+    func testLegacyMetadataDecodesEnabledByDefault() throws {
+        let legacy = Data("""
+        {"reference":"legacy","label":"Legacy key","algorithm":"ssh-ed25519",
+         "fingerprint":"SHA256:legacy","publicKeyBlob":"AQID","requiresBiometry":true}
+        """.utf8)
+        let decoded = try JSONDecoder().decode(KeyMetadata.self, from: legacy)
+        XCTAssertTrue(decoded.enabledByDefault)
+        XCTAssertTrue(decoded.requiresBiometry)
+        XCTAssertEqual(try JSONDecoder().decode(KeyMetadata.self, from: JSONEncoder().encode(decoded)), decoded)
+    }
+
+    func testSetEnabledRoundTrip() async throws {
+        let repository = makeRepository()
+        let original = try await repository.generateEd25519(label: "Toggle", requiresBiometry: false)
+        let untouched = try await repository.generateEd25519(label: "Untouched", requiresBiometry: false)
+        let secret = try readPrivateData(service: repository.keychainService, reference: original.reference)
+        for enabled in [false, false, true] {
+            try repository.setEnabled(enabled, reference: original.reference)
+            let listed = try await repository.list()
+            let updated = try XCTUnwrap(listed.first { $0.reference == original.reference })
+            XCTAssertEqual(updated, KeyMetadata(
+                reference: original.reference, label: original.label, algorithm: original.algorithm,
+                fingerprint: original.fingerprint, publicKeyBlob: original.publicKeyBlob,
+                requiresBiometry: original.requiresBiometry, enabledByDefault: enabled
+            ))
+            XCTAssertEqual(listed.first { $0.reference == untouched.reference }, untouched)
+            XCTAssertEqual(try KeychainMetadataStore.metadata(
+                service: repository.keychainService, reference: original.reference
+            ), updated)
+            XCTAssertEqual(try readPrivateData(
+                service: repository.keychainService, reference: original.reference
+            ), secret)
+        }
+    }
+
+    func testSetEnabledMissingReferenceThrows() throws {
+        let repository = makeRepository()
+        XCTAssertThrowsError(try repository.setEnabled(false, reference: "missing")) {
+            XCTAssertEqual($0 as? KeyRepositoryError, .keyNotFound)
+        }
+    }
+
+    func testSignatureStillWorksAfterDisable() async throws {
+        let repository = makeRepository()
+        let metadata = try await repository.generateEd25519(label: "Still signs", requiresBiometry: false)
+        try repository.setEnabled(false, reference: metadata.reference)
+        let message = Data("disabled-key-signature".utf8)
+        let signature = try await repository.sign(data: message, with: metadata.reference)
+        let publicKey = try Curve25519.Signing.PublicKey(
+            rawRepresentation: SSHWireFormat.ed25519RawPublicKey(from: metadata.publicKeyBlob)
+        )
+        XCTAssertTrue(publicKey.isValidSignature(signature.rawRepresentation, for: message))
+    }
+
+    func testSecureEnclaveWrapperSetEnabledRoundTrip() async throws {
+        let repository = makeRepository()
+        let service = SecureEnclaveKeyService(keychainService: repository.keychainService)
+        // The wrapper only updates metadata, so no Secure Enclave hardware is needed.
+        let metadata = KeyMetadata(
+            reference: UUID().uuidString, label: "SE metadata", algorithm: .ecdsaP256,
+            fingerprint: "SHA256:fixture", publicKeyBlob: Data([1, 2, 3]), requiresBiometry: true
+        )
+        let opaque = Data("opaque-test-representation".utf8)
+        try KeychainMetadataStore.add(
+            service: service.keychainService, metadata: metadata, secret: opaque, requiresBiometry: false
+        )
+        for enabled in [false, true] {
+            try service.setEnabled(enabled, reference: metadata.reference)
+            let updated = try KeychainMetadataStore.metadata(
+                service: service.keychainService, reference: metadata.reference
+            )
+            XCTAssertEqual(updated.enabledByDefault, enabled)
+            XCTAssertTrue(updated.requiresBiometry)
+            let representation = try await service.opaqueRepresentationForTesting(metadata.reference)
+            XCTAssertEqual(representation, opaque)
+        }
+        XCTAssertThrowsError(try service.setEnabled(false, reference: "missing")) {
+            XCTAssertEqual($0 as? KeyRepositoryError, .keyNotFound)
+        }
     }
 
     private func makeRepository() -> KeychainKeyRepository {

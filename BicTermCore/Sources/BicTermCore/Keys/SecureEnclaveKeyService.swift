@@ -41,7 +41,8 @@ public final class SecureEnclaveKeyService: @unchecked Sendable {
             algorithm: .ecdsaP256,
             fingerprint: OpenSSHFingerprint.sha256(publicKeyBlob: publicBlob),
             publicKeyBlob: publicBlob,
-            requiresBiometry: requiresBiometry
+            requiresBiometry: requiresBiometry,
+            enabledByDefault: true
         )
         try KeychainMetadataStore.add(
             service: keychainService,
@@ -50,6 +51,10 @@ public final class SecureEnclaveKeyService: @unchecked Sendable {
             requiresBiometry: false
         )
         return metadata
+    }
+
+    public func setEnabled(_ enabled: Bool, reference: String) throws {
+        try KeychainMetadataStore.setEnabled(service: keychainService, reference: reference, enabled: enabled)
     }
 
     public func sign(data: Data, with reference: String, reason: String) async throws -> KeySignature {

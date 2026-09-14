@@ -64,7 +64,7 @@ enum UITestSupport {
                     host: "127.0.0.1",
                     port: 12222,
                     username: "fixture",
-                    keyReference: reference
+            customKeys: [reference]
                   ) else { return }
             try? await store.save(connection)
         }
