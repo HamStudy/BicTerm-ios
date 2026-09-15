@@ -26,12 +26,13 @@ public extension Connection {
 /// only immutable values cross into the task that waits for Keychain/UI work.
 final class CascadeUserAuthenticationDelegate: NIOSSHClientUserAuthenticationDelegate, ChannelInboundHandler, @unchecked Sendable {
     typealias InboundIn = ByteBuffer
-    private let key: NIOSSHPrivateKey?
+    private let keyReferences: [String]
+    private let keyProvider: any SSHAuthenticationKeyProvider
     private let request: SSHPasswordRequest
     private let passwordTag: String?
     private let passwordStore: any PasswordStoring
     private let prompt: (any SSHPasswordPrompting)?
-    private var offeredKey = false
+    private var keyIndex = 0
     private var offeredPassword = false
     private var resolutionTask: Task<Void, Never>?
 
@@ -44,10 +45,13 @@ final class CascadeUserAuthenticationDelegate: NIOSSHClientUserAuthenticationDel
         resolutionTask?.cancel()
     }
 
-    init(host: String, port: Int, username: String, key: NIOSSHPrivateKey?,
-         passwordTag: String?, canRemember: Bool,
+    init(host: String, port: Int, username: String, keyReferences: [String],
+         keyProvider: any SSHAuthenticationKeyProvider,
+         effectivePasswordTag: String?, promptedPasswordTag: String?, canRemember: Bool,
          passwordStore: any PasswordStoring, prompt: (any SSHPasswordPrompting)?) {
-        self.key = key
+        self.keyReferences = keyReferences
+        self.keyProvider = keyProvider
+        let passwordTag = effectivePasswordTag ?? promptedPasswordTag
         self.passwordTag = passwordTag
         self.passwordStore = passwordStore
         self.prompt = prompt
@@ -56,14 +60,41 @@ final class CascadeUserAuthenticationDelegate: NIOSSHClientUserAuthenticationDel
                                           saveTag: canRemember ? passwordTag : nil)
     }
 
+    @available(*, deprecated, message: "Pass key references and a key provider instead")
+    convenience init(host: String, port: Int, username: String, key: NIOSSHPrivateKey?,
+                     passwordTag: String?, canRemember: Bool,
+                     passwordStore: any PasswordStoring, prompt: (any SSHPasswordPrompting)?) {
+        self.init(host: host, port: port, username: username,
+                  keyReferences: key == nil ? [] : ["static-key"],
+                  keyProvider: StaticAuthenticationKeyProvider(key: key),
+                  effectivePasswordTag: passwordTag, promptedPasswordTag: nil,
+                  canRemember: canRemember, passwordStore: passwordStore, prompt: prompt)
+    }
+
     func nextAuthenticationType(
         availableMethods: NIOSSHAvailableUserAuthenticationMethods,
         nextChallengePromise: EventLoopPromise<NIOSSHUserAuthenticationOffer?>
     ) {
-        if let key, !offeredKey, availableMethods.contains(.publicKey) {
-            offeredKey = true
-            nextChallengePromise.succeed(.init(username: request.username, serviceName: "ssh-connection",
-                                                offer: .privateKey(.init(privateKey: key))))
+        if !offeredPassword, keyIndex < keyReferences.count, availableMethods.contains(.publicKey) {
+            let reference = keyReferences[keyIndex]
+            keyIndex += 1
+            let keyProvider = keyProvider
+            let request = request
+            resolutionTask = Task {
+                do {
+                    let key = try await keyProvider.authenticationPrivateKey(
+                        with: reference, reason: "Authenticate to \(request.host)"
+                    )
+                    guard !Task.isCancelled else {
+                        nextChallengePromise.fail(SSHTransportError.authenticationFailed)
+                        return
+                    }
+                    nextChallengePromise.succeed(.init(username: request.username, serviceName: "ssh-connection",
+                                                        offer: .privateKey(.init(privateKey: key))))
+                } catch {
+                    nextChallengePromise.fail(SSHTransportError.authenticationFailed)
+                }
+            }
             return
         }
         guard !offeredPassword, availableMethods.contains(.password) else {
@@ -90,5 +121,14 @@ final class CascadeUserAuthenticationDelegate: NIOSSHClientUserAuthenticationDel
                 nextChallengePromise.fail(SSHTransportError.authenticationFailed)
             }
         }
+    }
+}
+
+fileprivate struct StaticAuthenticationKeyProvider: SSHAuthenticationKeyProvider {
+    let key: NIOSSHPrivateKey?
+
+    func authenticationPrivateKey(with reference: String, reason: String) async throws -> NIOSSHPrivateKey {
+        guard let key else { throw SSHTransportError.authenticationFailed }
+        return key
     }
 }

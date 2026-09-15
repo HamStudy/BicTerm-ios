@@ -21,8 +21,9 @@ import NIOSSH
 /// data back, which is all a client-side transport test needs. Release builds
 /// compile this file to nothing (whole-file `#if DEBUG`).
 public final class LoopbackPasswordSSHServer: @unchecked Sendable {
-    public enum KeyAuthentication: Sendable {
+    public enum KeyAuthentication: Sendable, Equatable {
         case disabled, rejected, requiresPassword
+        case acceptedPublicKeys([Data])
     }
     public enum StartError: Error, Equatable {
         case alreadyStarted
@@ -65,7 +66,7 @@ public final class LoopbackPasswordSSHServer: @unchecked Sendable {
         return inboundChannelCount
     }
 
-    /// Number of connections whose password auth succeeded.
+    /// Number of connections whose authentication succeeded.
     public var authenticatedConnectionCount: Int {
         lock.lock()
         defer { lock.unlock() }
@@ -162,8 +163,7 @@ public final class LoopbackPasswordSSHServer: @unchecked Sendable {
     }
 }
 
-/// Server-side auth delegate: accepts only the exact configured pair via the
-/// password method.
+/// Server-side auth delegate: accepts the configured password pair or key blobs.
 private final class AcceptanceCountingPasswordAuthDelegate: NIOSSHServerUserAuthenticationDelegate, @unchecked Sendable {
     var supportedAuthenticationMethods: NIOSSHAvailableUserAuthenticationMethods {
         keyAuthentication == .disabled ? .password : [.publicKey, .password]
@@ -187,10 +187,20 @@ private final class AcceptanceCountingPasswordAuthDelegate: NIOSSHServerUserAuth
         request: NIOSSHUserAuthenticationRequest,
         responsePromise: EventLoopPromise<NIOSSHUserAuthenticationOutcome>
     ) {
-        if case .publicKey = request.request {
+        if case .publicKey(let offer) = request.request {
             if keyAuthentication == .requiresPassword, request.username == username {
                 keyAccepted = true
                 responsePromise.succeed(.partialSuccess(remainingMethods: .password))
+            } else if case .acceptedPublicKeys(let accepted) = keyAuthentication,
+                      request.username == username {
+                let components = String(openSSHPublicKey: offer.publicKey).split(separator: " ", maxSplits: 1)
+                if components.count == 2,
+                   let blob = Data(base64Encoded: String(components[1])), accepted.contains(blob) {
+                    onAuthenticated()
+                    responsePromise.succeed(.success)
+                } else {
+                    responsePromise.succeed(.failure)
+                }
             } else {
                 responsePromise.succeed(.failure)
             }

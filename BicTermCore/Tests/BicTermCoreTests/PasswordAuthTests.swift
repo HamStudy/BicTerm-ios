@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 import NIOCore
 import NIOEmbedded
 import NIOPosix
@@ -56,6 +57,80 @@ actor RecordingPasswordPrompt: SSHPasswordPrompting {
             try? await store?.save(answer, for: tag)
         }
         return answer
+    }
+}
+
+private actor PoolKeyProvider: SSHAuthenticationKeyProvider {
+    let keys: [String: NIOSSHPrivateKey]
+    let biometricFailure: Bool
+    private(set) var references: [String] = []
+    private(set) var reasons: [String] = []
+
+    init(keys: [String: NIOSSHPrivateKey] = [:], biometricFailure: Bool = false) {
+        self.keys = keys
+        self.biometricFailure = biometricFailure
+    }
+
+    func authenticationPrivateKey(with reference: String, reason: String) async throws -> NIOSSHPrivateKey {
+        references.append(reference)
+        reasons.append(reason)
+        if biometricFailure { throw KeyRepositoryError.keychain(errSecAuthFailed) }
+        guard let key = keys[reference] else { throw KeyRepositoryError.keyNotFound }
+        return key
+    }
+}
+
+private enum CascadeTestTimeout: Error { case round, connection }
+
+private final class CascadeAuthenticationObserver: ChannelInboundHandler, @unchecked Sendable {
+    typealias InboundIn = ByteBuffer
+    let completion: EventLoopPromise<Void>
+
+    init(completion: EventLoopPromise<Void>) { self.completion = completion }
+
+    func userInboundEventTriggered(context: ChannelHandlerContext, event: Any) {
+        if event is UserAuthSuccessEvent { completion.succeed(()) }
+        context.fireUserInboundEventTriggered(event)
+    }
+
+    func errorCaught(context: ChannelHandlerContext, error: Error) {
+        completion.fail(error)
+        context.close(promise: nil)
+    }
+
+    func channelInactive(context: ChannelHandlerContext) {
+        completion.fail(SSHTransportError.unreachable)
+        context.fireChannelInactive()
+    }
+}
+
+private final class RecordingCascade: NIOSSHClientUserAuthenticationDelegate, @unchecked Sendable {
+    let delegate: CascadeUserAuthenticationDelegate
+    private let lock = NSLock()
+    private var offers: [String] = []
+    var offeredMethods: [String] { lock.withLock { offers } }
+
+    init(_ delegate: CascadeUserAuthenticationDelegate) { self.delegate = delegate }
+
+    func nextAuthenticationType(
+        availableMethods: NIOSSHAvailableUserAuthenticationMethods,
+        nextChallengePromise: EventLoopPromise<NIOSSHUserAuthenticationOffer?>
+    ) {
+        let loop = nextChallengePromise.futureResult.eventLoop
+        let round = loop.makePromise(of: NIOSSHUserAuthenticationOffer?.self)
+        let timeout = loop.scheduleTask(in: .seconds(10)) { round.fail(CascadeTestTimeout.round) }
+        round.futureResult.whenComplete { result in
+            timeout.cancel()
+            if case .success(let offer) = result {
+                switch offer?.offer {
+                case .privateKey: self.lock.withLock { self.offers.append("key") }
+                case .password: self.lock.withLock { self.offers.append("password") }
+                default: break
+                }
+            }
+            nextChallengePromise.completeWith(result)
+        }
+        delegate.nextAuthenticationType(availableMethods: availableMethods, nextChallengePromise: round)
     }
 }
 
@@ -427,27 +502,137 @@ final class PasswordAuthTests: XCTestCase {
         await server.stop()
     }
 
-    func testMissingStoredPasswordFailsTypedBeforeDialing() async throws {
-        let server = LoopbackPasswordSSHServer(username: "pwduser", password: Self.correctPassword)
+    func testCascadeSecondKeyAcceptedOverLoopback() async throws {
+        let first = NIOSSHPrivateKey(ed25519Key: Curve25519.Signing.PrivateKey())
+        let second = NIOSSHPrivateKey(ed25519Key: Curve25519.Signing.PrivateKey())
+        let components = String(openSSHPublicKey: second.publicKey).split(separator: " ")
+        let blob = try XCTUnwrap(Data(base64Encoded: String(components[1])))
+        let provider = PoolKeyProvider(keys: ["first": first, "second": second])
+        let prompt = RecordingPasswordPrompt(answer: nil)
+        try await exerciseCascade(policy: .acceptedPublicKeys([blob]), references: ["first", "second"],
+                                  provider: provider, prompt: prompt, expectedOffers: ["key", "key"])
+        let references = await provider.references
+        let reasons = await provider.reasons
+        let requests = await prompt.requests
+        XCTAssertEqual(references, ["first", "second"])
+        XCTAssertEqual(reasons, Array(repeating: "Authenticate to 127.0.0.1", count: 2))
+        XCTAssertTrue(requests.isEmpty)
+    }
+
+    func testCascadeAllKeysRejectedThenStoredPasswordAcceptedExactlyOnce() async throws {
+        let provider = PoolKeyProvider(keys: [
+            "first": NIOSSHPrivateKey(ed25519Key: Curve25519.Signing.PrivateKey()),
+            "second": NIOSSHPrivateKey(ed25519Key: Curve25519.Signing.PrivateKey()),
+        ])
+        let prompt = RecordingPasswordPrompt(answer: nil)
+        try await exerciseCascade(policy: .rejected, references: ["first", "second"], provider: provider,
+                                  effectiveTag: "saved", promptedTag: "derived",
+                                  store: InMemoryPasswordStore(["saved": Self.correctPassword, "derived": "wrong"]),
+                                  prompt: prompt, expectedOffers: ["key", "key", "password"])
+        let references = await provider.references
+        let requests = await prompt.requests
+        XCTAssertEqual(references, ["first", "second"])
+        XCTAssertTrue(requests.isEmpty)
+    }
+
+    func testCascadeEmptyKeyListUsesOnlyPassword() async throws {
+        let provider = PoolKeyProvider()
+        try await exerciseCascade(policy: .rejected, references: [], provider: provider,
+                                  promptedTag: "derived", store: InMemoryPasswordStore(["derived": Self.correctPassword]),
+                                  expectedOffers: ["password"])
+        let references = await provider.references
+        XCTAssertTrue(references.isEmpty)
+    }
+
+    func testCascadeExhaustionFailsTypedWithinTimeout() async throws {
+        let provider = PoolKeyProvider(keys: ["key": NIOSSHPrivateKey(ed25519Key: Curve25519.Signing.PrivateKey())])
+        try await exerciseCascade(policy: .rejected, references: ["key"], provider: provider,
+                                  effectiveTag: "wrong", store: InMemoryPasswordStore(["wrong": "not-accepted"]),
+                                  expectedOffers: ["key", "password"], shouldAuthenticate: false)
+    }
+
+    func testCascadeBiometricResolutionFailureIsTypedDuringAuthentication() async throws {
+        let provider = PoolKeyProvider(biometricFailure: true)
+        let prompt = RecordingPasswordPrompt(answer: Self.correctPassword)
+        try await exerciseCascade(policy: .rejected, references: ["biometric", "unused"], provider: provider,
+                                  prompt: prompt, expectedOffers: [], shouldAuthenticate: false)
+        let references = await provider.references
+        let requests = await prompt.requests
+        XCTAssertEqual(references, ["biometric"])
+        XCTAssertTrue(requests.isEmpty)
+    }
+
+    func testCascadeMissingStoredPasswordFallsThroughToPrompt() async throws {
+        let prompt = RecordingPasswordPrompt(answer: Self.correctPassword)
+        try await exerciseCascade(policy: .disabled, references: [], provider: NoKeyProvider(),
+                                  effectiveTag: "missing", promptedTag: "derived",
+                                  store: InMemoryPasswordStore(["derived": "must-not-be-used"]),
+                                  prompt: prompt, expectedOffers: ["password"])
+        let requests = await prompt.requests
+        XCTAssertEqual(requests.count, 1)
+        XCTAssertEqual(requests.first?.saveTag, "missing")
+    }
+
+    func testCascadeHeadlessMissingStoredPasswordFailsTypedDuringAuthentication() async throws {
+        try await exerciseCascade(policy: .disabled, references: [], provider: NoKeyProvider(),
+                                  effectiveTag: "missing", expectedOffers: [], shouldAuthenticate: false)
+    }
+
+    private func exerciseCascade(
+        policy: LoopbackPasswordSSHServer.KeyAuthentication,
+        references: [String], provider: any SSHAuthenticationKeyProvider,
+        effectiveTag: String? = nil, promptedTag: String? = nil,
+        store: any PasswordStoring = InMemoryPasswordStore(), prompt: (any SSHPasswordPrompting)? = nil,
+        expectedOffers: [String], shouldAuthenticate: Bool = true,
+        file: StaticString = #filePath, line: UInt = #line
+    ) async throws {
+        let server = LoopbackPasswordSSHServer(username: "pwduser", password: Self.correctPassword, keyAuthentication: policy)
         let port = try await server.start(port: 0)
-        defer { Task { await server.stop() } }
-
-        let store = InMemoryPasswordStore()
         let verifier = try await pretrustingVerifier(for: server, port: port)
-        let transport = SSHTransport(
-            hostKeyVerifier: verifier,
-            authenticationKeyProvider: NoKeyProvider(),
-            passwordStore: store
-        )
-        let connection = try makePasswordConnection(port: port, username: "pwduser", tag: "pwd-tag")
-
-        await assertThrowsSSHError(.authenticationFailed) {
-            try await transport.connect(to: connection, cols: 80, rows: 24)
+        let cascade = RecordingCascade(CascadeUserAuthenticationDelegate(
+            host: "127.0.0.1", port: port, username: "pwduser", keyReferences: references, keyProvider: provider,
+            effectivePasswordTag: effectiveTag, promptedPasswordTag: promptedTag, canRemember: true,
+            passwordStore: store, prompt: prompt
+        ))
+        let group = MultiThreadedEventLoopGroup(numberOfThreads: 1)
+        let loop = group.next()
+        let completion = loop.makePromise(of: Void.self)
+        let timeout = loop.scheduleTask(in: .seconds(30)) {
+            completion.fail(CascadeTestTimeout.connection)
         }
-        let inbound = server.inboundConnectionCount
-        XCTAssertEqual(inbound, 0, "no TCP connection may reach the server without a stored credential")
-        await transport.close()
+        let bootstrap = ClientBootstrap(group: loop)
+            .connectTimeout(.seconds(10))
+            .channelInitializer { channel in
+                channel.eventLoop.makeCompletedFuture {
+                    try channel.pipeline.syncOperations.addHandler(NIOSSHHandler(
+                        role: .client(SSHClientPipelineFactory.makeConfiguration(
+                            userAuthDelegate: cascade,
+                            serverAuthDelegate: VerifyingHostKeyDelegate(host: "127.0.0.1", port: port, verifier: verifier)
+                        )),
+                        allocator: channel.allocator,
+                        inboundChildChannelInitializer: SSHClientPipelineFactory.rejectAllInboundChildChannels
+                    ))
+                    try channel.pipeline.syncOperations.addHandler(cascade.delegate)
+                    try channel.pipeline.syncOperations.addHandler(CascadeAuthenticationObserver(completion: completion))
+                }
+            }
+        var channel: (any Channel)?
+        do {
+            channel = try await bootstrap.connect(host: "127.0.0.1", port: port).get()
+            try await completion.futureResult.get()
+            XCTAssertTrue(shouldAuthenticate, "Expected typed authentication failure", file: file, line: line)
+        } catch {
+            XCTAssertFalse(shouldAuthenticate, "Unexpected connect failure: \(error)", file: file, line: line)
+            XCTAssertEqual(error as? SSHTransportError, .authenticationFailed, "Must fail typed, not time out: \(error)", file: file, line: line)
+        }
+        timeout.cancel()
+        completion.fail(SSHTransportError.unreachable)
+        if let channel { try? await channel.close().get() }
+        XCTAssertEqual(cascade.offeredMethods, expectedOffers, file: file, line: line)
+        XCTAssertEqual(server.inboundConnectionCount, 1, "Resolution happens after dialing", file: file, line: line)
+        XCTAssertEqual(server.authenticatedConnectionCount, shouldAuthenticate ? 1 : 0, file: file, line: line)
         await server.stop()
+        try await group.shutdownGracefully()
     }
 
     func testKeyAuthPathUntouchedWhenAuthMethodIsPublicKey() async throws {
