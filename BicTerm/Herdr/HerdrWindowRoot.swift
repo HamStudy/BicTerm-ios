@@ -43,7 +43,8 @@ struct HerdrWindowRoot: View {
             embedConnection: entry.embedConnection,
             embedHerd: entry.herd,
             ownerID: entry.id,
-            hostKeyVerifier: store.hostKeyVerifier
+            hostKeyVerifier: store.hostKeyVerifier,
+            osc52Settings: Osc52ClipboardSettings()
         )
     }
 }

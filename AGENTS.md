@@ -79,7 +79,7 @@ Reference centrality: not measured (no codegraph index; Swift LSP not wired in t
 - herdr protocol codec stays in Rust — never reimplement in Swift.
 - `HerdrCoreC/include/HerdrCore.h` is cbindgen-generated — never hand-edit.
 - Never hand-edit or commit `BicTerm.xcodeproj`.
-- OSC 52 remote clipboard writes stay denied; paste is a local user action only.
+- OSC 52 remote clipboard writes follow the app-side hardened policy (fork hunk 11 surfaces a typed `ClipboardWriteRequest`; the app applies the foreground gate, 100 KiB cap, default-ON Settings toggle, and attribution toast). OSC 52 read/query stays denied unconditionally under every flag; paste remains a local user action only.
 
 ## UNIQUE STYLES
 - Partial `BicTerm/Info.plist` via xcodegen `info:` block for iPad orientation declaration (`~ipad` keys can't be `INFOPLIST_KEY_` settings — xcodebuild silently drops them). Don't hand-edit the plist; edit `project.yml`.

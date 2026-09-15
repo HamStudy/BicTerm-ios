@@ -30,6 +30,15 @@ final class TestKeyInterposerController: UIViewController {
     private var focusTimer: DispatchSourceTimer?
     private var discoveryAttempts = 0
 
+    /// DEBUG-only OSC 52 trigger used by the iPhone 17 Pro UI smoke: the
+    /// `--uitest-osc52-trigger` launch argument makes the controller feed
+    /// an `OSC 52 ; c ; <base64>` sequence directly into the discovered
+    /// terminal once it appears, exercising the production
+    /// `oscClipboardWriteRequest` path end-to-end without needing raw
+    /// HID injection through the simulator. The base64 payload decodes
+    /// to "hello from herdr!" — the same string the README example uses.
+    private var osc52TriggerArmed = ProcessInfo.processInfo.arguments.contains("--uitest-osc52-trigger")
+
     override func loadView() {
         let root = UIView(frame: .zero)
         root.isUserInteractionEnabled = false
@@ -88,6 +97,22 @@ final class TestKeyInterposerController: UIViewController {
         }
         if !container.isFirstResponder {
             container.becomeFirstResponder()
+        }
+        if osc52TriggerArmed {
+            osc52TriggerArmed = false
+            fireOsc52Trigger(container: container)
+        }
+    }
+
+    /// Fires the OSC 52 clipboard-write trigger after a short settle: the
+    /// SSH transport needs a moment to deliver the first paint so the
+    /// foreground predicate reads `window.isKeyWindow == true`.
+    private func fireOsc52Trigger(container: TerminalContainerView) {
+        NSLog("TestKeyInterposerController: firing --uitest-osc52-trigger")
+        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(800)) {
+            let payload = "aGVsbG8gZnJvbSBoZXJkciE="  // "hello from herdr!"
+            let bytes: [UInt8] = Array("\u{1B}]52;c;\(payload)\u{07}".utf8)
+            container.feed(byteArray: bytes[...])
         }
     }
 

@@ -118,6 +118,12 @@ open class LocalProcessTerminalView: TerminalView, TerminalViewDelegate, LocalPr
             pasteBoard.writeObjects([str as NSString])
         }
     }
+
+    // BICTERM-PATCH hunk 11: this Mac local-process view's existing
+    // `clipboardCopy` keeps the byte path; the new typed request is a
+    // no-op here because the legacy delegate is wired instead.
+    public func oscClipboardWriteRequest(source: TerminalView, request: ClipboardWriteRequest) {
+    }
     
     public func clipboardRead(source: TerminalView) -> Data? {
         guard let str = NSPasteboard.general.string(forType: .string) else {

@@ -8,7 +8,8 @@ import UIKit
 /// ``TerminalViewCache``, not by the SwiftUI placement — detaching a
 /// session (switching away, closing its window) keeps the feed running and
 /// the scrollback accumulating; only eviction or session close destroys it.
-final class TerminalSurface: NSObject, TerminalViewDelegate {
+@MainActor
+final class TerminalSurface: NSObject, @preconcurrency TerminalViewDelegate {
     let view: TerminalContainerView
     /// Stacks the terminal above the accessory toolbar when the user shows
     /// it — the surface's SwiftUI placements embed THIS view, never `view`
@@ -18,6 +19,22 @@ final class TerminalSurface: NSObject, TerminalViewDelegate {
     private var resyncTask: Task<Void, Never>?
     private let sendBytes: @Sendable (Data) -> Void
     private let resizeTo: @Sendable (_ cols: Int, _ rows: Int) -> Void
+    /// App-global OSC 52 toggle. Read on every write (cheap UserDefaults
+    /// lookup, but cheapness is not the point — the surface is the
+    /// trust boundary for the fork's delegate, so it must consult the
+    /// live setting, not a cached snapshot).
+    private let osc52Settings: Osc52ClipboardSettings
+    /// Hook to surface the approved toast on the foreground scene's
+    /// model. Nil in previews/tests; nil in production only if the scene
+    /// model has already closed. MainActor-isolated (the scene model is
+    /// @MainActor).
+    private let osc52ToastPresenter: (@MainActor (Osc52ClipboardToast) -> Void)?
+    /// Hook for DEBUG denial observability; production keeps this nil.
+    private let osc52DenialRecorder: (@MainActor (Osc52ClipboardDenial) -> Void)?
+    /// Attribution label baked into every approved toast ("Alpha", "Beta",
+    /// …) so the user can tell which remote triggered the clipboard
+    /// change. The cache passes this in from the session descriptor.
+    let sourceLabel: String
 
     init(
         output: AsyncStream<Data>,
@@ -25,10 +42,18 @@ final class TerminalSurface: NSObject, TerminalViewDelegate {
         send: @escaping @Sendable (Data) -> Void,
         onResize: @escaping @Sendable (_ cols: Int, _ rows: Int) -> Void,
         fontSize: Double = TerminalFontSettings.defaultSize,
-        fontModel: TerminalFontModel? = nil
+        fontModel: TerminalFontModel? = nil,
+        osc52Settings: Osc52ClipboardSettings = Osc52ClipboardSettings(),
+        osc52ToastPresenter: (@MainActor (Osc52ClipboardToast) -> Void)? = nil,
+        osc52DenialRecorder: (@MainActor (Osc52ClipboardDenial) -> Void)? = nil,
+        sourceLabel: String = ""
     ) {
         self.sendBytes = send
         self.resizeTo = onResize
+        self.osc52Settings = osc52Settings
+        self.osc52ToastPresenter = osc52ToastPresenter
+        self.osc52DenialRecorder = osc52DenialRecorder
+        self.sourceLabel = sourceLabel
 
         let options = TerminalOptions(
             cols: 80,
@@ -122,7 +147,64 @@ final class TerminalSurface: NSObject, TerminalViewDelegate {
     }
 
     func clipboardCopy(source: TerminalView, content: Data) {
-        // Remote OSC 52 clipboard writes are denied (v1: copy-only).
+        // Legacy byte-level callback: now a no-op. The fork's parse path
+        // routes every write attempt through `oscClipboardWriteRequest`
+        // (fork hunk 11) so the host can apply the typed policy at one
+        // decision point — foreground gating, size cap, settings toggle,
+        // malformed-base64 diagnostics. Kept as an override so
+        // `TerminalViewDelegate`'s default extension (which forwards here
+        // from the parse path's compat shim) remains satisfied without
+        // accidentally writing to the pasteboard twice.
+    }
+
+    func oscClipboardWriteRequest(source: TerminalView, request: ClipboardWriteRequest) {
+        // OSC 52 WRITE policy: foreground-only, 100 KiB cap, default ON.
+        // The fork's parse path surfaces the raw base64 here so malformed
+        // payloads stay diagnosable; the policy's raw-base64 entry point
+        // is the only path that can return `.malformedBase64`. Approved
+        // writes fire an attribution toast on the foreground scene;
+        // denials are silent (no toast, no banner) and never touch the
+        // pasteboard. Reads are unconditionally denied at the fork's
+        // `clipboardRead` default and never reach this layer.
+        let capturedView = view
+        let outcome = MainActor.assumeIsolated { () -> Osc52ClipboardOutcome in
+            let settings = osc52Settings
+            let label = sourceLabel.isEmpty ? "Terminal" : sourceLabel
+            let foreground: @MainActor () -> Bool = { capturedView.window?.isKeyWindow == true }
+            return Osc52Router(
+                settings: settings,
+                isForeground: foreground
+            )
+            .evaluate(request, sourceLabel: label)
+        }
+        MainActor.assumeIsolated {
+            applyOsc52Outcome(outcome)
+        }
+    }
+
+    /// Applies a router outcome: writes/clears fire a toast; denials
+    /// record a typed diagnostic (DEBUG) and never touch the pasteboard
+    /// or the UI. MainActor-isolated because every consumer (sink,
+    /// presenter, recorder) is.
+    @MainActor
+    private func applyOsc52Outcome(_ outcome: Osc52ClipboardOutcome) {
+        switch outcome.decision {
+        case .write(let text, let bytes):
+            Osc52ClipboardSink.write(text)
+            osc52ToastPresenter?(
+                Osc52ClipboardToast(kind: .copied(bytes: bytes), sourceLabel: outcome.sourceLabel)
+            )
+        case .clear:
+            Osc52ClipboardSink.clear()
+            osc52ToastPresenter?(
+                Osc52ClipboardToast(kind: .cleared, sourceLabel: outcome.sourceLabel)
+            )
+        case .deny(let reason):
+            #if DEBUG
+            Osc52ClipboardSink.recordDenial(reason)
+            #endif
+            osc52DenialRecorder?(reason)
+        }
     }
 }
 
@@ -166,6 +248,9 @@ final class TerminalViewCache {
     var fontModel: TerminalFontModel?
     var resolveFontSize: ((String) -> Double)?
     var onSceneFontPinch: ((String, Double) -> Void)?
+    /// App-global OSC 52 clipboard settings. SessionStore wires a shared
+    /// instance so the toggle in Settings applies to every surface at once.
+    var osc52Settings: Osc52ClipboardSettings = Osc52ClipboardSettings()
 
     let capacity: Int
 
@@ -205,13 +290,18 @@ final class TerminalViewCache {
         }
 
         let wasEvicted = evictedSessionIDs.remove(sessionID) != nil
+        let sourceLabel = model.connectionName
         let surface = TerminalSurface(
             output: model.beginOutputStream(),
             resync: model.resyncCommands,
             send: { model.send($0) },
             onResize: { cols, rows in model.resize(cols: cols, rows: rows) },
             fontSize: resolveFontSize?(model.sceneID) ?? fontModel?.size ?? TerminalFontSettings.defaultSize,
-            fontModel: fontModel
+            fontModel: fontModel,
+            osc52Settings: osc52Settings,
+            osc52ToastPresenter: { toast in model.presentOsc52Toast(toast) },
+            osc52DenialRecorder: { reason in model.recordOsc52Denial(reason) },
+            sourceLabel: sourceLabel
         )
         let sceneID = model.sceneID
         if let onSceneFontPinch {
@@ -227,6 +317,9 @@ final class TerminalViewCache {
             model.markScrollbackReleased()
         }
         model.surfaceAttached()
+        #if DEBUG
+        Self.maybeFireUITestOsc52Trigger(on: surface, connectionName: sourceLabel)
+        #endif
         return SurfaceAttachment(surface: surface, generation: generation)
     }
 
@@ -265,6 +358,32 @@ final class TerminalViewCache {
             evictedSessionIDs.insert(lru)
         }
     }
+
+    #if DEBUG
+    /// DEBUG-only UI smoke helper: the `--uitest-osc52-trigger` launch
+    /// argument makes every session-scene surface attach fire an
+    /// `OSC 52 ; c ; <base64>` sequence directly into the live terminal,
+    /// exercising the production `oscClipboardWriteRequest` →
+    /// `Osc52Router` → toast path end-to-end without needing raw HID
+    /// injection through the simulator.
+    private static func maybeFireUITestOsc52Trigger(
+        on surface: TerminalSurface,
+        connectionName: String
+    ) {
+        guard ProcessInfo.processInfo.arguments.contains("--uitest-osc52-trigger") else {
+            return
+        }
+        NSLog("TerminalViewCache: firing --uitest-osc52-trigger on \"\(connectionName)\"")
+        // Settle so the foreground predicate (`view.window?.isKeyWindow`)
+        // has a stable answer. 1.2 s is generous so the SSH transport
+        // has reached a connected state and the key window is the host.
+        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(1200)) {
+            let payload = "aGVsbG8gZnJvbSBoZXJkciE="  // "hello from herdr!"
+            let bytes: [UInt8] = Array("\u{1B}]52;c;\(payload)\u{07}".utf8)
+            surface.view.feed(byteArray: bytes[...])
+        }
+    }
+    #endif
 }
 
 /// Cache-backed terminal surface for session scenes. `makeUIView` pulls

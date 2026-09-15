@@ -32,6 +32,7 @@ struct ConnectionListContainer: View {
             ConnectionListView(
                 fontModel: store.terminalFont,
                 themeModel: store.theme,
+                osc52Model: store.osc52Clipboard,
                 onConnectRequested: handleConnect,
                 onOpenSessions: { switcherPresented = true },
                 onForgetHost: { connection in
@@ -178,7 +179,8 @@ struct ConnectionListContainer: View {
             embedConnection: entry.embedConnection,
             embedHerd: entry.herd,
             ownerID: entry.id,
-            hostKeyVerifier: store.hostKeyVerifier
+            hostKeyVerifier: store.hostKeyVerifier,
+            osc52Settings: Osc52ClipboardSettings()
         )
     }
 

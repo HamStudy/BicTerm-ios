@@ -58,12 +58,19 @@ struct SessionSceneView: View {
             #endif
         }
         .overlay(alignment: .top) {
-            if model.showReconnectedToast {
-                reconnectedToast
-                    .transition(.move(edge: .top).combined(with: .opacity))
+            VStack(spacing: spacing.xs) {
+                if model.showReconnectedToast {
+                    reconnectedToast
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
+                if let osc52Toast = model.osc52Toast {
+                    Osc52ToastView(toast: osc52Toast, sceneID: sanitized)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
             }
         }
         .animation(.easeInOut(duration: 0.2), value: model.showReconnectedToast)
+        .animation(.easeInOut(duration: 0.2), value: model.osc52Toast)
         .background(colors.background.ignoresSafeArea())
         .sceneAppearance(store.effectiveTheme(model.sceneID))
         .task {

@@ -40,6 +40,17 @@ final class SessionSceneModel: Identifiable {
     private(set) var syncSuspect = false
     /// Briefly true after a reconnect-driven screen refresh.
     private(set) var showReconnectedToast = false
+    /// Live OSC 52 clipboard toast for this scene; nil when none is
+    /// showing. A new event replaces the previous one and re-arms the
+    /// auto-dismiss timer. Source attribution (`connectionName`) and the
+    /// byte count travel with the event so the UI renders the exact
+    /// message the policy approved.
+    private(set) var osc52Toast: Osc52ClipboardToast?
+    /// DEBUG-only observability: the last denial this scene recorded so
+    /// a UI suite can assert the policy fired the expected branch.
+    #if DEBUG
+    private(set) var lastOsc52Denial: Osc52ClipboardDenial?
+    #endif
 
     let viewOutput: AsyncStream<Data>
     private var viewOutputContinuation: AsyncStream<Data>.Continuation
@@ -52,6 +63,7 @@ final class SessionSceneModel: Identifiable {
     private var pumpTask: Task<Void, Never>?
     private var syncTask: Task<Void, Never>?
     private var toastTask: Task<Void, Never>?
+    private var osc52ToastTask: Task<Void, Never>?
     nonisolated(unsafe) private var lifecycleObservers: [NSObjectProtocol] = []
     private var started = false
     private var didUserConnect = false
@@ -254,6 +266,29 @@ final class SessionSceneModel: Identifiable {
         }
     }
 
+    /// Surface the OSC 52 toast for an approved write or clear event.
+    /// Auto-dismisses after ~3s; a fresh event replaces the previous one
+    /// and re-arms the timer. Denials are recorded separately (DEBUG only)
+    /// and never produce a toast.
+    func presentOsc52Toast(_ toast: Osc52ClipboardToast) {
+        osc52Toast = toast
+        osc52ToastTask?.cancel()
+        osc52ToastTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(3))
+            guard !Task.isCancelled else { return }
+            self?.osc52Toast = nil
+        }
+    }
+
+    #if DEBUG
+    /// DEBUG-only: record a denial so UI suites can prove the right
+    /// branch fired without depending on the global `Osc52ClipboardSink`
+    /// counters.
+    func recordOsc52Denial(_ reason: Osc52ClipboardDenial) {
+        lastOsc52Denial = reason
+    }
+    #endif
+
     /// One-tap resync from the out-of-sync banner: local VT reset plus a
     /// remote redraw poke. Clears the suspicion — the screen is being
     /// rebuilt from fresh remote state.
@@ -452,6 +487,8 @@ final class SessionSceneModel: Identifiable {
         syncTask = nil
         toastTask?.cancel()
         toastTask = nil
+        osc52ToastTask?.cancel()
+        osc52ToastTask = nil
         viewOutputContinuation.finish()
         resyncCommandContinuation.finish()
         presentationCommands.finish()

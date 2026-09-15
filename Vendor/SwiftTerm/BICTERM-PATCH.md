@@ -326,3 +326,60 @@ It does not change remote DECSTR or RIS semantics.
 `BicTermMouseTests.testSessionModeResetPreservesScrollback` checks mode reset,
 both keyboard states, alternate-screen exit, and unchanged normal-buffer text.
 Reapply hunk 10 with hunks 1-9; its source and test carry inline markers.
+
+## OSC 52 clipboard write surface (production, hunk 11)
+
+### Hunk 11 — typed `ClipboardWriteRequest` + `oscClipboardWriteRequest` delegate
+
+**Pre-hunk state inspected on disk.** `Terminal.oscClipboard` already
+parsed the `ESC ] 52 ; <sel> ; <payload> ST` sequence and called
+`tdel?.clipboardCopy(source:content:)` after decoding the base64 payload.
+The default `TerminalViewDelegate.clipboardCopy` was empty, so remote
+writes were silently dropped — but the typed reasons (malformed base64,
+oversized payload, empty/clear, foreground vs. background) had no surface
+to the host. Read/query (`payload == "?"`) also routed through
+`clipboardRead`, whose default returns `nil`. The fork's parse path was
+already exactly the source of truth we needed; the gap was a typed
+decision point.
+
+The hunk adds an additive, typed request that surfaces every write
+attempt at one delegate method so the host can apply a single policy at
+one decision point.
+
+- `Terminal.ClipboardWriteRequest` (struct): `rawBase64: Data`,
+  `selection: String`, plus `isEmpty: Bool` and `decodedContent: Data?`
+  accessors. The raw bytes are kept undecoded so malformed base64 stays
+  diagnosable at the host.
+- `TerminalDelegate.oscClipboardWriteRequest(source:request:)` and
+  `TerminalViewDelegate.oscClipboardWriteRequest(source:request:)`: the
+  new method, default deny. `TerminalView.oscClipboardWriteRequest`
+  forwards to `terminalDelegate`; the `Apple/TerminalViewDelegate.swift`
+  protocol is extended; the Mac view, Mac local-process view, and the
+  iOS SwiftUI view default impl all gain the new symbol so the fork's
+  package builds on every platform.
+- `Terminal.oscClipboard`: read/query still routes through
+  `clipboardRead` (default deny — non-negotiable per app policy). Every
+  write attempt now builds a `ClipboardWriteRequest` and calls the new
+  delegate method, regardless of base64 validity. The previous path
+  silently dropped malformed base64; that information is now preserved
+  for host diagnostics.
+
+`Tests/SwiftTermTests/BicTermOSC52Tests.swift` (new, this hunk) covers
+the parse-path contract: read/query is denied by default, empty payload
+surfaces as `isEmpty == true`, malformed base64 surfaces with
+`decodedContent == nil`, valid base64 surfaces with the decoded bytes,
+`?` payload routes through `clipboardRead`, and the new delegate method
+fires with a `ClipboardWriteRequest` exactly once per write attempt.
+
+App-side policy (foreground gating, 100 KB cap, default-ON Settings
+toggle, attribution toast, source label) lives entirely in
+`BicTerm/Terminal/Osc52Clipboard.swift` and `Osc52Router.swift`; the
+fork stays policy-free. The `clipboardCopy(source:content:)` fallback
+is preserved as a byte-level shim so any consumer that hasn't adopted
+the typed entry point keeps its old behavior — reapply is safe even
+without a host-side upgrade.
+
+Reapply hunk 11 with hunks 1-10. The hunk touches `Terminal.swift`,
+`Apple/TerminalViewDelegate.swift`, `iOS/iOSTerminalView.swift`,
+`iOS/SwiftUITerminalView.swift`, `Mac/MacTerminalView.swift`, and
+`Mac/MacLocalTerminalView.swift`.

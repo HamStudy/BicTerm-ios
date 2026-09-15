@@ -13,6 +13,16 @@ import UIKit
 struct HerdrTUIHostingView: UIViewRepresentable {
     let runtime: HerdrEmbedRuntime
     var fontModel: TerminalFontModel? = nil
+    var osc52Settings: Osc52ClipboardSettings = Osc52ClipboardSettings()
+    /// Optional foreground check; nil = always foreground (tests).
+    var osc52ForegroundCheck: (@MainActor () -> Bool)? = nil
+    /// Optional toast presenter; nil = no toast (previews/tests).
+    var osc52ToastPresenter: (@MainActor (Osc52ClipboardToast) -> Void)? = nil
+    var osc52DenialRecorder: (@MainActor (Osc52ClipboardDenial) -> Void)? = nil
+    /// Attribution label baked into every approved toast; default
+    /// "Herdr" — the workspace view passes the endpoint label
+    /// ("Alpha", "Beta", or the herd name) when it mounts this.
+    var osc52SourceLabel: String = "Herdr"
 
     func makeCoordinator() -> Coordinator {
         Coordinator(parent: self)
@@ -53,8 +63,12 @@ struct HerdrTUIHostingView: UIViewRepresentable {
     }
 
     /// SwiftTerm delegate: input toward the embedded client, geometry toward
-    /// the pty window. Remote clipboard writes (OSC 52) stay denied, exactly
-    /// like SSH terminal sessions.
+    /// the pty window. Remote clipboard writes (OSC 52) follow the
+    /// foreground-only, 100 KiB cap, default-ON policy — the embedded TUI
+    /// inherits the same hardening as SSH terminal sessions. Reads stay
+    /// denied at the fork's `clipboardRead` default; writes route through
+    /// `oscClipboardWriteRequest` (fork hunk 11) so the policy has the
+    /// raw base64 for malformed-payload diagnostics.
     final class Coordinator: NSObject, TerminalViewDelegate {
         var parent: HerdrTUIHostingView
         private var feedTask: Task<Void, Never>?
@@ -106,7 +120,49 @@ struct HerdrTUIHostingView: UIViewRepresentable {
             }
         }
 
-        func clipboardCopy(source: TerminalView, content: Data) {}
+        func clipboardCopy(source: TerminalView, content: Data) {
+            // Legacy byte-level callback: no-op. The fork's parse path
+            // routes every write attempt through `oscClipboardWriteRequest`
+            // (hunk 11) so the host applies the typed policy at one
+            // decision point — foreground gating, size cap, settings
+            // toggle, malformed-base64 diagnostics. Kept as an override
+            // so the `TerminalViewDelegate` default extension (compat
+            // shim) remains satisfied without double-writing to the
+            // pasteboard.
+        }
+
+        func oscClipboardWriteRequest(source: TerminalView, request: ClipboardWriteRequest) {
+            // Same hardened policy as SSH terminal sessions: foreground
+            // gate, 100 KiB cap, settings toggle (default ON), malformed
+            // base64 surfaces as a typed diagnostic. Reads stay denied
+            // at the fork's `clipboardRead` default and never reach this
+            // layer.
+            let settings = parent.osc52Settings
+            let label = parent.osc52SourceLabel
+            let isForeground = parent.osc52ForegroundCheck ?? { true }
+            let presenter = parent.osc52ToastPresenter
+            let recorder = parent.osc52DenialRecorder
+            let outcome = MainActor.assumeIsolated {
+                Osc52Router(
+                    settings: settings,
+                    isForeground: isForeground
+                )
+                .evaluate(request, sourceLabel: label)
+            }
+            MainActor.assumeIsolated {
+                switch outcome.decision {
+                case .write(_, let bytes):
+                    presenter?(Osc52ClipboardToast(kind: .copied(bytes: bytes), sourceLabel: outcome.sourceLabel))
+                case .clear:
+                    presenter?(Osc52ClipboardToast(kind: .cleared, sourceLabel: outcome.sourceLabel))
+                case .deny(let reason):
+                    #if DEBUG
+                    Osc52ClipboardSink.recordDenial(reason)
+                    #endif
+                    recorder?(reason)
+                }
+            }
+        }
 
         func setTerminalTitle(source: TerminalView, title: String) {}
 

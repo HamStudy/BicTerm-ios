@@ -73,7 +73,17 @@ public protocol TerminalViewDelegate: AnyObject {
      * The default implementation does nothing.
      */
     func clipboardCopy(source: TerminalView, content: Data)
-    
+
+    /**
+     * This method is invoked for every inbound OSC 52 clipboard WRITE — valid
+     * base64, malformed base64, oversized, and empty — so the host can apply
+     * a single policy at one decision point (foreground gating, size cap,
+     * settings toggle, attribution toasts). BICTERM-PATCH hunk 11.
+     *
+     * The default implementation does nothing.
+     */
+    func oscClipboardWriteRequest(source: TerminalView, request: ClipboardWriteRequest)
+
     /**
      * This method is invoked when the client application has issued an OSC 52
      * query to read the clipboard contents.

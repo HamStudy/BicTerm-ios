@@ -3528,7 +3528,14 @@ open class TerminalView: NSView, NSTextInputClient, NSUserInterfaceValidations, 
     public func clipboardCopy(source: Terminal, content: Data) {
         terminalDelegate?.clipboardCopy(source: self, content: content)
     }
-    
+
+    public func oscClipboardWriteRequest(source: Terminal, request: ClipboardWriteRequest) {
+        // BICTERM-PATCH hunk 11: forward the typed write request to the
+        // view delegate so the host applies a single policy at one
+        // decision point.
+        terminalDelegate?.oscClipboardWriteRequest(source: self, request: request)
+    }
+
     public func clipboardRead(source: Terminal) -> Data? {
         return terminalDelegate?.clipboardRead(source: self)
     }
@@ -3601,7 +3608,13 @@ extension TerminalViewDelegate {
     
     public func clipboardCopy(source: TerminalView, content: Data) {
     }
-    
+
+    public func oscClipboardWriteRequest(source: TerminalView, request: ClipboardWriteRequest) {
+        // BICTERM-PATCH hunk 11: default forwards to `clipboardCopy` so
+        // existing consumers keep their old behavior — see the
+        // Terminal.swift default for the full compatibility contract.
+    }
+
     public func clipboardRead(source: TerminalView) -> Data? {
         return nil
     }

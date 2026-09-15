@@ -33,8 +33,13 @@ struct HerdrEmbedWorkspaceView: View {
     var embedHerd: HerdDescriptor? = nil
     var ownerID: UUID? = nil
     var hostKeyVerifier: HostKeyVerifier? = nil
+    /// OSC 52 settings (default ON); nil falls back to a fresh shared
+    /// instance. Workspace scenes pass `sessionStore.osc52Clipboard`.
+    var osc52Settings: Osc52ClipboardSettings? = nil
 
     @State private var runtime = HerdrEmbedRuntime.shared
+    @State private var osc52Toast: Osc52ClipboardToast? = nil
+    @State private var osc52ToastTask: Task<Void, Never>? = nil
 
     init(
         endpointLabel: String,
@@ -44,7 +49,8 @@ struct HerdrEmbedWorkspaceView: View {
         embedConnection: Connection? = nil,
         embedHerd: HerdDescriptor? = nil,
         ownerID: UUID? = nil,
-        hostKeyVerifier: HostKeyVerifier? = nil
+        hostKeyVerifier: HostKeyVerifier? = nil,
+        osc52Settings: Osc52ClipboardSettings? = nil
     ) {
         self.endpointLabel = endpointLabel
         self.onClose = onClose
@@ -53,6 +59,7 @@ struct HerdrEmbedWorkspaceView: View {
         self.embedHerd = embedHerd
         self.ownerID = ownerID
         self.hostKeyVerifier = hostKeyVerifier
+        self.osc52Settings = osc52Settings
         _runtime = State(initialValue: runtime)
     }
 
@@ -76,6 +83,13 @@ struct HerdrEmbedWorkspaceView: View {
         // The embedded client owns the grid: the soft keyboard overlays
         // instead of compressing it (same contract as the native chrome).
         .ignoresSafeArea(.keyboard)
+        .overlay(alignment: .top) {
+            if let toast = osc52Toast {
+                Osc52ToastView(toast: toast, sceneID: "herdr")
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: osc52Toast)
         .task {
             if let coordinator = await makeTransportCoordinator() {
                 runtime.attachTransport(coordinator)
@@ -88,8 +102,23 @@ struct HerdrEmbedWorkspaceView: View {
         }
         .onDisappear {
             Task { await runtime.requestStop(ownerID: ownerID) }
+            osc52ToastTask?.cancel()
         }
         .modifier(EmbedTrustPromptPresenter(coordinator: trustCoordinator))
+    }
+
+    /// Surface an approved OSC 52 toast on the workspace chrome. The
+    /// workspace view IS that window's content for the duration of the
+    /// presentation, so the gate is implicit in this entry-point being
+    /// called at all (the view is mounted).
+    private func presentOsc52Toast(_ toast: Osc52ClipboardToast) {
+        osc52Toast = toast
+        osc52ToastTask?.cancel()
+        osc52ToastTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(3))
+            guard !Task.isCancelled else { return }
+            osc52Toast = nil
+        }
     }
 
     @State private var trustCoordinator: HerdrEmbedTransportCoordinator?
@@ -182,7 +211,15 @@ struct HerdrEmbedWorkspaceView: View {
             }
             .accessibilityIdentifier("herdr-embed-superseded")
         case .running:
-            HerdrTUIHostingView(runtime: runtime, fontModel: fontModel)
+            HerdrTUIHostingView(
+                runtime: runtime,
+                fontModel: fontModel,
+                osc52Settings: osc52Settings ?? Osc52ClipboardSettings(),
+                osc52ForegroundCheck: nil,
+                osc52ToastPresenter: { toast in self.presentOsc52Toast(toast) },
+                osc52DenialRecorder: nil,
+                osc52SourceLabel: endpointLabel
+            )
         case let .failed(message):
             VStack(spacing: spacing.sm) {
                 if let diagnostic = runtime.failureDiagnostic {

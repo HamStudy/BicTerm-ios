@@ -12,6 +12,11 @@ struct SettingsView: View {
     /// The shared appearance preference; the Theme row shows its live
     /// value and the detail screen edits it.
     let themeModel: ThemeModel
+    /// App-global OSC 52 clipboard-write toggle. The "Remote Clipboard
+    /// Writes" row binds directly to this model's live value; flipping it
+    /// updates every terminal surface and the embedded herdr TUI in one
+    /// step (all read the same UserDefaults key).
+    let osc52Model: Osc52ClipboardModel
 
     var body: some View {
         List {
@@ -72,6 +77,25 @@ struct SettingsView: View {
                 }
                 .listRowBackground(colors.background)
                 .accessibilityIdentifier("settings-ssh-keys")
+
+                Toggle(isOn: Binding(
+                    get: { osc52Model.writesEnabled },
+                    set: { osc52Model.setWritesEnabled($0) }
+                )) {
+                    VStack(alignment: .leading, spacing: spacing.xxxs) {
+                        Text("Remote Clipboard Writes")
+                            .font(typography.body)
+                            .foregroundColor(colors.foreground)
+                        Text("Allow TUI programs to copy text to your clipboard. Every write shows a toast and only the foreground session applies.")
+                            .font(typography.caption)
+                            .foregroundColor(colors.dimmed)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .font(typography.body)
+                .foregroundStyle(colors.foreground)
+                .listRowBackground(colors.background)
+                .accessibilityIdentifier("settings-osc52-writes")
             }
 
             Section("About") {

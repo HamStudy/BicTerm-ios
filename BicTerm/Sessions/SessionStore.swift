@@ -74,6 +74,10 @@ final class SessionStore {
     /// Settings change re-themes every window at once.
     let theme = ThemeModel()
     let terminalMargin = TerminalMarginModel()
+    /// App-global OSC 52 clipboard-write toggle (default ON). One
+    /// instance shared by every scene and the terminal cache so a
+    /// Settings change applies to every surface at once.
+    let osc52Clipboard = Osc52ClipboardModel()
     var appearanceOverrides: [String: SessionAppearanceOverrides] = [:]
 
     private let hostKeyStore: (any HostKeyStoreProtocol)?
@@ -225,6 +229,7 @@ final class SessionStore {
         viewCache.onSceneFontPinch = { [weak self] sceneID, size in
             self?.setFontSize(size, sceneID: sceneID)
         }
+        viewCache.osc52Settings = Osc52ClipboardSettings()
         terminalFont.onApplied = { [weak self] _ in
             self?.refreshSceneFonts()
         }

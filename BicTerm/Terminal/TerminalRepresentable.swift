@@ -57,6 +57,16 @@ struct TerminalRepresentable: UIViewRepresentable {
     /// that don't opt in.
     var fontModel: TerminalFontModel? = nil
 
+    /// OSC 52 settings consulted on every remote clipboard write. Defaults
+    /// to a shared ``Osc52ClipboardSettings``; previews/tests can inject
+    /// one backed by an isolated `UserDefaults` suite.
+    var osc52Settings: Osc52ClipboardSettings = Osc52ClipboardSettings()
+
+    /// Optional foreground gate; nil = always foreground (previews/tests
+    /// that don't care). The session-scene cache wires the surface's view
+    /// to its actual `window != nil`.
+    var osc52ForegroundCheck: (@MainActor () -> Bool)? = nil
+
     var cursorStyle: CursorStyle = .blinkBlock
 
     func makeCoordinator() -> TerminalCoordinator {
@@ -174,12 +184,34 @@ final class TerminalCoordinator: NSObject, TerminalViewDelegate {
         // later task; ignore for now (never auto-navigate).
     }
 
-    // OSC 52 clipboard WRITE from the remote: denied for v1 — a remote
-    // program must never silently overwrite the user's pasteboard.
-    // Only the user's own selection copy (`copy:` on the container
-    // view) writes to UIPasteboard. Remote reads stay denied via the
-    // protocol default (nil).
+    // OSC 52 clipboard WRITE from the remote: legacy byte-level callback,
+    // now a no-op. The fork's parse path routes every write attempt
+    // through `oscClipboardWriteRequest` (hunk 11) so the host applies
+    // the typed policy at one decision point — foreground gating, size
+    // cap, settings toggle, malformed-base64 diagnostics. Kept as an
+    // override so the `TerminalViewDelegate` default extension (compat
+    // shim) remains satisfied without double-writing.
     func clipboardCopy(source: TerminalView, content: Data) {}
+
+    func oscClipboardWriteRequest(source: TerminalView, request: ClipboardWriteRequest) {
+        // The standalone `TerminalRepresentable` is DEBUG-only (UITEST
+        // preview surfaces). Apply the same hardened policy here as the
+        // session/herdr surfaces: foreground gate (nil = always
+        // foreground for previews/tests), 100 KiB cap, settings toggle
+        // (default ON). An approved write lands on UIPasteboard but
+        // there is no scene model to fire a toast on. Production goes
+        // through `TerminalSurface` (cache path), which carries the
+        // scene-model hook.
+        let settings = parent.osc52Settings
+        let isForeground = parent.osc52ForegroundCheck ?? { true }
+        _ = MainActor.assumeIsolated {
+            Osc52Router(
+                settings: settings,
+                isForeground: isForeground
+            )
+            .evaluate(request, sourceLabel: "Terminal")
+        }
+    }
 }
 
 /// SwiftTerm `TerminalView` with BicTerm-specific input hardening:

@@ -88,6 +88,7 @@ private struct TerminalWindowRoot: View {
             ConnectionListView(
                 fontModel: store.terminalFont,
                 themeModel: store.theme,
+                osc52Model: store.osc52Clipboard,
                 onConnectRequested: { connection in
                     listPresented = false
                     let descriptor = store.openSession(for: connection)
@@ -268,7 +269,8 @@ struct BicTermApp: App {
                     NavigationStack {
                         SettingsView(
                             fontModel: sessionStore.terminalFont,
-                            themeModel: sessionStore.theme
+                            themeModel: sessionStore.theme,
+                            osc52Model: sessionStore.osc52Clipboard
                         )
                     }
                     .terminalStyle()
@@ -277,7 +279,8 @@ struct BicTermApp: App {
                 NavigationStack {
                     SettingsView(
                         fontModel: sessionStore.terminalFont,
-                        themeModel: sessionStore.theme
+                        themeModel: sessionStore.theme,
+                        osc52Model: sessionStore.osc52Clipboard
                     )
                 }
                 .terminalStyle()

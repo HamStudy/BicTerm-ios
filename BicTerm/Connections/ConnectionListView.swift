@@ -21,11 +21,14 @@ struct ConnectionListView: View {
     /// Shared appearance preference handed to the Settings screen (the
     /// Theme row shows its live value; the detail screen edits it).
     let themeModel: ThemeModel
+    /// Shared OSC 52 clipboard-write toggle handed to the Settings screen.
+    let osc52Model: Osc52ClipboardModel
     var onOpenHerd: ((Herd) -> Void)?
 
     init(
         fontModel: TerminalFontModel,
         themeModel: ThemeModel,
+        osc52Model: Osc52ClipboardModel,
         onConnectRequested: @escaping (Connection) -> Void = { _ in },
         onOpenSessions: (() -> Void)? = nil,
         onClose: (() -> Void)? = nil,
@@ -34,6 +37,7 @@ struct ConnectionListView: View {
     ) {
         self.fontModel = fontModel
         self.themeModel = themeModel
+        self.osc52Model = osc52Model
         self.onConnectRequested = onConnectRequested
         self.onOpenSessions = onOpenSessions
         self.onClose = onClose
@@ -103,7 +107,7 @@ struct ConnectionListView: View {
                     }
                 }
                 ToolbarItem(placement: .topBarLeading) {
-                    NavigationLink(destination: SettingsView(fontModel: fontModel, themeModel: themeModel)) {
+                    NavigationLink(destination: SettingsView(fontModel: fontModel, themeModel: themeModel, osc52Model: osc52Model)) {
                         Image(systemName: "gear")
                             .foregroundColor(colors.accent)
                     }

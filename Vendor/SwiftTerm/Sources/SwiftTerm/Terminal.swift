@@ -200,7 +200,20 @@ public protocol TerminalDelegate: AnyObject {
      * The default implementation does nothing.
      */
     func clipboardCopy(source: Terminal, content: Data)
-    
+
+    /**
+     * This method is invoked for every inbound OSC 52 clipboard WRITE — valid
+     * base64, malformed base64, oversized, and empty — so the host can apply
+     * a single policy at one decision point (foreground gating, size cap,
+     * settings toggle, attribution toasts). BICTERM-PATCH hunk 11.
+     *
+     * Read/query (the `?` payload) still flows through `clipboardRead` and
+     * the default implementation returns `nil` (denies).
+     *
+     * The default implementation does nothing.
+     */
+    func oscClipboardWriteRequest(source: Terminal, request: ClipboardWriteRequest)
+
     /**
      * This method is invoked when the client application has issued an OSC 52
      * query to read the clipboard contents.
@@ -265,8 +278,29 @@ public protocol TerminalDelegate: AnyObject {
 
 /// Enumeration passed to the TerminalDelegate.createImage to configure
 /// the desired values for width and height.
-public enum ImageSizeRequest {
-    /// Make the best decision based on the image data
+// BICTERM-PATCH hunk 11: typed payload for an inbound OSC 52 clipboard
+// WRITE — top-level (not nested in `Terminal`) so it can appear in the
+// `TerminalDelegate` / `TerminalViewDelegate` protocol signatures above.
+// Carries the raw base64 bytes (intentionally undecoded so the host
+// can distinguish malformed from valid at the same decision point) and
+// the selection identifier the remote used.
+public struct ClipboardWriteRequest: Equatable, Hashable, Sendable {
+    public let rawBase64: Data
+    public let selection: String
+
+    public init(rawBase64: Data, selection: String) {
+        self.rawBase64 = rawBase64
+        self.selection = selection
+    }
+
+    /// Empty payload = the remote asked to clear the clipboard.
+    public var isEmpty: Bool { rawBase64.isEmpty }
+
+    /// Decoded payload, or nil when the base64 is malformed.
+    public var decodedContent: Data? { Data(base64Encoded: rawBase64) }
+}
+
+public enum ImageSizeRequest {    /// Make the best decision based on the image data
     case auto
     /// Occupy exactly the number of cells
     case cells(Int)
@@ -2695,6 +2729,10 @@ open class Terminal {
     // the selection/clipboard buffer.  On Apple platforms every selection maps
     // to the system clipboard, so we accept any value.  An empty <sel> is
     // treated as "c" (system clipboard).
+    //
+    // BICTERM-PATCH hunk 11: the write path now surfaces a typed request for
+    // every attempt (valid, malformed, oversized, empty). Read/query stays
+    // routed through `clipboardRead` (default denies).
     func oscClipboard (_ data: ArraySlice<UInt8>) {
         // Find the semicolon that separates the selection identifier from the payload.
         guard let sepIdx = data.firstIndex(of: UInt8(ascii: ";")) else {
@@ -2709,20 +2747,25 @@ open class Terminal {
         let payload = data[(sepIdx + 1)...]
 
         if payload.count == 1 && payload[payload.startIndex] == UInt8(ascii: "?") {
-            // Read / query – ask the delegate for clipboard contents.
+            // Read / query – ask the delegate for clipboard contents
+            // and, if allowed, echo them back base64-encoded.
+            // BICTERM-PATCH hunk 11: default implementation denies; the
+            // application can still answer via its own override.
             guard let content = tdel?.clipboardRead(source: self) else {
                 return
             }
             let base64 = content.base64EncodedString()
             sendResponse(cc.OSC, "52;\(selectionChars);\(base64)", cc.ST)
-        } else {
-            // Write – decode the base64 payload and hand it to the delegate.
-            let base64 = Data(payload)
-            guard let content = Data(base64Encoded: base64) else {
-                return
-            }
-            tdel?.clipboardCopy(source: self, content: content)
+            return
         }
+
+        // BICTERM-PATCH hunk 11: every write attempt — valid base64,
+        // malformed base64, oversized, or empty (clear) — surfaces via a
+        // single typed request so the host applies one policy at one
+        // decision point. The previous path silently dropped malformed
+        // base64; that information is now preserved for diagnostics.
+        let request = ClipboardWriteRequest(rawBase64: Data(payload), selection: selectionChars)
+        tdel?.oscClipboardWriteRequest(source: self, request: request)
     }
     
     // Notifications:
@@ -8099,7 +8142,21 @@ public extension TerminalDelegate {
     
     func clipboardCopy(source: Terminal, content: Data) {
     }
-    
+
+    func oscClipboardWriteRequest(source: Terminal, request: ClipboardWriteRequest) {
+        // BICTERM-PATCH hunk 11: default forwards to `clipboardCopy` so
+        // existing consumers keep their old behavior — empty payload is
+        // forwarded as empty Data, malformed base64 silently drops, valid
+        // base64 forwards the decoded bytes. Hosts that want the typed
+        // request (foreground gating, size cap, settings, attribution
+        // toast) override this method entirely.
+        if request.isEmpty {
+            clipboardCopy(source: source, content: Data())
+        } else if let decoded = request.decodedContent {
+            clipboardCopy(source: source, content: decoded)
+        }
+    }
+
     func clipboardRead(source: Terminal) -> Data? {
         return nil
     }

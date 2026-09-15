@@ -60,7 +60,11 @@ struct SessionMenuView: View {
         }
         .sheet(isPresented: $settingsPresented) {
             NavigationStack {
-                SettingsView(fontModel: store.terminalFont, themeModel: store.theme)
+                SettingsView(
+                    fontModel: store.terminalFont,
+                    themeModel: store.theme,
+                    osc52Model: store.osc52Clipboard
+                )
                     .toolbar {
                         ToolbarItem(placement: .confirmationAction) {
                             Button("Done") { settingsPresented = false }
