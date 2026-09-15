@@ -172,17 +172,46 @@ private struct TerminalWindowRoot: View {
     }
 }
 
+/// No scene content can observe a partially bootstrapped connection/key pool.
+private struct ConnectionsBootstrapGate<Content: View>: View {
+    let model: ConnectionsModel
+    @ViewBuilder let content: () -> Content
+    @State private var ready = false
+
+    var body: some View {
+        Group {
+            if ready {
+                content()
+            } else {
+                ProgressView("Loading connections")
+            }
+        }
+        .environment(model)
+        .task {
+            await model.bootstrap()
+            ready = true
+        }
+    }
+}
+
 @main
 struct BicTermApp: App {
+    @State private var connectionsModel = ConnectionsModel()
     @State private var sessionStore = SessionStore()
     // App-scoped so the herd workspace presentations (full-screen cover on
     // iPhone, herdr window on iPad) can surface this coordinator's TOFU
     // prompts above themselves (F3-B).
     @State private var herdConnect = HerdSessionCoordinator()
 
+    init() {
+        #if DEBUG
+        UITestSupport.activate()
+        #endif
+    }
+
     var body: some Scene {
         WindowGroup("BicTerm") {
-            Group {
+            ConnectionsBootstrapGate(model: connectionsModel) {
                 #if DEBUG
                 if ProcessInfo.processInfo.arguments.contains("-uitest-terminal-preview") {
                     TerminalPreviewScreen()
@@ -202,7 +231,7 @@ struct BicTermApp: App {
         }
 
         WindowGroup("Terminal", id: "terminal", for: SessionID.self) { $sessionID in
-            Group {
+            ConnectionsBootstrapGate(model: connectionsModel) {
                 #if DEBUG
                 if ProcessInfo.processInfo.arguments.contains("-uitest-terminal-preview") {
                     TerminalPreviewScreen()
@@ -228,7 +257,7 @@ struct BicTermApp: App {
         }
 
         WindowGroup("Herdr Workspace", id: "herdr", for: SessionID.self) { $sessionID in
-            Group {
+            ConnectionsBootstrapGate(model: connectionsModel) {
                 #if DEBUG
                 // iPadOS persists scene sessions across launches and hard
                 // shutdowns: a stale herdr scene restored during a
@@ -262,7 +291,7 @@ struct BicTermApp: App {
         }
 
         WindowGroup("Settings", id: "settings", for: SettingsWindowValue.self) { _ in
-            Group {
+            ConnectionsBootstrapGate(model: connectionsModel) {
                 #if DEBUG
                 // Same restoration hazard as the herdr scene above: a stale
                 // Settings window restored under `-uitest-terminal-preview`

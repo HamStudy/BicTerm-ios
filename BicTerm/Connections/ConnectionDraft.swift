@@ -8,22 +8,8 @@ struct HopDraft: Identifiable, Equatable {
     var username = ""
     var offersKeys = true
     var customKeys: [String]?
-    var keyReference: String {
-        get { customKeys?.first ?? "" }
-        set { customKeys = newValue.isEmpty ? [] : [newValue] }
-    }
-    var keyLabel = ""
-    var authMethod: AuthMethod {
-        get { offersKeys ? .publickey : .password }
-        set { offersKeys = newValue == .publickey }
-    }
-    /// Keychain tag hosting the hop password. Generated once when the picker switches to
-    /// password mode; reused on later edits so retyping overwrites in place.
-    private var storedPasswordTag: String?
-    var passwordTag: String {
-        get { storedPasswordTag ?? "" }
-        set { storedPasswordTag = newValue }
-    }
+    var passwordTag: String?
+    var removePasswordOnSave = false
     /// Unsaved editor input — written to the Keychain only at connection-save
     /// time, never persisted with the model.
     var passwordInput = ""
@@ -41,27 +27,17 @@ struct HopDraft: Identifiable, Equatable {
         username = hop.username
         offersKeys = hop.offersKeys
         customKeys = hop.customKeys
-        storedPasswordTag = hop.passwordTag
-        self.keyLabel = keyLabel ?? ""
+        passwordTag = hop.passwordTag
     }
 
     var portValue: Int? { HopPort.parse(port) }
 
-    /// Entering password mode detaches the key selection (a hop uses exactly
-    /// one credential kind) and mints a tag if this hop never had one.
-    mutating func switchAuthMethod(to method: AuthMethod) {
-        guard authMethod != method else { return }
-        authMethod = method
-        switch method {
-        case .password:
-            keyReference = ""
-            keyLabel = ""
-            if passwordTag.isEmpty {
-                passwordTag = HopDraft.makePasswordTag()
-            }
-        case .publickey:
-            passwordInput = ""
-        }
+    mutating func stagePasswordRemoval() {
+        removePasswordOnSave = true
+        passwordTag = nil
+        passwordInput = ""
+        hasSavedPassword = false
+        passwordEntryMissing = false
     }
 
     static func makePasswordTag() -> String {
@@ -87,7 +63,7 @@ struct HopDraft: Identifiable, Equatable {
             username: username,
             offersKeys: offersKeys,
             customKeys: customKeys,
-            passwordTag: storedPasswordTag
+            passwordTag: passwordTag
         )
     }
 }
@@ -105,21 +81,8 @@ struct ConnectionDraft: Equatable {
     var username = ""
     var offersKeys = true
     var customKeys: [String]?
-    var keyReference: String {
-        get { customKeys?.first ?? "" }
-        set { customKeys = newValue.isEmpty ? [] : [newValue] }
-    }
-    var keyLabel = ""
-    var authMethod: AuthMethod {
-        get { offersKeys ? .publickey : .password }
-        set { offersKeys = newValue == .publickey }
-    }
-    /// Keychain tag hosting the destination password. See `HopDraft`.
-    private var storedPasswordTag: String?
-    var passwordTag: String {
-        get { storedPasswordTag ?? "" }
-        set { storedPasswordTag = newValue }
-    }
+    var passwordTag: String?
+    var removePasswordOnSave = false
     /// Unsaved editor input — Keychain-only on save, never persisted.
     var passwordInput = ""
     var hasSavedPassword = false
@@ -145,8 +108,7 @@ struct ConnectionDraft: Equatable {
         username = connection.username
         offersKeys = connection.offersKeys
         customKeys = connection.customKeys
-        storedPasswordTag = connection.passwordTag
-        self.keyLabel = keyLabel ?? ""
+        passwordTag = connection.passwordTag
         hops = connection.jumpChain.map { HopDraft(hop: $0, keyLabel: nil) }
         agentForwarding = connection.protocolOptions["agentForwarding"]?.boolValue == true
         herdrEnabled = connection.herdrEnabled
@@ -201,22 +163,12 @@ struct ConnectionDraft: Equatable {
         return nil
     }
 
-    /// Entering password mode detaches the key selection; entering key mode
-    /// drops unsaved password input. Saved Keychain entries are only removed
-    /// by editor save-path cleanup, deletion, or an explicit overwrite.
-    mutating func switchAuthMethod(to method: AuthMethod) {
-        guard authMethod != method else { return }
-        authMethod = method
-        switch method {
-        case .password:
-            keyReference = ""
-            keyLabel = ""
-            if passwordTag.isEmpty {
-                passwordTag = HopDraft.makePasswordTag()
-            }
-        case .publickey:
-            passwordInput = ""
-        }
+    mutating func stagePasswordRemoval() {
+        removePasswordOnSave = true
+        passwordTag = nil
+        passwordInput = ""
+        hasSavedPassword = false
+        passwordEntryMissing = false
     }
 
     var hopErrors: [Int: String] {
@@ -323,7 +275,7 @@ struct ConnectionDraft: Equatable {
             username: username.trimmingCharacters(in: .whitespaces),
             offersKeys: offersKeys,
             customKeys: customKeys,
-            passwordTag: storedPasswordTag,
+            passwordTag: passwordTag,
             jumpChain: jumpChain,
             protocolOptions: options
         )

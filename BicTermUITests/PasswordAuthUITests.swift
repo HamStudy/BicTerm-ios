@@ -26,7 +26,7 @@ final class PasswordAuthUITests: XCTestCase {
         typeInto(app.textFields["field-host"], "127.0.0.1")
         typeInto(app.textFields["field-port"], "18090", clearing: "22")
         typeInto(app.textFields["field-username"], "uitest")
-        selectSegment("Password", in: "auth-method-picker")
+        setOfferKeys(false)
         typeIntoSecure(app.secureTextFields["password-field"], "bicterm-uitest-fixture-password")
         app.buttons["save-editor"].tap()
         assertNoSystemSavePasswordPrompt()
@@ -35,8 +35,8 @@ final class PasswordAuthUITests: XCTestCase {
         openEditorForConnection(named: "Password-Audit")
         scrollToHittable(app.secureTextFields["password-field"])
         recordSurface("reopened-editor")
-        XCTAssertFalse(app.buttons["key-selector"].exists)
-        selectSegment("Key", in: "auth-method-picker")
+        XCTAssertFalse(app.buttons["key-selector"].isEnabled)
+        setOfferKeys(true)
         recordSurface("switched-to-key")
         app.buttons["key-selector"].tap()
         recordSurface("key-picker")
@@ -76,10 +76,10 @@ final class PasswordAuthUITests: XCTestCase {
         typeInto(app.textFields["field-port"], "18090", clearing: "22")
         typeInto(app.textFields["field-username"], "uitest")
 
-        selectSegment("Password", in: "auth-method-picker")
+        setOfferKeys(false)
         let secureField = app.secureTextFields["password-field"]
         XCTAssertTrue(secureField.waitForExistence(timeout: 5), "password mode must swap the key picker for a SecureField")
-        XCTAssertFalse(app.buttons["key-selector"].exists, "password mode must not offer key selection")
+        XCTAssertFalse(app.buttons["key-selector"].isEnabled, "keys-off disables customization")
         XCTAssertTrue(app.staticTexts["password-field-status"].exists, "blank passwords explain ask-on-connect")
         waitForEnabled(app.buttons["save-editor"])
 
@@ -102,7 +102,7 @@ final class PasswordAuthUITests: XCTestCase {
         scrollToHittable(reopenedSecure)
         XCTAssertTrue(reopenedSecure.exists)
         XCTAssertTrue(app.staticTexts["password-saved-badge"].exists, "saved password shows a badge, never prefilled text")
-        XCTAssertTrue(app.buttons["key-selector"].exists == false)
+        XCTAssertFalse(app.buttons["key-selector"].isEnabled)
         let value = reopenedSecure.value as? String
         XCTAssertTrue(value == nil || value == "", "SecureField must never be pre-filled from the store; got \(value ?? "<nil>")")
         waitForEnabled(app.buttons["save-editor"])
@@ -143,7 +143,7 @@ final class PasswordAuthUITests: XCTestCase {
         let hopSecure = app.secureTextFields["hop-password-field"]
         XCTAssertTrue(hopSecure.waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["hop-password-saved-badge"].exists)
-        XCTAssertFalse(app.buttons["hop-key-selector"].exists)
+        XCTAssertFalse(app.buttons["hop-key-selector"].isEnabled)
         let hopValue = hopSecure.value as? String
         XCTAssertTrue(hopValue == nil || hopValue == "", "hop password SecureField must never pre-fill; got \(hopValue ?? "<nil>")")
         waitForEnabled(app.buttons["save-hop"])
@@ -162,7 +162,7 @@ final class PasswordAuthUITests: XCTestCase {
         typeInto(app.textFields["field-host"], "127.0.0.1")
         typeInto(app.textFields["field-port"], "18090", clearing: "22")
         typeInto(app.textFields["field-username"], "uitest")
-        selectSegment("Password", in: "auth-method-picker")
+        setOfferKeys(false)
         typeIntoSecure(app.secureTextFields["password-field"], "bicterm-uitest-fixture-password")
         waitForEnabled(app.buttons["save-editor"])
         app.buttons["save-editor"].tap()
@@ -218,22 +218,22 @@ final class PasswordAuthUITests: XCTestCase {
 
     // MARK: Picker toggles
 
-    func testSwitchingAuthMethodTogglesCredentialFields() {
+    func testOfferKeysToggleKeepsPasswordIndependent() {
         launchApp(arguments: ["--uitest-reset", "--uitest-pwd-server"])
 
         openEditorForNewConnection()
         XCTAssertTrue(app.buttons["key-selector"].exists, "new connections start in key mode")
-        XCTAssertFalse(app.secureTextFields["password-field"].exists)
+        XCTAssertTrue(app.secureTextFields["password-field"].exists)
 
-        selectSegment("Password", in: "auth-method-picker")
+        setOfferKeys(false)
         XCTAssertTrue(app.secureTextFields["password-field"].waitForExistence(timeout: 5))
-        XCTAssertFalse(app.buttons["key-selector"].exists)
+        XCTAssertFalse(app.buttons["key-selector"].isEnabled)
 
-        selectSegment("Key", in: "auth-method-picker")
+        setOfferKeys(true)
         let keySelector = app.buttons["key-selector"]
         scrollToHittable(keySelector, swipingUp: false)
         XCTAssertTrue(keySelector.exists)
-        XCTAssertFalse(app.secureTextFields["password-field"].exists)
+        XCTAssertTrue(app.secureTextFields["password-field"].exists)
 
         app.buttons["cancel-editor"].tap()
     }
@@ -301,7 +301,7 @@ final class PasswordAuthUITests: XCTestCase {
         typeInto(app.textFields["field-host"], "127.0.0.1")
         typeInto(app.textFields["field-port"], "18090", clearing: "22")
         typeInto(app.textFields["field-username"], "uitest")
-        selectSegment("Password", in: "auth-method-picker")
+        setOfferKeys(false)
         XCTAssertFalse(app.staticTexts["password-field-error"].exists)
         XCTAssertTrue(app.staticTexts["password-field-status"].label.contains("asked"))
         waitForEnabled(app.buttons["save-editor"])
@@ -343,13 +343,14 @@ final class PasswordAuthUITests: XCTestCase {
         XCTAssertTrue(app.buttons["cancel-editor"].waitForExistence(timeout: 10))
     }
 
-    private func selectSegment(_ title: String, in pickerIdentifier: String) {
+    private func setOfferKeys(_ enabled: Bool, hop: Bool = false) {
         dismissKeyboard()
-        let picker = app.segmentedControls[pickerIdentifier]
-        XCTAssertTrue(picker.waitForExistence(timeout: 5), "auth method segmented picker must exist")
-        let segment = picker.buttons[title]
-        XCTAssertTrue(segment.exists, "segment \(title) must exist")
-        segment.tap()
+        let toggle = app.switches[hop ? "hop-offer-keys-toggle" : "offer-keys-toggle"]
+        scrollToHittable(toggle, swipingUp: false)
+        XCTAssertTrue(toggle.waitForExistence(timeout: 5))
+        if (toggle.value as? String == "1") != enabled {
+            toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
+        }
     }
 
     private func selectAuthenticationKey(_ label: String) {
@@ -360,6 +361,7 @@ final class PasswordAuthUITests: XCTestCase {
         let key = app.buttons["key-\(label.replacingOccurrences(of: " ", with: "-"))"]
         XCTAssertTrue(key.waitForExistence(timeout: 5), "key \(label) must be listed")
         key.tap()
+        app.buttons["customize-done"].tap()
     }
 
     private func addPasswordHop(host: String, port: String, username: String, password: String) {
@@ -373,7 +375,7 @@ final class PasswordAuthUITests: XCTestCase {
         typeInto(app.textFields["hop-field-port"], port, clearing: "22")
         typeInto(app.textFields["hop-field-username"], username)
 
-        selectSegment("Password", in: "hop-auth-method-picker")
+        setOfferKeys(false, hop: true)
         let secure = app.secureTextFields["hop-password-field"]
         XCTAssertTrue(secure.waitForExistence(timeout: 5))
         typeIntoSecure(secure, password)

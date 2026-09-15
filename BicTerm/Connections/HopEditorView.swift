@@ -6,6 +6,8 @@ struct HopEditorView: View {
     @Environment(\.terminalTypography) var typography
     @Environment(\.terminalSpacing) var spacing
     @Environment(\.dismiss) private var dismiss
+    @Environment(KeyStore.self) private var keyStore
+    @Environment(KeyAvailabilityPreferences.self) private var preferences
 
     /// Snapshot of the incoming draft; dirty = working draft differs, so a
     /// hop reverted to its original values cancels without prompting.
@@ -39,6 +41,14 @@ struct HopEditorView: View {
 
     private var isDirty: Bool {
         draft != originalDraft
+    }
+
+    private var offeredKeyCount: Int {
+        KeyOfferResolver().resolve(
+            KeyOfferRequest(offersKeys: draft.offersKeys, customKeys: draft.customKeys,
+                            hardwareKeysEnabledByDefault: preferences.hardwareOfferedByDefault),
+            keys: keyStore.keys.map(\.metadata)
+        ).count
     }
 
     private func cancelTapped() {
@@ -98,20 +108,23 @@ struct HopEditorView: View {
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
 
-                Picker("Authentication", selection: Binding(
-                    get: { draft.authMethod },
-                    set: {
-                        draft.switchAuthMethod(to: $0)
-                        if $0 == .password { touchedFields.insert(.password) }
-                    }
-                )) {
-                    Text("Key").tag(AuthMethod.publickey)
-                    Text("Password").tag(AuthMethod.password)
+            }
+            Section("Keys") {
+                Toggle("Offer Keys", isOn: $draft.offersKeys)
+                    .accessibilityIdentifier("hop-offer-keys-toggle")
+                NavigationLink("Customize") {
+                    KeyPickerView(customKeys: $draft.customKeys)
                 }
-                .pickerStyle(.segmented)
-                .accessibilityIdentifier("hop-auth-method-picker")
-
-                if draft.authMethod == .password {
+                .disabled(!draft.offersKeys)
+                .accessibilityIdentifier("hop-key-selector")
+                if offeredKeyCount > 5 {
+                    Text("\(offeredKeyCount) keys will be offered. Many servers allow only 6 authentication attempts and may disconnect before later keys are tried.")
+                        .font(typography.caption)
+                        .foregroundStyle(colors.dimmed)
+                        .accessibilityIdentifier("hop-offer-count-warning")
+                }
+            }
+            Section("Password") {
                     VStack(alignment: .leading, spacing: spacing.xxxs) {
                         HStack {
                             Text("Password")
@@ -130,7 +143,11 @@ struct HopEditorView: View {
                                 .accessibilityLabel("Password")
                                 .accessibilityIdentifier("hop-password-field")
                         }
-                        if draft.hasSavedPassword, draft.passwordInput.isEmpty {
+                        if draft.removePasswordOnSave, draft.passwordInput.isEmpty {
+                            Text("Password will be removed when you save the connection")
+                                .font(typography.caption)
+                                .accessibilityIdentifier("hop-password-removal-status")
+                        } else if draft.hasSavedPassword, draft.passwordInput.isEmpty {
                             Text("Saved on this device")
                                 .font(typography.caption)
                                 .foregroundColor(colors.success)
@@ -148,36 +165,15 @@ struct HopEditorView: View {
                                 .foregroundStyle(colors.dimmed)
                         }
                     }
-                } else {
-                    NavigationLink {
-                        KeyPickerView(
-                            selectedReference: draft.keyReference
-                        ) { selected in
-                            draft.keyReference = selected.reference
-                            draft.keyLabel = selected.label
-                        }
-                    } label: {
-                        VStack(alignment: .leading, spacing: spacing.xxxs) {
-                            Text("Authentication Key")
-                                .font(typography.body)
-                                .foregroundColor(colors.foreground)
-                            Text(draft.keyReference.isEmpty ? "Select a key" : draft.keyLabel)
-                                .font(typography.caption)
-                                .foregroundColor(
-                                    draft.keyReference.isEmpty
-                                        ? (saveAttempted ? colors.error : colors.dimmed)
-                                        : colors.accent
-                                )
-                        }
-                    }
-                    .accessibilityIdentifier("hop-key-selector")
+                if !draft.removePasswordOnSave && (draft.hasSavedPassword || draft.passwordTag != nil) {
+                    Button("Remove Saved Password", role: .destructive) { draft.stagePasswordRemoval() }
+                        .accessibilityIdentifier("hop-remove-saved-password")
                 }
             }
         }
         .scrollContentBackground(.hidden)
         .task {
-            guard !draft.passwordWasProbed, !draft.passwordTag.isEmpty else { return }
-            let tag = draft.passwordTag
+            guard !draft.passwordWasProbed, !draft.removePasswordOnSave, let tag = draft.passwordTag else { return }
             let found = (try? await AppServices.shared.passwordStore.password(for: tag)) != nil
             guard draft.passwordTag == tag else { return }
             draft.hasSavedPassword = found

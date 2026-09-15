@@ -4,23 +4,21 @@ import SwiftUI
 /// Lists keychain keys by label + SHA256 fingerprint ONLY — private key
 /// material is never read, displayed, or accepted here.
 ///
-/// The picker owns a live `KeyStore` (refresh() re-reads the Keychain), so
-/// the list tracks generate/import/delete instead of freezing the snapshot
-/// the editor happened to load; a fresh key saved inline is auto-selected
-/// and returns the user straight to the editor.
+/// The shared observable store keeps membership live; nil selection follows
+/// the resolver, while an explicit selection retains disabled memberships.
 struct KeyPickerView: View {
     @Environment(\.terminalColors) var colors
     @Environment(\.terminalTypography) var typography
     @Environment(\.terminalSpacing) var spacing
     @Environment(\.dismiss) private var dismiss
     @Environment(KeyStore.self) private var keyStore
+    @Environment(KeyAvailabilityPreferences.self) private var preferences
     @State private var showingGenerate = false
     @State private var showingImport = false
     @State private var knownReferences: Set<String> = []
     @State private var copyState: CopyState = .idle
 
-    var selectedReference: String?
-    let onSelect: (KeyMetadata) -> Void
+    @Binding var customKeys: [String]?
 
     enum CopyState: Equatable {
         case idle
@@ -28,12 +26,23 @@ struct KeyPickerView: View {
         case failed
     }
 
-    init(
-        selectedReference: String? = nil,
-        onSelect: @escaping (KeyMetadata) -> Void
-    ) {
-        self.selectedReference = selectedReference
-        self.onSelect = onSelect
+    private var inherited: [String] {
+        KeyOfferResolver().resolve(
+            KeyOfferRequest(offersKeys: true, customKeys: nil,
+                            hardwareKeysEnabledByDefault: preferences.hardwareOfferedByDefault),
+            keys: keyStore.keys.map(\.metadata)
+        )
+    }
+
+    private var selected: Set<String> { Set(customKeys ?? inherited) }
+
+    private func setSelection(_ references: Set<String>) {
+        customKeys = references == Set(inherited) ? nil : references.sorted { lhs, rhs in
+            let left = keyStore.keys.first { $0.id == lhs }?.metadata.label ?? ""
+            let right = keyStore.keys.first { $0.id == rhs }?.metadata.label ?? ""
+            let order = left.caseInsensitiveCompare(right)
+            return order == .orderedSame ? lhs < rhs : order == .orderedAscending
+        }
     }
 
     var body: some View {
@@ -45,9 +54,13 @@ struct KeyPickerView: View {
             }
         }
         .background(colors.background)
-        .navigationTitle("Select Key")
+        .navigationTitle("Customize Keys")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("Done") { dismiss() }
+                    .accessibilityIdentifier("customize-done")
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     Button {
@@ -70,7 +83,6 @@ struct KeyPickerView: View {
                 .accessibilityIdentifier("picker-add-menu")
             }
         }
-        .task { keyStore.refresh() }
         .sheet(isPresented: $showingGenerate, onDismiss: handleSheetDismiss) {
             GenerateKeySheet(keyStore: keyStore)
         }
@@ -90,6 +102,10 @@ struct KeyPickerView: View {
                 Text("Generate an ed25519 key or import an existing one — the new key is selected automatically.")
             }
             .accessibilityIdentifier("picker-empty-state")
+
+            Button("Use All Enabled Keys") { customKeys = nil }
+                .frame(minHeight: 44)
+                .accessibilityIdentifier("use-all-enabled-keys")
 
             HStack(spacing: spacing.sm) {
                 Button {
@@ -116,6 +132,12 @@ struct KeyPickerView: View {
 
     private var keyList: some View {
         List {
+            Section {
+                Button("Use All Enabled Keys") { customKeys = nil }
+                    .accessibilityIdentifier("use-all-enabled-keys")
+                Text(customKeys == nil ? "Using inherited keys" : "Custom selection")
+                    .accessibilityIdentifier("key-selection-mode")
+            }
             ForEach(keyStore.keys) { item in
                 keyRow(item)
             }
@@ -125,10 +147,11 @@ struct KeyPickerView: View {
     }
 
     private func keyRow(_ item: KeyListItem) -> some View {
-        let isSelected = item.metadata.reference == selectedReference
+        let isSelected = selected.contains(item.id)
         return Button {
-            onSelect(item.metadata)
-            dismiss()
+            var references = selected
+            if isSelected { references.remove(item.id) } else { references.insert(item.id) }
+            setSelection(references)
         } label: {
             HStack(spacing: spacing.sm) {
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "key")
@@ -146,9 +169,16 @@ struct KeyPickerView: View {
                         .foregroundColor(colors.dimmed)
                 }
                 Spacer()
+                if !item.metadata.enabledByDefault {
+                    Text("Disabled")
+                        .font(typography.caption)
+                        .foregroundStyle(colors.dimmed)
+                        .accessibilityIdentifier("disabled-key-badge")
+                }
             }
             .frame(minHeight: 44)
         }
+        .disabled(!item.metadata.enabledByDefault && !isSelected)
         .accessibilityIdentifier("key-\(sanitized(item.metadata.label))")
         .accessibilityValue(isSelected ? "Selected" : "")
         .accessibilityHint("Long press to copy the public key")
@@ -218,7 +248,7 @@ struct KeyPickerView: View {
     private func handleSheetDismiss() {
         let previous = knownReferences
         guard let added = keyStore.keys.first(where: { !previous.contains($0.id) }) else { return }
-        onSelect(added.metadata)
+        setSelection(selected.union([added.id]))
         dismiss()
     }
 

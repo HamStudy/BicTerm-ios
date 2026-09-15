@@ -17,6 +17,9 @@ final class ConnectionsModel {
     private let keyListProvider: () async -> [KeyMetadata]
     private let protocolDescriptors: [ProtocolDescriptor]
     private let descriptorProvider: (String) -> ProtocolDescriptor?
+    private let bootstrapPreparation: (@MainActor () async -> Void)?
+    private let keyRefresh: @MainActor () async -> Void
+    @ObservationIgnored internal private(set) var bootstrapTask: Task<Void, Never>?
 
     private(set) var connections: [Connection] = []
     private(set) var keys: [KeyMetadata] = []
@@ -37,19 +40,25 @@ final class ConnectionsModel {
         self.keyListProvider = { (try? await services.keyRepository.list()) ?? [] }
         self.protocolDescriptors = services.protocols
         self.descriptorProvider = services.descriptor(forProtocolID:)
+        self.bootstrapPreparation = nil
+        self.keyRefresh = { services.keyStore.refresh() }
     }
 
     internal init(
         connectionStore: any ConnectionStoreProtocol,
         protocolDescriptors: [ProtocolDescriptor],
         descriptorProvider: @escaping (String) -> ProtocolDescriptor?,
-        keyListProvider: @escaping () async -> [KeyMetadata] = { [] }
+        keyListProvider: @escaping () async -> [KeyMetadata] = { [] },
+        bootstrapPreparation: @escaping @MainActor () async -> Void = {},
+        keyRefresh: @escaping @MainActor () async -> Void = {}
     ) {
         self.services = .shared
         self.connectionStore = connectionStore
         self.protocolDescriptors = protocolDescriptors
         self.descriptorProvider = descriptorProvider
         self.keyListProvider = keyListProvider
+        self.bootstrapPreparation = bootstrapPreparation
+        self.keyRefresh = keyRefresh
     }
 
     var groupedConnections: [ConnectionGroup] {
@@ -87,11 +96,21 @@ final class ConnectionsModel {
     }
 
     func bootstrap() async {
-        #if DEBUG
-        await runUITestHooksIfRequested()
-        await SessionFixtureSeeder.seedIfNeeded()
-        #endif
-        await reload()
+        if bootstrapTask == nil {
+            bootstrapTask = Task {
+                if let bootstrapPreparation {
+                    await bootstrapPreparation()
+                } else {
+                    #if DEBUG
+                    await runUITestHooksIfRequested()
+                    await SessionFixtureSeeder.seedIfNeeded()
+                    #endif
+                }
+                await reload()
+                await keyRefresh()
+            }
+        }
+        await bootstrapTask?.value
     }
 
     func reload() async {
@@ -107,6 +126,11 @@ final class ConnectionsModel {
     }
 
     func persist(_ connection: Connection) async -> Result<Void, PersistenceError> {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--uitest-editor-save-fail") {
+            return .failure(.operationFailed("the test rejected the editor write"))
+        }
+        #endif
         do {
             try await connectionStore.save(connection)
             if let index = connections.firstIndex(where: { $0.id == connection.id }) {
@@ -186,6 +210,8 @@ final class ConnectionsModel {
             || arguments.contains("--uitest-unavailable-connection")
             || arguments.contains("--uitest-herdr-connection")
             || arguments.contains("--uitest-herd-e2e")
+            || arguments.contains("--uitest-editor-password-fixture")
+            || arguments.contains("--uitest-custom-disabled")
         else { return }
 
         if arguments.contains("--uitest-reset") || arguments.contains("--uitest-unavailable-connection") {
@@ -209,6 +235,40 @@ final class ConnectionsModel {
         }
         if arguments.contains("--uitest-herd-e2e") {
             await seedHerdE2EConnections()
+        }
+        if arguments.contains("--uitest-editor-password-fixture") {
+            await seedEditorPasswordFixture()
+        }
+        if arguments.contains("--uitest-custom-disabled"),
+           let connection = try? Connection(name: "Disabled Custom", type: .ssh,
+               host: "example.com", port: 22, username: "fixture",
+               customKeys: ["uitest-disabled-fixture"]) {
+            try? await services.connectionStore.save(connection)
+        }
+    }
+
+    private func seedEditorPasswordFixture() async {
+        let mode = TerminalSceneUITest.value(after: "--uitest-editor-password-fixture") ?? "saved"
+        let tag = "uitest.editor.saved"
+        let password = "bicterm-uitest-fixture-password"
+        let hop = Hop(host: "jump.example.com", port: 22, username: "jump",
+                      offersKeys: false, passwordTag: tag)
+        guard let connection = try? Connection(
+            name: "Credential Fixture", type: .ssh, host: "127.0.0.1", port: 18090,
+            username: "uitest", offersKeys: false,
+            passwordTag: mode == "prompted" ? nil : tag,
+            jumpChain: mode == "hop-shared" ? [hop] : []
+        ) else { return }
+        try? await services.passwordStore.save(password, for: tag)
+        if mode == "prompted" || mode == "both" {
+            try? await services.passwordStore.save(password, for: connection.promptedPasswordTag)
+        }
+        try? await services.connectionStore.save(connection)
+        if mode == "other-hop", let other = try? Connection(
+            name: "Other Hop", type: .ssh, host: "other.example.com", port: 22,
+            username: "other", offersKeys: false, jumpChain: [hop]
+        ) {
+            try? await services.connectionStore.save(other)
         }
     }
 

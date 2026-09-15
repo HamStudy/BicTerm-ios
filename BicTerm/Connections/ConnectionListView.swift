@@ -5,7 +5,7 @@ struct ConnectionListView: View {
     @Environment(\.terminalColors) var colors
     @Environment(\.terminalTypography) var typography
     @Environment(\.terminalSpacing) var spacing
-    @State private var model = ConnectionsModel()
+    @Environment(ConnectionsModel.self) private var model
     @State private var herds = HerdsModel()
     @State private var editorTarget: EditorTarget?
     @State private var herdEditorTarget: HerdEditorTarget?
@@ -166,7 +166,6 @@ struct ConnectionListView: View {
                 )
             }
             .task {
-                await model.bootstrap()
                 await herds.bootstrap()
                 presentDebugEditorIfNeeded()
             }

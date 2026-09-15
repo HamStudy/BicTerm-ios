@@ -18,7 +18,6 @@ struct KeyManagementView: View {
             #if DEBUG
             UITestSupport.activate()
             #endif
-            keyStore.refresh()
             #if DEBUG
             UITestSupport.seedConnectionIfNeeded()
             #endif
@@ -62,6 +61,7 @@ struct KeyListView: View {
                         .buttonStyle(.plain)
                         .listRowBackground(colors.background)
                         .accessibilityIdentifier("key-row-\(item.metadata.label)")
+                        .accessibilityValue(item.metadata.enabledByDefault ? "Enabled" : "Disabled")
                     }
                 }
                 .listStyle(.insetGrouped)

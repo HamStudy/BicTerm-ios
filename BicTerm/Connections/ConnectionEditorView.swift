@@ -6,6 +6,8 @@ struct ConnectionEditorView: View {
     @Environment(\.terminalTypography) var typography
     @Environment(\.terminalSpacing) var spacing
     @Environment(\.dismiss) private var dismiss
+    @Environment(KeyStore.self) private var keyStore
+    @Environment(KeyAvailabilityPreferences.self) private var preferences
 
     let existing: Connection?
     /// Duplicate-as-new pre-fill source. Its values seed a fresh draft while
@@ -48,12 +50,14 @@ struct ConnectionEditorView: View {
             Form {
                 identitySection
                 authenticationSection
+                passwordSection
                 if jumpChainSupported { jumpChainSection }
                 protocolOptionsSection
                 if draft.protocolID == ProtocolDescriptor.ssh.id { herdrSection }
                 connectSection
             }
             .scrollContentBackground(.hidden)
+            .disabled(isSaving)
             .background(colors.background)
             .scrollDismissesKeyboard(.immediately)
             .toolbar {
@@ -132,17 +136,23 @@ struct ConnectionEditorView: View {
 
     private func probePasswords() async {
         let tag = draft.passwordTag
-        if !tag.isEmpty {
-            let found = (try? await AppServices.shared.passwordStore.password(for: tag)) != nil
-            if draft.passwordTag == tag {
+        let promptedTag = (existing ?? seed)?.promptedPasswordTag
+        let editorFound = if let tag {
+            (try? await AppServices.shared.passwordStore.password(for: tag)) != nil
+        } else { false }
+        let promptedFound = if let promptedTag, seed == nil {
+            (try? await AppServices.shared.passwordStore.password(for: promptedTag)) != nil
+        } else { false }
+        if !draft.removePasswordOnSave, draft.passwordTag == tag {
+                let found = editorFound || promptedFound
                 draft.hasSavedPassword = found
-                draft.passwordEntryMissing = !found
+                draft.passwordEntryMissing = tag != nil && !found
                 originalDraft?.hasSavedPassword = found
-                originalDraft?.passwordEntryMissing = !found
-            }
+                originalDraft?.passwordEntryMissing = tag != nil && !found
         }
-        for hop in draft.hops where !hop.passwordTag.isEmpty {
-            let found = (try? await AppServices.shared.passwordStore.password(for: hop.passwordTag)) != nil
+        for hop in draft.hops {
+            guard let tag = hop.passwordTag else { continue }
+            let found = (try? await AppServices.shared.passwordStore.password(for: tag)) != nil
             if let index = draft.hops.firstIndex(where: { $0.id == hop.id && $0.passwordTag == hop.passwordTag }) {
                 draft.hops[index].hasSavedPassword = found
                 draft.hops[index].passwordEntryMissing = !found
@@ -256,23 +266,22 @@ struct ConnectionEditorView: View {
     }
 
     private var authenticationSection: some View {
-        Section {
-            if draft.protocolID == ProtocolDescriptor.ssh.id {
-                Picker("Authentication", selection: Binding(
-                    get: { draft.authMethod },
-                    set: {
-                        draft.switchAuthMethod(to: $0)
-                        if $0 == .password { touchedFields.insert(.password) }
-                    }
-                )) {
-                    Text("Key").tag(AuthMethod.publickey)
-                    Text("Password").tag(AuthMethod.password)
-                }
-                .pickerStyle(.segmented)
-                .accessibilityIdentifier("auth-method-picker")
+        Section("Keys") {
+            Toggle("Offer Keys", isOn: $draft.offersKeys)
+                .accessibilityIdentifier("offer-keys-toggle")
+            keyPickerRow
+                .disabled(!draft.offersKeys)
+            if offeredKeyCount > 5 {
+                Text("\(offeredKeyCount) keys will be offered. Many servers allow only 6 authentication attempts and may disconnect before later keys are tried.")
+                    .font(typography.caption)
+                    .foregroundStyle(colors.dimmed)
+                    .accessibilityIdentifier("offer-count-warning")
             }
+        }
+    }
 
-            if draft.authMethod == .password, draft.protocolID == ProtocolDescriptor.ssh.id {
+    private var passwordSection: some View {
+        Section {
                 VStack(alignment: .leading, spacing: spacing.xxxs) {
                     HStack {
                         Text("Password")
@@ -291,7 +300,11 @@ struct ConnectionEditorView: View {
                             .accessibilityLabel("Password")
                             .accessibilityIdentifier("password-field")
                     }
-                    if draft.hasSavedPassword, draft.passwordInput.isEmpty {
+                    if draft.removePasswordOnSave, draft.passwordInput.isEmpty {
+                        Text("Password will be removed when you save")
+                            .font(typography.caption)
+                            .accessibilityIdentifier("password-removal-status")
+                    } else if draft.hasSavedPassword, draft.passwordInput.isEmpty {
                         Text("Saved on this device")
                             .font(typography.caption)
                             .foregroundColor(colors.success)
@@ -310,51 +323,47 @@ struct ConnectionEditorView: View {
                             .accessibilityIdentifier("password-field-status")
                     }
                 }
-            } else {
-                keyPickerRow
+            if !draft.removePasswordOnSave && (draft.hasSavedPassword || draft.passwordTag != nil) {
+                Button("Remove Saved Password", role: .destructive) { draft.stagePasswordRemoval() }
+                    .accessibilityIdentifier("remove-saved-password")
             }
         } header: {
-            Text("Authentication")
+            Text("Password")
         } footer: {
-            if draft.authMethod == .password, draft.protocolID == ProtocolDescriptor.ssh.id {
                 Text(draft.hasSavedPassword
                      ? "Leave the field blank to keep the saved password, or type a replacement. Passwords stay in this device's Keychain, protected when locked; they don't transfer to another device."
                      : "Password is optional. Leave it blank to be asked when connecting. Typed passwords are saved in this device's Keychain, protected when locked; they don't transfer to another device.")
                     .font(typography.caption)
                     .foregroundColor(colors.dimmed)
-            } else {
-                Text("Keys are referenced by label and fingerprint. Private key material never leaves the keychain.")
-                    .font(typography.caption)
-                    .foregroundColor(colors.dimmed)
-            }
         }
     }
 
     private var keyPickerRow: some View {
         NavigationLink {
-            KeyPickerView(selectedReference: draft.keyReference) { selected in
-                draft.keyReference = selected.reference
-                draft.keyLabel = selected.label
-            }
+            KeyPickerView(customKeys: $draft.customKeys)
         } label: {
             VStack(alignment: .leading, spacing: spacing.xxxs) {
-                Text("Authentication Key")
+                Text("Customize")
                     .font(typography.body)
                     .foregroundColor(colors.foreground)
-                if draft.keyReference.isEmpty {
-                    Text(saveAttempted ? (draft.keyError ?? "Select a key") : "Select a key")
-                        .font(typography.caption)
-                        .foregroundColor(saveAttempted && draft.keyError != nil ? colors.error : colors.dimmed)
-                } else {
-                    Text(draft.keyLabel.isEmpty ? draft.keyReference : draft.keyLabel)
+                    Text(keyOfferSummary)
                         .font(typography.caption)
                         .foregroundColor(colors.accent)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                }
             }
         }
         .accessibilityIdentifier("key-selector")
+    }
+
+    private var keyOfferSummary: String {
+        draft.customKeys == nil ? "All keys (\(offeredKeyCount) offered)" : "\(offeredKeyCount) selected keys"
+    }
+
+    private var offeredKeyCount: Int {
+        KeyOfferResolver().resolve(
+            KeyOfferRequest(offersKeys: draft.offersKeys, customKeys: draft.customKeys,
+                            hardwareKeysEnabledByDefault: preferences.hardwareOfferedByDefault),
+            keys: keyStore.keys.map(\.metadata)
+        ).count
     }
 
     private var jumpChainSection: some View {
@@ -448,12 +457,7 @@ struct ConnectionEditorView: View {
     }
 
     private func hopCredentialSummary(_ hop: HopDraft) -> String {
-        switch hop.authMethod {
-        case .publickey:
-            hop.keyLabel.isEmpty ? "no key" : hop.keyLabel
-        case .password:
-            "Password"
-        }
+        hop.offersKeys ? "Keys" : "Password"
     }
 
     private func addHopTapped() {        guard draft.hops.count < Connection.maximumJumpChainLength else {
@@ -590,23 +594,12 @@ struct ConnectionEditorView: View {
                 connection: existing,
                 keyLabel: model.keyLabel(forReference: existing.customKeys?.first ?? "")
             )
-            applyHopKeyLabels(from: existing)
         } else if let seed {
             draft = ConnectionDraft(
                 duplicating: seed,
                 name: model.nextDuplicateName(of: seed.name),
                 keyLabel: model.keyLabel(forReference: seed.customKeys?.first ?? "")
             )
-            applyHopKeyLabels(from: seed)
-        }
-    }
-
-    /// Password hops carry Keychain tags, never key references, so the key
-    /// list resolves no label for them and their label stays empty.
-    private func applyHopKeyLabels(from connection: Connection) {
-        for index in draft.hops.indices {
-            draft.hops[index].keyLabel =
-                model.keyLabel(forReference: connection.jumpChain[index].customKeys?.first ?? "") ?? ""
         }
     }
 
@@ -614,6 +607,10 @@ struct ConnectionEditorView: View {
         saveAttempted = true
         saveError = nil
         do {
+            if !draft.passwordInput.isEmpty { draft.passwordTag = HopDraft.makePasswordTag() }
+            for index in draft.hops.indices where !draft.hops[index].passwordInput.isEmpty {
+                draft.hops[index].passwordTag = HopDraft.makePasswordTag()
+            }
             let connection = try draft.makeConnection()
             guard descriptor != nil else {
                 saveError = "This protocol is unavailable in this build. Choose an available protocol before saving."
@@ -648,11 +645,11 @@ struct ConnectionEditorView: View {
     /// no-op); only fields carrying fresh input produce a write.
     private var pendingPasswordWrites: [(tag: String, password: String)] {
         var writes: [(tag: String, password: String)] = []
-        if draft.authMethod == .password, !draft.passwordInput.isEmpty {
-            writes.append((tag: draft.passwordTag, password: draft.passwordInput))
+        if let tag = draft.passwordTag, !draft.passwordInput.isEmpty {
+            writes.append((tag: tag, password: draft.passwordInput))
         }
-        for hop in draft.hops where hop.authMethod == .password && !hop.passwordInput.isEmpty {
-            writes.append((tag: hop.passwordTag, password: hop.passwordInput))
+        for hop in draft.hops where !hop.passwordInput.isEmpty {
+            if let tag = hop.passwordTag { writes.append((tag: tag, password: hop.passwordInput)) }
         }
         return writes
     }
@@ -675,8 +672,12 @@ struct ConnectionEditorView: View {
     /// retained.
     private func deleteOrphanedPasswordEntries(replacedBy connection: Connection) async {
         let oldTags = existing.map(ConnectionsModel.passwordTags(in:)) ?? []
-        let liveTags = ConnectionsModel.passwordTags(in: connection)
-        for tag in oldTags where !liveTags.contains(tag) {
+        var liveTags = Set(model.connections.filter { $0.id != connection.id }
+            .flatMap(ConnectionsModel.passwordTags(in:)))
+        if let tag = connection.passwordTag { liveTags.insert(tag) }
+        liveTags.formUnion(connection.jumpChain.compactMap(\.passwordTag))
+        if !draft.removePasswordOnSave { liveTags.insert(connection.promptedPasswordTag) }
+        for tag in Set(oldTags) where !liveTags.contains(tag) {
             try? await AppServices.shared.passwordStore.deletePassword(for: tag)
         }
     }

@@ -45,11 +45,25 @@ enum UITestArguments {
 @MainActor
 enum UITestSupport {
     static var seededSecureEnclaveReference: String?
+    private static var activated = false
 
     static func activate() {
+        guard !activated else { return }
+        activated = true
         guard argumentsContainUITestFlag else { return }
         if UITestArguments.isResetKeysActive { resetAllKeys() }
         if UITestArguments.isSeedSecureEnclaveKeyActive { seedSecureEnclaveKey() }
+        if UITestArguments.arguments.contains("-uitest-seed-disabled-key") { seedDisabledKey() }
+        if UITestArguments.arguments.contains("-uitest-seed-offer-warning") {
+            for index in 1...3 {
+                let metadata = KeyMetadata(
+                    reference: "uitest-warning-\(index)", label: "Warning Fixture \(index)",
+                    algorithm: .ed25519, fingerprint: "SHA256:UITESTWARNING\(index)",
+                    publicKeyBlob: Data(repeating: UInt8(index), count: 32), requiresBiometry: false
+                )
+                try? KeychainItemQuery.addItem(service: KeyStore.ed25519Service, metadata: metadata)
+            }
+        }
         if UITestArguments.isSeedPasteboardActive { seedPasteboard() }
     }
 
@@ -95,6 +109,21 @@ enum UITestSupport {
         if (try? KeychainItemQuery.addItem(service: KeyStore.secureEnclaveService, metadata: metadata)) != nil {
             seededSecureEnclaveReference = metadata.reference
         }
+    }
+
+    private static func seedDisabledKey() {
+        let reference = "uitest-disabled-fixture"
+        try? KeychainItemQuery.deleteItem(service: KeyStore.ed25519Service, reference: reference)
+        let metadata = KeyMetadata(
+            reference: reference,
+            label: "Disabled Fixture",
+            algorithm: .ed25519,
+            fingerprint: "SHA256:UITESTDISABLEDFIXTURE",
+            publicKeyBlob: Data(repeating: 0xAB, count: 32),
+            requiresBiometry: false,
+            enabledByDefault: false
+        )
+        try? KeychainItemQuery.addItem(service: KeyStore.ed25519Service, metadata: metadata)
     }
 
     private static func seedPasteboard() {

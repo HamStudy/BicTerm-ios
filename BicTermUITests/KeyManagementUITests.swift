@@ -1,5 +1,6 @@
 import CryptoKit
 import LocalAuthentication
+import UIKit
 import XCTest
 
 @MainActor
@@ -35,6 +36,57 @@ final class KeyManagementUITests: XCTestCase {
             app.navigationBars["SSH Keys"].waitForExistence(timeout: 15),
             "Key management entry did not appear"
         )
+    }
+
+    func testDisabledKeyPresentAtFirstBootstrap() {
+        app.launchArguments = ["-uitest-reset-keys", "-uitest-keys-entry"]
+        app.launch()
+        XCTAssertTrue(app.navigationBars["SSH Keys"].waitForExistence(timeout: 15))
+        app.terminate()
+        app.launchArguments = ["--uitest-reset", "--uitest-sessions", "--uitest-pwd-server",
+                               "--uitest-pretrust-fixtures", "-uitest-seed-disabled-key"]
+        app.launch()
+        XCTAssertTrue(app.buttons["open-settings"].waitForExistence(timeout: 15))
+        app.buttons["open-settings"].tap()
+        openKeysFromSettings()
+        assertFourFixtureRows()
+    }
+
+    func testColdRestoredSettingsSceneLoadsKeys() throws {
+        guard UIDevice.current.userInterfaceIdiom == .pad else {
+            throw XCTSkip("Cold Settings restoration requires the prepared iPad scene")
+        }
+        // The shell producer owns uninstall, both launches, and termination.
+        // Attaching must not replace Launch #2's deliberately seed-free vector.
+        app.activate()
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 20),
+                      "The independent Settings scene must be cold-restored")
+        XCTAssertFalse(app.buttons["add-connection"].isHittable,
+                       "Settings, not the connection list, must be the restored foreground scene")
+        openKeysFromSettings()
+        assertFourFixtureRows()
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = "cold-restored-settings-keys"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
+    private func openKeysFromSettings() {
+        let keys = app.buttons["settings-ssh-keys"]
+        XCTAssertTrue(keys.waitForExistence(timeout: 10))
+        keys.tap()
+        XCTAssertTrue(app.navigationBars["SSH Keys"].waitForExistence(timeout: 10))
+    }
+
+    private func assertFourFixtureRows() {
+        let rows = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'key-row-'"))
+        XCTAssertEqual(rows.count, 4)
+        XCTAssertEqual(app.buttons["key-row-Disabled Fixture"].value as? String, "Disabled")
+        for label in ["Fixture Ed25519", "Fixture Ed25519 Passphrase", "Fixture Hop2 Unauthorized"] {
+            XCTAssertEqual(app.buttons["key-row-\(label)"].value as? String, "Enabled")
+        }
+        XCTAssertEqual(app.staticTexts.matching(identifier: "key-type-badge").count, 4)
+        XCTAssertFalse(app.staticTexts["Secure Enclave"].exists)
     }
 
     private func openMenu(actionIdentifier: String, actionLabel: String) {

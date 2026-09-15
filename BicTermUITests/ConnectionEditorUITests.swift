@@ -81,8 +81,8 @@ final class ConnectionEditorUITests: XCTestCase {
 
         let keySelector = app.buttons["key-selector"]
         scrollToHittable(keySelector)
-        XCTAssertTrue(keySelector.label.contains("Fixture Ed25519"),
-                      "editor must reopen with the same key label")
+        XCTAssertTrue(keySelector.label.contains("1 selected keys"),
+                      "editor must reopen with the custom key count")
 
         let firstHop = app.staticTexts["hop-0-host"]
         scrollToHittable(firstHop)
@@ -155,8 +155,7 @@ final class ConnectionEditorUITests: XCTestCase {
         )
 
         app.buttons["key-Fixture-Ed25519"].tap()
-        XCTAssertTrue(app.staticTexts["Fixture Ed25519"].waitForExistence(timeout: 5),
-                      "selected key label must appear on the key row")
+        XCTAssertNotEqual(app.buttons["key-Fixture-Ed25519"].value as? String, "Selected")
     }
 
     // MARK: Key picker — inline generate/import/copy + live list
@@ -186,7 +185,7 @@ final class ConnectionEditorUITests: XCTestCase {
         openEditorForNewConnection()
         app.buttons["key-selector"].tap()
         XCTAssertTrue(
-            app.navigationBars["Select Key"].waitForExistence(timeout: 5),
+            app.navigationBars["Customize Keys"].waitForExistence(timeout: 5),
             "Key picker did not open"
         )
     }
@@ -202,6 +201,7 @@ final class ConnectionEditorUITests: XCTestCase {
         XCTAssertTrue(app.buttons["picker-empty-generate"].exists, "Empty state must offer Generate Key")
         XCTAssertTrue(app.buttons["picker-empty-import"].exists, "Empty state must offer Import Key")
         XCTAssertTrue(app.buttons["picker-add-menu"].exists, "Toolbar add menu must exist in the empty state")
+        XCTAssertTrue(app.buttons["use-all-enabled-keys"].exists, "An empty pool must still allow returning to inheritance")
     }
 
     func testGenerateKeyInlineAutoSelectsInEditor() {
@@ -222,7 +222,7 @@ final class ConnectionEditorUITests: XCTestCase {
             "Saving a key inline must auto-select it and return to the editor"
         )
         XCTAssertTrue(
-            keySelector.label.contains("Inline Key"),
+            keySelector.label.contains("1 offered"),
             "Editor key row must show the inline-generated key, got: \(keySelector.label)"
         )
     }
@@ -252,7 +252,7 @@ final class ConnectionEditorUITests: XCTestCase {
             "Saving an imported key inline must auto-select it and return to the editor"
         )
         XCTAssertTrue(
-            keySelector.label.contains("Inline Import"),
+            keySelector.label.contains("1 offered"),
             "Editor key row must show the inline-imported key, got: \(keySelector.label)"
         )
     }
@@ -287,7 +287,7 @@ final class ConnectionEditorUITests: XCTestCase {
         selectAuthenticationKey("Fixture Ed25519")
 
         app.buttons["key-selector"].tap()
-        XCTAssertTrue(app.navigationBars["Select Key"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["Customize Keys"].waitForExistence(timeout: 5))
 
         let selected = app.buttons["key-Fixture-Ed25519"]
         XCTAssertTrue(selected.waitForExistence(timeout: 5))
@@ -343,7 +343,7 @@ final class ConnectionEditorUITests: XCTestCase {
         XCTAssertEqual(app.textFields["field-port"].value as? String, "22")
         XCTAssertEqual(app.textFields["field-username"].value as? String, "u")
         XCTAssertTrue(
-            app.buttons["key-selector"].label.contains("Fixture Ed25519"),
+            app.buttons["key-selector"].label.contains("1 selected keys"),
             "duplicate must carry the source's key selection"
         )
         XCTAssertTrue(app.buttons["save-editor"].isEnabled,
@@ -559,6 +559,7 @@ final class ConnectionEditorUITests: XCTestCase {
         let popped = NSPredicate(format: "exists == false")
         expectation(for: popped, evaluatedWith: hostField)
         waitForExpectations(timeout: 10)
+        scrollToHittable(app.textFields["field-name"], swipingUp: false)
         XCTAssertTrue(
             app.textFields["field-name"].waitForExistence(timeout: 5),
             "discarding the hop must return to the connection editor"
@@ -658,6 +659,7 @@ final class ConnectionEditorUITests: XCTestCase {
 
         app.buttons["cancel-hop"].tap()
         dialogButton(identifier: "discard-confirm", label: "Discard Changes").tap()
+        scrollToHittable(app.textFields["field-name"], swipingUp: false)
         XCTAssertTrue(app.textFields["field-name"].waitForExistence(timeout: 5),
                       "discarding the hop must return to the connection editor")
 
@@ -668,8 +670,220 @@ final class ConnectionEditorUITests: XCTestCase {
 
     // MARK: Helpers
 
+    func testOfferKeysTogglePreservesStateAndDisablesCustomize() {
+        launchApp(reset: true)
+        openEditorForNewConnection()
+        selectAuthenticationKey("Fixture Ed25519")
+        let password = app.secureTextFields["password-field"]
+        scrollToHittable(password)
+        typeInto(password, "kept-password")
+        let toggle = app.switches["offer-keys-toggle"]
+        scrollToHittable(toggle, swipingUp: false)
+        XCTAssertTrue(setToggle(toggle, on: false))
+        XCTAssertFalse(app.buttons["key-selector"].isEnabled)
+        XCTAssertEqual(password.value as? String, String(repeating: "•", count: 13))
+        XCTAssertTrue(setToggle(toggle, on: true))
+        XCTAssertTrue(app.buttons["key-selector"].isEnabled)
+        app.buttons["key-selector"].tap()
+        XCTAssertEqual(app.buttons["key-Fixture-Ed25519"].value as? String, "Selected")
+        XCTAssertNotEqual(app.buttons["key-Fixture-Hop2-Unauthorized"].value as? String, "Selected")
+        capturePortState("offer-keys-customization-preserved")
+    }
+
+    func testUseAllEnabledKeysClearsCustomSelection() {
+        app.launchArguments = ["-uitest-reset-keys", "--uitest-reset", "-uitest-seed-se-key"]
+        app.launch()
+        XCTAssertTrue(app.buttons["open-settings"].waitForExistence(timeout: 15))
+        app.buttons["open-settings"].tap()
+        XCTAssertTrue(setToggle(app.switches["settings-hardware-keys"], on: false))
+        app.navigationBars["Settings"].buttons.firstMatch.tap()
+        openKeyPickerForNewConnection()
+        XCTAssertEqual(app.buttons["key-Fixture-Ed25519"].value as? String, "Selected")
+        XCTAssertNotEqual(app.buttons["key-SE-Test-Key"].value as? String, "Selected")
+        app.buttons["key-Fixture-Ed25519"].tap()
+        XCTAssertEqual(app.staticTexts["key-selection-mode"].label, "Custom selection")
+        app.buttons["key-Fixture-Ed25519"].tap()
+        XCTAssertEqual(app.staticTexts["key-selection-mode"].label, "Using inherited keys")
+        app.buttons["key-SE-Test-Key"].tap()
+        XCTAssertEqual(app.buttons["key-SE-Test-Key"].value as? String, "Selected")
+        XCTAssertEqual(app.staticTexts["key-selection-mode"].label, "Custom selection")
+        capturePortState("customize-explicit-hardware-key")
+        app.buttons["use-all-enabled-keys"].tap()
+        XCTAssertNotEqual(app.buttons["key-SE-Test-Key"].value as? String, "Selected")
+        XCTAssertEqual(app.staticTexts["key-selection-mode"].label, "Using inherited keys")
+    }
+
+    func testDisabledRetainedKeyShowsDisabledBadge() {
+        app.launchArguments = ["-uitest-reset-keys", "--uitest-reset", "-uitest-seed-disabled-key",
+                               "--uitest-custom-disabled"]
+        app.launch()
+        openEditorForConnection(named: "Disabled-Custom")
+        app.buttons["key-selector"].tap()
+        let row = app.buttons["key-Disabled-Fixture"]
+        XCTAssertEqual(row.value as? String, "Selected")
+        XCTAssertTrue(app.staticTexts["disabled-key-badge"].exists)
+        row.tap()
+        XCTAssertNotEqual(row.value as? String, "Selected")
+        XCTAssertFalse(row.isEnabled)
+    }
+
+    func testReplacementAfterStagedRemovalSavesAndConnectsWithoutPrompting() {
+        launchPasswordFixture("both")
+        stagePasswordRemoval()
+        let password = app.secureTextFields["password-field"]
+        scrollToHittable(password, swipingUp: false)
+        typeInto(password, "bicterm-uitest-fixture-password")
+        savePasswordFixture()
+        connectPasswordFixture(expectPrompt: false)
+    }
+
+    func testPromptOnlyTagDeletedAfterSave() {
+        launchPasswordFixture("prompted")
+        stagePasswordRemoval()
+        savePasswordFixture()
+        connectPasswordFixture(expectPrompt: true)
+    }
+
+    func testBothPasswordTagsDeletedAfterSave() {
+        launchPasswordFixture("both")
+        stagePasswordRemoval()
+        savePasswordFixture()
+        connectPasswordFixture(expectPrompt: true)
+    }
+
+    func testHopSharedTagRetainedAfterSave() {
+        launchPasswordFixture("hop-shared")
+        stagePasswordRemoval()
+        savePasswordFixture()
+        openEditorForConnection(named: "Credential-Fixture")
+        assertHopPasswordSaved()
+    }
+
+    func testOtherConnectionHopTagRetained() {
+        launchPasswordFixture("other-hop")
+        stagePasswordRemoval()
+        savePasswordFixture()
+        openEditorForConnection(named: "Other-Hop")
+        assertHopPasswordSaved()
+    }
+
+    func testCancelledRemovalPreservesSavedPassword() {
+        launchPasswordFixture("both")
+        stagePasswordRemoval()
+        app.buttons["cancel-editor"].tap()
+        dialogButton(identifier: "discard-confirm", label: "Discard Changes").tap()
+        connectPasswordFixture(expectPrompt: false)
+    }
+
+    func testSaveFailurePreservesCredentials() {
+        launchPasswordFixture("both", extra: ["--uitest-editor-save-fail"])
+        stagePasswordRemoval()
+        app.buttons["save-editor"].tap()
+        let error = app.staticTexts["save-error"]
+        scrollToHittable(error)
+        XCTAssertTrue(error.waitForExistence(timeout: 5))
+        app.terminate()
+        app.launchArguments = ["--uitest-pwd-server", "--uitest-pretrust-fixtures"]
+        app.launch()
+        connectPasswordFixture(expectPrompt: false)
+    }
+
+    func testDuplicateSharedPasswordSurvivesRemoval() {
+        launchPasswordFixture("saved")
+        app.buttons["cancel-editor"].tap()
+        swipeRow(named: "Credential-Fixture")
+        app.buttons["duplicate-Credential-Fixture"].tap()
+        XCTAssertTrue(app.buttons["save-editor"].waitForExistence(timeout: 5))
+        app.buttons["save-editor"].tap()
+        XCTAssertTrue(app.buttons["connection-Credential-Fixture-(copy)"].waitForExistence(timeout: 5))
+        openEditorForConnection(named: "Credential-Fixture")
+        stagePasswordRemoval()
+        savePasswordFixture()
+        connectPasswordFixture(expectPrompt: false, name: "Credential-Fixture-(copy)")
+    }
+
+    func testStagedRemovalCancelledByReplacementInput() {
+        launchPasswordFixture("saved")
+        stagePasswordRemoval()
+        let password = app.secureTextFields["password-field"]
+        scrollToHittable(password, swipingUp: false)
+        typeInto(password, "bicterm-uitest-fixture-password")
+        XCTAssertFalse(app.staticTexts["password-removal-status"].exists)
+        XCTAssertTrue(app.staticTexts["password-field-status"].label.contains("Will be saved"))
+        savePasswordFixture()
+        openEditorForConnection(named: "Credential-Fixture")
+        let badge = app.staticTexts["password-saved-badge"]
+        scrollToHittable(badge)
+        XCTAssertTrue(badge.waitForExistence(timeout: 5))
+    }
+
+    func testOfferCountWarningUsesEffectiveResolverCount() {
+        app.launchArguments = ["-uitest-reset-keys", "--uitest-reset", "-uitest-seed-offer-warning",
+                               "-uitest-seed-disabled-key"]
+        app.launch()
+        openEditorForNewConnection()
+        let warning = app.staticTexts["offer-count-warning"]
+        scrollToHittable(warning)
+        XCTAssertEqual(warning.label, "6 keys will be offered. Many servers allow only 6 authentication attempts and may disconnect before later keys are tried.")
+        capturePortState("six-key-offer-warning")
+        let toggle = app.switches["offer-keys-toggle"]
+        scrollToHittable(toggle, swipingUp: false)
+        XCTAssertTrue(setToggle(toggle, on: false))
+        XCTAssertFalse(warning.exists)
+        XCTAssertTrue(setToggle(toggle, on: true))
+        app.buttons["key-selector"].tap()
+        app.buttons["key-Fixture-Ed25519"].tap()
+        app.buttons["customize-done"].tap()
+        XCTAssertFalse(warning.exists)
+    }
+
+    private func launchPasswordFixture(_ mode: String, extra: [String] = []) {
+        app.launchArguments = ["--uitest-reset", "--uitest-pwd-server", "--uitest-pretrust-fixtures",
+                               "--uitest-editor-password-fixture", mode] + extra
+        app.launch()
+        XCTAssertTrue(app.buttons["connection-Credential-Fixture"].waitForExistence(timeout: 15))
+        openEditorForConnection(named: "Credential-Fixture")
+    }
+
+    private func stagePasswordRemoval() {
+        let remove = app.buttons["remove-saved-password"]
+        scrollToHittable(remove)
+        XCTAssertTrue(remove.waitForExistence(timeout: 5))
+        remove.tap()
+        XCTAssertTrue(app.staticTexts["password-removal-status"].exists)
+    }
+
+    private func savePasswordFixture() {
+        app.buttons["save-editor"].tap()
+        XCTAssertTrue(app.buttons["connection-Credential-Fixture"].waitForExistence(timeout: 10))
+    }
+
+    private func connectPasswordFixture(expectPrompt: Bool, name: String = "Credential-Fixture") {
+        let row = app.buttons["connection-\(name)"]
+        XCTAssertTrue(row.waitForExistence(timeout: 15))
+        row.tap()
+        if app.buttons["trust-confirm"].waitForExistence(timeout: 3) { app.buttons["trust-confirm"].tap() }
+        if expectPrompt {
+            XCTAssertTrue(app.secureTextFields["password-prompt-field"].waitForExistence(timeout: 15))
+        } else {
+            let status = app.staticTexts["scene-statuschip-\(name)"]
+            expectation(for: NSPredicate(format: "label == 'Connected'"), evaluatedWith: status)
+            waitForExpectations(timeout: 15)
+            XCTAssertFalse(app.secureTextFields["password-prompt-field"].exists)
+        }
+    }
+
+    private func assertHopPasswordSaved() {
+        let edit = app.buttons["edit-hop-0"]
+        scrollToHittable(edit)
+        edit.tap()
+        let badge = app.staticTexts["hop-password-saved-badge"]
+        scrollToHittable(badge)
+        XCTAssertTrue(badge.waitForExistence(timeout: 5))
+    }
+
     private func launchApp(reset: Bool) {
-        app.launchArguments = reset ? ["--uitest-reset"] : []
+        app.launchArguments = reset ? ["-uitest-reset-keys", "--uitest-reset"] : []
         app.launch()
     }
 
@@ -727,7 +941,7 @@ final class ConnectionEditorUITests: XCTestCase {
             toolbarDone.tap()
             return
         }
-        if plainDone.exists {
+        if plainDone.exists && plainDone.isHittable && plainDone.identifier != "customize-done" {
             plainDone.tap()
             return
         }
@@ -781,10 +995,21 @@ final class ConnectionEditorUITests: XCTestCase {
 
     private func selectAuthenticationKey(_ label: String) {
         dismissKeyboard()
-        app.buttons["key-selector"].tap()
-        let key = app.buttons["key-\(label.replacingOccurrences(of: " ", with: "-"))"]
-        XCTAssertTrue(key.waitForExistence(timeout: 5), "key \(label) must be listed")
-        key.tap()
+        let selector = app.buttons["key-selector"]
+        scrollToHittable(selector)
+        selector.tap()
+        selectOnlyKey(label)
+        app.buttons["customize-done"].tap()
+    }
+
+    private func selectOnlyKey(_ label: String) {
+        let identifier = "key-\(label.replacingOccurrences(of: " ", with: "-"))"
+        XCTAssertTrue(app.buttons[identifier].waitForExistence(timeout: 5))
+        let rows = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'key-' AND identifier != 'key-selection-mode'"))
+        for row in rows.allElementsBoundByIndex {
+            let desired = row.identifier == identifier
+            if (row.value as? String == "Selected") != desired, row.isEnabled { row.tap() }
+        }
     }
 
     /// A SwiftUI Form Toggle's XCUI element spans the whole row; tapping its
@@ -828,7 +1053,8 @@ final class ConnectionEditorUITests: XCTestCase {
         app.buttons["hop-key-selector"].tap()
         let keyButton = app.buttons["key-\(key.replacingOccurrences(of: " ", with: "-"))"]
         XCTAssertTrue(keyButton.waitForExistence(timeout: 5))
-        keyButton.tap()
+        selectOnlyKey(key)
+        app.buttons["customize-done"].tap()
 
         let save = app.buttons["save-hop"]
         XCTAssertTrue(save.waitForExistence(timeout: 5))
