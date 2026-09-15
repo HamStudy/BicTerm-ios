@@ -38,7 +38,7 @@ final class TerminalSurface: NSObject, @preconcurrency TerminalViewDelegate {
 
     init(
         output: AsyncStream<Data>,
-        resync: AsyncStream<Void>,
+        resync: AsyncStream<TerminalResyncCommand>,
         send: @escaping @Sendable (Data) -> Void,
         onResize: @escaping @Sendable (_ cols: Int, _ rows: Int) -> Void,
         fontSize: Double = TerminalFontSettings.defaultSize,
@@ -93,14 +93,20 @@ final class TerminalSurface: NSObject, @preconcurrency TerminalViewDelegate {
             }
         }
 
-        // Full VT reset (RIS semantics: screen, modes, buffers). Used after
-        // a rehandshake (server-side session replaced) and after a detected
-        // inbound drop (stream suspect); the registry's redraw poke then
-        // refills the fresh screen.
+        // Resync commands carry their reset flavor: a suspect screen
+        // (loss-corrupted stream, user-tapped resync, or a reconnect while
+        // suspect) takes the full RIS — screen, modes, buffers — while a
+        // clean reconnect resets session modes only, preserving the
+        // transcript. The registry's redraw poke then refills the screen.
         resyncTask = Task { [weak view] in
-            for await _ in resync {
+            for await command in resync {
                 await MainActor.run {
-                    view?.getTerminal().resetToInitialState()
+                    switch command {
+                    case .fullReset:
+                        view?.getTerminal().resetToInitialState()
+                    case .modesOnly:
+                        view?.getTerminal().resetSessionModes()
+                    }
                 }
             }
         }

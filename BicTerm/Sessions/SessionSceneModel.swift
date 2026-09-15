@@ -2,6 +2,19 @@ import BicTermCore
 import Foundation
 import SwiftUI
 
+/// What a resync command asks the session's terminal surface to reset.
+/// A suspect local screen (loss-corrupted stream, or the user tapped
+/// Resync because it looks wrong) needs the full RIS; a clean reconnect
+/// only needs the replaced shell's input modes cleared so the
+/// transcript survives.
+enum TerminalResyncCommand: Sendable {
+    /// Full VT reset (RIS semantics: screen, modes, buffers).
+    case fullReset
+    /// Resets session protocol modes (mouse, bracketed paste, cursor/
+    /// keypad, alt-screen) while preserving the transcript.
+    case modesOnly
+}
+
 /// Per-scene binding between one terminal window (or iPhone cover) and its
 /// single registry session: state observation, terminal I/O forwarding, the
 /// manual-reconnect action, close confirmation, and scene-phase wiring.
@@ -56,8 +69,8 @@ final class SessionSceneModel: Identifiable {
     private var viewOutputContinuation: AsyncStream<Data>.Continuation
     /// Local VT reset commands for the session's terminal surface (one
     /// consumer: the surface's resync task).
-    let resyncCommands: AsyncStream<Void>
-    private var resyncCommandContinuation: AsyncStream<Void>.Continuation
+    let resyncCommands: AsyncStream<TerminalResyncCommand>
+    private var resyncCommandContinuation: AsyncStream<TerminalResyncCommand>.Continuation
 
     private var stateTask: Task<Void, Never>?
     private var pumpTask: Task<Void, Never>?
@@ -88,7 +101,7 @@ final class SessionSceneModel: Identifiable {
         let (stream, continuation) = AsyncStream<Data>.makeStream(bufferingPolicy: .bufferingNewest(256))
         self.viewOutput = stream
         self.viewOutputContinuation = continuation
-        let (resyncStream, resyncContinuation) = AsyncStream<Void>.makeStream(
+        let (resyncStream, resyncContinuation) = AsyncStream<TerminalResyncCommand>.makeStream(
             bufferingPolicy: .bufferingNewest(4)
         )
         self.resyncCommands = resyncStream
@@ -250,10 +263,12 @@ final class SessionSceneModel: Identifiable {
 
     /// A rehandshaked session was adopted: the remote shell was replaced,
     /// so the local surface is reset and the remote poked into a redraw.
+    /// A suspect stream takes the full RIS (its screen cannot be trusted);
+    /// a clean reconnect resets modes only, preserving the transcript.
     /// Normal reconnects surface as a brief toast; a suspect stream keeps
     /// the louder banner up instead.
     private func refreshTerminalAfterReconnect() {
-        resyncCommandContinuation.yield()
+        resyncCommandContinuation.yield(syncSuspect ? .fullReset : .modesOnly)
         if syncSuspect {
             return
         }
@@ -291,11 +306,12 @@ final class SessionSceneModel: Identifiable {
 
     /// One-tap resync from the out-of-sync banner: local VT reset plus a
     /// remote redraw poke. Clears the suspicion — the screen is being
-    /// rebuilt from fresh remote state.
+    /// rebuilt from fresh remote state. Always a full reset: the user
+    /// tapped because the screen looks wrong.
     func resyncNow() {
         guard !isClosed else { return }
         syncSuspect = false
-        resyncCommandContinuation.yield()
+        resyncCommandContinuation.yield(.fullReset)
         let registry = self.registry
         let sceneID = self.sceneID
         Task { await registry.resync(sceneID: sceneID) }
