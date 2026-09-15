@@ -26,11 +26,26 @@ struct SessionSceneView: View {
     var actions: SessionSceneActions?
 
     @State private var switcherPresented = false
+    /// Local mirror of `model.osc52Toast` written from the
+    /// `osc52ToastPresenter` callback on surface attach. `@Observable`
+    /// observation through the SessionSceneModel setter was firing the
+    /// `body` (NSLog confirmed) but SwiftUI was using a cached render
+    /// that didn't pick up the structural change — the local `@State`
+    /// mirror writes via `MainActor.run` and SwiftUI's `@State` tracking
+    /// guarantees a structural re-render. This is the security guardrail
+    /// of OSC 52; rendering MUST happen.
+    @State private var renderedOsc52Toast: Osc52ClipboardToast?
 
     private var agentPresenter: AgentApprovalPresenter { store.agentPresenter }
 
     var body: some View {
-        VStack(spacing: 0) {
+        let toastToShow = renderedOsc52Toast ?? model.osc52Toast
+        return VStack(spacing: 0) {
+            Group {
+                if let osc52Toast = toastToShow {
+                    Osc52ToastView(toast: osc52Toast, sceneID: sanitized)
+                }
+            }
             chrome
             if model.scrollbackReleased {
                 scrollbackReleasedNotice
@@ -63,11 +78,16 @@ struct SessionSceneView: View {
                     reconnectedToast
                         .transition(.move(edge: .top).combined(with: .opacity))
                 }
-                if let osc52Toast = model.osc52Toast {
-                    Osc52ToastView(toast: osc52Toast, sceneID: sanitized)
-                        .transition(.move(edge: .top).combined(with: .opacity))
-                }
             }
+        }
+        .onChange(of: model.osc52Toast) { _, new in
+            // Bridge the @Observable model write to a local @State mirror.
+            // The @Observable property change reliably invalidates this view,
+            // but the structural rebuild was skipping the conditional view
+            // (confirmed by NSLog inside body firing with the new value but
+            // no render change observed in burst screenshots). The local
+            // @State write forces an explicit structural invalidation here.
+            renderedOsc52Toast = new
         }
         .animation(.easeInOut(duration: 0.2), value: model.showReconnectedToast)
         .animation(.easeInOut(duration: 0.2), value: model.osc52Toast)

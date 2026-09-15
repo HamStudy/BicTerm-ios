@@ -286,6 +286,9 @@ final class TerminalViewCache {
         if let entry = entries[sessionID] {
             touch(sessionID)
             model.surfaceAttached()
+            #if DEBUG
+            Self.maybeFireUITestOsc52Trigger(on: entry.surface, connectionName: model.connectionName)
+            #endif
             return SurfaceAttachment(surface: entry.surface, generation: generation)
         }
 
@@ -374,10 +377,10 @@ final class TerminalViewCache {
             return
         }
         NSLog("TerminalViewCache: firing --uitest-osc52-trigger on \"\(connectionName)\"")
-        // Settle so the foreground predicate (`view.window?.isKeyWindow`)
-        // has a stable answer. 1.2 s is generous so the SSH transport
-        // has reached a connected state and the key window is the host.
-        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(1200)) {
+        // Fire immediately so the toast appears within the screenshot
+        // burst window; the foreground predicate is evaluated at fire
+        // time and the key window settles before the view appears.
+        DispatchQueue.main.async {
             let payload = "aGVsbG8gZnJvbSBoZXJkciE="  // "hello from herdr!"
             let bytes: [UInt8] = Array("\u{1B}]52;c;\(payload)\u{07}".utf8)
             surface.view.feed(byteArray: bytes[...])

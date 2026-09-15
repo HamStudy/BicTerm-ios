@@ -35,30 +35,42 @@ struct Osc52ClipboardToast: Equatable, Sendable {
 /// with the in-app reconnect signal. No focus shift, no input capture,
 /// no accessibility element that steals the screen reader — toast is
 /// advisory only.
+///
+/// Styling uses hard-coded `Color` / `Font` (not the `terminalColors` /
+/// `terminalTypography` environment) because the overlay is hosted by
+/// `SessionSceneView` inside a SwiftUI `.overlay { ... }` closure whose
+/// re-evaluation may sample the environment values from a build context
+/// that has not propagated the latest `terminalStyle()` injection —
+/// `@Environment(\.terminalColors)` returned empty colors for the
+/// overlay under iOS 26.3, causing the toast to render with
+/// `Color.clear` text/background and zero-frame image. Hard-coded tokens
+/// avoid the propagation race and keep the security guardrail visible
+/// regardless of where the toast is hosted.
 struct Osc52ToastView: View {
-    @Environment(\.terminalColors) private var colors
-    @Environment(\.terminalTypography) private var typography
-    @Environment(\.terminalSpacing) private var spacing
-
     let toast: Osc52ClipboardToast
     /// Identifier suffix so multiple sessions can coexist in the
     /// accessibility tree without colliding.
     var sceneID: String = ""
 
     var body: some View {
-        HStack(spacing: spacing.xs) {
+        HStack(spacing: 8) {
             Image(systemName: symbolName)
-                .foregroundColor(colors.success)
+                .foregroundColor(.green)
             Text(toast.fullText)
-                .font(typography.caption)
-                .foregroundColor(colors.foreground)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(.primary)
         }
-        .padding(.horizontal, spacing.sm)
-        .padding(.vertical, spacing.xs)
-        .background(colors.selection.opacity(0.9), in: Capsule())
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Color(.systemBackground).opacity(0.92), in: Capsule())
+        .overlay(
+            Capsule()
+                .strokeBorder(Color.green.opacity(0.6), lineWidth: 1)
+        )
+        .shadow(color: Color.black.opacity(0.15), radius: 4, y: 2)
         .accessibilityIdentifier("osc52-toast-\(sceneID)")
         .accessibilityLabel(toast.fullText)
-        .padding(.top, spacing.xs)
+        .padding(.top, 4)
         .allowsHitTesting(false)
     }
 
