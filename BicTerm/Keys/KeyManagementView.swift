@@ -2,7 +2,7 @@ import BicTermCore
 import SwiftUI
 
 struct KeyManagementView: View {
-    @State private var keyStore = KeyStore()
+    @Environment(KeyStore.self) private var keyStore
     @State private var showingGenerate = false
     @State private var showingImport = false
 
@@ -14,7 +14,7 @@ struct KeyManagementView: View {
                 showingImport: $showingImport
             )
         }
-        .onAppear {
+        .task {
             #if DEBUG
             UITestSupport.activate()
             #endif
@@ -23,10 +23,10 @@ struct KeyManagementView: View {
             UITestSupport.seedConnectionIfNeeded()
             #endif
         }
-        .sheet(isPresented: $showingGenerate, onDismiss: { keyStore.refresh() }) {
+        .sheet(isPresented: $showingGenerate) {
             GenerateKeySheet(keyStore: keyStore)
         }
-        .sheet(isPresented: $showingImport, onDismiss: { keyStore.refresh() }) {
+        .sheet(isPresented: $showingImport) {
             ImportKeySheet(keyStore: keyStore)
         }
     }

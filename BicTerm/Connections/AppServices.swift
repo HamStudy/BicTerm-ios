@@ -19,6 +19,8 @@ final class AppServices {
     let connectionStore: any ConnectionStoreProtocol
     let herdStore: any HerdStoreProtocol
     let keyRepository = KeychainKeyRepository()
+    let keyStore = KeyStore()
+    let keyAvailabilityPreferences = KeyAvailabilityPreferences()
     let passwordStore: any PasswordStoring
 
     #if DEBUG

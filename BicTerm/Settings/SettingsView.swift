@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(TerminalMarginModel.self) private var marginModel
+    @Environment(KeyAvailabilityPreferences.self) private var keyPreferences
     @Environment(\.terminalColors) var colors
     @Environment(\.terminalTypography) var typography
     @Environment(\.terminalSpacing) var spacing
@@ -19,6 +20,7 @@ struct SettingsView: View {
     let osc52Model: Osc52ClipboardModel
 
     var body: some View {
+        @Bindable var keyPreferences = keyPreferences
         List {
             Section("Appearance") {
                 NavigationLink {
@@ -67,7 +69,7 @@ struct SettingsView: View {
                 .accessibilityIdentifier("settings-margins")
             }
 
-            Section("Security") {
+            Section {
                 NavigationLink {
                     KeyManagementView()
                 } label: {
@@ -77,8 +79,7 @@ struct SettingsView: View {
                 }
                 .listRowBackground(colors.background)
                 .accessibilityIdentifier("settings-ssh-keys")
-
-                Toggle(isOn: Binding(
+Toggle(isOn: Binding(
                     get: { osc52Model.writesEnabled },
                     set: { osc52Model.setWritesEnabled($0) }
                 )) {
@@ -96,6 +97,17 @@ struct SettingsView: View {
                 .foregroundStyle(colors.foreground)
                 .listRowBackground(colors.background)
                 .accessibilityIdentifier("settings-osc52-writes")
+
+                Toggle("Offer Hardware Keys by Default", isOn: $keyPreferences.hardwareOfferedByDefault)
+                    .font(typography.body)
+                    .foregroundStyle(colors.foreground)
+                    .tint(colors.accent)
+                    .listRowBackground(colors.background)
+                    .accessibilityIdentifier("settings-hardware-keys")
+            } header: {
+                Text("Security")
+            } footer: {
+                Text("Applies to keys offered by default. Explicitly selected keys always apply.")
             }
 
             Section("About") {

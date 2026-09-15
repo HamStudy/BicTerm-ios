@@ -198,7 +198,8 @@ final class SessionStore {
                 authorizer: authorizer,
                 book: book,
                 verifier: verifier,
-                passwordPrompt: passwordPresenter
+                passwordPrompt: passwordPresenter,
+                hardwareKeysEnabledByDefault: AppServices.shared.keyAvailabilityPreferences.hardwareKeysEnabledByDefault
             )
         }
 
@@ -478,12 +479,14 @@ final class SessionStore {
         authorizer: AgentAuthorizationService,
         book: AgentSessionBook,
         verifier: HostKeyVerifier,
-        passwordPrompt: any SSHPasswordPrompting
+        passwordPrompt: any SSHPasswordPrompting,
+        hardwareKeysEnabledByDefault: @escaping @Sendable () -> Bool
     ) -> any TerminalTransportFactory {
         var registry = TransportRegistry()
         registry.register(.ssh, factory: SSHSessionTransportFactory(
             hostKeyVerifier: verifier, passwordStore: AppServices.shared.passwordStore,
-            passwordPrompt: passwordPrompt
+            passwordPrompt: passwordPrompt,
+            hardwareKeysEnabledByDefault: hardwareKeysEnabledByDefault
         ))
         return AgentForwardingTransportFactory(
             base: registry,

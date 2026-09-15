@@ -13,9 +13,7 @@ struct KeyPickerView: View {
     @Environment(\.terminalTypography) var typography
     @Environment(\.terminalSpacing) var spacing
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.scenePhase) private var scenePhase
-
-    @State private var keyStore = KeyStore()
+    @Environment(KeyStore.self) private var keyStore
     @State private var showingGenerate = false
     @State private var showingImport = false
     @State private var knownReferences: Set<String> = []
@@ -72,13 +70,7 @@ struct KeyPickerView: View {
                 .accessibilityIdentifier("picker-add-menu")
             }
         }
-        .onAppear { keyStore.refresh() }
-        .onChange(of: scenePhase) { _, phase in
-            // A picker left open in one iPad window re-reads the Keychain when
-            // its scene reactivates, so keys mutated in another window or via
-            // Key Management never leave this list stale.
-            if phase == .active { keyStore.refresh() }
-        }
+        .task { keyStore.refresh() }
         .sheet(isPresented: $showingGenerate, onDismiss: handleSheetDismiss) {
             GenerateKeySheet(keyStore: keyStore)
         }
@@ -225,7 +217,6 @@ struct KeyPickerView: View {
 
     private func handleSheetDismiss() {
         let previous = knownReferences
-        keyStore.refresh()
         guard let added = keyStore.keys.first(where: { !previous.contains($0.id) }) else { return }
         onSelect(added.metadata)
         dismiss()

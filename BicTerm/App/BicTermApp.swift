@@ -197,6 +197,8 @@ struct BicTermApp: App {
                 #endif
             }
             .environment(sessionStore.terminalMargin)
+            .environment(AppServices.shared.keyStore)
+            .environment(AppServices.shared.keyAvailabilityPreferences)
         }
 
         WindowGroup("Terminal", id: "terminal", for: SessionID.self) { $sessionID in
@@ -221,6 +223,8 @@ struct BicTermApp: App {
                 #endif
             }
             .environment(sessionStore.terminalMargin)
+            .environment(AppServices.shared.keyStore)
+            .environment(AppServices.shared.keyAvailabilityPreferences)
         }
 
         WindowGroup("Herdr Workspace", id: "herdr", for: SessionID.self) { $sessionID in
@@ -253,6 +257,8 @@ struct BicTermApp: App {
             }
             .appAppearance(sessionStore.theme)
             .environment(sessionStore.terminalMargin)
+            .environment(AppServices.shared.keyStore)
+            .environment(AppServices.shared.keyAvailabilityPreferences)
         }
 
         WindowGroup("Settings", id: "settings", for: SettingsWindowValue.self) { _ in
@@ -288,6 +294,8 @@ struct BicTermApp: App {
             }
             .appAppearance(sessionStore.theme)
             .environment(sessionStore.terminalMargin)
+            .environment(AppServices.shared.keyStore)
+            .environment(AppServices.shared.keyAvailabilityPreferences)
         }
     }
 }

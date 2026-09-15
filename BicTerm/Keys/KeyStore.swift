@@ -82,12 +82,15 @@ final class KeyStore {
 
     func generate(label: String, type: KeyType, requiresBiometry: Bool) async throws -> KeyMetadata {
         do {
+            let metadata: KeyMetadata
             switch type {
             case .ed25519:
-                return try await repository.generateEd25519(label: label, requiresBiometry: requiresBiometry)
+                metadata = try await repository.generateEd25519(label: label, requiresBiometry: requiresBiometry)
             case .secureEnclaveP256:
-                return try await secureEnclaveService.generate(label: label, requiresBiometry: requiresBiometry)
+                metadata = try await secureEnclaveService.generate(label: label, requiresBiometry: requiresBiometry)
             }
+            refresh()
+            return metadata
         } catch {
             throw KeyStoreError.from(error)
         }
@@ -95,12 +98,14 @@ final class KeyStore {
 
     func importKey(_ data: Data, passphrase: Data?, label: String, requiresBiometry: Bool) async throws -> KeyMetadata {
         do {
-            return try await repository.importOpenSSHPrivateKey(
+            let metadata = try await repository.importOpenSSHPrivateKey(
                 data,
                 passphrase: passphrase,
                 label: label,
                 requiresBiometry: requiresBiometry
             )
+            refresh()
+            return metadata
         } catch {
             throw KeyStoreError.from(error)
         }
@@ -110,6 +115,7 @@ final class KeyStore {
         let service = item.isSecureEnclave ? Self.secureEnclaveService : Self.ed25519Service
         do {
             try KeychainItemQuery.deleteItem(service: service, reference: item.metadata.reference)
+            refresh()
         } catch {
             throw KeyStoreError.from(error)
         }

@@ -311,6 +311,7 @@ final class HerdSessionCoordinator {
         approve: @escaping @Sendable (HerdrHostTrustChallenge) async -> Bool
     ) -> MachineConnect {
         let searchPaths = liveSearchPaths()
+        let hardwareKeysEnabledByDefault = AppServices.shared.keyAvailabilityPreferences.hardwareKeysEnabledByDefault
         return { connection, hostKeyVerifier in
             let verifier: HostKeyVerifier
             #if DEBUG
@@ -334,6 +335,7 @@ final class HerdSessionCoordinator {
             #endif
             let connector = HerdrEndpointConnector(
                 hostKeyVerifier: verifier,
+                hardwareKeysEnabledByDefault: hardwareKeysEnabledByDefault,
                 searchPaths: searchPaths,
                 approveHostKey: approve
             )
