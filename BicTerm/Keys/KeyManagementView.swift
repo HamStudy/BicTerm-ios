@@ -52,16 +52,16 @@ struct KeyListView: View {
                 .accessibilityIdentifier("key-empty-state")
             } else {
                 List {
+                    if keyStore.enabledCount > 5 {
+                        Text("\(keyStore.enabledCount) keys are enabled. Many servers allow only 6 authentication attempts and may disconnect before later keys are tried.")
+                            .font(typography.caption)
+                            .foregroundStyle(colors.dimmed)
+                            .accessibilityIdentifier("enabled-count-banner")
+                            .listRowBackground(colors.background)
+                    }
                     ForEach(keyStore.keys) { item in
-                        NavigationLink {
-                            KeyDetailView(keyStore: keyStore, item: item)
-                        } label: {
-                            KeyRowView(item: item)
-                        }
-                        .buttonStyle(.plain)
+                        KeyToggleRow(keyStore: keyStore, item: item)
                         .listRowBackground(colors.background)
-                        .accessibilityIdentifier("key-row-\(item.metadata.label)")
-                        .accessibilityValue(item.metadata.enabledByDefault ? "Enabled" : "Disabled")
                     }
                 }
                 .listStyle(.insetGrouped)
@@ -98,6 +98,62 @@ struct KeyListView: View {
                 .accessibilityLabel("Add Key")
                 .accessibilityIdentifier("keys-add-menu")
             }
+        }
+    }
+}
+
+private struct KeyToggleRow: View {
+    @Environment(\.terminalColors) private var colors
+    @Environment(\.terminalTypography) private var typography
+
+    let keyStore: KeyStore
+    let item: KeyListItem
+
+    @State private var errorMessage: String?
+
+    var body: some View {
+        VStack(alignment: .leading) {
+            HStack {
+                NavigationLink {
+                    KeyDetailView(keyStore: keyStore, item: item)
+                } label: {
+                    KeyRowView(item: item)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("key-row-\(item.metadata.label)")
+                .accessibilityValue(item.metadata.enabledByDefault ? "Enabled" : "Disabled")
+
+                Toggle("Enabled", isOn: Binding(
+                    get: { item.metadata.enabledByDefault },
+                    set: { enabled in
+                        Task { await setEnabled(enabled) }
+                    }
+                ))
+                .labelsHidden()
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
+                .accessibilityLabel("Enable \(item.metadata.label)")
+                .accessibilityIdentifier("key-enabled-toggle-\(item.metadata.reference)")
+            }
+            if let errorMessage {
+                Text(errorMessage)
+                    .font(typography.caption)
+                    .foregroundColor(colors.error)
+                    .accessibilityIdentifier("key-toggle-error")
+            }
+        }
+    }
+
+    private func setEnabled(_ enabled: Bool) async {
+        let priorState = item.metadata.enabledByDefault
+        guard enabled != priorState else { return }
+        errorMessage = nil
+        do {
+            try await keyStore.setEnabled(enabled, item: item)
+        } catch {
+            keyStore.refresh()
+            errorMessage = (error as? KeyStoreError)?.message
+                ?? KeyStoreError.actionFailed(String(describing: error)).message
         }
     }
 }

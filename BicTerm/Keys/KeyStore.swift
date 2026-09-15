@@ -55,6 +55,10 @@ final class KeyStore {
 
     private(set) var keys: [KeyListItem] = []
 
+    var enabledCount: Int {
+        keys.count { $0.metadata.enabledByDefault }
+    }
+
     init(
         repository: KeychainKeyRepository = KeychainKeyRepository(),
         secureEnclaveService: SecureEnclaveKeyService = SecureEnclaveKeyService(),
@@ -73,7 +77,15 @@ final class KeyStore {
                 KeyListItem(metadata: $0.metadata, createdDate: $0.createdDate)
             })
         }
-        keys = items.sorted { $0.metadata.label.localizedCaseInsensitiveCompare($1.metadata.label) == .orderedAscending }
+        var seen = Set<String>()
+        keys = items
+            .filter { seen.insert($0.metadata.reference).inserted }
+            .sorted { lhs, rhs in
+                let order = lhs.metadata.label.caseInsensitiveCompare(rhs.metadata.label)
+                return order == .orderedSame
+                    ? lhs.metadata.reference < rhs.metadata.reference
+                    : order == .orderedAscending
+            }
     }
 
     func authorize(reason: String) async -> Bool {
@@ -121,10 +133,80 @@ final class KeyStore {
         }
     }
 
+    func setEnabled(_ enabled: Bool, item: KeyListItem) async throws {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--uitest-key-toggle-fail") {
+            throw KeyStoreError.actionFailed("the test rejected the key toggle")
+        }
+        #endif
+        do {
+            if item.isSecureEnclave {
+                try secureEnclaveService.setEnabled(enabled, reference: item.metadata.reference)
+            } else {
+                try repository.setEnabled(enabled, reference: item.metadata.reference)
+            }
+            refresh()
+        } catch {
+            throw KeyStoreError.from(error)
+        }
+    }
+
     func connectionsReferencing(_ item: KeyListItem) async -> [Connection] {
         guard let store = try? PersistenceStoreFactory.makeConfigurationStore() else { return [] }
         guard let connections = try? await store.loadConnections() else { return [] }
-        return connections.filter { $0.customKeys?.contains(item.metadata.reference) == true }
+        return connectionsReferencing(item, in: connections)
+    }
+
+    func connectionsReferencing(_ item: KeyListItem, in connections: [Connection]) -> [Connection] {
+        connections.filter { connection in
+            endpointMatches(in: connection) { _, customKeys in
+                customKeys?.contains(item.metadata.reference) == true
+            }
+        }
+    }
+
+    func connectionsOfferingByDefault(
+        _ item: KeyListItem,
+        hardwareKeysEnabledByDefault: Bool
+    ) async -> [Connection] {
+        guard let store = try? PersistenceStoreFactory.makeConfigurationStore() else { return [] }
+        guard let connections = try? await store.loadConnections() else { return [] }
+        return connectionsOfferingByDefault(
+            item,
+            hardwareKeysEnabledByDefault: hardwareKeysEnabledByDefault,
+            in: connections,
+            keys: keys.map(\.metadata)
+        )
+    }
+
+    func connectionsOfferingByDefault(
+        _ item: KeyListItem,
+        hardwareKeysEnabledByDefault: Bool,
+        in connections: [Connection],
+        keys: [KeyMetadata]
+    ) -> [Connection] {
+        let offeredReferences = KeyOfferResolver().resolve(
+            KeyOfferRequest(
+                offersKeys: true,
+                customKeys: nil,
+                hardwareKeysEnabledByDefault: hardwareKeysEnabledByDefault
+            ),
+            keys: keys
+        )
+        guard offeredReferences.contains(item.metadata.reference) else { return [] }
+        return connections.filter { connection in
+            endpointMatches(in: connection) { offersKeys, customKeys in
+                offersKeys && customKeys == nil
+            }
+        }
+    }
+
+    private func endpointMatches(
+        in connection: Connection,
+        predicate: (_ offersKeys: Bool, _ customKeys: [String]?) -> Bool
+    ) -> Bool {
+        predicate(connection.offersKeys, connection.customKeys)
+            || connection.jumpChain.contains { predicate($0.offersKeys, $0.customKeys) }
     }
 }
 

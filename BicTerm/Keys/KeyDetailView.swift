@@ -6,12 +6,14 @@ struct KeyDetailView: View {
     @Environment(\.terminalTypography) var typography
     @Environment(\.terminalSpacing) var spacing
     @Environment(\.dismiss) var dismiss
+    @Environment(KeyAvailabilityPreferences.self) private var preferences
 
     let keyStore: KeyStore
     let item: KeyListItem
 
     @State private var showingDeleteConfirmation = false
     @State private var referencingConnections: [Connection] = []
+    @State private var defaultOfferingConnections: [Connection] = []
     @State private var errorMessage: String?
     @State private var copyState: CopyState = .idle
 
@@ -114,10 +116,18 @@ struct KeyDetailView: View {
                 .listRowBackground(colors.background)
             }
 
+            Section("Connections") {
+                Text("Selected by \(referencingConnections.count) connections")
+                    .accessibilityIdentifier("key-selected-connection-count")
+                Text("Offered by default to \(defaultOfferingConnections.count) connections")
+                    .accessibilityIdentifier("key-default-offer-connection-count")
+            }
+            .listRowBackground(colors.background)
+
             Section {
                 Button("Delete Key", role: .destructive) {
                     Task {
-                        referencingConnections = await keyStore.connectionsReferencing(item)
+                        await refreshConnectionUsage()
                         showingDeleteConfirmation = true
                     }
                 }
@@ -136,6 +146,9 @@ struct KeyDetailView: View {
         .background(colors.background)
         .navigationTitle("Key Details")
         .navigationBarTitleDisplayMode(.inline)
+        .task(id: preferences.hardwareOfferedByDefault) {
+            await refreshConnectionUsage()
+        }
         .confirmationDialog(
             "Delete “\(item.metadata.label)”?",
             isPresented: $showingDeleteConfirmation,
@@ -182,11 +195,25 @@ struct KeyDetailView: View {
     }
 
     private var deleteWarningMessage: String {
-        if referencingConnections.isEmpty {
+        if referencingConnections.isEmpty, defaultOfferingConnections.isEmpty {
             return "This key is not used by any connection. Connections cannot authenticate with it after deletion. This cannot be undone."
         }
-        let names = referencingConnections.map(\.name).joined(separator: ", ")
-        return "Used by: \(names). These connections will no longer be able to authenticate with this key. This cannot be undone."
+        var usage: [String] = []
+        if !referencingConnections.isEmpty {
+            usage.append("Selected by: \(referencingConnections.map(\.name).joined(separator: ", "))")
+        }
+        if !defaultOfferingConnections.isEmpty {
+            usage.append("Offered by default to: \(defaultOfferingConnections.map(\.name).joined(separator: ", "))")
+        }
+        return "\(usage.joined(separator: ". ")). These connections will no longer be able to authenticate with this key. This cannot be undone."
+    }
+
+    private func refreshConnectionUsage() async {
+        referencingConnections = await keyStore.connectionsReferencing(item)
+        defaultOfferingConnections = await keyStore.connectionsOfferingByDefault(
+            item,
+            hardwareKeysEnabledByDefault: preferences.hardwareOfferedByDefault
+        )
     }
 
     private func performDelete() async {

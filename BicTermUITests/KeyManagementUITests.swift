@@ -186,6 +186,83 @@ final class KeyManagementUITests: XCTestCase {
         }
     }
 
+    private func keyToggles() -> XCUIElementQuery {
+        app.switches.matching(NSPredicate(format: "identifier BEGINSWITH 'key-enabled-toggle-'"))
+    }
+
+    private func enabledToggleCount() -> Int {
+        (0..<keyToggles().count).count { toggleIsOn(keyToggles().element(boundBy: $0)) }
+    }
+
+    private func toggleIsOn(_ toggle: XCUIElement) -> Bool {
+        let value = (toggle.value as? String ?? "").lowercased()
+        return value == "1" || value == "true" || value == "on"
+    }
+
+    private func generateKey(named label: String) {
+        openMenu(actionIdentifier: "menu-generate", actionLabel: "Generate Key")
+        let labelField = app.textFields["generate-label"]
+        XCTAssertTrue(labelField.waitForExistence(timeout: 5))
+        labelField.tap()
+        labelField.typeText(label)
+        dismissKeyboard()
+        XCTAssertTrue(setToggle(app.switches["generate-biometrics"], on: false))
+        app.buttons["generate-save"].tap()
+        XCTAssertTrue(app.staticTexts[label].waitForExistence(timeout: 10))
+    }
+
+    func testTogglePersistenceAcrossReopen() {
+        // `-uitest-reset-keys` wipes every key (earlier suite tests leave
+        // SE/imported keys behind); `--uitest-reset` then re-seeds exactly
+        // the three fixture ed25519 keys.
+        launch(["-uitest-reset-keys", "--uitest-reset"])
+        XCTAssertEqual(keyToggles().count, 3)
+        XCTAssertEqual(enabledToggleCount(), 3)
+        XCTAssertTrue(setToggle(keyToggles().element(boundBy: 0), on: false))
+        XCTAssertEqual(enabledToggleCount(), 2)
+
+        app.terminate()
+        launch([])
+        XCTAssertEqual(keyToggles().count, 3)
+        XCTAssertEqual(enabledToggleCount(), 2, "Disabled state must persist across reopening Key Management")
+    }
+
+    func testToggleFailureShowsInlineErrorAndRestores() {
+        launch([
+            "-uitest-reset-keys",
+            "--uitest-reset",
+            "-uitest-seed-disabled-key",
+            "--uitest-key-toggle-fail",
+        ])
+        let toggle = app.switches["key-enabled-toggle-uitest-disabled-fixture"]
+        XCTAssertTrue(toggle.waitForExistence(timeout: 10))
+        XCTAssertFalse(toggleIsOn(toggle))
+        // The switch element spans the whole row; a center tap hits the
+        // NavigationLink instead of the switch. Tap the trailing edge where
+        // the switch renders (same mechanics as setToggle).
+        toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
+
+        let error = app.staticTexts["key-toggle-error"]
+        XCTAssertTrue(error.waitForExistence(timeout: 5), "A failed key toggle must publish a row-local error")
+        XCTAssertFalse(toggleIsOn(toggle), "The failed toggle must restore its persisted disabled state")
+    }
+
+    func testEnabledCountBannerAppearsAndClears() {
+        launch(["-uitest-reset-keys", "--uitest-reset"])
+        generateKey(named: "Banner Four")
+        generateKey(named: "Banner Five")
+        generateKey(named: "Banner Six")
+
+        let banner = app.staticTexts["enabled-count-banner"]
+        XCTAssertTrue(banner.waitForExistence(timeout: 5))
+        XCTAssertEqual(
+            banner.label,
+            "6 keys are enabled. Many servers allow only 6 authentication attempts and may disconnect before later keys are tried."
+        )
+        XCTAssertTrue(setToggle(keyToggles().element(boundBy: 0), on: false))
+        XCTAssertFalse(banner.waitForExistence(timeout: 2), "The warning must clear at five enabled keys")
+    }
+
     func testGenerateEd25519KeyAppearsWithBadgeFingerprintAndCreatedDate() {
         launch(["-uitest-reset-keys", "-uitest-biometrics-bypass"])
 
