@@ -457,7 +457,16 @@ struct ConnectionEditorView: View {
     }
 
     private func hopCredentialSummary(_ hop: HopDraft) -> String {
-        hop.offersKeys ? "Keys" : "Password"
+        guard hop.offersKeys else { return "Password" }
+        let offered = KeyOfferResolver().resolve(
+            KeyOfferRequest(
+                offersKeys: true,
+                customKeys: hop.customKeys,
+                hardwareKeysEnabledByDefault: preferences.hardwareOfferedByDefault
+            ),
+            keys: keyStore.keys.map(\.metadata)
+        ).count
+        return hop.customKeys == nil ? "All keys (\(offered) offered)" : "\(offered) selected keys"
     }
 
     private func addHopTapped() {        guard draft.hops.count < Connection.maximumJumpChainLength else {

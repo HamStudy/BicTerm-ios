@@ -6,6 +6,8 @@ struct ConnectionListView: View {
     @Environment(\.terminalTypography) var typography
     @Environment(\.terminalSpacing) var spacing
     @Environment(ConnectionsModel.self) private var model
+    @Environment(KeyStore.self) private var keyStore
+    @Environment(KeyAvailabilityPreferences.self) private var preferences
     @State private var herds = HerdsModel()
     @State private var editorTarget: EditorTarget?
     @State private var herdEditorTarget: HerdEditorTarget?
@@ -359,8 +361,7 @@ struct ConnectionListView: View {
 
                 if connection.type == .ssh {
                     TerminalBadge(
-                        !connection.offersKeys
-                            ? "Password" : "Key: \(model.keyLabel(forReference: connection.customKeys?.first ?? "") ?? "Unavailable")",
+                        authSummary(for: connection),
                         tint: colors.dimmed
                     )
                     .accessibilityIdentifier("auth-method-\(sanitized(connection.name))")
@@ -401,6 +402,22 @@ struct ConnectionListView: View {
             }
         }
         .padding(.vertical, spacing.xxs)
+    }
+
+    /// Resolver-computed row summary. Probe-free (no Keychain reads at
+    /// render); the shared observable store/preference keep the count live
+    /// across windows without dismissal hooks.
+    private func authSummary(for connection: Connection) -> String {
+        guard connection.offersKeys else { return "Password" }
+        let offered = KeyOfferResolver().resolve(
+            KeyOfferRequest(
+                offersKeys: true,
+                customKeys: connection.customKeys,
+                hardwareKeysEnabledByDefault: preferences.hardwareOfferedByDefault
+            ),
+            keys: keyStore.keys.map(\.metadata)
+        ).count
+        return connection.customKeys == nil ? "All keys (\(offered) offered)" : "\(offered) selected keys"
     }
 
     private func errorBanner(_ message: String) -> some View {

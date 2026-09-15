@@ -837,6 +837,138 @@ final class ConnectionEditorUITests: XCTestCase {
         XCTAssertFalse(warning.exists)
     }
 
+    // MARK: Hop-row pool summaries
+
+    func testHopSummariesReflectPoolModel() {
+        app.launchArguments = ["-uitest-reset-keys", "--uitest-reset", "-uitest-biometrics-bypass"]
+        app.launch()
+        openEditorForNewConnection()
+        typeInto(app.textFields["field-name"], "Hop Summaries")
+        typeInto(app.textFields["field-host"], "10.0.0.9")
+        typeInto(app.textFields["field-username"], "alice")
+
+        // Default hop: inherits the enabled pool (the three fixture keys).
+        addHop(host: "127.0.0.1", port: "12222", username: "hop1user")
+        assertHopCredential(0, equals: "hop1user · All keys (3 offered)")
+
+        // Keys-off hop falls back to the password summary.
+        editHop(0)
+        XCTAssertTrue(setToggle(app.switches["hop-offer-keys-toggle"], on: false))
+        saveHop()
+        assertHopCredential(0, equals: "hop1user · Password")
+
+        // Custom hop: two explicitly selected keys.
+        editHop(0)
+        XCTAssertTrue(setToggle(app.switches["hop-offer-keys-toggle"], on: true))
+        openHopKeyPicker()
+        let hop2Row = app.buttons["key-Fixture-Hop2-Unauthorized"]
+        XCTAssertTrue(hop2Row.waitForExistence(timeout: 5))
+        hop2Row.tap()
+        app.buttons["customize-done"].tap()
+        saveHop()
+        assertHopCredential(0, equals: "hop1user · 2 selected keys")
+
+        let saveEditor = app.buttons["save-editor"]
+        scrollToHittable(saveEditor)
+        XCTAssertTrue(saveEditor.isEnabled)
+        saveEditor.tap()
+        XCTAssertTrue(app.buttons["connection-Hop-Summaries"].waitForExistence(timeout: 10))
+        XCTAssertEqual(app.staticTexts["auth-method-Hop-Summaries"].label, "All keys (3 offered)",
+                      "the row badge mirrors the destination's inherited pool, not the hop's selection")
+
+        // Disabling one of the two custom keys in Key Management must
+        // recompute both the list row and the hop row without a relaunch.
+        XCTAssertTrue(app.buttons["open-settings"].waitForExistence(timeout: 10))
+        app.buttons["open-settings"].tap()
+        let sshKeys = app.buttons["settings-ssh-keys"]
+        scrollToHittable(sshKeys)
+        XCTAssertTrue(sshKeys.waitForExistence(timeout: 5))
+        sshKeys.tap()
+        let fixtureToggle = app.switches["Enable Fixture Ed25519"]
+        XCTAssertTrue(fixtureToggle.waitForExistence(timeout: 5))
+        fixtureToggle.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
+        expectation(
+            for: NSPredicate(format: "value == 'Disabled'"),
+            evaluatedWith: app.buttons["key-row-Fixture Ed25519"]
+        )
+        waitForExpectations(timeout: 5)
+        app.buttons["keys-done"].tap()
+        app.navigationBars["Settings"].buttons.firstMatch.tap()
+
+        XCTAssertEqual(app.staticTexts["auth-method-Hop-Summaries"].label, "All keys (2 offered)",
+                      "the list row must update live after the key toggle (3 → 2 enabled)")
+        openEditorForConnection(named: "Hop-Summaries")
+        assertHopCredential(0, equals: "hop1user · 1 selected keys")
+
+        // Freshness: generating a key while the editor is open grows the
+        // enabled pool (2 → 3); returning the hop to inherited must show
+        // the NEW count, not a snapshot from editor-open time.
+        editHop(0)
+        openHopKeyPicker()
+        app.buttons["picker-add-menu"].tap()
+        let generateItem = app.buttons["picker-menu-generate"].exists
+            ? app.buttons["picker-menu-generate"]
+            : app.buttons["Generate Key"]
+        XCTAssertTrue(generateItem.waitForExistence(timeout: 5))
+        generateItem.tap()
+        let labelField = app.textFields["generate-label"]
+        XCTAssertTrue(labelField.waitForExistence(timeout: 5))
+        typeInto(labelField, "Fresh Hop Key")
+        XCTAssertTrue(setToggle(app.switches["generate-biometrics"], on: false))
+        app.buttons["generate-save"].tap()
+        // The generate sheet dismisses, auto-selects the new key, and pops
+        // the picker back onto the hop editor; gate on both layers being
+        // gone before interacting with the hop editor again.
+        let sheetDismissed = NSPredicate(format: "exists == false")
+        expectation(for: sheetDismissed, evaluatedWith: app.textFields["generate-label"])
+        waitForExpectations(timeout: 10)
+        let selectorReady = NSPredicate(format: "hittable == true")
+        expectation(for: selectorReady, evaluatedWith: app.buttons["hop-key-selector"])
+        waitForExpectations(timeout: 10)
+        openHopKeyPicker()
+        app.buttons["use-all-enabled-keys"].tap()
+        app.buttons["customize-done"].tap()
+        saveHop()
+        assertHopCredential(0, equals: "hop1user · All keys (3 offered)")
+    }
+
+    private func openHopKeyPicker() {
+        let selector = app.buttons["hop-key-selector"]
+        scrollToHittable(selector)
+        selector.tap()
+        XCTAssertTrue(app.buttons["use-all-enabled-keys"].waitForExistence(timeout: 5),
+                      "hop key picker did not open")
+    }
+
+    private func editHop(_ index: Int) {
+        let edit = app.buttons["edit-hop-\(index)"]
+        scrollToHittable(edit)
+        edit.tap()
+        XCTAssertTrue(app.textFields["hop-field-host"].waitForExistence(timeout: 10))
+    }
+
+    private func saveHop() {
+        let save = app.buttons["save-hop"]
+        XCTAssertTrue(save.waitForExistence(timeout: 5))
+        save.tap()
+        let popped = NSPredicate(format: "exists == false")
+        expectation(for: popped, evaluatedWith: app.textFields["hop-field-host"])
+        waitForExpectations(timeout: 10)
+        let editorReady = NSPredicate(format: "hittable == true")
+        expectation(for: editorReady, evaluatedWith: app.buttons["cancel-editor"])
+        waitForExpectations(timeout: 10)
+        Thread.sleep(forTimeInterval: 0.4)
+    }
+
+    private func assertHopCredential(_ index: Int, equals expected: String) {
+        let credential = app.staticTexts["hop-\(index)-credential"]
+        // The row sits just above the fold right after saving a hop, but
+        // far below it when the editor reopens — reveal from both sides.
+        scrollToHittable(credential, swipingUp: false)
+        scrollToHittable(credential)
+        XCTAssertEqual(credential.label, expected)
+    }
+
     private func launchPasswordFixture(_ mode: String, extra: [String] = []) {
         app.launchArguments = ["--uitest-reset", "--uitest-pwd-server", "--uitest-pretrust-fixtures",
                                "--uitest-editor-password-fixture", mode] + extra
@@ -1034,6 +1166,19 @@ final class ConnectionEditorUITests: XCTestCase {
             swipes += 1
         }
         return true
+    }
+
+    private func addHop(host: String, port: String, username: String) {
+        let addHopButton = app.buttons["add-hop"]
+        scrollToHittable(addHopButton)
+        addHopButton.tap()
+
+        let hostField = app.textFields["hop-field-host"]
+        XCTAssertTrue(hostField.waitForExistence(timeout: 10))
+        typeInto(hostField, host)
+        typeInto(app.textFields["hop-field-port"], port, clearing: "22")
+        typeInto(app.textFields["hop-field-username"], username)
+        saveHop()
     }
 
     private func addHop(host: String, port: String?, username: String, key: String) {
