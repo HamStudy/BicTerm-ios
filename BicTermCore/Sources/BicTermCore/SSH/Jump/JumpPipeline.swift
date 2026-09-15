@@ -167,6 +167,9 @@ struct NIOJumpDialer: JumpDialer {
                     try channel.pipeline.syncOperations.addHandler(cascade)
                 }
                 try channel.pipeline.syncOperations.addHandler(recorder)
+                try channel.setOption(ChannelOptions.autoRead, value: true)
+                // SSHChildChannel's option setter does not initiate a read.
+                channel.read()
             }.get()
         } catch {
             throw .channelDenied
@@ -242,6 +245,9 @@ final class NIOJumpHopConnection: JumpHopConnection, @unchecked Sendable {
                     return channel.eventLoop.makeFailedFuture(SSHTransportError.channelDenied)
                 }
                 return channel.eventLoop.makeCompletedFuture {
+                    // Retain the peer's identification bytes until connectNested
+                    // installs their consumer, including across metadata awaits.
+                    try channel.setOption(ChannelOptions.autoRead, value: false)
                     try channel.pipeline.syncOperations.addHandler(SSHChannelDataByteBufferWrapper())
                 }
             }
