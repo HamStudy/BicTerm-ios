@@ -117,6 +117,9 @@ public struct HerdrEndpointConnector: Sendable {
     private let hostKeyVerifier: HostKeyVerifier
     private let authenticationKeyProvider: any SSHAuthenticationKeyProvider
     private let passwordStore: any PasswordStoring
+    private let hardwareKeysEnabledByDefault: @Sendable () -> Bool
+    private let keyOfferResolver: KeyOfferResolver
+    private let metadataProvider: any SSHKeyMetadataProviding
     private let searchPaths: [String]
     private let approveHostKey: HostKeyApproval
 
@@ -124,12 +127,18 @@ public struct HerdrEndpointConnector: Sendable {
         hostKeyVerifier: HostKeyVerifier,
         authenticationKeyProvider: any SSHAuthenticationKeyProvider = DefaultSSHAuthenticationKeyProvider(),
         passwordStore: any PasswordStoring = KeychainPasswordStore(),
+        hardwareKeysEnabledByDefault: @escaping @Sendable () -> Bool = { true },
+        keyOfferResolver: KeyOfferResolver = KeyOfferResolver(),
+        metadataProvider: any SSHKeyMetadataProviding = DefaultSSHKeyMetadataProvider(),
         searchPaths: [String] = HerdrProbe.defaultSearchPaths,
         approveHostKey: @escaping HostKeyApproval
     ) {
         self.hostKeyVerifier = hostKeyVerifier
         self.authenticationKeyProvider = authenticationKeyProvider
         self.passwordStore = passwordStore
+        self.hardwareKeysEnabledByDefault = hardwareKeysEnabledByDefault
+        self.keyOfferResolver = keyOfferResolver
+        self.metadataProvider = metadataProvider
         self.searchPaths = searchPaths
         self.approveHostKey = approveHostKey
     }
@@ -205,7 +214,10 @@ public struct HerdrEndpointConnector: Sendable {
             let transport = SSHTransport(
                 hostKeyVerifier: hostKeyVerifier,
                 authenticationKeyProvider: authenticationKeyProvider,
-                passwordStore: passwordStore
+                passwordStore: passwordStore,
+                hardwareKeysEnabledByDefault: hardwareKeysEnabledByDefault,
+                keyOfferResolver: keyOfferResolver,
+                metadataProvider: metadataProvider
             )
             do {
                 try await transport.connect(
@@ -239,7 +251,10 @@ public struct HerdrEndpointConnector: Sendable {
         let builder = JumpChainBuilder(
             hostKeyVerifier: hostKeyVerifier,
             authenticationKeyProvider: authenticationKeyProvider,
-            passwordStore: passwordStore
+            passwordStore: passwordStore,
+            hardwareKeysEnabledByDefault: hardwareKeysEnabledByDefault,
+            keyOfferResolver: keyOfferResolver,
+            metadataProvider: metadataProvider
         )
         do {
             return try await builder.buildExecConnection(connection: connection)

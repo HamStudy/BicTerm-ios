@@ -60,17 +60,6 @@ final class CascadeUserAuthenticationDelegate: NIOSSHClientUserAuthenticationDel
                                           saveTag: canRemember ? passwordTag : nil)
     }
 
-    @available(*, deprecated, message: "Pass key references and a key provider instead")
-    convenience init(host: String, port: Int, username: String, key: NIOSSHPrivateKey?,
-                     passwordTag: String?, canRemember: Bool,
-                     passwordStore: any PasswordStoring, prompt: (any SSHPasswordPrompting)?) {
-        self.init(host: host, port: port, username: username,
-                  keyReferences: key == nil ? [] : ["static-key"],
-                  keyProvider: StaticAuthenticationKeyProvider(key: key),
-                  effectivePasswordTag: passwordTag, promptedPasswordTag: nil,
-                  canRemember: canRemember, passwordStore: passwordStore, prompt: prompt)
-    }
-
     func nextAuthenticationType(
         availableMethods: NIOSSHAvailableUserAuthenticationMethods,
         nextChallengePromise: EventLoopPromise<NIOSSHUserAuthenticationOffer?>
@@ -121,14 +110,5 @@ final class CascadeUserAuthenticationDelegate: NIOSSHClientUserAuthenticationDel
                 nextChallengePromise.fail(SSHTransportError.authenticationFailed)
             }
         }
-    }
-}
-
-fileprivate struct StaticAuthenticationKeyProvider: SSHAuthenticationKeyProvider {
-    let key: NIOSSHPrivateKey?
-
-    func authenticationPrivateKey(with reference: String, reason: String) async throws -> NIOSSHPrivateKey {
-        guard let key else { throw SSHTransportError.authenticationFailed }
-        return key
     }
 }

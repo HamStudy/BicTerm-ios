@@ -12,17 +12,26 @@ public struct SSHSessionTransportFactory: TerminalTransportFactory {
     private let authenticationKeyProvider: any SSHAuthenticationKeyProvider
     private let passwordStore: any PasswordStoring
     private let passwordPrompt: (any SSHPasswordPrompting)?
+    private let hardwareKeysEnabledByDefault: @Sendable () -> Bool
+    private let keyOfferResolver: KeyOfferResolver
+    private let metadataProvider: any SSHKeyMetadataProviding
 
     public init(
         hostKeyVerifier: HostKeyVerifier,
         authenticationKeyProvider: any SSHAuthenticationKeyProvider = DefaultSSHAuthenticationKeyProvider(),
         passwordStore: any PasswordStoring = KeychainPasswordStore(),
-        passwordPrompt: (any SSHPasswordPrompting)? = nil
+        passwordPrompt: (any SSHPasswordPrompting)? = nil,
+        hardwareKeysEnabledByDefault: @escaping @Sendable () -> Bool = { true },
+        keyOfferResolver: KeyOfferResolver = KeyOfferResolver(),
+        metadataProvider: any SSHKeyMetadataProviding = DefaultSSHKeyMetadataProvider()
     ) {
         self.hostKeyVerifier = hostKeyVerifier
         self.authenticationKeyProvider = authenticationKeyProvider
         self.passwordStore = passwordStore
         self.passwordPrompt = passwordPrompt
+        self.hardwareKeysEnabledByDefault = hardwareKeysEnabledByDefault
+        self.keyOfferResolver = keyOfferResolver
+        self.metadataProvider = metadataProvider
     }
 
     public func makeTransport(for connection: Connection) throws(TransportError) -> any TerminalTransport {
@@ -34,14 +43,20 @@ public struct SSHSessionTransportFactory: TerminalTransportFactory {
                 hostKeyVerifier: hostKeyVerifier,
                 authenticationKeyProvider: authenticationKeyProvider,
                 passwordStore: passwordStore,
-                passwordPrompt: passwordPrompt
+                passwordPrompt: passwordPrompt,
+                hardwareKeysEnabledByDefault: hardwareKeysEnabledByDefault,
+                keyOfferResolver: keyOfferResolver,
+                metadataProvider: metadataProvider
             )
         }
         return JumpTerminalTransport(builder: JumpChainBuilder(
             hostKeyVerifier: hostKeyVerifier,
             authenticationKeyProvider: authenticationKeyProvider,
             passwordStore: passwordStore,
-            passwordPrompt: passwordPrompt
+            passwordPrompt: passwordPrompt,
+            hardwareKeysEnabledByDefault: hardwareKeysEnabledByDefault,
+            keyOfferResolver: keyOfferResolver,
+            metadataProvider: metadataProvider
         ))
     }
 }

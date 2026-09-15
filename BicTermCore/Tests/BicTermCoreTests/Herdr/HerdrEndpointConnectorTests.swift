@@ -30,6 +30,7 @@ final class HerdrEndpointConnectorTests: XCTestCase {
             authenticationKeyProvider: StaticKeyProvider(
                 key: try await SSHTestFixture.loadFixtureEd25519Key()
             ),
+            metadataProvider: FixtureKeyMetadataProvider(),
             searchPaths: searchPaths,
             approveHostKey: approval
         )
@@ -208,6 +209,7 @@ final class HerdrEndpointConnectorTests: XCTestCase {
             authenticationKeyProvider: StaticKeyProvider(
                 key: try await SSHTestFixture.loadFixtureEd25519Key()
             ),
+            metadataProvider: FixtureKeyMetadataProvider(),
             searchPaths: [Self.statusShimPath],
             approveHostKey: approvalRecorder.approve
         )
@@ -236,6 +238,7 @@ final class HerdrEndpointConnectorTests: XCTestCase {
             authenticationKeyProvider: StaticKeyProvider(
                 key: try await SSHTestFixture.loadFixtureEd25519Key()
             ),
+            metadataProvider: FixtureKeyMetadataProvider(),
             searchPaths: [Self.statusShimPath],
             approveHostKey: approvalRecorder.approve
         )
@@ -310,6 +313,7 @@ final class HerdrEndpointConnectorTests: XCTestCase {
         let connector = HerdrEndpointConnector(
             hostKeyVerifier: try await JumpFixture.makeVerifier(),
             authenticationKeyProvider: try await JumpFixture.makeRecordingProvider(),
+            metadataProvider: FixtureKeyMetadataProvider(),
             searchPaths: [shim],
             approveHostKey: { _ in false }
         )

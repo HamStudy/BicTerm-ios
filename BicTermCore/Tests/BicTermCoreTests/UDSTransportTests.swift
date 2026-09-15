@@ -34,7 +34,8 @@ final class UDSTransportTests: XCTestCase {
         let verifier = try await SSHTestFixture.makeVerifier()
         return SSHTransport(
             hostKeyVerifier: verifier,
-            authenticationKeyProvider: StaticKeyProvider(key: key)
+            authenticationKeyProvider: StaticKeyProvider(key: key),
+            metadataProvider: FixtureKeyMetadataProvider()
         )
     }
 

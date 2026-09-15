@@ -27,7 +27,8 @@ final class ProxyJumpTests: XCTestCase {
     private func makeBuilder(trustingHop2: Bool = true) async throws -> (JumpChainBuilder, RecordingKeyProvider) {
         let provider = try await JumpFixture.makeRecordingProvider()
         let verifier = try await JumpFixture.makeVerifier(trustingHop2: trustingHop2)
-        return (JumpChainBuilder(hostKeyVerifier: verifier, authenticationKeyProvider: provider), provider)
+        return (JumpChainBuilder(hostKeyVerifier: verifier, authenticationKeyProvider: provider,
+                                 metadataProvider: FixtureKeyMetadataProvider()), provider)
     }
 
     func testEmptyChainBuildsDirectSSHTransport() async throws {
@@ -79,13 +80,10 @@ final class ProxyJumpTests: XCTestCase {
             )
         }
 
-        // Key resolution precedes the dial, so hop 1's key was consulted
-        // exactly once; the chain aborted before the destination's
-        // credential was ever requested.
         XCTAssertEqual(
             provider.calls.map(\.reference),
-            [JumpFixture.goodKeyReference],
-            "only the refused first hop may resolve a key"
+            [],
+            "a refused TCP dial must not resolve private keys before authentication"
         )
     }
 

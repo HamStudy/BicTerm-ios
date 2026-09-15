@@ -122,6 +122,17 @@ struct StaticKeyProvider: SSHAuthenticationKeyProvider {
     }
 }
 
+struct FixtureKeyMetadataProvider: SSHKeyMetadataProviding {
+    var references = ["fixture-ed25519", "fixture-ed25519-hop2-unauthorized", "fixture-p256"]
+
+    func availableKeys() async throws -> [KeyMetadata] {
+        references.map {
+            KeyMetadata(reference: $0, label: $0, algorithm: .ed25519,
+                        fingerprint: "fixture", publicKeyBlob: Data(), requiresBiometry: false)
+        }
+    }
+}
+
 actor SSHOutputSink {
     private var buffer = Data()
     private(set) var isFinished = false

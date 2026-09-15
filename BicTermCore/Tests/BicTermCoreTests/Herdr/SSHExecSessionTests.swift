@@ -41,7 +41,8 @@ final class SSHExecSessionTests: XCTestCase {
         let verifier = try await SSHTestFixture.makeVerifier()
         let transport = SSHTransport(
             hostKeyVerifier: verifier,
-            authenticationKeyProvider: StaticKeyProvider(key: key)
+            authenticationKeyProvider: StaticKeyProvider(key: key),
+            metadataProvider: FixtureKeyMetadataProvider()
         )
         try await transport.connect(to: SSHTestFixture.makeConnection(), cols: 80, rows: 24)
         self.transport = transport
@@ -227,7 +228,8 @@ final class SSHExecSessionTests: XCTestCase {
         let key = try await SSHTestFixture.loadFixtureEd25519Key()
         let offline = SSHTransport(
             hostKeyVerifier: try await SSHTestFixture.makeVerifier(),
-            authenticationKeyProvider: StaticKeyProvider(key: key)
+            authenticationKeyProvider: StaticKeyProvider(key: key),
+            metadataProvider: FixtureKeyMetadataProvider()
         )
         await assertThrowsAsyncError(TransportError.channelDenied) {
             _ = try await offline.openExecChannel(command: "printf x")

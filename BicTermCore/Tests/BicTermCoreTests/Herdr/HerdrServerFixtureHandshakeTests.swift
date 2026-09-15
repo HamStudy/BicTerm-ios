@@ -59,7 +59,8 @@ final class HerdrServerFixtureHandshakeTests: XCTestCase {
         let key = try await SSHTestFixture.loadFixtureEd25519Key()
         let sshTransport = SSHTransport(
             hostKeyVerifier: try await SSHTestFixture.makeVerifier(),
-            authenticationKeyProvider: StaticKeyProvider(key: key)
+            authenticationKeyProvider: StaticKeyProvider(key: key),
+            metadataProvider: FixtureKeyMetadataProvider()
         )
         try await sshTransport.connect(to: SSHTestFixture.makeConnection(), cols: 80, rows: 24)
         transport = sshTransport

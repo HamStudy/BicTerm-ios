@@ -35,7 +35,8 @@ final class HerdrSSHTransportTests: XCTestCase {
         let key = try await SSHTestFixture.loadFixtureEd25519Key()
         let transport = SSHTransport(
             hostKeyVerifier: try await SSHTestFixture.makeVerifier(),
-            authenticationKeyProvider: StaticKeyProvider(key: key)
+            authenticationKeyProvider: StaticKeyProvider(key: key),
+            metadataProvider: FixtureKeyMetadataProvider()
         )
         try await transport.connect(to: SSHTestFixture.makeConnection(), cols: 80, rows: 24)
         self.transport = transport
@@ -48,7 +49,8 @@ final class HerdrSSHTransportTests: XCTestCase {
         let key = try await SSHTestFixture.loadFixtureEd25519Key()
         let transport = SSHTransport(
             hostKeyVerifier: try await SSHTestFixture.makeVerifier(),
-            authenticationKeyProvider: StaticKeyProvider(key: key)
+            authenticationKeyProvider: StaticKeyProvider(key: key),
+            metadataProvider: FixtureKeyMetadataProvider()
         )
         let udsPath = SSHTestFixture.repoRoot
             .appendingPathComponent("Fixtures/run/sshd-uds.sock").path
@@ -250,7 +252,8 @@ final class HerdrSSHTransportTests: XCTestCase {
         let key = try await SSHTestFixture.loadFixtureEd25519Key()
         let offline = SSHTransport(
             hostKeyVerifier: try await SSHTestFixture.makeVerifier(),
-            authenticationKeyProvider: StaticKeyProvider(key: key)
+            authenticationKeyProvider: StaticKeyProvider(key: key),
+            metadataProvider: FixtureKeyMetadataProvider()
         )
         do {
             _ = try await HerdrSSHTransport(transport: offline, executablePath: Self.shimPath)

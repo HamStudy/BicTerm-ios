@@ -25,7 +25,8 @@ final class SSHTransportIntegrationTests: XCTestCase {
         let verifier = try await SSHTestFixture.makeVerifier()
         let transport = SSHTransport(
             hostKeyVerifier: verifier,
-            authenticationKeyProvider: StaticKeyProvider(key: key)
+            authenticationKeyProvider: StaticKeyProvider(key: key),
+            metadataProvider: FixtureKeyMetadataProvider()
         )
         try await transport.connect(to: SSHTestFixture.makeConnection(), cols: cols, rows: rows)
         let sink = SSHOutputSink()
@@ -92,7 +93,8 @@ final class SSHTransportIntegrationTests: XCTestCase {
         let verifier = try await SSHTestFixture.makeVerifier(trustingNormalHop1Key: false)
         let transport = SSHTransport(
             hostKeyVerifier: verifier,
-            authenticationKeyProvider: StaticKeyProvider(key: key)
+            authenticationKeyProvider: StaticKeyProvider(key: key),
+            metadataProvider: FixtureKeyMetadataProvider()
         )
         defer { Task { await transport.close() } }
 
@@ -119,7 +121,8 @@ final class SSHTransportIntegrationTests: XCTestCase {
         let verifier = try await SSHTestFixture.makeVerifier()
         let transport = SSHTransport(
             hostKeyVerifier: verifier,
-            authenticationKeyProvider: StaticKeyProvider(key: wrongKey)
+            authenticationKeyProvider: StaticKeyProvider(key: wrongKey),
+            metadataProvider: FixtureKeyMetadataProvider()
         )
         defer { Task { await transport.close() } }
 
@@ -136,7 +139,8 @@ final class SSHTransportIntegrationTests: XCTestCase {
         let verifier = try await SSHTestFixture.makeVerifier(trustingNormalHop1Key: false)
         let transport = SSHTransport(
             hostKeyVerifier: verifier,
-            authenticationKeyProvider: StaticKeyProvider(key: key)
+            authenticationKeyProvider: StaticKeyProvider(key: key),
+            metadataProvider: FixtureKeyMetadataProvider()
         )
         defer { Task { await transport.close() } }
 
@@ -206,7 +210,8 @@ final class SSHTransportIntegrationTests: XCTestCase {
             let verifier = try await SSHTestFixture.makeVerifier()
             let transport = SSHTransport(
                 hostKeyVerifier: verifier,
-                authenticationKeyProvider: StaticKeyProvider(key: NIOSSHPrivateKey(p256Key: p256))
+                authenticationKeyProvider: StaticKeyProvider(key: NIOSSHPrivateKey(p256Key: p256)),
+                metadataProvider: FixtureKeyMetadataProvider()
             )
             defer { Task { await transport.close() } }
 
@@ -258,7 +263,8 @@ final class SSHTransportIntegrationTests: XCTestCase {
                         with: metadata.reference,
                         reason: "T7 SE transport test"
                     )
-                )
+                ),
+                metadataProvider: FixtureKeyMetadataProvider()
             )
             defer { Task { await transport.close() } }
 
@@ -291,7 +297,8 @@ final class SSHTransportIntegrationTests: XCTestCase {
         let key = try await SSHTestFixture.loadFixtureEd25519Key()
         let transport = SSHTransport(
             hostKeyVerifier: verifier,
-            authenticationKeyProvider: StaticKeyProvider(key: key)
+            authenticationKeyProvider: StaticKeyProvider(key: key),
+            metadataProvider: FixtureKeyMetadataProvider()
         )
         let sink = SSHOutputSink()
         collectors.append(await startCollecting(from: transport, into: sink))

@@ -31,7 +31,8 @@ final class LossyProxySyncIntegrationTests: XCTestCase {
         let key = try await SSHTestFixture.loadFixtureEd25519Key()
         let factory = SSHSessionTransportFactory(
             hostKeyVerifier: try await lossyVerifier(),
-            authenticationKeyProvider: StaticKeyProvider(key: key)
+            authenticationKeyProvider: StaticKeyProvider(key: key),
+            metadataProvider: FixtureKeyMetadataProvider()
         )
         return SessionRegistry(
             transportFactory: factory,
@@ -190,7 +191,8 @@ final class LossyProxySyncIntegrationTests: XCTestCase {
             hostKeyVerifier: try await SSHTestFixture.makeVerifier(),
             authenticationKeyProvider: StaticKeyProvider(
                 key: try await SSHTestFixture.loadFixtureEd25519Key()
-            )
+            ),
+            metadataProvider: FixtureKeyMetadataProvider()
         )
         defer { Task { await transport.close() } }
 

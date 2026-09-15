@@ -11,8 +11,9 @@ struct JumpHopEndpoint: Equatable, Sendable {
     let host: String
     let port: Int
     let username: String
-    let keyReference: String
-    let authMethod: AuthMethod
+    let offersKeys: Bool
+    let customKeys: [String]?
+    let passwordTag: String?
     let promptedPasswordTag: String?
     let canRemember: Bool
 
@@ -21,18 +22,21 @@ struct JumpHopEndpoint: Equatable, Sendable {
             host: hop.host,
             port: hop.port,
             username: hop.username,
-            keyReference: hop.offersKeys ? (hop.customKeys?.first ?? "") : (hop.passwordTag ?? ""),
-            authMethod: hop.offersKeys ? .publickey : .password
+            offersKeys: hop.offersKeys,
+            customKeys: hop.customKeys,
+            passwordTag: hop.passwordTag
         )
     }
 
-    init(host: String, port: Int, username: String, keyReference: String, authMethod: AuthMethod = .publickey,
+    init(host: String, port: Int, username: String, offersKeys: Bool = true,
+         customKeys: [String]? = nil, passwordTag: String? = nil,
          promptedPasswordTag: String? = nil, canRemember: Bool = false) {
         self.host = host
         self.port = port
         self.username = username
-        self.keyReference = keyReference
-        self.authMethod = authMethod
+        self.offersKeys = offersKeys
+        self.customKeys = customKeys
+        self.passwordTag = passwordTag
         self.promptedPasswordTag = promptedPasswordTag
         self.canRemember = canRemember
     }
@@ -100,6 +104,9 @@ struct NIOJumpDialer: JumpDialer {
     let authenticationKeyProvider: any SSHAuthenticationKeyProvider
     let passwordStore: any PasswordStoring
     var passwordPrompt: (any SSHPasswordPrompting)? = nil
+    var hardwareKeysEnabledByDefault: @Sendable () -> Bool = { true }
+    var keyOfferResolver: KeyOfferResolver = KeyOfferResolver()
+    var metadataProvider: any SSHKeyMetadataProviding = DefaultSSHKeyMetadataProvider()
 
     func connectTCP(to endpoint: JumpHopEndpoint) async throws(SSHTransportError) -> any JumpHopConnection {
         let userAuth = try await makeUserAuthDelegate(for: endpoint)
@@ -170,40 +177,18 @@ struct NIOJumpDialer: JumpDialer {
     private func makeUserAuthDelegate(
         for endpoint: JumpHopEndpoint
     ) async throws(SSHTransportError) -> any NIOSSHClientUserAuthenticationDelegate {
-        switch endpoint.authMethod {
-        case .publickey:
-            do {
-                let key = try await authenticationKeyProvider.authenticationPrivateKey(
-                    with: endpoint.keyReference,
-                    reason: "Authenticate to \(endpoint.host)"
-                )
-                // Hop indices are not stable identities: hop prompts are session-only,
-                // avoiding orphaned/reassigned remembered passwords after a reorder.
-                return CascadeUserAuthenticationDelegate(
-                    host: endpoint.host, port: endpoint.port, username: endpoint.username,
-                    key: key, passwordTag: endpoint.promptedPasswordTag, canRemember: endpoint.canRemember,
-                    passwordStore: passwordStore, prompt: passwordPrompt
-                )
-            } catch {
-                throw .authenticationFailed
-            }
-        case .password:
-            if let passwordPrompt {
-                return CascadeUserAuthenticationDelegate(
-                    host: endpoint.host, port: endpoint.port, username: endpoint.username,
-                    key: nil, passwordTag: endpoint.keyReference, canRemember: endpoint.canRemember,
-                    passwordStore: passwordStore, prompt: passwordPrompt
-                )
-            }
-            let stored: String?
-            do {
-                stored = try await passwordStore.password(for: endpoint.keyReference)
-            } catch {
-                throw .authenticationFailed
-            }
-            guard let password = stored else { throw .authenticationFailed }
-            return PasswordUserAuthenticationDelegate(username: endpoint.username, password: password)
-        }
+        let keys = (try? await metadataProvider.availableKeys()) ?? []
+        let references = keyOfferResolver.resolve(
+            KeyOfferRequest(offersKeys: endpoint.offersKeys, customKeys: endpoint.customKeys,
+                            hardwareKeysEnabledByDefault: hardwareKeysEnabledByDefault()),
+            keys: keys
+        )
+        return CascadeUserAuthenticationDelegate(
+            host: endpoint.host, port: endpoint.port, username: endpoint.username,
+            keyReferences: references, keyProvider: authenticationKeyProvider,
+            effectivePasswordTag: endpoint.passwordTag, promptedPasswordTag: endpoint.promptedPasswordTag,
+            canRemember: endpoint.canRemember, passwordStore: passwordStore, prompt: passwordPrompt
+        )
     }
 }
 

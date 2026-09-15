@@ -36,7 +36,7 @@ final class FakeJumpDialer: JumpDialer, @unchecked Sendable {
     /// hop authenticates with its OWN keyReference.
     private func resolve(_ endpoint: JumpHopEndpoint) async throws(SSHTransportError) {
         do {
-            _ = try await keyProvider.authenticationPrivateKey(with: endpoint.keyReference, reason: "fake")
+            _ = try await keyProvider.authenticationPrivateKey(with: endpoint.customKeys?.first ?? "", reason: "fake")
         } catch {
             throw .authenticationFailed
         }
@@ -143,7 +143,7 @@ final class ProxyJumpCompositionTests: XCTestCase {
     private let host = "127.0.0.1"
 
     private func makeEndpoint(_ port: Int, ref: String? = nil) -> JumpHopEndpoint {
-        JumpHopEndpoint(host: host, port: port, username: "u", keyReference: ref ?? "key-\(port)")
+        JumpHopEndpoint(host: host, port: port, username: "u", customKeys: [ref ?? "key-\(port)"])
     }
 
     private func makeConnection(ports: [Int], destinationPort: Int) throws -> Connection {

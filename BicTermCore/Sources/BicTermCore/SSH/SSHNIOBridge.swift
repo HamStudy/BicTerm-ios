@@ -131,40 +131,6 @@ final class SingleKeyUserAuthenticationDelegate: NIOSSHClientUserAuthenticationD
     }
 }
 
-/// Offers exactly one stored password, exactly once (RFC 4252 `password`
-/// method). A second callback means the server rejected the password; the
-/// connection is then failed with the typed
-/// ``SSHTransportError/authenticationFailed``. Servers advertising only
-/// `publickey` get the same typed failure without any offer being sent.
-final class PasswordUserAuthenticationDelegate: NIOSSHClientUserAuthenticationDelegate, @unchecked Sendable {
-    // @unchecked Sendable: invoked only on the connection's EventLoop;
-    // `didOffer` is exclusively mutated there.
-    private let username: String
-    private let password: String
-    private var didOffer = false
-
-    init(username: String, password: String) {
-        self.username = username
-        self.password = password
-    }
-
-    func nextAuthenticationType(
-        availableMethods: NIOSSHAvailableUserAuthenticationMethods,
-        nextChallengePromise: EventLoopPromise<NIOSSHUserAuthenticationOffer?>
-    ) {
-        guard !didOffer, availableMethods.contains(.password) else {
-            nextChallengePromise.fail(SSHTransportError.authenticationFailed)
-            return
-        }
-        didOffer = true
-        nextChallengePromise.succeed(NIOSSHUserAuthenticationOffer(
-            username: username,
-            serviceName: "ssh-connection",
-            offer: .password(.init(password: password))
-        ))
-    }
-}
-
 // MARK: - Error recorder
 
 /// Terminal handler on the parent connection channel. Records the FIRST

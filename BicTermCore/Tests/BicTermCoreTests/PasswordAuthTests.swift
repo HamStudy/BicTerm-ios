@@ -225,14 +225,20 @@ final class PasswordAuthTests: XCTestCase {
     // MARK: Delegate offer semantics
 
     func testOffersStoredPasswordExactlyOnce() async throws {
-        let loop = EmbeddedEventLoop()
-        let delegate = PasswordUserAuthenticationDelegate(username: "pwd-user", password: "hunter2-sentinel")
+        let group = MultiThreadedEventLoopGroup(numberOfThreads: 1)
+        defer { Task { try? await group.shutdownGracefully() } }
+        let loop = group.next()
+        let delegate = CascadeUserAuthenticationDelegate(
+            host: "example.com", port: 22, username: "pwd-user", keyReferences: [], keyProvider: NoKeyProvider(),
+            effectivePasswordTag: "stored", promptedPasswordTag: nil, canRemember: false,
+            passwordStore: InMemoryPasswordStore(["stored": "hunter2-sentinel"]), prompt: nil
+        )
 
         let first = loop.makePromise(of: NIOSSHUserAuthenticationOffer?.self)
-        delegate.nextAuthenticationType(
+        loop.execute { delegate.nextAuthenticationType(
             availableMethods: [.publicKey, .password],
             nextChallengePromise: first
-        )
+        ) }
         let offer = try await first.futureResult.get()
 
         XCTAssertEqual(offer?.username, "pwd-user")
@@ -242,10 +248,10 @@ final class PasswordAuthTests: XCTestCase {
         XCTAssertEqual(offered.password, "hunter2-sentinel")
 
         let second = loop.makePromise(of: NIOSSHUserAuthenticationOffer?.self)
-        delegate.nextAuthenticationType(
+        loop.execute { delegate.nextAuthenticationType(
             availableMethods: [.publicKey, .password],
             nextChallengePromise: second
-        )
+        ) }
         await assertThrowsSSHError(.authenticationFailed) {
             _ = try await second.futureResult.get()
         }
@@ -253,7 +259,11 @@ final class PasswordAuthTests: XCTestCase {
 
     func testFailsTypedWhenServerDoesNotAdvertisePassword() async throws {
         let loop = EmbeddedEventLoop()
-        let delegate = PasswordUserAuthenticationDelegate(username: "pwd-user", password: "hunter2-sentinel")
+        let delegate = CascadeUserAuthenticationDelegate(
+            host: "example.com", port: 22, username: "pwd-user", keyReferences: [], keyProvider: NoKeyProvider(),
+            effectivePasswordTag: "stored", promptedPasswordTag: nil, canRemember: false,
+            passwordStore: InMemoryPasswordStore(["stored": "hunter2-sentinel"]), prompt: nil
+        )
         let promise = loop.makePromise(of: NIOSSHUserAuthenticationOffer?.self)
 
         delegate.nextAuthenticationType(availableMethods: [.publicKey], nextChallengePromise: promise)
@@ -272,8 +282,9 @@ final class PasswordAuthTests: XCTestCase {
         let prompt = RecordingPasswordPrompt(answer: Self.correctPassword)
         let key = try await SSHTestFixture.loadFixtureEd25519Key()
         let delegate = CascadeUserAuthenticationDelegate(
-            host: "hop.example.com", port: 2222, username: "hop-user", key: key,
-            passwordTag: nil, canRemember: false, passwordStore: InMemoryPasswordStore(), prompt: prompt
+            host: "hop.example.com", port: 2222, username: "hop-user", keyReferences: ["fixture"],
+            keyProvider: StaticKeyProvider(key: key), effectivePasswordTag: nil, promptedPasswordTag: nil,
+            canRemember: false, passwordStore: InMemoryPasswordStore(), prompt: prompt
         )
         let first = loop.makePromise(of: NIOSSHUserAuthenticationOffer?.self)
         loop.execute { delegate.nextAuthenticationType(availableMethods: [.publicKey, .password], nextChallengePromise: first) }
@@ -297,8 +308,9 @@ final class PasswordAuthTests: XCTestCase {
         let loop = EmbeddedEventLoop()
         let prompt = RecordingPasswordPrompt(answer: Self.correctPassword)
         let delegate = CascadeUserAuthenticationDelegate(
-            host: "example.com", port: 22, username: "user", key: nil,
-            passwordTag: "tag", canRemember: true, passwordStore: InMemoryPasswordStore(), prompt: prompt
+            host: "example.com", port: 22, username: "user", keyReferences: [], keyProvider: NoKeyProvider(),
+            effectivePasswordTag: "tag", promptedPasswordTag: nil,
+            canRemember: true, passwordStore: InMemoryPasswordStore(), prompt: prompt
         )
         let promise = loop.makePromise(of: NIOSSHUserAuthenticationOffer?.self)
         delegate.nextAuthenticationType(availableMethods: [.publicKey], nextChallengePromise: promise)
@@ -359,7 +371,8 @@ final class PasswordAuthTests: XCTestCase {
             let key = try await SSHTestFixture.loadFixtureEd25519Key()
             for _ in 0..<2 {
                 let transport = SSHTransport(hostKeyVerifier: verifier, authenticationKeyProvider: StaticKeyProvider(key: key),
-                                             passwordStore: store, passwordPrompt: prompt)
+                                             passwordStore: store, passwordPrompt: prompt,
+                                             metadataProvider: FixtureKeyMetadataProvider())
                 try await transport.connect(to: connection, cols: 80, rows: 24)
                 await transport.close()
             }
@@ -380,7 +393,7 @@ final class PasswordAuthTests: XCTestCase {
         let dialer = NIOJumpDialer(hostKeyVerifier: verifier, authenticationKeyProvider: NoKeyProvider(),
                                   passwordStore: InMemoryPasswordStore(), passwordPrompt: prompt)
         let hop = try await dialer.connectTCP(to: JumpHopEndpoint(
-            host: "127.0.0.1", port: port, username: "hop-user", keyReference: "hop-password", authMethod: .password
+            host: "127.0.0.1", port: port, username: "hop-user", offersKeys: false, passwordTag: "hop-password"
         ))
         let session = try await hop.openSession(cols: 80, rows: 24)
         let requests = await prompt.requests
@@ -404,7 +417,8 @@ final class PasswordAuthTests: XCTestCase {
         let store = InMemoryPasswordStore()
         let prompt = RecordingPasswordPrompt(answer: Self.correctPassword, store: store)
         let builder = JumpChainBuilder(hostKeyVerifier: verifier, authenticationKeyProvider: StaticKeyProvider(key: key),
-                                       passwordStore: store, passwordPrompt: prompt)
+                                       passwordStore: store, passwordPrompt: prompt,
+                                       metadataProvider: FixtureKeyMetadataProvider(references: ["fixture"]))
         let connection = try Connection(name: "jump-password", type: .ssh, host: "127.0.0.1", port: port,
                                         username: "pwduser", customKeys: ["fixture"], jumpChain: [
                                             Hop(host: "127.0.0.1", port: 12222, username: SSHTestFixture.username, customKeys: ["fixture"])

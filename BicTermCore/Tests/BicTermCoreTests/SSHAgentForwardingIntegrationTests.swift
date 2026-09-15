@@ -94,7 +94,8 @@ final class SSHAgentForwardingIntegrationTests: XCTestCase {
         )
         let transport = SSHTransport(
             hostKeyVerifier: try await SSHTestFixture.makeVerifier(),
-            authenticationKeyProvider: StaticKeyProvider(key: NIOSSHPrivateKey(ed25519Key: parsed.privateKey))
+            authenticationKeyProvider: StaticKeyProvider(key: NIOSSHPrivateKey(ed25519Key: parsed.privateKey)),
+            metadataProvider: FixtureKeyMetadataProvider()
         )
         await bridge.install(on: transport)
         try await transport.connect(to: SSHTestFixture.makeConnection(), cols: 80, rows: 24)

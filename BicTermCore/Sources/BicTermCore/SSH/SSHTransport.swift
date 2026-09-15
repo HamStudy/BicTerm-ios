@@ -6,8 +6,7 @@ import NIOSSH
 /// Key- or password-authenticated SSH terminal transport over SwiftNIO SSH.
 ///
 /// Lifecycle: one `connect` per session — it performs TCP connect, host-key
-/// TOFU verification (via T4's `HostKeyVerifier`), single-shot user auth
-/// (public key or password per the connection's `authMethod`), session
+/// TOFU verification (via T4's `HostKeyVerifier`), key-pool/password auth, session
 /// channel open, `pty-req` (xterm-256color) and `shell`
 /// (both with reply tracking). `output` is a FRESH stream per connection;
 /// the previous one is finished on reconnect or `close`.
@@ -37,6 +36,9 @@ public actor SSHTransport {
     private let authenticationKeyProvider: any SSHAuthenticationKeyProvider
     private let passwordStore: any PasswordStoring
     private let passwordPrompt: (any SSHPasswordPrompting)?
+    private let hardwareKeysEnabledByDefault: @Sendable () -> Bool
+    private let keyOfferResolver: KeyOfferResolver
+    private let metadataProvider: any SSHKeyMetadataProviding
     private var outputContinuation: AsyncStream<Data>.Continuation?
     private var group: MultiThreadedEventLoopGroup?
     var connectionChannel: (any Channel)?
@@ -67,12 +69,18 @@ public actor SSHTransport {
         hostKeyVerifier: HostKeyVerifier,
         authenticationKeyProvider: any SSHAuthenticationKeyProvider = DefaultSSHAuthenticationKeyProvider(),
         passwordStore: any PasswordStoring = KeychainPasswordStore(),
-        passwordPrompt: (any SSHPasswordPrompting)? = nil
+        passwordPrompt: (any SSHPasswordPrompting)? = nil,
+        hardwareKeysEnabledByDefault: @escaping @Sendable () -> Bool = { true },
+        keyOfferResolver: KeyOfferResolver = KeyOfferResolver(),
+        metadataProvider: any SSHKeyMetadataProviding = DefaultSSHKeyMetadataProvider()
     ) {
         self.hostKeyVerifier = hostKeyVerifier
         self.authenticationKeyProvider = authenticationKeyProvider
         self.passwordStore = passwordStore
         self.passwordPrompt = passwordPrompt
+        self.hardwareKeysEnabledByDefault = hardwareKeysEnabledByDefault
+        self.keyOfferResolver = keyOfferResolver
+        self.metadataProvider = metadataProvider
         let (stream, _) = AsyncStream.makeStream(of: Data.self, bufferingPolicy: .bufferingNewest(32))
         self.output = stream
     }
@@ -96,40 +104,22 @@ public actor SSHTransport {
         }
     }
 
-    /// Key connections can continue with RFC 4252 password auth after rejection
-    /// or partial success. Without a prompt, missing password credentials still
-    /// fail before dialing on the password-only path for headless callers.
+    /// Resolve the current availability pool for each attempt, including UDS.
     func userAuthDelegate(
         for connection: Connection
     ) async throws(SSHTransportError) -> any NIOSSHClientUserAuthenticationDelegate {
-        if connection.offersKeys {
-            let privateKey: NIOSSHPrivateKey
-            do {
-                privateKey = try await authenticationKeyProvider.authenticationPrivateKey(
-                    with: connection.customKeys?.first ?? "",
-                    reason: "Authenticate to \(connection.host)"
-                )
-            } catch {
-                throw .authenticationFailed
-            }
-            return CascadeUserAuthenticationDelegate(
-                host: connection.host, port: connection.port, username: connection.username,
-                key: privateKey, passwordTag: connection.promptedPasswordTag, canRemember: true,
-                passwordStore: passwordStore, prompt: passwordPrompt
-            )
-        } else {
-            if let passwordPrompt {
-                return CascadeUserAuthenticationDelegate(
-                    host: connection.host, port: connection.port, username: connection.username,
-                    key: nil, passwordTag: connection.passwordTag ?? connection.promptedPasswordTag, canRemember: true,
-                    passwordStore: passwordStore, prompt: passwordPrompt
-                )
-            }
-            return PasswordUserAuthenticationDelegate(
-                username: connection.username,
-                password: try await resolvedPassword(forTag: connection.passwordTag ?? connection.promptedPasswordTag)
-            )
-        }
+        let keys = (try? await metadataProvider.availableKeys()) ?? []
+        let references = keyOfferResolver.resolve(
+            KeyOfferRequest(offersKeys: connection.offersKeys, customKeys: connection.customKeys,
+                            hardwareKeysEnabledByDefault: hardwareKeysEnabledByDefault()),
+            keys: keys
+        )
+        return CascadeUserAuthenticationDelegate(
+            host: connection.host, port: connection.port, username: connection.username,
+            keyReferences: references, keyProvider: authenticationKeyProvider,
+            effectivePasswordTag: connection.passwordTag, promptedPasswordTag: connection.promptedPasswordTag,
+            canRemember: true, passwordStore: passwordStore, prompt: passwordPrompt
+        )
     }
 
     /// Inputs for one session-establish run: PTY dimensions plus the resolved
@@ -309,20 +299,6 @@ public actor SSHTransport {
     }
 
     // MARK: - Private
-
-    /// Resolves the stored password for a `.password`-method endpoint. Any
-    /// store failure or a missing entry is the typed `.authenticationFailed`
-    /// — no credential probe ever reaches the network.
-    private func resolvedPassword(forTag tag: String) async throws(SSHTransportError) -> String {
-        let stored: String?
-        do {
-            stored = try await passwordStore.password(for: tag)
-        } catch {
-            throw .authenticationFailed
-        }
-        guard let stored else { throw .authenticationFailed }
-        return stored
-    }
 
     /// `createChannel` must run on the connection's EventLoop; everything
     /// stays inside future closures so the explicitly non-Sendable

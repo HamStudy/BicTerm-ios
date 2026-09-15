@@ -34,7 +34,8 @@ final class SSHTransportConformanceTests: XCTestCase {
             makeTransport: {
                 SSHTransport(
                     hostKeyVerifier: verifier,
-                    authenticationKeyProvider: StaticKeyProvider(key: key)
+                    authenticationKeyProvider: StaticKeyProvider(key: key),
+                    metadataProvider: FixtureKeyMetadataProvider()
                 )
             },
             connectWorking: { transport in
@@ -68,7 +69,8 @@ final class SSHTransportConformanceTests: XCTestCase {
             makeFailingTransport: {
                 SSHTransport(
                     hostKeyVerifier: verifier,
-                    authenticationKeyProvider: StaticKeyProvider(key: key)
+                    authenticationKeyProvider: StaticKeyProvider(key: key),
+                    metadataProvider: FixtureKeyMetadataProvider()
                 )
             },
             connectFailing: { transport in
