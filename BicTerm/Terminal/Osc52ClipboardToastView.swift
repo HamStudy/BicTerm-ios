@@ -68,6 +68,7 @@ struct Osc52ToastView: View {
                 .strokeBorder(Color.green.opacity(0.6), lineWidth: 1)
         )
         .shadow(color: Color.black.opacity(0.15), radius: 4, y: 2)
+        .accessibilityElement(children: .ignore)
         .accessibilityIdentifier("osc52-toast-\(sceneID)")
         .accessibilityLabel(toast.fullText)
         .padding(.top, 4)
