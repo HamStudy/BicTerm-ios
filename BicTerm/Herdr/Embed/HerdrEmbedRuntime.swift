@@ -60,6 +60,23 @@ final class HerdrEmbedRuntime {
     private var activeTransport: HerdrEmbedTransportCoordinator?
     private var stagedTransport: HerdrEmbedTransportCoordinator?
 
+    /// Bring-up invalidation token (F2 close-during-bringup orphan):
+    /// bumped by every `requestStop`. A bring-up that resumes from any
+    /// suspension with a stale token unwinds itself — tears down the
+    /// transport and settles the FFI stop debt — instead of completing
+    /// a headless run.
+    private var bringupGeneration = 0
+    /// Generation of the current (or most recent) bring-up claim. The
+    /// unwinder of an invalidated bring-up only clears shared runtime
+    /// state while its claim still owns the runtime (a newer open may
+    /// have claimed it already).
+    private var claimGeneration = 0
+    /// The in-flight (or just-finished) bring-up task. `requestStop`
+    /// cancels it so a close during transport prepare() unwinds the
+    /// coordinator (TOFU continuations, establish tasks, bridges)
+    /// instead of orphaning it.
+    private var bringupTask: Task<Void, Never>?
+
     /// Read-thread side of the output path (lock-confined, no MainActor
     /// hops): byte counters, the color-scheme query scanner, the bounded
     /// continuation, and the drop-triggered resync poker.
@@ -87,6 +104,12 @@ final class HerdrEmbedRuntime {
     /// catalog seeding — and the legacy launch-time socket path is ignored.
     /// Initial geometry is a placeholder — the hosting view's first layout
     /// resize delivers SwiftTerm's real grid.
+    ///
+    /// The bring-up runs as a child task so a close at ANY point — during
+    /// transport prepare(), during the FFI boot, or while running — can
+    /// cancel/invalidate it (``requestStop(ownerID:)``): the child observes
+    /// the stale generation after every suspension and unwinds instead of
+    /// completing a headless run (the F2 close-during-bringup orphan).
     func startIfNeeded(
         ownerID: UUID? = nil,
         defaultCols: Int = 80,
@@ -102,27 +125,92 @@ final class HerdrEmbedRuntime {
             return
         }
 
+        // Claim the bring-up with no suspension between the gate above and
+        // here: `.starting` now covers transport prepare() too, so a close
+        // during bring-up meets a stoppable state, and a same-owner re-entry
+        // (SwiftUI re-firing .task) returns instead of double-bringing-up.
+        phase = .starting
+        currentOwner = ownerID
         failureDiagnostic = nil
         transportLines = []
+        let transport: HerdrEmbedTransportCoordinator?
         if let staged = stagedTransport {
             stagedTransport = nil
             activeTransport = staged
+            transport = staged
+        } else {
+            transport = nil
+        }
+        let generation = bringupGeneration
+        claimGeneration = generation
+
+        let task = Task { @MainActor [weak self] in
+            guard let self else { return }
+            await self.bringUp(
+                generation: generation,
+                transport: transport,
+                defaultCols: defaultCols,
+                defaultRows: defaultRows
+            )
+        }
+        bringupTask = task
+        // Forward the caller's own cancellation (SwiftUI tears .task down
+        // when the surface disappears) into the bring-up as a second stop
+        // path alongside onDisappear's requestStop.
+        await withTaskCancellationHandler {
+            await task.value
+        } onCancel: {
+            task.cancel()
+        }
+    }
+
+    private func bringUp(
+        generation: Int,
+        transport: HerdrEmbedTransportCoordinator?,
+        defaultCols: Int,
+        defaultRows: Int
+    ) async {
+        guard !bringupInvalidated(generation) else {
+            await settleAbandonedBringup(
+                generation: generation, session: nil, transport: transport
+            )
+            return
         }
 
         let resolvedSocketPath: String
-        if let activeTransport {
+        if let transport {
             do {
-                resolvedSocketPath = try await activeTransport.prepare()
-                transportLines = activeTransport.eventLines
+                resolvedSocketPath = try await transport.prepare()
+                transportLines = transport.eventLines
             } catch let failure as HerdrEmbedTransportFailure {
+                transportLines = transport.eventLines
+                if bringupInvalidated(generation) {
+                    await settleAbandonedBringup(
+                        generation: generation, session: nil, transport: transport
+                    )
+                    return
+                }
                 presentTransportFailure(failure)
-                await teardownTransport()
+                await teardownTransport(transport)
                 return
             } catch {
+                transportLines = transport.eventLines
+                if bringupInvalidated(generation) {
+                    await settleAbandonedBringup(
+                        generation: generation, session: nil, transport: transport
+                    )
+                    return
+                }
                 presentTransportFailure(.bridge(
                     .bindFailed(path: "transport", reason: "\(error)")
                 ))
-                await teardownTransport()
+                await teardownTransport(transport)
+                return
+            }
+            guard !bringupInvalidated(generation) else {
+                await settleAbandonedBringup(
+                    generation: generation, session: nil, transport: transport
+                )
                 return
             }
         } else if let legacy = Self.resolveSocketPath() {
@@ -138,8 +226,6 @@ final class HerdrEmbedRuntime {
         }
         self.socketPath = resolvedSocketPath
 
-        phase = .starting
-        currentOwner = ownerID
         let session = sessionFactory()
         prepareClientEnvironment()
 
@@ -185,8 +271,23 @@ final class HerdrEmbedRuntime {
                     }
                 }
             }
+            // The boot continuation is cancellation-blind by FFI contract
+            // (start returns when it returns); observe the stop HERE and
+            // tear the just-booted client down instead of running headless.
+            guard !bringupInvalidated(generation) else {
+                await settleAbandonedBringup(
+                    generation: generation, session: session, transport: transport
+                )
+                return
+            }
             phase = .running
         } catch {
+            if bringupInvalidated(generation) {
+                await settleAbandonedBringup(
+                    generation: generation, session: session, transport: transport
+                )
+                return
+            }
             phase = .failed("\(error)")
             finishStream()
             self.session = nil
@@ -194,6 +295,10 @@ final class HerdrEmbedRuntime {
     }
 
     /// Stops the live run (window/cover closed or Disconnect). Off-main.
+    /// Effective in EVERY phase of a live bring-up or run: transport
+    /// prepare(), FFI boot, and running — the in-flight bring-up task is
+    /// cancelled and its generation invalidated, so its continuation
+    /// observes the stop and tears down instead of completing headless.
     /// An `ownerID` scopes the stop to the run's owning workspace — a
     /// superseded surface closing its window must not kill the run that
     /// replaced it; nil stops unconditionally (the owner's own Disconnect,
@@ -201,20 +306,71 @@ final class HerdrEmbedRuntime {
     /// joined — its supervisor may still be dialing the bridge socket,
     /// which resolves relative to the cwd the coordinator pinned.
     func requestStop(ownerID: UUID? = nil) async {
-        guard phase == .running || phase == .starting else { return }
+        guard phase == .running || phase == .starting else {
+            bringupTask = nil
+            return
+        }
         if let ownerID, currentOwner != ownerID { return }
+        bringupGeneration &+= 1
+        let task = bringupTask
+        bringupTask = nil
+        task?.cancel()
         let session = session
         phase = .stopped(exit: nil)
         currentOwner = nil
         finishStream()
         self.session = nil
-        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            DispatchQueue.global(qos: .userInitiated).async {
-                session?.stopBlocking()
-                continuation.resume()
+        if let session {
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                DispatchQueue.global(qos: .userInitiated).async {
+                    session.stopBlocking()
+                    continuation.resume()
+                }
             }
         }
+        // Let the bring-up child unwind (cancellation-resumed prepare and
+        // boot continuations — the coordinator's own cleanup of bridges,
+        // carriers, and the pinned cwd) before the teardown backstop.
+        if let task {
+            await task.value
+        }
         await teardownTransport()
+    }
+
+    private func bringupInvalidated(_ generation: Int) -> Bool {
+        bringupGeneration != generation || Task.isCancelled
+    }
+
+    /// Unwinds an invalidated bring-up: settles the FFI stop debt for a
+    /// client that booted (or tried to), releases the run's state, and
+    /// tears down the scoped transport. `stopBlocking` is the session's
+    /// own idempotent settle (requestStop may have stopped it already);
+    /// shared runtime state is only cleared while this generation still
+    /// owns the claim — a newer open may have taken over.
+    private func settleAbandonedBringup(
+        generation: Int,
+        session: HerdrEmbedSession?,
+        transport: HerdrEmbedTransportCoordinator?
+    ) async {
+        if let session, self.session === session {
+            self.session = nil
+        }
+        if claimGeneration == generation {
+            currentOwner = nil
+            finishStream()
+            if case .starting = phase {
+                phase = .stopped(exit: nil)
+            }
+        }
+        if let session {
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                DispatchQueue.global(qos: .userInitiated).async {
+                    session.stopBlocking()
+                    continuation.resume()
+                }
+            }
+        }
+        await teardownTransport(transport)
     }
 
     private func handleExit(_ detail: String?) {
@@ -243,6 +399,11 @@ final class HerdrEmbedRuntime {
     }
 
     private func teardownTransport(_ explicit: HerdrEmbedTransportCoordinator? = nil) async {
+        // A scoped teardown must not touch a NEWER bring-up's coordinator
+        // (an old run exiting / an old bring-up unwinding after takeover).
+        if let explicit {
+            guard activeTransport === explicit else { return }
+        }
         guard let transport = explicit ?? activeTransport else { return }
         activeTransport = nil
         transportLines = transport.eventLines
@@ -256,6 +417,10 @@ final class HerdrEmbedRuntime {
     /// as a typed ``HerdrDiagnostic`` using the native taxonomy's kinds.
     private func presentTransportFailure(_ failure: HerdrEmbedTransportFailure) {
         switch failure {
+        case .cancelled:
+            // A stop during bring-up: quiet, like a declined prompt.
+            phase = .stopped(exit: nil)
+            return
         case let .connector(error):
             switch error {
             case .trustDeclined:

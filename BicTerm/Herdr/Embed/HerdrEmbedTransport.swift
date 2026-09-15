@@ -142,10 +142,13 @@ enum HerdrEmbedHerdSeeder {
     }
 }
 
-/// Typed failure of one embedded-transport bring-up.
+/// Typed failure of one embedded-transport bring-up. `.cancelled` is the
+/// cooperative-cancellation outcome: the runtime stopped the bring-up and
+/// `prepare()` unwound its bridges, carriers, and pinned cwd.
 enum HerdrEmbedTransportFailure: Error {
     case connector(HerdrEndpointConnectorError)
     case bridge(HerdrEmbedBridgeError)
+    case cancelled
 }
 
 /// Drives the embedded client's SSH transport (plan herdr-embed T5/T6):
@@ -186,6 +189,12 @@ final class HerdrEmbedTransportCoordinator {
     private var servers: [HerdrEmbedBridgeServer] = []
     private var carriers: [String: any SSHExecCapableConnection] = [:]
     private var previousCWD: String?
+    /// Per-machine establish tasks of the in-flight prepare() — cancelled
+    /// when the bring-up is cancelled so their awaits unwind.
+    private var establishTasks: [Task<Result<HerdrProbedCarrier, HerdrEmbedTransportFailure>, Never>] = []
+    /// Set by the cancellation handler while prepare() is in flight; every
+    /// post-suspension resume in prepare() checks it and unwinds.
+    private var prepareCancelled = false
 
     init(
         connection: Connection,
@@ -325,8 +334,28 @@ final class HerdrEmbedTransportCoordinator {
     /// embed crate should point at (no local server exists in the embed
     /// scenario — the client treats it as an unavailable Local and
     /// federates the seeded machines).
+    ///
+    /// Cancellation-aware (the F2 close-during-bringup fix): when the
+    /// bring-up task is cancelled, the pending TOFU continuations are
+    /// resumed declined, the establish tasks cancelled, and every
+    /// post-suspension resume unwinds — closing the bridge channels and
+    /// UDS listeners it had started, the established carriers, and the
+    /// pinned cwd — then throws `.cancelled`. No coordinator state (or
+    /// continuation) outlives the cancelled bring-up.
     func prepare() async throws(HerdrEmbedTransportFailure) -> String {
-        let (established, establishFailure) = await establishAll()
+        prepareCancelled = false
+        let (established, establishFailure) = await withTaskCancellationHandler {
+            await establishAll()
+        } onCancel: {
+            Task { @MainActor [weak self] in
+                self?.handlePrepareCancellation()
+            }
+        }
+
+        if isPrepareCancelled() {
+            await unwindBringUp(established: established, started: [])
+            throw .cancelled
+        }
 
         // Pin the cwd BEFORE the binds: socket paths are relative (the
         // container's absolute paths exceed sun_path) and NIO resolves them
@@ -348,6 +377,10 @@ final class HerdrEmbedTransportCoordinator {
         var started: [(link: HerdrEmbedMachineLink, bridge: HerdrEmbedBridgeServer)] = []
         var bridgeFailure: HerdrEmbedTransportFailure?
         for item in established {
+            if isPrepareCancelled() {
+                await unwindBringUp(established: established, started: started)
+                throw .cancelled
+            }
             let bridge = HerdrEmbedBridgeServer(
                 socketPath: Self.socketPath(machine: item.link.machine),
                 carrier: item.probed.carrier,
@@ -385,6 +418,10 @@ final class HerdrEmbedTransportCoordinator {
             throw establishFailure ?? bridgeFailure ?? .bridge(.bindFailed(
                 path: "transport", reason: "no machine could be established"
             ))
+        }
+        if isPrepareCancelled() {
+            await unwindBringUp(established: established, started: started)
+            throw .cancelled
         }
         servers = started.map(\.bridge)
 
@@ -483,6 +520,7 @@ final class HerdrEmbedTransportCoordinator {
                 await self.establishOne(link)
             }
         }
+        establishTasks = tasks
         var established: [Established] = []
         var firstFailure: HerdrEmbedTransportFailure?
         for (task, link) in zip(tasks, links) {
@@ -496,7 +534,55 @@ final class HerdrEmbedTransportCoordinator {
                 )
             }
         }
+        establishTasks = []
         return (established, firstFailure)
+    }
+
+    // MARK: - Bring-up cancellation (F2)
+
+    private func isPrepareCancelled() -> Bool {
+        prepareCancelled || Task.isCancelled
+    }
+
+    /// Runs on the MainActor hop from the cancellation handler: marks the
+    /// prepare flag, cancels the per-machine establish tasks (their own
+    /// awaits unwind), and brings every undecided TOFU continuation down
+    /// with the bring-up so nothing parks the coordinator forever.
+    private func handlePrepareCancellation() {
+        prepareCancelled = true
+        for task in establishTasks {
+            task.cancel()
+        }
+        resolvePendingTrustPromptsAsDeclined()
+    }
+
+    private func resolvePendingTrustPromptsAsDeclined() {
+        let pending = [trustPrompt].compactMap { $0 } + queuedTrustPrompts
+        trustPrompt = nil
+        queuedTrustPrompts.removeAll()
+        for prompt in pending {
+            prompt.continuation.resume(returning: false)
+        }
+    }
+
+    /// Unwinds a cancelled prepare(): stops the bridges it started (each
+    /// stop closes its carrier and unlinks the UDS listener), closes the
+    /// carriers of established-but-unbridged machines, and restores the
+    /// pinned cwd.
+    private func unwindBringUp(
+        established: [Established],
+        started: [(link: HerdrEmbedMachineLink, bridge: HerdrEmbedBridgeServer)]
+    ) async {
+        let bridged = Set(started.map { $0.link.machine.profileID })
+        for item in established where !bridged.contains(item.link.machine.profileID) {
+            await item.probed.carrier.close()
+        }
+        for (_, bridge) in started {
+            await bridge.stop()
+        }
+        servers.removeAll()
+        carriers.removeAll()
+        restoreCWD()
     }
 
     private func establishOne(
@@ -516,6 +602,7 @@ final class HerdrEmbedTransportCoordinator {
         switch failure {
         case let .connector(error): "connector: \(error)"
         case let .bridge(error): "bridge: \(error)"
+        case .cancelled: "cancelled"
         }
     }
 
