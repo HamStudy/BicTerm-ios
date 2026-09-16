@@ -188,13 +188,25 @@ final class HerdrEmbedTransportCoordinator {
 
     private var servers: [HerdrEmbedBridgeServer] = []
     private var carriers: [String: any SSHExecCapableConnection] = [:]
-    private var previousCWD: String?
     /// Per-machine establish tasks of the in-flight prepare() — cancelled
     /// when the bring-up is cancelled so their awaits unwind.
-    private var establishTasks: [Task<Result<HerdrProbedCarrier, HerdrEmbedTransportFailure>, Never>] = []
+    private var establishTasks: [Task<Result<Established, HerdrEmbedTransportFailure>, Never>] = []
     /// Set by the cancellation handler while prepare() is in flight; every
     /// post-suspension resume in prepare() checks it and unwinds.
     private var prepareCancelled = false
+
+    /// Test seam (deterministic early-failure regression tests): replaces
+    /// the per-machine establish step so a test can hand the coordinator
+    /// carriers with observable lifetimes — no SSH, no fixtures.
+    /// Production paths leave it nil (the connector path runs).
+    var establishForTesting: (@Sendable (HerdrEmbedMachineLink) async -> Established)?
+
+    /// Test seam (deterministic early-failure regression tests): overrides
+    /// the home directory the cwd pin and the transport directory derive
+    /// from (production: the app home). A nonexistent directory fails the
+    /// pin; a transport-directory name occupied by a regular file fails
+    /// the mkdir — both deterministically, before any bind.
+    var homeDirectoryForTesting: String?
 
     init(
         connection: Connection,
@@ -359,20 +371,45 @@ final class HerdrEmbedTransportCoordinator {
 
         // Pin the cwd BEFORE the binds: socket paths are relative (the
         // container's absolute paths exceed sun_path) and NIO resolves them
-        // against the process cwd on its own event-loop threads.
-        pinCWDIfNeeded()
+        // against the process cwd on its own event-loop threads. The pin
+        // is OWNED (HerdrEmbedTransportWorkspace): a superseded
+        // coordinator's teardown cannot un-pin it under these binds.
+        do {
+            try pinCWD()
+        } catch {
+            // The established carriers are still unbridged and neither
+            // `servers` nor `carriers` knows them — runtime teardown
+            // cannot recover them, so this unwind is their only closer.
+            // The pin never happened, so its release inside the unwind
+            // is a no-op.
+            await unwindBringUp(established: established, started: [])
+            throw error
+        }
         let transportDirectory = URL(
-            fileURLWithPath: NSHomeDirectory(),
+            fileURLWithPath: homeDirectory,
             isDirectory: true
         )
         .appendingPathComponent(
             HerdrEmbedClientCatalog.transportDirectoryName,
             isDirectory: true
         )
-        try? FileManager.default.createDirectory(
-            at: transportDirectory,
-            withIntermediateDirectories: true
-        )
+        do {
+            try FileManager.default.createDirectory(
+                at: transportDirectory,
+                withIntermediateDirectories: true
+            )
+        } catch {
+            // Never let a directory-creation failure fall through to the
+            // binds — it would surface as a misleading bind ENOENT. The
+            // established carriers are still unbridged (runtime teardown
+            // cannot recover them): the unwind closes them and releases
+            // the pin this bring-up just took.
+            await unwindBringUp(established: established, started: [])
+            throw .bridge(.bindFailed(
+                path: transportDirectory.path,
+                reason: "creating the transport directory failed: \(error)"
+            ))
+        }
 
         var started: [(link: HerdrEmbedMachineLink, bridge: HerdrEmbedBridgeServer)] = []
         var bridgeFailure: HerdrEmbedTransportFailure?
@@ -383,8 +420,8 @@ final class HerdrEmbedTransportCoordinator {
             }
             let bridge = HerdrEmbedBridgeServer(
                 socketPath: Self.socketPath(machine: item.link.machine),
-                carrier: item.probed.carrier,
-                executablePath: item.probed.executablePath,
+                carrier: item.carrier,
+                executablePath: item.executablePath,
                 sessionName: item.link.bridgeSessionName
             )
             let eventSink = EventSink(label: item.link.machine.label) { [weak self] line in
@@ -396,12 +433,12 @@ final class HerdrEmbedTransportCoordinator {
             do {
                 try await bridge.start()
                 started.append((item.link, bridge))
-                carriers[item.link.machine.profileID] = item.probed.carrier
+                carriers[item.link.machine.profileID] = item.carrier
             } catch let error as HerdrEmbedBridgeError {
-                await item.probed.carrier.close()
+                await item.carrier.close()
                 if bridgeFailure == nil { bridgeFailure = .bridge(error) }
             } catch {
-                await item.probed.carrier.close()
+                await item.carrier.close()
                 if bridgeFailure == nil {
                     bridgeFailure = .bridge(.bindFailed(
                         path: Self.socketPath(machine: item.link.machine),
@@ -505,9 +542,14 @@ final class HerdrEmbedTransportCoordinator {
 
     // MARK: - Establish
 
-    private struct Established {
+    /// One machine's established carrier: the probed SSH connection plus
+    /// the remote herdr executable the bridge command should exec.
+    /// `prepare()` owns these from `establishAll()` until each is either
+    /// handed to a started bridge or closed by an unwind.
+    struct Established {
         let link: HerdrEmbedMachineLink
-        let probed: HerdrProbedCarrier
+        let carrier: any SSHExecCapableConnection
+        let executablePath: String
     }
 
     /// One carrier per machine, concurrently (the native herd's
@@ -525,8 +567,8 @@ final class HerdrEmbedTransportCoordinator {
         var firstFailure: HerdrEmbedTransportFailure?
         for (task, link) in zip(tasks, links) {
             switch await task.value {
-            case let .success(probed):
-                established.append(Established(link: link, probed: probed))
+            case let .success(item):
+                established.append(item)
             case let .failure(failure):
                 if firstFailure == nil { firstFailure = failure }
                 eventLines.append(
@@ -565,17 +607,18 @@ final class HerdrEmbedTransportCoordinator {
         }
     }
 
-    /// Unwinds a cancelled prepare(): stops the bridges it started (each
-    /// stop closes its carrier and unlinks the UDS listener), closes the
-    /// carriers of established-but-unbridged machines, and restores the
-    /// pinned cwd.
+    /// Unwinds a prepare() that cannot proceed — cancelled, or failed
+    /// before bridge startup (cwd pin, transport-directory creation):
+    /// stops the bridges it started (each stop closes its carrier and
+    /// unlinks the UDS listener), closes the carriers of
+    /// established-but-unbridged machines, and restores the pinned cwd.
     private func unwindBringUp(
         established: [Established],
         started: [(link: HerdrEmbedMachineLink, bridge: HerdrEmbedBridgeServer)]
     ) async {
         let bridged = Set(started.map { $0.link.machine.profileID })
         for item in established where !bridged.contains(item.link.machine.profileID) {
-            await item.probed.carrier.close()
+            await item.carrier.close()
         }
         for (_, bridge) in started {
             await bridge.stop()
@@ -587,10 +630,18 @@ final class HerdrEmbedTransportCoordinator {
 
     private func establishOne(
         _ link: HerdrEmbedMachineLink
-    ) async -> Result<HerdrProbedCarrier, HerdrEmbedTransportFailure> {
+    ) async -> Result<Established, HerdrEmbedTransportFailure> {
+        if let establishForTesting {
+            return .success(await establishForTesting(link))
+        }
         let connector = await makeConnector()
         do {
-            return .success(try await connector.establishProbed(link.connection))
+            let probed = try await connector.establishProbed(link.connection)
+            return .success(Established(
+                link: link,
+                carrier: probed.carrier,
+                executablePath: probed.executablePath
+            ))
         } catch let error as HerdrEndpointConnectorError {
             return .failure(.connector(error))
         } catch {
@@ -608,18 +659,38 @@ final class HerdrEmbedTransportCoordinator {
 
     // MARK: - cwd pin
 
-    private func pinCWDIfNeeded() {
-        guard previousCWD == nil else { return }
-        let home = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
-        let current = FileManager.default.currentDirectoryPath
-        guard chdir(home.path) == 0 else { return }
-        previousCWD = current
+    /// Home the cwd pin and the transport directory both derive from.
+    /// The test seam can point both at one controlled directory; the
+    /// pin and the mkdir must agree on it (the pin is what makes the
+    /// relative socket paths resolve).
+    private var homeDirectory: String {
+        homeDirectoryForTesting ?? NSHomeDirectory()
     }
 
+    /// Pins the process cwd to the app home for the relative bridge
+    /// socket paths. Typed failure: a bring-up that cannot pin must not
+    /// proceed to relative binds (they would fail with a misleading
+    /// ENOENT).
+    private func pinCWD() throws(HerdrEmbedTransportFailure) {
+        do {
+            try HerdrEmbedTransportWorkspace.pinCWD(
+                homeDirectory: homeDirectory,
+                owner: self
+            )
+        } catch {
+            throw .bridge(.bindFailed(
+                path: HerdrEmbedClientCatalog.transportDirectoryName,
+                reason: "pinning the transport cwd failed: \(error)"
+            ))
+        }
+    }
+
+    /// Releases the pin this coordinator holds. Ownership-aware: a
+    /// superseded coordinator's release leaves a newer bring-up's pin
+    /// (and the cwd) untouched; the current owner's release restores the
+    /// pre-pin cwd.
     private func restoreCWD() {
-        guard let previousCWD else { return }
-        self.previousCWD = nil
-        chdir(previousCWD)
+        HerdrEmbedTransportWorkspace.releaseCWD(owner: self)
     }
 }
 

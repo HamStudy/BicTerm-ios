@@ -305,6 +305,13 @@ final class HerdrEmbedRuntime {
     /// tests). The transport (when attached) tears down AFTER the client
     /// joined — its supervisor may still be dialing the bridge socket,
     /// which resolves relative to the cwd the coordinator pinned.
+    ///
+    /// The stop captures the coordinator it owes a teardown for AT
+    /// ENTRY: a newer bring-up may claim the runtime while this stop is
+    /// still unwinding (phase is already `.stopped`), and its trailing
+    /// teardown must never grab the NEW coordinator — tearing down a
+    /// live bring-up mid-pin un-pins the cwd under its relative binds
+    /// (the bridge `bindFailed(ENOENT)` startup failure).
     func requestStop(ownerID: UUID? = nil) async {
         guard phase == .running || phase == .starting else {
             bringupTask = nil
@@ -316,6 +323,7 @@ final class HerdrEmbedRuntime {
         bringupTask = nil
         task?.cancel()
         let session = session
+        let transport = activeTransport
         phase = .stopped(exit: nil)
         currentOwner = nil
         finishStream()
@@ -334,7 +342,7 @@ final class HerdrEmbedRuntime {
         if let task {
             await task.value
         }
-        await teardownTransport()
+        await teardownTransport(transport)
     }
 
     private func bringupInvalidated(_ generation: Int) -> Bool {
@@ -398,14 +406,17 @@ final class HerdrEmbedRuntime {
         }
     }
 
-    private func teardownTransport(_ explicit: HerdrEmbedTransportCoordinator? = nil) async {
-        // A scoped teardown must not touch a NEWER bring-up's coordinator
-        // (an old run exiting / an old bring-up unwinding after takeover).
-        if let explicit {
-            guard activeTransport === explicit else { return }
+    /// Tears down exactly the coordinator the caller owes — never a
+    /// different (newer) bring-up's. A SUPERSEDED coordinator is still
+    /// torn down (its bridges and carriers must not leak a live listener
+    /// that blocks the next bring-up's bind); the cwd pin it held is
+    /// released ownership-aware inside the coordinator, so a newer
+    /// bring-up's pin survives the superseded teardown.
+    private func teardownTransport(_ transport: HerdrEmbedTransportCoordinator?) async {
+        guard let transport else { return }
+        if activeTransport === transport {
+            activeTransport = nil
         }
-        guard let transport = explicit ?? activeTransport else { return }
-        activeTransport = nil
         transportLines = transport.eventLines
         await transport.teardown()
     }
