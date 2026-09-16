@@ -337,6 +337,95 @@ final class SessionSceneModelTests: XCTestCase {
         let reconnected = await waitFor(model) { $0 == .active }
         XCTAssertTrue(reconnected, "row-button path must reconnect after restore: \(model.state)")
         XCTAssertEqual(factory.createdCount, 1)
+
+        // Successful reconnect consumes the persisted snapshot: the row
+        // must never return on a later reload/relaunch.
+        let remaining = await store.loadRestorableSessions()
+        XCTAssertTrue(remaining.isEmpty, "a successful manual reconnect consumes the snapshot")
+        let consumed = try await snapshots.snapshot(sceneID: snapshot.sceneID)
+        XCTAssertNil(consumed)
+    }
+
+    /// A FAILED manual reconnect must not silently destroy recoverable
+    /// state: the snapshot survives, so the row returns on every
+    /// subsequent launch, and only the explicit Dismiss action permanently
+    /// removes it.
+    func testFailedReconnectKeepsSnapshotRecoverableUntilExplicitDismissal() async throws {
+        let snapshots = InMemoryAppSnapshotStore()
+        let alpha = try makeConnection(name: "Alpha")
+        let snapshot = SessionSnapshot(connectionID: alpha.id, sceneID: "terminated-scene-fail")
+        try await snapshots.save(snapshot)
+        let failingFactory = ScriptedSessionTransportFactory(fallback: .fail(.unreachable))
+        let store = makeStore(factory: failingFactory, snapshots: snapshots, connections: [alpha])
+
+        let descriptor = store.openRestoredSession(
+            snapshot: snapshot,
+            connection: alpha,
+            initiatesReconnect: true
+        )
+        let model = try XCTUnwrap(store.sceneModel(for: descriptor.id))
+        await model.start()
+
+        let failed = await waitFor(model) {
+            if case .failed = $0 { return true }
+            return false
+        }
+        XCTAssertTrue(failed, "reconnect must surface its failure: \(model.state)")
+
+        // The failure did NOT consume the snapshot.
+        let survived = try await snapshots.snapshot(sceneID: snapshot.sceneID)
+        XCTAssertEqual(survived, snapshot)
+
+        // App death with the failed scene open re-persists the snapshot
+        // (willTerminate), so the row returns on every subsequent launch.
+        await store.registry.willTerminate()
+        let repersisted = try await snapshots.snapshot(sceneID: snapshot.sceneID)
+        XCTAssertEqual(repersisted?.connectionID, alpha.id)
+        XCTAssertEqual(repersisted?.state, SessionSnapshotState.reconnectRequired)
+
+        // Fresh launch (fresh store over the same persistence): the row is
+        // listed again — a failing reconnect can never clear it.
+        let relaunchStore = makeStore(factory: failingFactory, snapshots: snapshots, connections: [alpha])
+        let reloaded = await relaunchStore.loadRestorableSessions()
+        XCTAssertEqual(reloaded.map(\.snapshot.sceneID), [snapshot.sceneID])
+
+        // The explicit dismissal permanently removes it.
+        let dismissed = await relaunchStore.dismissRestorableSession(try XCTUnwrap(reloaded.first))
+        XCTAssertTrue(dismissed, "dismissal must confirm the persisted deletion")
+        let afterDismiss = await relaunchStore.loadRestorableSessions()
+        XCTAssertTrue(afterDismiss.isEmpty, "dismissed row must not return on reload")
+        let deleted = try await snapshots.snapshot(sceneID: snapshot.sceneID)
+        XCTAssertNil(deleted)
+    }
+
+    /// Dismissal deletes ONLY the target snapshot: sibling snapshots and
+    /// the underlying connection survive, and the dismissed row never
+    /// returns after a reload.
+    func testDismissalRemovesOnlyTargetSnapshotAndStaysGoneAfterReload() async throws {
+        let factory = ScriptedSessionTransportFactory(fallback: .succeed)
+        let snapshots = InMemoryAppSnapshotStore()
+        let alpha = try makeConnection(name: "Alpha")
+        let stale = SessionSnapshot(connectionID: alpha.id, sceneID: "terminated-stale")
+        let keep = SessionSnapshot(connectionID: alpha.id, sceneID: "terminated-keep")
+        try await snapshots.save(stale)
+        try await snapshots.save(keep)
+        let store = makeStore(factory: factory, snapshots: snapshots, connections: [alpha])
+
+        let listed = await store.loadRestorableSessions()
+        XCTAssertEqual(Set(listed.map(\.snapshot.sceneID)), [stale.sceneID, keep.sceneID])
+
+        let staleEntry = try XCTUnwrap(listed.first { $0.snapshot.sceneID == stale.sceneID })
+        let dismissed = await store.dismissRestorableSession(staleEntry)
+        XCTAssertTrue(dismissed)
+
+        // Persisted state: target gone, sibling kept, connection intact.
+        let deletedStale = try await snapshots.snapshot(sceneID: stale.sceneID)
+        XCTAssertNil(deletedStale)
+        let keptSnapshot = try await snapshots.snapshot(sceneID: keep.sceneID)
+        XCTAssertEqual(keptSnapshot, keep)
+        let afterDismiss = await store.loadRestorableSessions()
+        XCTAssertEqual(afterDismiss.map(\.snapshot.sceneID), [keep.sceneID])
+        XCTAssertEqual(afterDismiss.first?.connection.id, alpha.id, "the connection must survive dismissal")
     }
 
     /// Closing a live scene asks for confirmation first; confirming

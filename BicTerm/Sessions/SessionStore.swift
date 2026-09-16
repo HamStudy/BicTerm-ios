@@ -209,7 +209,10 @@ final class SessionStore {
         self.agentBook = book
         self.hostKeyVerifier = verifier
         self.hostKeyStore = injectedHostKeyStore ?? keyStore
-        self.snapshotStore = snapshotStore
+        // The RESOLVED store — the same instance the registry holds — so
+        // snapshot dismissal/forget paths operate on live persistence even
+        // when the caller relied on the default store.
+        self.snapshotStore = snapshots
 
         if let connectionLookup {
             self.connectionLookup = connectionLookup
@@ -354,15 +357,22 @@ final class SessionStore {
 
     // MARK: - Restoration listing
 
-    /// Snapshots restorable in this launch: their connection still exists
-    /// and no scene has opened them yet. Each restores as
-    /// `.reconnectRequired` — reconnection is always a manual action.
+    /// Snapshots restorable in this launch: their connection still exists,
+    /// and any scene that opened one is still in a recoverable (non-active)
+    /// state. Each restores as `.reconnectRequired` — reconnection is always
+    /// a manual action, and dismissal always deletes only the snapshot.
     func loadRestorableSessions() async -> [RestorableSession] {
         guard let snapshots = try? await registry.restorableSnapshots() else { return [] }
         var result: [RestorableSession] = []
         for snapshot in snapshots {
-            guard !descriptors.values.contains(where: { $0.restoredSceneID == snapshot.sceneID }) else {
-                continue
+            if let live = descriptors.values.first(where: { $0.restoredSceneID == snapshot.sceneID }) {
+                // The snapshot is consumed the moment its scene goes active;
+                // a live scene in any other state is still recoverable, so
+                // the row stays listed (and dismissible) instead of hiding
+                // until relaunch.
+                if await registry.state(sceneID: live.registrySceneID) == .active {
+                    continue
+                }
             }
             guard let connection = await connectionLookup(snapshot.connectionID) else { continue }
             connectionNameCache[connection.id] = connection.name
@@ -385,6 +395,31 @@ final class SessionStore {
             removed += 1
         }
         return removed
+    }
+
+    /// Permanently dismisses one restorable session: deletes ONLY its
+    /// persisted snapshot so the row never returns. The connection,
+    /// credentials, host trust, and every other snapshot are untouched.
+    /// Returns false when deletion failed — callers must keep the row
+    /// listed, because a UI-only disappearance would return on the next
+    /// launch.
+    func dismissRestorableSession(_ entry: RestorableSession) async -> Bool {
+        // A live scene bound to this snapshot (a failed/suspended restore)
+        // must close with it, or a later willTerminate would re-persist the
+        // snapshot and resurrect the dismissed row. A scene that went active
+        // in the meantime already consumed the snapshot and stays open.
+        if let live = descriptors.values.first(where: { $0.restoredSceneID == entry.snapshot.sceneID }) {
+            if await registry.state(sceneID: live.registrySceneID) != .active {
+                await closeScene(live.id)
+            }
+        }
+        guard let snapshotStore else { return false }
+        do {
+            try await snapshotStore.deleteSnapshot(sceneID: entry.snapshot.sceneID)
+            return true
+        } catch {
+            return false
+        }
     }
 
     // MARK: - Window restoration
