@@ -396,6 +396,87 @@ final class SessionScenesUITests: XCTestCase {
         attachScreenshot(named: "task-14-restore")
     }
 
+    /// A stale reconnect-required row can be dismissed permanently: the
+    /// persisted snapshot is deleted (the saved connection survives), and
+    /// the row never returns on later reloads or relaunches.
+    func testRestorableRowDismissRemovesRowPermanently() throws {
+        try XCTSkipUnless(
+            UIDevice.current.userInterfaceIdiom == .phone,
+            "Restoration list flow runs on the phone form factor"
+        )
+
+        // Seed a restorable snapshot: connect Alpha, background (snapshot),
+        // terminate.
+        app.launchArguments = baseLaunchArguments(extra: ["--uitest-open-session", "Alpha"])
+        app.launch()
+
+        let alphaStatus = app.staticTexts["scene-status-Alpha"]
+        XCTAssertTrue(
+            alphaStatus.waitForExistence(timeout: 60),
+            "Alpha scene never appeared on first launch"
+        )
+        XCTAssertTrue(
+            waitUntil(alphaStatus, contains: "status:active", timeout: 45),
+            "Alpha never connected on first launch"
+        )
+
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        springboard.activate()
+        Thread.sleep(forTimeInterval: 3)
+        app.terminate()
+
+        // Relaunch keeping snapshots: the row must be listed and expose a
+        // dismiss action alongside Reconnect.
+        app.launchArguments = [
+            "--uitest-pretrust-fixtures",
+            "--uitest-sessions",
+            "--uitest-expect-restore",
+        ]
+        app.launch()
+
+        let dismissButton = app.buttons["restorable-dismiss-Alpha"]
+        XCTAssertTrue(
+            dismissButton.waitForExistence(timeout: 20),
+            "every restorable row must expose an accessible dismiss action"
+        )
+        XCTAssertTrue(app.buttons["restorable-reconnect-Alpha"].exists)
+
+        dismissButton.tap()
+
+        // The row leaves the list; the saved connection survives.
+        let goneDeadline = Date().addingTimeInterval(10)
+        while Date() < goneDeadline && dismissButton.exists {
+            Thread.sleep(forTimeInterval: 0.25)
+        }
+        XCTAssertFalse(dismissButton.exists, "dismissed row must leave the list")
+        XCTAssertTrue(
+            app.buttons["connection-Alpha"].waitForExistence(timeout: 10),
+            "dismissal must never delete the saved connection"
+        )
+
+        // Relaunch again: the dismissed row must NOT return.
+        app.terminate()
+        app.launchArguments = [
+            "--uitest-pretrust-fixtures",
+            "--uitest-sessions",
+            "--uitest-expect-restore",
+        ]
+        app.launch()
+
+        Thread.sleep(forTimeInterval: 4)
+        XCTAssertFalse(
+            app.buttons["restorable-reconnect-Alpha"].exists,
+            "dismissed row must not return on relaunch"
+        )
+        XCTAssertFalse(app.buttons["restorable-dismiss-Alpha"].exists)
+        XCTAssertTrue(
+            app.buttons["connection-Alpha"].waitForExistence(timeout: 10),
+            "the saved connection must still be listed after relaunch"
+        )
+
+        attachScreenshot(named: "restorable-dismiss-persisted")
+    }
+
     // MARK: - Agent approval
 
     /// "Approve for this session": the first sign surfaces the sheet with

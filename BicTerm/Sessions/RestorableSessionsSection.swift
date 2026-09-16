@@ -2,8 +2,9 @@ import BicTermCore
 import SwiftUI
 
 /// Main-window section listing termination snapshots that can be restored.
-/// Every entry restores as reconnect-required — the only connect action is
-/// the manual Reconnect button.
+/// Every entry restores as reconnect-required and exposes two actions: the
+/// manual Reconnect button, and Dismiss, which permanently deletes the
+/// entry's persisted snapshot (the saved connection is kept).
 struct RestorableSessionsSection: View {
     @Environment(\.terminalColors) private var colors
     @Environment(\.terminalTypography) private var typography
@@ -11,6 +12,7 @@ struct RestorableSessionsSection: View {
 
     let entries: [SessionStore.RestorableSession]
     let onReconnect: (SessionStore.RestorableSession) -> Void
+    let onDismiss: (SessionStore.RestorableSession) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: spacing.xs) {
@@ -42,6 +44,19 @@ struct RestorableSessionsSection: View {
                     .buttonStyle(.bordered)
                     .tint(colors.accent)
                     .accessibilityIdentifier("restorable-reconnect-\(sanitized(entry.connection.name))")
+
+                    Button {
+                        onDismiss(entry)
+                    } label: {
+                        Image(systemName: "xmark.circle")
+                            .font(typography.headline)
+                    }
+                    .buttonStyle(.borderless)
+                    .tint(colors.dimmed)
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
+                    .accessibilityLabel("Dismiss \(entry.connection.name)")
+                    .accessibilityIdentifier("restorable-dismiss-\(sanitized(entry.connection.name))")
                 }
                 .padding(spacing.xs)
                 .background(colors.selection.opacity(0.35), in: RoundedRectangle(cornerRadius: 6))

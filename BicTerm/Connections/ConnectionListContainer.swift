@@ -24,9 +24,11 @@ struct ConnectionListContainer: View {
     var body: some View {
         VStack(spacing: 0) {
             if !restorableSessions.isEmpty {
-                RestorableSessionsSection(entries: restorableSessions) { entry in
-                    reconnectRestorable(entry)
-                }
+                RestorableSessionsSection(
+                    entries: restorableSessions,
+                    onReconnect: { reconnectRestorable($0) },
+                    onDismiss: { dismissRestorable($0) }
+                )
             }
 
             ConnectionListView(
@@ -219,6 +221,17 @@ struct ConnectionListContainer: View {
             connection: entry.connection,
             initiatesReconnect: true
         ))
+    }
+
+    /// Permanently removes a stale restorable row: the persisted snapshot is
+    /// deleted FIRST and the row leaves the list only when persistence
+    /// confirms, so a failed deletion never fakes a disappearance that the
+    /// next launch would undo.
+    private func dismissRestorable(_ entry: SessionStore.RestorableSession) {
+        Task {
+            guard await store.dismissRestorableSession(entry) else { return }
+            restorableSessions.removeAll { $0.id == entry.id }
+        }
     }
 
     /// Per-host forget (T20): clears trust, stored passwords, restorable
