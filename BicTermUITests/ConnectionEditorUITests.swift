@@ -396,6 +396,47 @@ final class ConnectionEditorUITests: XCTestCase {
         XCTAssertTrue(original.waitForExistence(timeout: 5), "original must survive deleting the copy")
     }
 
+    // MARK: Context menu — pointer secondary click / touch long press
+
+    /// XCUITest has no iOS secondary-click primitive; a long press opens the
+    /// same native UIContextMenuInteraction that a pointer secondary click
+    /// opens on iPadOS, so this path verifies the shared menu content.
+    func testContextMenuExposesRowActions() {
+        launchApp(reset: true)
+
+        openEditorForNewConnection()
+        typeInto(app.textFields["field-name"], "Menu Me")
+        typeInto(app.textFields["field-host"], "10.9.9.8")
+        typeInto(app.textFields["field-username"], "u")
+        selectAuthenticationKey("Fixture Ed25519")
+        app.buttons["save-editor"].tap()
+
+        let row = app.buttons["connection-Menu-Me"]
+        XCTAssertTrue(row.waitForExistence(timeout: 10))
+
+        row.press(forDuration: 1.1)
+
+        XCTAssertTrue(
+            app.buttons["connect-Menu-Me"].waitForExistence(timeout: 5),
+            "context menu must expose Connect"
+        )
+        XCTAssertTrue(app.buttons["edit-Menu-Me"].exists, "context menu must expose Edit")
+        XCTAssertTrue(app.buttons["duplicate-Menu-Me"].exists, "context menu must expose Duplicate")
+        XCTAssertTrue(app.buttons["forget-host-Menu-Me"].exists, "context menu must expose Forget Host")
+        XCTAssertTrue(app.buttons["delete-Menu-Me"].exists, "context menu must expose Delete")
+
+        app.buttons["edit-Menu-Me"].tap()
+        let nameField = app.textFields["field-name"]
+        XCTAssertTrue(
+            nameField.waitForExistence(timeout: 5),
+            "context-menu Edit must open the connection editor"
+        )
+        XCTAssertEqual(nameField.value as? String, "Menu Me")
+        app.buttons["cancel-editor"].tap()
+
+        XCTAssertTrue(row.waitForExistence(timeout: 5), "the row must survive the menu round-trip")
+    }
+
     // MARK: Row tap — default tap connects, swipe menu keeps edit
 
     func testTappingConnectionRowOpensSession() {

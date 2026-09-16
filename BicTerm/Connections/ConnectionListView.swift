@@ -302,47 +302,61 @@ struct ConnectionListView: View {
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("connection-\(sanitized(connection.name))")
+        .accessibilityHint("Long press or secondary click for connection actions")
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-            Button(role: .destructive) {
-                deleteTarget = connection
-            } label: {
-                Label("Delete", systemImage: "trash")
-            }
-            .accessibilityIdentifier("delete-\(sanitized(connection.name))")
-
-            Button {
-                editorTarget = EditorTarget(connection: nil, seed: connection)
-            } label: {
-                Label("Duplicate", systemImage: "plus.square.on.square")
-            }
-            .tint(colors.selection)
-            .accessibilityIdentifier("duplicate-\(sanitized(connection.name))")
-
-            Button {
-                editorTarget = EditorTarget(connection: connection)
-            } label: {
-                Label("Edit", systemImage: "pencil")
-            }
-            .tint(colors.accent)
-            .accessibilityIdentifier("edit-\(sanitized(connection.name))")
-
-            Button {
-                forgetTarget = connection
-            } label: {
-                Label("Forget Host", systemImage: "eraser")
-            }
-            .tint(colors.dimmed)
-            .accessibilityIdentifier("forget-host-\(sanitized(connection.name))")
-
-            Button {
-                connect(connection)
-            } label: {
-                Label("Connect", systemImage: "play.fill")
-            }
-            .tint(colors.success)
-            .disabled(!isAvailable)
-            .accessibilityIdentifier("connect-\(sanitized(connection.name))")
+            rowActions(for: connection, isAvailable: isAvailable)
         }
+        .contextMenu {
+            rowActions(for: connection, isAvailable: isAvailable)
+        }
+    }
+
+    /// The row's secondary actions, shared verbatim by the trailing swipe
+    /// actions (touch) and the native context menu (pointer secondary click /
+    /// touch long press), so both paths expose identical closures, labels,
+    /// roles, and identifiers. The context menu is an additional access
+    /// path — the swipe actions stay.
+    @ViewBuilder
+    private func rowActions(for connection: Connection, isAvailable: Bool) -> some View {
+        Button(role: .destructive) {
+            deleteTarget = connection
+        } label: {
+            Label("Delete", systemImage: "trash")
+        }
+        .accessibilityIdentifier("delete-\(sanitized(connection.name))")
+
+        Button {
+            editorTarget = EditorTarget(connection: nil, seed: connection)
+        } label: {
+            Label("Duplicate", systemImage: "plus.square.on.square")
+        }
+        .tint(colors.selection)
+        .accessibilityIdentifier("duplicate-\(sanitized(connection.name))")
+
+        Button {
+            editorTarget = EditorTarget(connection: connection)
+        } label: {
+            Label("Edit", systemImage: "pencil")
+        }
+        .tint(colors.accent)
+        .accessibilityIdentifier("edit-\(sanitized(connection.name))")
+
+        Button {
+            forgetTarget = connection
+        } label: {
+            Label("Forget Host", systemImage: "eraser")
+        }
+        .tint(colors.dimmed)
+        .accessibilityIdentifier("forget-host-\(sanitized(connection.name))")
+
+        Button {
+            connect(connection)
+        } label: {
+            Label("Connect", systemImage: "play.fill")
+        }
+        .tint(colors.success)
+        .disabled(!isAvailable)
+        .accessibilityIdentifier("connect-\(sanitized(connection.name))")
     }
 
     private func rowLabel(
