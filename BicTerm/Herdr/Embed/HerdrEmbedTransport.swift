@@ -53,7 +53,11 @@ enum HerdrEmbedClientCatalog {
     /// container's absolute paths exceed that, so the transport directory
     /// is a SHORT RELATIVE path resolved against the pinned process cwd
     /// (both the Swift listener and the in-process Rust client share it).
-    static let transportDirectoryName = "herdr-embed-transport"
+    /// It lives under the container's `tmp/` — the data-container ROOT is
+    /// not writable on device (EPERM; the simulator does not enforce
+    /// this) — and `tmp/herdr-embed-transport/<32-hex>.sock` stays ~62
+    /// bytes, well under sun_path.
+    static let transportDirectoryRelativePath = "tmp/herdr-embed-transport"
 
     /// Re-seeding semantics (T6): the file set is rewritten atomically per
     /// open — machines added/removed in the herd editor are reflected on
@@ -390,7 +394,7 @@ final class HerdrEmbedTransportCoordinator {
             isDirectory: true
         )
         .appendingPathComponent(
-            HerdrEmbedClientCatalog.transportDirectoryName,
+            HerdrEmbedClientCatalog.transportDirectoryRelativePath,
             isDirectory: true
         )
         do {
@@ -490,11 +494,11 @@ final class HerdrEmbedTransportCoordinator {
             ))
         }
         HerdrEmbedClientCatalog.applyEnvironment(
-            transportDirectory: HerdrEmbedClientCatalog.transportDirectoryName,
+            transportDirectory: HerdrEmbedClientCatalog.transportDirectoryRelativePath,
             stateHome: stateHome
         )
 
-        return "\(HerdrEmbedClientCatalog.transportDirectoryName)/local.sock"
+        return "\(HerdrEmbedClientCatalog.transportDirectoryRelativePath)/local.sock"
     }
 
     /// Server-death analog for one machine (E2E seam + debugging): closes
@@ -537,7 +541,7 @@ final class HerdrEmbedTransportCoordinator {
     }
 
     static func socketPath(machine: HerdrEmbedMachine) -> String {
-        "\(HerdrEmbedClientCatalog.transportDirectoryName)/\(machine.profileID).sock"
+        "\(HerdrEmbedClientCatalog.transportDirectoryRelativePath)/\(machine.profileID).sock"
     }
 
     // MARK: - Establish
@@ -679,7 +683,7 @@ final class HerdrEmbedTransportCoordinator {
             )
         } catch {
             throw .bridge(.bindFailed(
-                path: HerdrEmbedClientCatalog.transportDirectoryName,
+                path: HerdrEmbedClientCatalog.transportDirectoryRelativePath,
                 reason: "pinning the transport cwd failed: \(error)"
             ))
         }

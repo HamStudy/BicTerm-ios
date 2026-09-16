@@ -64,7 +64,7 @@ final class HerdrEmbedTransportEarlyFailureTests: XCTestCase {
         await assertEarlyFailure(
             coordinator: coordinator,
             carriers: carriers,
-            expectedPath: HerdrEmbedClientCatalog.transportDirectoryName,
+            expectedPath: HerdrEmbedClientCatalog.transportDirectoryRelativePath,
             reasonContains: "pinning the transport cwd failed"
         )
         XCTAssertEqual(
@@ -77,10 +77,16 @@ final class HerdrEmbedTransportEarlyFailureTests: XCTestCase {
         // Two machines: the unwind must close EVERY established carrier,
         // not just the first.
         let (coordinator, carriers) = makeCoordinator(machineCount: 2)
-        // The transport-directory name occupied by a regular FILE: the
+        // The transport directory lives under the container's tmp/ (the
+        // data-container ROOT is not writable on device — EPERM). The
+        // tmp/herdr-embed-transport path occupied by a regular FILE: the
         // mkdir fails typed instead of falling through to the binds.
-        let blocker = scratch
-            .appendingPathComponent(HerdrEmbedClientCatalog.transportDirectoryName)
+        // createFile does not create intermediates, so tmp/ comes first.
+        let blocker = scratch.appendingPathComponent("tmp/herdr-embed-transport")
+        try FileManager.default.createDirectory(
+            at: blocker.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
         XCTAssertTrue(
             FileManager.default.createFile(atPath: blocker.path, contents: nil),
             "test precondition: the transport-directory blocker file exists"

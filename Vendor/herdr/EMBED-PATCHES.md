@@ -158,7 +158,7 @@ UDS listener + per-connection `remote-client-bridge` exec relay;
 `BicTerm/Herdr/Embed/HerdrEmbedTransport` coordinator, catalog seeding,
 TOFU reuse) and seeds the client's saved-endpoint catalog under
 `{App Support}/herdr-embed/state-home/herdr/client/`. The transport
-directory is a SHORT RELATIVE path (`herdr-embed-transport`) resolved
+directory is a SHORT RELATIVE path (`tmp/herdr-embed-transport`) resolved
 against the process cwd the coordinator pins — `sockaddr_un.sun_path`
 holds 104 bytes on Darwin and app-container paths exceed that. Evidence:
 `.sisyphus/evidence/herdr-embed-t5.log`.

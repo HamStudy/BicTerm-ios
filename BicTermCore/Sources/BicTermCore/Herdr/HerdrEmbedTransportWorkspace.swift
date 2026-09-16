@@ -3,7 +3,7 @@ import Foundation
 /// Process-global cwd pin shared by every embedded-transport bring-up
 /// (Mode A host and every herd machine): Darwin `sockaddr_un.sun_path`
 /// holds 104 bytes and app-container absolute paths exceed it, so the
-/// bridge sockets bind RELATIVE paths (`herdr-embed-transport/<profile>
+/// bridge sockets bind RELATIVE paths (`tmp/herdr-embed-transport/<profile>
 /// .sock`) that the kernel resolves against the process cwd — and the
 /// in-process Rust client resolves the same relative paths against the
 /// same pin. Every bring-up pins the cwd to the app home before binding
