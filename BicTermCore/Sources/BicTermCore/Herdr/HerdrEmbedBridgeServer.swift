@@ -116,10 +116,20 @@ public actor HerdrEmbedBridgeServer {
         try Self.sweepStaleSocket(at: socketPath)
         let parent = (socketPath as NSString).deletingLastPathComponent
         if !parent.isEmpty {
-            try? FileManager.default.createDirectory(
-                atPath: parent,
-                withIntermediateDirectories: true
-            )
+            do {
+                try FileManager.default.createDirectory(
+                    atPath: parent,
+                    withIntermediateDirectories: true
+                )
+            } catch {
+                // Surface the REAL filesystem reason (e.g. the cwd is not
+                // the pinned home and the relative parent cannot exist) —
+                // never let it fall through to a misleading bind ENOENT.
+                throw .bindFailed(
+                    path: socketPath,
+                    reason: "could not create the socket directory: \(error)"
+                )
+            }
         }
 
         let bound: NIOAsyncChannel<NIOAsyncChannel<ByteBuffer, ByteBuffer>, Never>
