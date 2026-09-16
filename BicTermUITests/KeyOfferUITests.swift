@@ -101,8 +101,8 @@ final class KeyOfferUITests: XCTestCase {
         typeInto(app.textFields["field-username"], "uitest")
         setOfferKeys(false)
         XCTAssertTrue(
-            app.staticTexts["password-field-status"].label.contains("asked"),
-            "a blank password must explain the ask-on-connect behavior"
+            app.staticTexts["password-field-status"].label.contains("server requests"),
+            "a blank password must explain that prompting occurs only if the server requests a password"
         )
         waitForEnabled(app.buttons["save-editor"])
         app.buttons["save-editor"].tap()

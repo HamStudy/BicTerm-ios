@@ -310,13 +310,13 @@ struct ConnectionEditorView: View {
                             .foregroundColor(colors.success)
                             .accessibilityIdentifier("password-saved-badge")
                     } else if draft.passwordEntryMissing, draft.passwordInput.isEmpty {
-                        Text("Saved password missing — re-enter it or you'll be asked when connecting")
+                        Text("Saved password missing — re-enter it, or you'll be prompted if the server requests a password")
                             .font(typography.caption)
                             .foregroundColor(colors.error)
                             .accessibilityIdentifier("password-field-error")
                     } else {
                         Text(draft.passwordInput.isEmpty
-                             ? "You'll be asked for the password when connecting"
+                             ? "No password saved — you'll be prompted if the server requests one"
                              : "Will be saved in this device's Keychain when you tap Save")
                             .font(typography.caption)
                             .foregroundStyle(colors.dimmed)
@@ -332,7 +332,7 @@ struct ConnectionEditorView: View {
         } footer: {
                 Text(draft.hasSavedPassword
                      ? "Leave the field blank to keep the saved password, or type a replacement. Passwords stay in this device's Keychain, protected when locked; they don't transfer to another device."
-                     : "Password is optional. Leave it blank to be asked when connecting. Typed passwords are saved in this device's Keychain, protected when locked; they don't transfer to another device.")
+                     : "Password is optional: the server may accept a key alone, request a password instead, or require both. Leave it blank and you'll be prompted only if the server requests one. Typed passwords are saved in this device's Keychain, protected when locked; they don't transfer to another device.")
                     .font(typography.caption)
                     .foregroundColor(colors.dimmed)
         }

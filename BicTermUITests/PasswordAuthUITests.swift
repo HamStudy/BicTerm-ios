@@ -80,7 +80,8 @@ final class PasswordAuthUITests: XCTestCase {
         let secureField = app.secureTextFields["password-field"]
         XCTAssertTrue(secureField.waitForExistence(timeout: 5), "password mode must swap the key picker for a SecureField")
         XCTAssertFalse(app.buttons["key-selector"].isEnabled, "keys-off disables customization")
-        XCTAssertTrue(app.staticTexts["password-field-status"].exists, "blank passwords explain ask-on-connect")
+        XCTAssertTrue(app.staticTexts["password-field-status"].label.contains("server requests"),
+                      "blank passwords explain that prompting occurs only if the server requests a password")
         waitForEnabled(app.buttons["save-editor"])
 
         typeIntoSecure(secureField, "bicterm-uitest-fixture-password")
@@ -253,8 +254,8 @@ final class PasswordAuthUITests: XCTestCase {
         openEditorForConnection(named: "Interactive")
         scrollToHittable(app.secureTextFields["password-field"])
         XCTAssertFalse(app.staticTexts["password-saved-badge"].exists)
-        XCTAssertTrue(app.staticTexts["password-field-status"].exists,
-                      "a never-remembered password must fall back to the ask-on-connect hint")
+        XCTAssertTrue(app.staticTexts["password-field-status"].label.contains("server requests"),
+                      "a never-remembered password must fall back to the prompt-only-if-requested hint")
     }
 
     func testCancelPasswordPromptShowsAuthenticationFailureAndRetryPromptsAgain() {
@@ -335,7 +336,7 @@ final class PasswordAuthUITests: XCTestCase {
         typeInto(app.textFields["field-username"], "uitest")
         setOfferKeys(false)
         XCTAssertFalse(app.staticTexts["password-field-error"].exists)
-        XCTAssertTrue(app.staticTexts["password-field-status"].label.contains("asked"))
+        XCTAssertTrue(app.staticTexts["password-field-status"].label.contains("server requests"))
         waitForEnabled(app.buttons["save-editor"])
         app.buttons["save-editor"].tap()
         XCTAssertTrue(app.buttons["connection-Interactive"].waitForExistence(timeout: 10))

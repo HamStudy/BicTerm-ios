@@ -153,13 +153,13 @@ struct HopEditorView: View {
                                 .foregroundColor(colors.success)
                                 .accessibilityIdentifier("hop-password-saved-badge")
                         } else if draft.passwordEntryMissing, draft.passwordInput.isEmpty {
-                            Text("Saved password missing — re-enter it or you'll be asked when connecting")
+                            Text("Saved password missing — re-enter it, or you'll be prompted if this hop requests a password")
                                 .font(typography.caption)
                                 .foregroundStyle(colors.error)
                                 .accessibilityIdentifier("hop-password-field-error")
                         } else {
                             Text(draft.passwordInput.isEmpty
-                                 ? "You'll be asked for the password when connecting"
+                                 ? "No password saved — you'll be prompted if this hop requests one"
                                  : "Will be saved in this device's Keychain when you tap Save in the connection editor")
                                 .font(typography.caption)
                                 .foregroundStyle(colors.dimmed)
