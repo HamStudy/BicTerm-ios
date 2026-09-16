@@ -291,6 +291,11 @@ final class HerdrEmbedRuntime {
             phase = .failed("\(error)")
             finishStream()
             self.session = nil
+            // The transport is prepared and live (bridges, carriers, cwd
+            // pin) — a failed embed start must tear it down like the
+            // prepare-failure branches above, or the orphaned listeners
+            // collide with the next bring-up (liveListenerExists).
+            await teardownTransport(transport)
         }
     }
 
@@ -540,7 +545,13 @@ final class HerdrEmbedRuntime {
     /// herdr client env (T3 harness contract): a config that skips the
     /// onboarding overlay (it would swallow input) and a stderr log that
     /// survives teardown. HERDR_CLIENT_SOCKET_PATH is asserted by the embed
-    /// crate itself. HOME is left alone — the app container is writable.
+    /// crate itself. HOME is left alone, but every XDG anchor the client
+    /// consults is redirected into container-writable locations: the
+    /// data-container ROOT is not writable on device (EPERM; the simulator
+    /// does not enforce it), and the client's config-dir fallback is
+    /// `$HOME/.config/herdr` — its rotating logs and session state live
+    /// under it, so an unredirected anchor silently disables client
+    /// logging on device.
     private func prepareClientEnvironment() {
         let support = URL.applicationSupportDirectory
             .appendingPathComponent("herdr-embed")
@@ -553,6 +564,12 @@ final class HerdrEmbedRuntime {
             support.appendingPathComponent("client-stderr.log").path,
             1
         )
+        let configHome = support.appendingPathComponent("config-home", isDirectory: true)
+        try? FileManager.default.createDirectory(
+            at: configHome,
+            withIntermediateDirectories: true
+        )
+        setenv("XDG_CONFIG_HOME", configHome.path(percentEncoded: false), 1)
     }
 
     // MARK: - Socket resolution (T4: local fixture / explicit config only)
