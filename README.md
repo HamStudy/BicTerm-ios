@@ -14,8 +14,8 @@ An iOS 18+ SSH terminal client for iPhone and iPad, built on
 
 ## What Works
 
-- **SSH connections** with optional passwords: save a password connection blank to be prompted during connect or reconnect (RFC 4252 `password` only). Public-key auth (ed25519 from Keychain, P-256 from Secure Enclave) can continue with a password when the server rejects the key or requires both. The prompt can remember destination passwords in this device's Keychain, protected when locked and never transferred to another device; jump-host prompts are session-only (save hop passwords in the editor instead). Connection rows show **Password** or the authentication **key label**, and the editor verifies the local Keychain entry before showing **Saved on this device**.
-- **Key management inline in the editor** — generate or import an SSH key, or copy a public key, directly from the connection editor's key picker; the picker reads the Keychain live and auto-selects a freshly saved key
+- **SSH connections with a key availability pool**: every key you enable (ed25519 from Keychain, P-256 from Secure Enclave) is offered automatically on each connect attempt, the way an SSH agent works. The server picks from what it is offered; there is no per-connection key selection by default. A connection's **Customize** section can narrow the offer to an explicit set of keys, and switching **Offer Keys** off skips keys entirely. Passwords are decoupled from key selection: save a password connection blank to be prompted during connect or reconnect (RFC 4252 `password` only), and a saved or prompted password still completes authentication when the server rejects every key or requires both factors. The prompt can remember destination passwords in this device's Keychain, protected when locked and never transferred to another device; jump-host prompts are session-only (save hop passwords in the editor instead). Connection rows summarize the destination's offer as **All keys (N offered)**, **N selected keys**, or **Password**, and the editor verifies the local Keychain entry before showing **Saved on this device**. Herdr connections authenticate through the same SSH layer.
+- **Key management with per-key switches**: generate or import an SSH key, or copy a public key, directly from the connection editor's key picker; the picker reads the Keychain live and auto-selects a freshly saved key. The Key Management screen gives every key an on/off switch that controls whether it joins the default offer, and a warning appears once more than five keys are enabled (many servers allow only six authentication attempts, OpenSSH's default `MaxAuthTries 6`, and may disconnect before later keys are tried). The Settings hardware-keys default affects only the pool a connection inherits; a key you explicitly select in Customize always applies.
 - **Discard confirmation in connection and hop editors** — cancelling with uncommitted edits prompts "Discard Changes?" instead of silently dropping the draft; untouched drafts (or edits reverted to the saved values) dismiss instantly, and swipe-down dismissal is disabled while a draft is dirty
 - **ProxyJump / jump chains** up to 5 hops with per-hop host-key verification
 - **TOFU host-key trust** — fingerprint prompt on first connect, hard reject on changed keys
@@ -116,7 +116,9 @@ An iOS 18+ SSH terminal client for iPhone and iPad, built on
 
 - SSH agent forwarding **for herdr endpoints** — upstream herdr has no agent-forwarding concept, so there is no protocol path to forward into (documented research verdict; the in-app SSH agent still serves terminal sessions)
 - Keyboard-interactive auth (NIOSSH has no keyboard-interactive client; password and public-key only)
+- PIV / USB-C hardware-token support (deliberately deferred; the Settings hardware-keys toggle is the only forward-hook)
 - RSA keys / key export
+- A dedicated system sshd fixture for password testing (UI password tests use the in-process test server on port 18090)
 - SFTP/SCP or port forwarding
 - Terminal transcript/scrollback persistence
 - Analytics
