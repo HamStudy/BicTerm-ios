@@ -98,6 +98,9 @@ final class HerdEmbedCatalogTests: XCTestCase {
         XCTAssertEqual(entry["enabled"] as? Bool, true)
         XCTAssertEqual(entry["target"] as? String, "user@alpha.example:22")
         XCTAssertEqual(entry["session"] as? String, "default")
-        XCTAssertEqual(try seededSelection(), "")
+        XCTAssertNil(
+            try seededSelection(),
+            "no selection is JSON null — the client falls back to Local without a warning"
+        )
     }
 }

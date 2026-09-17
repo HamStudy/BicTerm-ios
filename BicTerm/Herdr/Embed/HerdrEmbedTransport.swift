@@ -96,7 +96,7 @@ enum HerdrEmbedClientCatalog {
             to: clientDirectory.appendingPathComponent("endpoints.json")
         )
         try writeJSON(
-            ["version": 1, "selected_profile": selectedProfileID ?? ""],
+            ["version": 1, "selected_profile": selectedProfileID ?? NSNull()],
             to: clientDirectory.appendingPathComponent("endpoint-selection.json")
         )
     }
@@ -191,6 +191,11 @@ final class HerdrEmbedTransportCoordinator {
     /// Profile the client should select at boot (the herd's persisted
     /// machine choice); nil = first catalog machine.
     private let preferredSelection: String?
+    /// Herd coordinators seed the machine catalog (the client's sidebar
+    /// federates Local + machines). Mode A does not: its client attaches
+    /// to the one machine's bridge as its Local endpoint — upstream
+    /// `herdr --remote` behavior — so the catalog stays empty.
+    private let seedsCatalog: Bool
     private let connectorFactory: (@Sendable () async -> HerdrEndpointConnector)?
     private let providedVerifier: HostKeyVerifier?
     private let authenticationKeyProvider: (@Sendable () async -> any SSHAuthenticationKeyProvider)?
@@ -257,6 +262,7 @@ final class HerdrEmbedTransportCoordinator {
     ) {
         self.links = [Self.link(for: connection)]
         self.preferredSelection = nil
+        self.seedsCatalog = false
         self.providedVerifier = hostKeyVerifier
         self.searchPaths = searchPaths
         self.connectorFactory = nil
@@ -277,6 +283,7 @@ final class HerdrEmbedTransportCoordinator {
     ) {
         self.links = [Self.link(for: connection)]
         self.preferredSelection = nil
+        self.seedsCatalog = false
         self.providedVerifier = hostKeyVerifier
         self.searchPaths = searchPaths
         self.authenticationKeyProvider = authenticationKeyProvider
@@ -287,6 +294,7 @@ final class HerdrEmbedTransportCoordinator {
     init(connection: Connection, connector: @escaping @Sendable () async -> HerdrEndpointConnector) {
         self.links = [Self.link(for: connection)]
         self.preferredSelection = nil
+        self.seedsCatalog = false
         self.connectorFactory = connector
         self.providedVerifier = nil
         self.authenticationKeyProvider = nil
@@ -308,6 +316,7 @@ final class HerdrEmbedTransportCoordinator {
     ) {
         self.links = machines
         self.preferredSelection = preferredSelection
+        self.seedsCatalog = true
         self.providedVerifier = hostKeyVerifier
         self.authenticationKeyProvider = authenticationKeyProvider
         self.providedMetadataProvider = metadataProvider
@@ -323,6 +332,7 @@ final class HerdrEmbedTransportCoordinator {
     ) {
         self.links = machines
         self.preferredSelection = preferredSelection
+        self.seedsCatalog = true
         self.providedVerifier = hostKeyVerifier
         self.authenticationKeyProvider = nil
         self.providedMetadataProvider = nil
@@ -337,6 +347,7 @@ final class HerdrEmbedTransportCoordinator {
     ) {
         self.links = machines
         self.preferredSelection = preferredSelection
+        self.seedsCatalog = true
         self.connectorFactory = connector
         self.providedVerifier = nil
         self.authenticationKeyProvider = nil
@@ -522,11 +533,16 @@ final class HerdrEmbedTransportCoordinator {
             withIntermediateDirectories: true
         )
         do {
-            // Every link is seeded — machines whose bring-up failed stay in
-            // the catalog so the client's own sidebar renders their state.
+            // Herd: every link is seeded — machines whose bring-up failed
+            // stay in the catalog so the client's own sidebar renders
+            // their state. Mode A: an empty seed clears any stale herd
+            // catalog from a previous open; the client attaches to the
+            // machine's bridge as its Local endpoint and never federates.
             try HerdrEmbedClientCatalog.seed(
-                machines: links.map(\.machine),
-                selectedProfileID: preferredSelection ?? links.first?.machine.profileID,
+                machines: seedsCatalog ? links.map(\.machine) : [],
+                selectedProfileID: seedsCatalog
+                    ? preferredSelection ?? links.first?.machine.profileID
+                    : nil,
                 stateHome: stateHome
             )
         } catch {
@@ -546,7 +562,10 @@ final class HerdrEmbedTransportCoordinator {
             stateHome: stateHome
         )
 
-        return "\(transportDirectory)/local.sock"
+        if seedsCatalog {
+            return "\(transportDirectory)/local.sock"
+        }
+        return socketPath(for: started[0].link.machine)
     }
 
     /// Server-death analog for one machine (E2E seam + debugging): closes

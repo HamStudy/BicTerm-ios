@@ -285,41 +285,34 @@ final class HerdrEmbedHardeningTests: XCTestCase {
         )
     }
 
-    func testSeveredCarrierKeepsHonestStateWithBoundedRedialsAndReopenReconnects() async throws {
+    func testSeveredCarrierSurfacesTypedExitAndReopenReconnects() async throws {
         try requireFixtures(serverPort: 12222)
         let connection = try makeDirectConnection(label: "sever")
         let cwdBeforeStart = FileManager.default.currentDirectoryPath
         let (runtime, coordinator) = try await startTransportRuntime(connection: connection)
-        let hosted = try await hostAndWaitForRender(runtime)
+        _ = try await hostAndWaitForRender(runtime)
 
         await coordinator.severMachineTransport(profileID: HerdrEmbedMachine.profileID(for: connection.id))
 
+        // Mode A is remote mode: the severed machine was the client's
+        // only (Local) endpoint, so the client exits — with the typed
+        // loss detail surfaced, never a silent EOF.
         await waitFor(
-            coordinator.eventLines.contains { $0.contains("bridge carrier lost") },
-            "the severed machine surfaced through its bridge",
+            runtime.phase.stoppedExitDetail?.contains("lost connection to server") == true,
+            "the client exited with the connection-lost detail when its only endpoint was severed",
             timeout: 15
         )
 
-        // Watch the client's redial behavior against the still-listening
-        // bridge for a fixed window: every redial's exec open fails on the
-        // dead carrier — the churn must stay bounded (no retry storm).
-        let churnStart = coordinator.eventLines.filter { $0.contains("bridge carrier lost") }.count
+        // Churn stays bounded trivially: nothing redials a dead carrier
+        // in remote mode — recovery is the reopen below.
+        let churnStart = coordinator.eventLines.filter { $0.contains("relay ended") }.count
         try await Task.sleep(for: .seconds(8))
-        let churn = coordinator.eventLines.filter { $0.contains("bridge carrier lost") }.count - churnStart
-        XCTAssertLessThanOrEqual(churn, 12, "redials against the dead carrier stay bounded")
+        let churn = coordinator.eventLines.filter { $0.contains("relay ended") }.count - churnStart
+        XCTAssertLessThanOrEqual(churn, 12, "no relay churn after the carrier died")
 
-        XCTAssertEqual(runtime.phase, .running, "the run itself keeps honest running state")
-        XCTAssertEqual(runtime.bytesDropped, 0, "no silent drops during the loss cycle")
-        let writtenBefore = runtime.bytesWritten
-        runtime.writeInput(Data("j".utf8))
-        await waitFor(runtime.bytesWritten > writtenBefore, "input still accepted while the machine is down")
-
-        // The v1 reconnect surface is the workspace REOPEN: stop, then a
-        // fresh coordinator establish → new carrier, new relay, fresh TUI
-        // (a new terminal view — no stale VT state can survive).
-        await runtime.requestStop()
-        await waitFor(runtime.phase != .running, "run stopped before reopen", timeout: 20)
-
+        // The v1 reconnect surface is the workspace REOPEN: a fresh
+        // coordinator establish → new carrier, new relay, fresh TUI (a
+        // new terminal view — no stale VT state can survive).
         let freshCoordinator = try await makeTrustedCoordinator(connection: connection)
         runtime.attachTransport(freshCoordinator)
         await runtime.startIfNeeded()
@@ -346,7 +339,7 @@ final class HerdrEmbedHardeningTests: XCTestCase {
         )
     }
 
-    func testServerDeathKeepsRunHonestAndBounded() async throws {
+    func testServerDeathSurfacesTypedExitAndReopens() async throws {
         try requireFixtures(serverPort: 12222)
         let serverDirectory = Self.repoRoot
             .appendingPathComponent("Fixtures/run/herdr/server-12222", isDirectory: true)
@@ -362,7 +355,7 @@ final class HerdrEmbedHardeningTests: XCTestCase {
 
         let connection = try makeDirectConnection(label: "kill")
         let (runtime, coordinator) = try await startTransportRuntime(connection: connection)
-        let hosted = try await hostAndWaitForRender(runtime)
+        _ = try await hostAndWaitForRender(runtime)
 
         XCTAssertEqual(kill(serverPID, SIGTERM), 0, "fixture server killed from its pidfile")
 
@@ -371,31 +364,32 @@ final class HerdrEmbedHardeningTests: XCTestCase {
             "the machine's relay ended when its server died",
             timeout: 15
         )
-        XCTAssertEqual(runtime.phase, .running, "the embedded run survives a machine's server death")
+        // Mode A is remote mode: the machine IS the client's Local
+        // endpoint, so its server's death ends the client — surfaced as a
+        // typed exit detail, never the silent EOF of the pty era.
+        await waitFor(
+            runtime.phase.stoppedExitDetail?.contains("server shut down") == true,
+            "the client exited with the server-death detail once its only endpoint died",
+            timeout: 15
+        )
 
         let endsBefore = coordinator.eventLines.filter { $0.contains("relay ended") }.count
         try await Task.sleep(for: .seconds(6))
         let ends = coordinator.eventLines.filter { $0.contains("relay ended") }.count - endsBefore
         XCTAssertLessThanOrEqual(ends, 12, "relay churn after server death stays bounded")
 
-        let writtenBefore = runtime.bytesWritten
-        runtime.writeInput(Data("j".utf8))
-        await waitFor(runtime.bytesWritten > writtenBefore, "input still accepted after server death")
-        XCTAssertEqual(runtime.bytesDropped, 0, "no silent drops during the server-death cycle")
-
-        // Wait for the fixture server to come back (the bridge's
-        // remote-client-bridge auto-starts one on its next redial; a
-        // direct spawn is the fallback) and record whether the client
-        // recovers on its own — honest documentation either way.
+        // Recovery is an explicit reopen: the fixture server comes back,
+        // a fresh coordinator re-establishes, and the client boots again.
         Self.ensureFixtureServerBack(port: 12222, timeout: 15)
-        let readBefore = runtime.bytesRead
-        try await Task.sleep(for: .seconds(6))
-        let recovered = runtime.bytesRead > readBefore
-            && coordinator.eventLines.filter { $0.contains("relay opened") }.count > 1
-        let record = recovered
-            ? "client re-established its machine after the server restart"
-            : "client kept the machine down after the server restart (user reopen required)"
-        Self.note("[server-death] \(record)")
+        let freshCoordinator = try await makeTrustedCoordinator(connection: connection)
+        runtime.attachTransport(freshCoordinator)
+        await runtime.startIfNeeded()
+        await waitFor(
+            freshCoordinator.eventLines.contains { $0.contains("bridge relay opened") },
+            "the reopened machine dialed through its fresh carrier",
+            timeout: 15
+        )
+        _ = try await hostAndWaitForRender(runtime)
 
         await runtime.requestStop()
     }
@@ -422,11 +416,14 @@ final class HerdrEmbedHardeningTests: XCTestCase {
             .joined(separator: "\n") + "\n"
         try revoked.write(to: authorizedKeys, atomically: true, encoding: .utf8)
 
+        // The relay-end cascade (carrier close → sshd channel teardown →
+        // remote bridge process exit → stdout EOF) can lag well past 15s
+        // when the fixture was just churned by the open/close cycles test.
         await coordinator.severMachineTransport(profileID: HerdrEmbedMachine.profileID(for: connection.id))
         await waitFor(
-            coordinator.eventLines.contains { $0.contains("bridge carrier lost") },
-            "the severed machine surfaced while the key was revoked",
-            timeout: 15
+            coordinator.eventLines.contains { $0.contains("relay ended") },
+            "the severed machine's relay ended while the key was revoked — phase: \(runtime.phase), tail: \(coordinator.eventLines.suffix(10).joined(separator: " | "))",
+            timeout: 30
         )
         await runtime.requestStop()
 
@@ -710,11 +707,11 @@ final class HerdrEmbedHardeningTests: XCTestCase {
 
     private func waitFor(
         _ condition: @autoclosure () -> Bool,
-        _ message: String,
+        _ message: @autoclosure () -> String,
         timeout: TimeInterval = 8
     ) async {
         let met = await poll({ condition() }, timeout: timeout)
-        XCTAssertTrue(met, message)
+        XCTAssertTrue(met, message())
     }
 
     private func waitForOptional(
@@ -1233,6 +1230,13 @@ private extension UIView {
                 return found
             }
         }
+        return nil
+    }
+}
+
+private extension HerdrEmbedRuntime.Phase {
+    var stoppedExitDetail: String? {
+        if case let .stopped(exit) = self { return exit }
         return nil
     }
 }

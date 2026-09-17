@@ -200,6 +200,68 @@ final class HerdrEmbedTransportBringUpTests: XCTestCase {
         XCTAssertEqual(FileManager.default.currentDirectoryPath, cwdBefore)
     }
 
+    /// Mode A (a lone connection, no herd) is the client's remote mode:
+    /// prepare() points the client socket AT the machine's bridge — Local
+    /// IS the machine, as in upstream `herdr --remote` — and seeds an
+    /// EMPTY catalog so the sidebar never shows the machine duplicated
+    /// next to Local.
+    func testModeAAttachesBridgeAsLocalAndSeedsEmptyCatalog() async throws {
+        let connection = try! Connection(
+            name: "mode-a",
+            type: .ssh,
+            host: "127.0.0.1",
+            port: 1,
+            username: "fixture"
+        )
+        let coordinator = HerdrEmbedTransportCoordinator(
+            connection: connection,
+            hostKeyVerifier: nil
+        )
+        coordinator.homeDirectoryForTesting = scratch.path
+        let carrier = CloseCountingCarrier()
+        coordinator.establishForTesting = { link in
+            HerdrEmbedTransportCoordinator.Established(
+                link: link,
+                carrier: carrier,
+                executablePath: "/usr/bin/herdr"
+            )
+        }
+
+        let profileID = HerdrEmbedMachine.forConnection(connection).profileID
+        let localPath = try await coordinator.prepare()
+        XCTAssertEqual(
+            localPath,
+            "\(Self.specifiedTransportDirectory)/\(profileID).sock",
+            "Mode A attaches the client to the machine bridge as its Local endpoint"
+        )
+
+        let stateHome = getenv("XDG_STATE_HOME").map { String(cString: $0) }
+        let clientDirectory = URL(fileURLWithPath: try XCTUnwrap(stateHome))
+            .appendingPathComponent("herdr/client")
+        let catalog = try String(
+            contentsOf: clientDirectory.appendingPathComponent("endpoints.json"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(catalog.contains("\"ssh\""))
+        XCTAssertFalse(
+            catalog.contains(profileID),
+            "Mode A seeds no machine entries — the bridge is Local"
+        )
+        let selection = try String(
+            contentsOf: clientDirectory.appendingPathComponent("endpoint-selection.json"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(
+            selection.contains("null"),
+            "Mode A writes a null selection, not an empty profile id"
+        )
+
+        await coordinator.teardown()
+        let closeCount = await carrier.closeCount
+        XCTAssertEqual(closeCount, 1)
+        XCTAssertEqual(FileManager.default.currentDirectoryPath, cwdBefore)
+    }
+
     /// The production path, unseamed: no home-directory override, so
     /// prepare() pins the REAL app home and binds under its tmp/. On the
     /// simulator this is indistinguishable from any writable directory;
