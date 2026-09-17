@@ -81,7 +81,9 @@ struct HerdrEmbedResult herdr_embed_write_input(struct herdr_embed *embed,
 /**
  * Blocking, cancellable read of client output into the caller's buffer.
  * Returns the byte count (>0), 0 when the instance stopped or the client
- * exited with nothing left to drain, or -1 with the reason in `error_out`.
+ * exited cleanly with nothing left to drain, or -1 with the reason in
+ * `error_out` — including a client thread that ended with an error, whose
+ * recorded exit detail is surfaced once its remaining output has drained.
  */
 int64_t herdr_embed_read_output(struct herdr_embed *embed,
                                 uint8_t *buf,

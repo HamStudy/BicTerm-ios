@@ -52,6 +52,7 @@ struct Inner {
     wake: [AtomicI32; 2],
     stopping: AtomicBool,
     client_exited: AtomicBool,
+    exit_failed: AtomicBool,
     saved_stdio: Mutex<Option<[RawFd; 3]>>,
     boot: Mutex<BootState>,
     boot_cv: Condvar,
@@ -99,6 +100,7 @@ impl Inner {
             Ok(()) => "client exited cleanly".to_owned(),
             Err(error) => format!("client thread ended: {error}"),
         };
+        self.exit_failed.store(outcome.is_err(), Ordering::Release);
         *self.exit_detail.lock().unwrap_or_else(|e| e.into_inner()) = Some(text);
         self.client_exited.store(true, Ordering::Release);
         // Unblock a read_output parked in poll: it must observe the exit.
@@ -151,6 +153,7 @@ pub(crate) fn start(config: StartConfig) -> io::Result<EmbedInstance> {
         wake: [AtomicI32::new(wake[0]), AtomicI32::new(wake[1])],
         stopping: AtomicBool::new(false),
         client_exited: AtomicBool::new(false),
+        exit_failed: AtomicBool::new(false),
         saved_stdio: Mutex::new(None),
         boot: Mutex::new(BootState {
             reached_run_client: false,
@@ -491,6 +494,16 @@ impl EmbedInstance {
                             return Ok(n as usize);
                         }
                     }
+                }
+                if self.inner.exit_failed.load(Ordering::Acquire) {
+                    let detail = self
+                        .inner
+                        .exit_detail
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .clone()
+                        .unwrap_or_else(|| "client thread ended with an unknown error".to_owned());
+                    return Err(FfiError::new(HERDR_EMBED_CODE_IO, detail));
                 }
                 return Ok(0);
             }
