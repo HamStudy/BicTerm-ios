@@ -114,6 +114,12 @@ struct ConnectionListContainer: View {
         .task {
             await reloadRestorableSessions()
             #if DEBUG
+            // Cold launch starts the scene already .active, so the
+            // onChange below never fires — replay the fixture here too
+            // (didOpenHerdrFixture makes the call idempotent).
+            if scenePhase == .active {
+                openHerdrFixtureReplayOnce()
+            }
             await SessionUITestDriver.run(store: store, present: present)
             #endif
         }
