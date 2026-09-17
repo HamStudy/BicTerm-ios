@@ -179,6 +179,10 @@ final class HerdrEmbedTransportCoordinator {
     /// Byte-flow + lifecycle lines surfaced to the runtime (evidence log);
     /// each line is prefixed with its machine's label.
     private(set) var eventLines: [String] = []
+    /// Bring-up failures only (establish or bridge bind), one line per
+    /// failed machine — the subset of eventLines a user must see; the
+    /// full log stays on eventLines for diagnostics.
+    private(set) var failureLines: [String] = []
 
     private(set) var trustPrompt: TrustPrompt?
     private var queuedTrustPrompts: [TrustPrompt] = []
@@ -483,6 +487,7 @@ final class HerdrEmbedTransportCoordinator {
             } catch let error as HerdrEmbedBridgeError {
                 await item.carrier.close()
                 if bridgeFailure == nil { bridgeFailure = .bridge(error) }
+                failureLines.append("\(item.link.machine.label): bridge bind failed — \(error)")
             } catch {
                 await item.carrier.close()
                 if bridgeFailure == nil {
@@ -491,6 +496,7 @@ final class HerdrEmbedTransportCoordinator {
                         reason: "\(error)"
                     ))
                 }
+                failureLines.append("\(item.link.machine.label): bridge bind failed — \(error)")
             }
         }
         guard !started.isEmpty else {
@@ -646,6 +652,9 @@ final class HerdrEmbedTransportCoordinator {
                 if firstFailure == nil { firstFailure = failure }
                 eventLines.append(
                     "\(link.machine.label): bring-up failed — \(Self.describe(failure))"
+                )
+                failureLines.append(
+                    "\(link.machine.label): \(Self.describe(failure))"
                 )
             }
         }

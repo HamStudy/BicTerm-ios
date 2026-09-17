@@ -208,16 +208,30 @@ struct HerdrEmbedWorkspaceView: View {
             }
             .accessibilityIdentifier("herdr-embed-superseded")
         case .running:
-            HerdrTUIHostingView(
-                runtime: runtime,
-                fontModel: fontModel,
-                toolbarVisible: store.terminalToolbar.isVisible,
-                osc52Settings: osc52Settings ?? Osc52ClipboardSettings(),
-                osc52ForegroundCheck: nil,
-                osc52ToastPresenter: { toast in self.presentOsc52Toast(toast) },
-                osc52DenialRecorder: nil,
-                osc52SourceLabel: endpointLabel
-            )
+            VStack(spacing: 0) {
+                if !runtime.transportFailureLines.isEmpty {
+                    VStack(alignment: .leading, spacing: spacing.xxs) {
+                        ForEach(runtime.transportFailureLines, id: \.self) { line in
+                            Label(line, systemImage: "exclamationmark.triangle")
+                                .font(typography.caption)
+                                .foregroundStyle(colors.error)
+                                .accessibilityIdentifier("herdr-embed-transport-warning")
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding([.horizontal, .bottom], spacing.sm)
+                }
+                HerdrTUIHostingView(
+                    runtime: runtime,
+                    fontModel: fontModel,
+                    toolbarVisible: store.terminalToolbar.isVisible,
+                    osc52Settings: osc52Settings ?? Osc52ClipboardSettings(),
+                    osc52ForegroundCheck: nil,
+                    osc52ToastPresenter: { toast in self.presentOsc52Toast(toast) },
+                    osc52DenialRecorder: nil,
+                    osc52SourceLabel: endpointLabel
+                )
+            }
         case let .failed(message):
             VStack(spacing: spacing.sm) {
                 if let diagnostic = runtime.failureDiagnostic {

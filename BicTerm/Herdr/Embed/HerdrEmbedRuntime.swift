@@ -40,6 +40,7 @@ final class HerdrEmbedRuntime {
     private(set) var failureDiagnostic: HerdrDiagnostic?
     /// Bridge byte-flow/lifecycle lines from the transport coordinator.
     private(set) var transportLines: [String] = []
+    private(set) var transportFailureLines: [String] = []
     /// Identity (workspace-entry id) that owns the live run. Opening a
     /// second workspace while one runs REPLACES the run (v1: one embedded
     /// TUI per process); superseded surfaces render a closed state.
@@ -133,6 +134,7 @@ final class HerdrEmbedRuntime {
         currentOwner = ownerID
         failureDiagnostic = nil
         transportLines = []
+        transportFailureLines = []
         let transport: HerdrEmbedTransportCoordinator?
         if let staged = stagedTransport {
             stagedTransport = nil
@@ -182,8 +184,10 @@ final class HerdrEmbedRuntime {
             do {
                 resolvedSocketPath = try await transport.prepare()
                 transportLines = transport.eventLines
+                transportFailureLines = transport.failureLines
             } catch let failure as HerdrEmbedTransportFailure {
                 transportLines = transport.eventLines
+                transportFailureLines = transport.failureLines
                 if bringupInvalidated(generation) {
                     await settleAbandonedBringup(
                         generation: generation, session: nil, transport: transport
@@ -195,6 +199,7 @@ final class HerdrEmbedRuntime {
                 return
             } catch {
                 transportLines = transport.eventLines
+                transportFailureLines = transport.failureLines
                 if bringupInvalidated(generation) {
                     await settleAbandonedBringup(
                         generation: generation, session: nil, transport: transport
@@ -423,6 +428,7 @@ final class HerdrEmbedRuntime {
             activeTransport = nil
         }
         transportLines = transport.eventLines
+        transportFailureLines = transport.failureLines
         await transport.teardown()
     }
 
