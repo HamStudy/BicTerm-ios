@@ -11,6 +11,10 @@ sandbox profile. Never trust the simulator for sandbox-sensitive behavior.
 
 Verified 2026-09-17 by `BicTermTests/Device/SandboxCapabilityProbeTests.swift` (record-only,
 16 `PROBE:` lines per run). Device: iPad Pro 13-inch (M5), iOS 26. Simulator: iPhone 17 Pro.
+Independently reproduced 2026-09-17 on iPhone 17 Pro Max (iOS 26): identical matrix (openpty//dev/ptmx
+EPERM, socketpair/fcntl/dup2 ok, TIOCSWINSZ ENOTSUP, container-root and real-/tmp EPERM) plus the embed
+client boot proof passing (`EMBED-BOOT: start = ok`, `running = true`); evidence
+`.sisyphus/evidence/iphone-device-probe.log`.
 Evidence: `.sisyphus/evidence/device-probe.log` (device) and `.sisyphus/evidence/device-probe-sim.log`.
 
 | Operation | Device | Simulator |
