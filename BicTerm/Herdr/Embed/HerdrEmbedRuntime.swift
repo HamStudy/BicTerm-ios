@@ -570,6 +570,18 @@ final class HerdrEmbedRuntime {
             withIntermediateDirectories: true
         )
         setenv("XDG_CONFIG_HOME", configHome.path(percentEncoded: false), 1)
+        // The transport path sets XDG_STATE_HOME in applyEnvironment BEFORE
+        // this runs; the legacy socket-path mode has no transport, so set
+        // the same anchor here or the client's state_dir() falls back to
+        // $HOME/.local/state/herdr — a mkdir at the container root (EPERM
+        // on device). Same location as the coordinator's, so a later
+        // applyEnvironment is a no-op rewrite.
+        let stateHome = support.appendingPathComponent("state-home", isDirectory: true)
+        try? FileManager.default.createDirectory(
+            at: stateHome,
+            withIntermediateDirectories: true
+        )
+        setenv("XDG_STATE_HOME", stateHome.path(percentEncoded: false), 1)
     }
 
     // MARK: - Socket resolution (T4: local fixture / explicit config only)
