@@ -127,8 +127,11 @@ final class HerdrConnectionUITests: XCTestCase {
         app.buttons["cancel-editor"].tap()
     }
 
-    /// Rebase seam: password auth (upstream) and the Herdr section (ours)
-    /// coexist in one editor — one save flow exercising both.
+    /// Rebase seam: password auth and the Herdr section coexist in one
+    /// editor — one save flow exercising both. Pool model: password auth
+    /// means keys stay out of the offer and a password is saved, the row
+    /// summarizes it as "Password", and the editor reopens with the
+    /// "Saved on this device" badge.
     func testPasswordAuthAndHerdrSessionSaveTogether() {
         app.launchArguments = ["--uitest-reset", "--uitest-seed-keys"]
         app.launch()
@@ -138,10 +141,13 @@ final class HerdrConnectionUITests: XCTestCase {
         typeInto(app.textFields["field-host"], "10.4.5.8")
         typeInto(app.textFields["field-username"], "alice")
         dismissKeyboard()
-        let picker = app.segmentedControls["auth-method-picker"]
-        XCTAssertTrue(picker.waitForExistence(timeout: 5))
-        picker.buttons["Password"].tap()
-        typeInto(app.secureTextFields["password-field"], "bicterm-uitest-fixture-password")
+
+        // Pool model: password auth = leave keys out of the offer and
+        // save a password (blank would mean prompt-at-connect instead).
+        let offerKeys = app.switches["offer-keys-toggle"]
+        scrollTo(offerKeys)
+        XCTAssertTrue(setToggle(offerKeys, on: false), "keys must stay out of the offer")
+        typeIntoSecure(app.secureTextFields["password-field"], "bicterm-uitest-fixture-password")
 
         let toggle = app.switches["herdr-toggle"]
         scrollTo(toggle)
@@ -151,18 +157,46 @@ final class HerdrConnectionUITests: XCTestCase {
         typeInto(sessionField, "work")
 
         scrollTo(app.buttons["save-editor"])
+        waitForEnabled(app.buttons["save-editor"])
         app.buttons["save-editor"].tap()
+        dismissSystemSavePromptIfPresent()
 
         let row = app.buttons["connection-Pwd-Herdr"]
         XCTAssertTrue(row.waitForExistence(timeout: 10), "the combined connection must save")
-        XCTAssertTrue(
-            row.label.contains("Password"),
-            "the row shows the password auth label: \(row.label)"
+        XCTAssertEqual(
+            app.staticTexts["auth-method-Pwd-Herdr"].label, "Password",
+            "the row summarizes the keys-off connection as password auth"
         )
         XCTAssertTrue(
             app.staticTexts["badge-herdr"].waitForExistence(timeout: 5),
             "the same connection carries the Herdr badge"
         )
+
+        // Both halves persist together: the saved password surfaces as
+        // the "Saved on this device" badge (never prefilled text) and
+        // the herdr section reopens enabled with its session name.
+        openEditorForConnection(named: "Pwd-Herdr")
+        let secure = app.secureTextFields["password-field"]
+        scrollTo(secure)
+        XCTAssertTrue(
+            app.staticTexts["password-saved-badge"].waitForExistence(timeout: 5),
+            "the saved password must surface as the device badge"
+        )
+        let value = secure.value as? String
+        XCTAssertTrue(
+            value == nil || value == "",
+            "SecureField must never be pre-filled from the store; got \(value ?? "<nil>")"
+        )
+        let relaunchedToggle = app.switches["herdr-toggle"]
+        scrollTo(relaunchedToggle)
+        XCTAssertEqual(
+            (relaunchedToggle.value as? String ?? "").lowercased(), "1",
+            "the herdr toggle must persist"
+        )
+        let relaunchedSession = app.textFields["herdr-session-field"]
+        XCTAssertTrue(relaunchedSession.waitForExistence(timeout: 5))
+        XCTAssertEqual(relaunchedSession.value as? String, "work", "the session name must persist")
+        app.buttons["cancel-editor"].tap()
     }
 
     // MARK: Helpers
@@ -191,12 +225,53 @@ final class HerdrConnectionUITests: XCTestCase {
         dismissKeyboard()
     }
 
+    /// Tap toward the trailing edge: on regular-width sheets SwiftUI can
+    /// report the whole row as the SecureField's frame, and a center tap
+    /// then lands between the label and the text box, never focusing the
+    /// editor. 75% width is inside the text box in both AX shapes.
+    private func typeIntoSecure(_ field: XCUIElement, _ text: String) {
+        field.coordinate(withNormalizedOffset: CGVector(dx: 0.75, dy: 0.5)).tap()
+        let focused = NSPredicate(format: "hasKeyboardFocus == true")
+        expectation(for: focused, evaluatedWith: field)
+        waitForExpectations(timeout: 5)
+        app.typeText(text)
+        let bullets = field.value as? String
+        XCTAssertEqual(bullets?.count, text.count, "secure input must land exactly")
+        dismissKeyboard()
+    }
+
+    /// Binding updates land one render tick late on relaxed-timing hosts
+    /// (observed: iPad simulator with hardware keyboard); poll instead of
+    /// reading `isEnabled` synchronously.
+    private func waitForEnabled(_ button: XCUIElement, timeout: TimeInterval = 8) {
+        let enabled = NSPredicate(format: "enabled == true")
+        expectation(for: enabled, evaluatedWith: button)
+        waitForExpectations(timeout: timeout)
+    }
+
+    /// The editor opts out of the system password-vault flow via
+    /// `.textContentType(.oneTimeCode)`, but iOS 26.5's AutoFill still
+    /// presents its "Save Password?" sheet once the simulator's password
+    /// subsystem is active — dismiss it so the flow under test continues.
+    private func dismissSystemSavePromptIfPresent() {
+        let notNow = app.buttons["Not Now"]
+        if notNow.waitForExistence(timeout: 3) {
+            notNow.tap()
+            let dismissed = NSPredicate(format: "exists == false")
+            expectation(for: dismissed, evaluatedWith: notNow)
+            waitForExpectations(timeout: 3)
+        }
+    }
+
     private func selectAuthenticationKey(_ label: String) {
         dismissKeyboard()
         app.buttons["key-selector"].tap()
         let key = app.buttons["key-\(label.replacingOccurrences(of: " ", with: "-"))"]
         XCTAssertTrue(key.waitForExistence(timeout: 5), "key \(label) must be listed")
         key.tap()
+        // The pool-model editor pushes KeyPickerView; selecting a key row
+        // keeps the picker open, so Done must pop back to the editor.
+        app.buttons["customize-done"].tap()
     }
 
     private func dismissKeyboard() {
