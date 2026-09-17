@@ -231,6 +231,7 @@ final class HerdrEmbedBridgeServerTests: XCTestCase {
             authenticationKeyProvider: StaticKeyProvider(
                 key: try await SSHTestFixture.loadFixtureEd25519Key()
             ),
+            metadataProvider: FixtureKeyMetadataProvider(),
             searchPaths: [
                 SSHTestFixture.repoRoot.appendingPathComponent(Self.herdrFixtureBin).path
             ],
