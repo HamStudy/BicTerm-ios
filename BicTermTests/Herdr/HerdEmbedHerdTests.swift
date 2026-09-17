@@ -55,6 +55,10 @@ final class HerdrEmbedHerdTests: XCTestCase {
                 "the real client's sidebar lists machine \(label)"
             )
         }
+        XCTAssertFalse(
+            bufferContains(hosted, "Local"),
+            "herd mode hides the Local endpoint — the host runs no local herdr server"
+        )
 
         // Machine selection through the client's OWN surface: a real SGR
         // click on each machine's sidebar row (the same delegate path a

@@ -232,7 +232,7 @@ final class HerdrEmbedRuntime {
         self.socketPath = resolvedSocketPath
 
         let session = sessionFactory()
-        prepareClientEnvironment()
+        prepareClientEnvironment(hideLocal: transport?.seedsCatalog ?? false)
 
         let config = HerdrEmbedSessionConfig(
             socketPath: resolvedSocketPath,
@@ -558,7 +558,12 @@ final class HerdrEmbedRuntime {
     /// `$HOME/.config/herdr` — its rotating logs and session state live
     /// under it, so an unredirected anchor silently disables client
     /// logging on device.
-    private func prepareClientEnvironment() {
+    private func prepareClientEnvironment(hideLocal: Bool) {
+        if hideLocal {
+            setenv("HERDR_EMBED_HIDE_LOCAL", "1", 1)
+        } else {
+            unsetenv("HERDR_EMBED_HIDE_LOCAL")
+        }
         let support = URL.applicationSupportDirectory
             .appendingPathComponent("herdr-embed")
         try? FileManager.default.createDirectory(at: support, withIntermediateDirectories: true)

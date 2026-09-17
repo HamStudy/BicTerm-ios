@@ -195,7 +195,7 @@ final class HerdrEmbedTransportCoordinator {
     /// federates Local + machines). Mode A does not: its client attaches
     /// to the one machine's bridge as its Local endpoint — upstream
     /// `herdr --remote` behavior — so the catalog stays empty.
-    private let seedsCatalog: Bool
+    private(set) var seedsCatalog: Bool
     private let connectorFactory: (@Sendable () async -> HerdrEndpointConnector)?
     private let providedVerifier: HostKeyVerifier?
     private let authenticationKeyProvider: (@Sendable () async -> any SSHAuthenticationKeyProvider)?
