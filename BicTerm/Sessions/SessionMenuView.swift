@@ -25,6 +25,11 @@ struct SessionMenuView: View {
     let store: SessionStore
     /// The session attached in THIS scene (marked, and not jumpable).
     let currentSessionID: UUID
+    /// Appended to every accessibility identifier in the menu. The herdr
+    /// workspace chrome passes "-herdr" so a herdr window and a terminal
+    /// window on screen together (iPad) never duplicate the session
+    /// scene's identifiers; the terminal scene keeps the default "".
+    var identifierSuffix: String = ""
     var onPickSession: (UUID) -> Void
     var onNewConnection: () -> Void
     var onManageSessions: () -> Void
@@ -50,7 +55,7 @@ struct SessionMenuView: View {
         .frame(minWidth: 44, minHeight: 44)
         .contentShape(Rectangle())
         .accessibilityLabel("Session menu")
-        .accessibilityIdentifier("scene-menu")
+        .accessibilityIdentifier("scene-menu\(identifierSuffix)")
         .foregroundColor(colors.dimmed)
         .sheet(isPresented: $fontEditorPresented) {
             if let descriptor = store.descriptor(id: currentSessionID) {
@@ -68,7 +73,7 @@ struct SessionMenuView: View {
                     .toolbar {
                         ToolbarItem(placement: .confirmationAction) {
                             Button("Done") { settingsPresented = false }
-                                .accessibilityIdentifier("menu-settings-done")
+                                .accessibilityIdentifier("menu-settings-done\(identifierSuffix)")
                         }
                     }
             }
@@ -87,7 +92,7 @@ struct SessionMenuView: View {
                 systemImage: "keyboard"
             )
         }
-        .accessibilityIdentifier("terminal-toolbar-toggle")
+        .accessibilityIdentifier("terminal-toolbar-toggle\(identifierSuffix)")
     }
 
     private var sessionsSubmenu: some View {
@@ -98,6 +103,7 @@ struct SessionMenuView: View {
                     key: row.key,
                     store: store,
                     isCurrent: row.descriptor.id == currentSessionID,
+                    identifierSuffix: identifierSuffix,
                     onJump: jump
                 )
             }
@@ -109,11 +115,11 @@ struct SessionMenuView: View {
             } label: {
                 Label("Manage Sessions…", systemImage: "rectangle.on.rectangle")
             }
-            .accessibilityIdentifier("scene-manage-sessions")
+            .accessibilityIdentifier("scene-manage-sessions\(identifierSuffix)")
         } label: {
             Label("Sessions", systemImage: "rectangle.on.rectangle")
         }
-        .accessibilityIdentifier("scene-sessions")
+        .accessibilityIdentifier("scene-sessions\(identifierSuffix)")
     }
 
     private var newSessionItem: some View {
@@ -122,7 +128,7 @@ struct SessionMenuView: View {
         } label: {
             Label("New Session", systemImage: "plus")
         }
-        .accessibilityIdentifier("scene-new-session")
+        .accessibilityIdentifier("scene-new-session\(identifierSuffix)")
     }
 
     private var settingsItem: some View {
@@ -135,7 +141,7 @@ struct SessionMenuView: View {
         } label: {
             Label("Settings…", systemImage: "gear")
         }
-        .accessibilityIdentifier("scene-settings")
+        .accessibilityIdentifier("scene-settings\(identifierSuffix)")
     }
 
     // MARK: - Jump
@@ -183,6 +189,7 @@ private struct SessionMenuRow: View {
     let key: String
     let store: SessionStore
     let isCurrent: Bool
+    var identifierSuffix: String = ""
     let onJump: (UUID) -> Void
 
     @State private var hasUnseenOutput = false
@@ -202,7 +209,7 @@ private struct SessionMenuRow: View {
             }
         }
         .disabled(isCurrent)
-        .accessibilityIdentifier("menu-session-\(key)")
+        .accessibilityIdentifier("menu-session-\(key)\(identifierSuffix)")
         .task { await pollUnseenOutput() }
     }
 

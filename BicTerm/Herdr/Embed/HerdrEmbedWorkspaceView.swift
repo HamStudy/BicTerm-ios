@@ -1,13 +1,14 @@
 import BicTermCore
 import SwiftUI
 
-/// Chrome for the embedded herdr TUI (plan herdr-embed T4): the native
-/// workspace header composition — "Herdr — {label}", status line,
-/// Disconnect — around ``HerdrTUIHostingView`` instead of the native pane
-/// area. Herds present the same surface with the client's machine catalog
-/// seeded per open (T6): each herd machine rides its own profile socket
-/// through the bridge transport, and the REAL client's own sidebar owns
-/// multi-machine selection/input/health.
+/// Chrome for the embedded herdr TUI (plan herdr-embed T4): the workspace
+/// presents the SAME top chrome as a terminal session — ``HerdrChromeView``
+/// (title, Herdr badge, live status chip, session menu, Close) — around
+/// ``HerdrTUIHostingView`` instead of the native pane area. Herds present
+/// the same surface with the client's machine catalog seeded per open (T6):
+/// each herd machine rides its own profile socket through the bridge
+/// transport, and the REAL client's own sidebar owns multi-machine
+/// selection/input/health.
 ///
 /// Lifecycle: the view owns the process-single embedded instance while it
 /// is on screen — appearing starts the client, disappearing stops it (the
@@ -28,6 +29,14 @@ struct HerdrEmbedWorkspaceView: View {
 
     let endpointLabel: String
     let onClose: () -> Void
+    /// Session registry backing the chrome's session menu (toolbar toggle,
+    /// Sessions submenu, New Session, Settings). The workspace is NOT one
+    /// of its sessions — the menu's Appearance submenu stays hidden.
+    let store: SessionStore
+    /// Chrome menu actions, wired per presentation (iPad window: openWindow
+    /// jump / in-window list sheet; iPhone cover: cover swap / dismiss).
+    var onPickSession: (UUID) -> Void = { _ in }
+    var onNewConnection: () -> Void = {}
     var fontModel: TerminalFontModel? = nil
     var embedConnection: Connection? = nil
     var embedHerd: HerdDescriptor? = nil
@@ -44,6 +53,9 @@ struct HerdrEmbedWorkspaceView: View {
     init(
         endpointLabel: String,
         onClose: @escaping () -> Void,
+        store: SessionStore,
+        onPickSession: ((UUID) -> Void)? = nil,
+        onNewConnection: (() -> Void)? = nil,
         fontModel: TerminalFontModel? = nil,
         runtime: HerdrEmbedRuntime = .shared,
         embedConnection: Connection? = nil,
@@ -54,6 +66,9 @@ struct HerdrEmbedWorkspaceView: View {
     ) {
         self.endpointLabel = endpointLabel
         self.onClose = onClose
+        self.store = store
+        self.onPickSession = onPickSession ?? { _ in }
+        self.onNewConnection = onNewConnection ?? {}
         self.fontModel = fontModel
         self.embedConnection = embedConnection
         self.embedHerd = embedHerd
@@ -65,7 +80,7 @@ struct HerdrEmbedWorkspaceView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            header
+            chrome
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             if let footnote = ioFootnote {
@@ -91,6 +106,9 @@ struct HerdrEmbedWorkspaceView: View {
         }
         .animation(.easeInOut(duration: 0.2), value: osc52Toast)
         .task {
+            // Same warm as the session scene: the chrome menu's Sessions
+            // submenu reads live state text from scene models.
+            store.warmSceneModelsForSwitcher()
             if let coordinator = await makeTransportCoordinator() {
                 runtime.attachTransport(coordinator)
                 trustCoordinator = coordinator
@@ -153,33 +171,17 @@ struct HerdrEmbedWorkspaceView: View {
         runtime.currentOwner == nil || runtime.currentOwner == ownerID
     }
 
-    private var header: some View {
-        HStack(spacing: spacing.sm) {
-            VStack(alignment: .leading, spacing: spacing.xxs) {
-                Text("Herdr — \(endpointLabel)")
-                    .font(typography.headline)
-                    .foregroundStyle(colors.foreground)
-                    .accessibilityIdentifier("herdr-endpoint-label")
-                Text(statusText)
-                    .font(typography.caption)
-                    .foregroundStyle(statusColor)
-                    .accessibilityIdentifier("herdr-embed-status")
-            }
-            Spacer()
-            if phase == .running, ownsLiveRun {
-                Button("Disconnect") {
-                    Task { await runtime.requestStop(ownerID: ownerID) }
-                }
-                .font(typography.body)
-                .buttonStyle(.bordered)
-                .frame(minHeight: 44)
-                .contentShape(Rectangle())
-                .accessibilityIdentifier("herdr-disconnect")
-            }
-        }
-        .windowControlsClearance()
-        .padding([.trailing, .top], spacing.sm)
-        .padding(.bottom, spacing.xs)
+    private var chrome: some View {
+        HerdrChromeView(
+            store: store,
+            title: endpointLabel,
+            statusText: statusText,
+            statusColor: statusColor,
+            ownerID: ownerID,
+            onPickSession: onPickSession,
+            onNewConnection: onNewConnection,
+            onClose: onClose
+        )
     }
 
     @ViewBuilder
@@ -203,17 +205,13 @@ struct HerdrEmbedWorkspaceView: View {
                     .foregroundStyle(colors.dimmed)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, spacing.sm)
-                Button("Close", action: onClose)
-                    .font(typography.body)
-                    .buttonStyle(.bordered)
-                    .frame(minHeight: 44)
-                    .accessibilityIdentifier("herdr-embed-close")
             }
             .accessibilityIdentifier("herdr-embed-superseded")
         case .running:
             HerdrTUIHostingView(
                 runtime: runtime,
                 fontModel: fontModel,
+                toolbarVisible: store.terminalToolbar.isVisible,
                 osc52Settings: osc52Settings ?? Osc52ClipboardSettings(),
                 osc52ForegroundCheck: nil,
                 osc52ToastPresenter: { toast in self.presentOsc52Toast(toast) },
@@ -237,11 +235,6 @@ struct HerdrEmbedWorkspaceView: View {
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, spacing.sm)
                     .accessibilityIdentifier("herdr-embed-failed")
-                Button("Close", action: onClose)
-                    .font(typography.body)
-                    .buttonStyle(.bordered)
-                    .frame(minHeight: 44)
-                    .accessibilityIdentifier("herdr-embed-close")
             }
         case .stopped:
             VStack(spacing: spacing.sm) {
@@ -250,11 +243,6 @@ struct HerdrEmbedWorkspaceView: View {
                     .foregroundStyle(colors.foreground)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, spacing.sm)
-                Button("Close", action: onClose)
-                    .font(typography.body)
-                    .buttonStyle(.bordered)
-                    .frame(minHeight: 44)
-                    .accessibilityIdentifier("herdr-embed-close")
             }
         }
     }

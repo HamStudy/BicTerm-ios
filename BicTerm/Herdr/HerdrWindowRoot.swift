@@ -1,3 +1,4 @@
+import BicTermCore
 import SwiftUI
 
 /// Content of one Herdr workspace window: the session its window value
@@ -5,6 +6,8 @@ import SwiftUI
 /// connection list (never auto-dismissing the last visible scene).
 @MainActor
 struct HerdrWindowRoot: View {
+    @Environment(\.openWindow) private var openWindow
+    @Environment(\.supportsMultipleWindows) private var supportsMultipleWindows
     @Environment(\.terminalColors) private var colors
 
     let store: SessionStore
@@ -12,10 +15,36 @@ struct HerdrWindowRoot: View {
     let herdConnect: HerdSessionCoordinator
     let windowSessionID: UUID?
 
+    /// Compact-split fallback (supportsMultipleWindows == false): the chrome
+    /// menu's session jump, or a connect from the list sheet, attaches the
+    /// terminal session IN this window — TerminalWindowRoot's in-window
+    /// switch, mirrored for the herdr window.
+    @State private var switchedSessionID: UUID?
+    @State private var listPresented = false
+
     var body: some View {
         Group {
-            if let windowSessionID,
-               let entry = center.entry(id: windowSessionID) {
+            if let switched = switchedSessionID,
+               let descriptor = store.descriptor(id: switched),
+               let model = store.sceneModel(for: descriptor.id) {
+                SessionSceneView(
+                    model: model,
+                    store: store,
+                    actions: SessionSceneActions(
+                        onPickSession: { pickedID in
+                            switchedSessionID = pickedID
+                        },
+                        onNewConnection: { listPresented = true },
+                        onSessionClosed: {
+                            switchedSessionID = nil
+                        }
+                    )
+                )
+                // In-window switches must REBUILD the scene — see the
+                // matching comment in ConnectionListContainer.
+                .id(model.id)
+            } else if let windowSessionID,
+                      let entry = center.entry(id: windowSessionID) {
                 herdrWorkspace(for: entry)
                     .id(entry.id)
             } else {
@@ -23,6 +52,49 @@ struct HerdrWindowRoot: View {
             }
         }
         .terminalStyle()
+        .sheet(isPresented: $listPresented) {
+            ConnectionListView(
+                fontModel: store.terminalFont,
+                themeModel: store.theme,
+                osc52Model: store.osc52Clipboard,
+                onConnectRequested: { connection in
+                    listPresented = false
+                    connectFromListSheet(connection)
+                },
+                onClose: { listPresented = false }
+            )
+            .terminalStyle()
+        }
+        .sceneAppearance(effectiveTheme)
+    }
+
+    /// The switched session's per-window override wins; the workspace itself
+    /// follows the global theme (it has no per-session override — it is not
+    /// a SessionStore session).
+    private var effectiveTheme: AppearancePreference {
+        guard let switchedSessionID,
+              let descriptor = store.descriptor(id: switchedSessionID) else {
+            return store.theme.preference
+        }
+        return store.effectiveTheme(descriptor.registrySceneID)
+    }
+
+    /// The list sheet's connect: herdr connections open their own workspace
+    /// window; terminal connections mirror TerminalWindowRoot — a new window
+    /// unless this one shows a replaceable (dead) switched session or the
+    /// window is too compact for multi-window.
+    private func connectFromListSheet(_ connection: Connection) {
+        if connection.herdrEnabled {
+            openWindow(id: "herdr", value: SessionID(value: center.openEmbed(connection: connection)))
+            return
+        }
+        let descriptor = store.openSession(for: connection)
+        let canSwapInWindow = switchedSessionID.map { store.canReplaceSession($0) } ?? false
+        if supportsMultipleWindows, !canSwapInWindow {
+            openWindow(id: "terminal", value: SessionID(value: descriptor.id))
+        } else {
+            switchedSessionID = descriptor.id
+        }
     }
 
     @ViewBuilder
@@ -39,6 +111,13 @@ struct HerdrWindowRoot: View {
                     await center.close(id: entry.id)
                 }
             },
+            store: store,
+            onPickSession: { pickedID in
+                // Reached only when this window can't open windows (compact
+                // split): switch in-window, mirroring TerminalWindowRoot.
+                switchedSessionID = pickedID
+            },
+            onNewConnection: { listPresented = true },
             fontModel: store.terminalFont,
             embedConnection: entry.embedConnection,
             embedHerd: entry.herd,

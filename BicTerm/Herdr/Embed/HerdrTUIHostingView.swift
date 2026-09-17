@@ -13,6 +13,11 @@ import UIKit
 struct HerdrTUIHostingView: UIViewRepresentable {
     let runtime: HerdrEmbedRuntime
     var fontModel: TerminalFontModel? = nil
+    /// Whether the esc/ctrl/tab/arrows accessory strip participates in the
+    /// layout below the surface — the app-global `SessionStore.terminalToolbar`
+    /// pref, same contract as SSH session surfaces (the terminal shrinks by
+    /// the strip's height; the strip never covers the bottom row).
+    var toolbarVisible: Bool = false
     var osc52Settings: Osc52ClipboardSettings = Osc52ClipboardSettings()
     /// Optional foreground check; nil = always foreground (tests).
     var osc52ForegroundCheck: (@MainActor () -> Bool)? = nil
@@ -28,7 +33,7 @@ struct HerdrTUIHostingView: UIViewRepresentable {
         Coordinator(parent: self)
     }
 
-    func makeUIView(context: Context) -> TerminalContainerView {
+    func makeUIView(context: Context) -> TerminalToolbarHostView {
         let resolvedSize = fontModel.map { CGFloat($0.size) } ?? 14
         let font = UIFont.monospacedSystemFont(ofSize: resolvedSize, weight: .regular)
         // 80×24 placeholder grid: the real geometry arrives with the first
@@ -36,30 +41,44 @@ struct HerdrTUIHostingView: UIViewRepresentable {
         let options = TerminalOptions(
             cols: 80,
             rows: 24,
-            cursorStyle: .blinkBlock,
+            // Steady cursor, matching the session surfaces (TerminalSurface):
+            // a blinking cursor animates continuously, which reads as
+            // perpetual main-thread activity to XCUI's idle wait (menu
+            // taps and typeText hang ~15s and fail) and never idles.
+            cursorStyle: .steadyBlock,
             scrollback: TerminalScrollback.maxLines
         )
         let view = TerminalContainerView(frame: .zero, font: font, options: options)
+        let hostView = TerminalToolbarHostView(terminalView: view)
         view.fontModel = fontModel
         view.optionAsMetaKey = true
+        // UIKit's inputAccessoryView dock overlays the surface's bottom rows;
+        // the accessory lives in the host view's layout instead (same wiring
+        // as TerminalSurface). `hostedAccessory` keeps the accessory's
+        // sticky-ctrl state feeding SwiftTerm's key encoding (fork hunk 8).
+        view.inputAccessoryView = nil
+        view.hostedAccessory = hostView.accessoryView
         view.applyNativeTerminalColors()
         view.terminalDelegate = context.coordinator
         view.accessibilityIdentifier = "herdr-embed-tui"
+        hostView.setAccessoryVisible(toolbarVisible)
         context.coordinator.startFeeding(into: view, runtime: runtime)
-        return view
+        return hostView
     }
 
-    func updateUIView(_ uiView: TerminalContainerView, context: Context) {
+    func updateUIView(_ uiView: TerminalToolbarHostView, context: Context) {
         context.coordinator.parent = self
-        if let liveSize = fontModel?.size, uiView.font.pointSize != CGFloat(liveSize) {
-            uiView.font = UIFont.monospacedSystemFont(ofSize: CGFloat(liveSize), weight: .regular)
+        uiView.setAccessoryVisible(toolbarVisible)
+        let terminal = uiView.terminalView
+        if let liveSize = fontModel?.size, terminal.font.pointSize != CGFloat(liveSize) {
+            terminal.font = UIFont.monospacedSystemFont(ofSize: CGFloat(liveSize), weight: .regular)
         }
     }
 
-    static func dismantleUIView(_ uiView: TerminalContainerView, coordinator: Coordinator) {
+    static func dismantleUIView(_ uiView: TerminalToolbarHostView, coordinator: Coordinator) {
         coordinator.stopFeeding()
-        uiView.delegate = nil
-        uiView.updateUiClosed()
+        uiView.terminalView.delegate = nil
+        uiView.terminalView.updateUiClosed()
     }
 
     /// SwiftTerm delegate: input toward the embedded client, geometry toward

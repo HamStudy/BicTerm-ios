@@ -14,6 +14,10 @@ struct ConnectionListContainer: View {
 
     @State private var coverDescriptor: SessionStore.SessionDescriptor?
     @State private var herdrCoverSession: HerdrCoverSession?
+    /// Cross-cover jump from the herdr chrome's session menu: the terminal
+    /// cover is presented from the herdr cover's onDismiss — UIKit drops a
+    /// presentation requested while the previous cover is still dismissing.
+    @State private var pendingHerdrJump: SessionStore.SessionDescriptor?
     @State private var restorableSessions: [SessionStore.RestorableSession] = []
     @State private var switcherPresented = false
 
@@ -97,7 +101,12 @@ struct ConnectionListContainer: View {
                 )
             }
         }
-        .fullScreenCover(item: $herdrCoverSession) { cover in
+        .fullScreenCover(item: $herdrCoverSession, onDismiss: {
+            if let pending = pendingHerdrJump {
+                pendingHerdrJump = nil
+                coverDescriptor = pending
+            }
+        }) { cover in
             if let entry = HerdrWorkspaceCenter.shared.entry(id: cover.id) {
                 herdrWorkspace(for: entry)
                     .id(entry.id)
@@ -123,7 +132,10 @@ struct ConnectionListContainer: View {
             await SessionUITestDriver.run(store: store, present: present)
             #endif
         }
-        .onChange(of: scenePhase) { _, phase in
+        // `initial: true`: a fast launch can reach .active BEFORE this view
+        // subscribes, and a plain onChange then never fires — the herdr
+        // fixture driver (and the restorable reload) would silently no-op.
+        .onChange(of: scenePhase, initial: true) { _, phase in
             if phase == .active {
                 Task { await reloadRestorableSessions() }
                 #if DEBUG
@@ -183,6 +195,15 @@ struct ConnectionListContainer: View {
                 }
                 herdrCoverSession = nil
             },
+            store: store,
+            onPickSession: { pickedID in
+                // iPhone jump: swap covers — dismiss this workspace, then
+                // present the picked session's terminal cover (onDismiss).
+                guard let picked = store.descriptor(id: pickedID) else { return }
+                pendingHerdrJump = picked
+                herdrCoverSession = nil
+            },
+            onNewConnection: { herdrCoverSession = nil },
             fontModel: store.terminalFont,
             embedConnection: entry.embedConnection,
             embedHerd: entry.herd,
