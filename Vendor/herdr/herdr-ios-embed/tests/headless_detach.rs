@@ -11,7 +11,6 @@ use herdr_ios_embed::{herdr_embed_is_running, herdr_embed_write_input, HERDR_EMB
 use std::time::Duration;
 
 const FRAME_TIMEOUT: Duration = Duration::from_secs(20);
-const EXIT_TIMEOUT: Duration = Duration::from_secs(10);
 
 fn count_sgr(bytes: &[u8]) -> usize {
     let mut count = 0usize;
@@ -45,16 +44,25 @@ fn keystrokes_reach_the_client_and_prefix_q_detaches_cleanly() {
     assert!(ready, "no TUI frame before input ({} bytes)", acc.len());
 
     // ctrl+b (prefix) then q (detach) — the client's default keybindings,
-    // written as separate single-byte reads like a real keyboard would.
-    let result = unsafe { herdr_embed_write_input(embed.handle(), b"\x02".as_ptr(), 1) };
-    assert_eq!(result.code, HERDR_EMBED_CODE_OK, "{}", detail_text(result.detail));
-    std::thread::sleep(Duration::from_millis(120));
-    let result = unsafe { herdr_embed_write_input(embed.handle(), b"q".as_ptr(), 1) };
-    assert_eq!(result.code, HERDR_EMBED_CODE_OK, "{}", detail_text(result.detail));
-
-    let exited = common::poll_until(EXIT_TIMEOUT, &|| {
-        !herdr_embed_is_running(embed.handle())
-    });
+    // written as separate single-byte reads like a real keyboard would. The
+    // first pair can land inside the client's startup window (the first
+    // snapshot commit clears the prefix state), so the pair is retried
+    // until the client detaches — the socketpair surfaces output fast
+    // enough that the first frame races the activation.
+    let mut exited = false;
+    for _ in 0..8 {
+        let result = unsafe { herdr_embed_write_input(embed.handle(), b"\x02".as_ptr(), 1) };
+        assert_eq!(result.code, HERDR_EMBED_CODE_OK, "{}", detail_text(result.detail));
+        std::thread::sleep(Duration::from_millis(120));
+        let result = unsafe { herdr_embed_write_input(embed.handle(), b"q".as_ptr(), 1) };
+        assert_eq!(result.code, HERDR_EMBED_CODE_OK, "{}", detail_text(result.detail));
+        exited = common::poll_until(Duration::from_millis(700), &|| {
+            !herdr_embed_is_running(embed.handle())
+        });
+        if exited {
+            break;
+        }
+    }
     if !exited {
         let dump_dir = common::repo_root()
             .join(".build-artifacts/herdr-embed-test")
@@ -76,5 +84,5 @@ fn keystrokes_reach_the_client_and_prefix_q_detaches_cleanly() {
     let result = embed.stop();
     assert_eq!(result.code, HERDR_EMBED_CODE_OK, "{}", detail_text(result.detail));
     let (_, ttys) = fd_state();
-    assert!(ttys.is_empty(), "pty fds leaked: {ttys:?}");
+    assert!(ttys.is_empty(), "tty fds leaked: {ttys:?}");
 }

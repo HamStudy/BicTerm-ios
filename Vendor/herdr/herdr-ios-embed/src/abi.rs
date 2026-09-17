@@ -62,9 +62,9 @@ unsafe fn write_error_out(error_out: *mut HerdrEmbedResult, result: HerdrEmbedRe
     }
 }
 
-/// Starts the embedded client against a new pty. Returns null on failure with
-/// the structured reason in `error_out` (optional). The returned handle is
-/// released by `herdr_embed_stop` — there is no separate destroy.
+/// Starts the embedded client against a new socketpair. Returns null on
+/// failure with the structured reason in `error_out` (optional). The returned
+/// handle is released by `herdr_embed_stop` — there is no separate destroy.
 #[no_mangle]
 pub extern "C" fn herdr_embed_start(
     config: *const herdr_embed_config,
@@ -126,7 +126,7 @@ pub extern "C" fn herdr_embed_start(
     }
 }
 
-/// Feeds raw input bytes (keys, paste) to the client through the pty master.
+/// Feeds raw input bytes (keys, paste) to the client through the host socket.
 #[no_mangle]
 pub extern "C" fn herdr_embed_write_input(
     embed: *mut herdr_embed,
@@ -144,7 +144,7 @@ pub extern "C" fn herdr_embed_write_input(
             return Err(invalid("bytes pointer is null with a non-zero length"));
         }
         // SAFETY: caller provides `len` readable bytes for the call; the
-        // slice is copied into the pty and never retained.
+        // slice is copied into the socket and never retained.
         let bytes = unsafe { std::slice::from_raw_parts(bytes, len) };
         // SAFETY: non-null, live handle per the ABI contract.
         unsafe { instance_ref(embed) }.write_input(bytes)
@@ -173,7 +173,7 @@ pub extern "C" fn herdr_embed_read_output(
             return Err(invalid("buffer pointer is null with a non-zero capacity"));
         }
         // SAFETY: caller provides `capacity` writable bytes for the call; the
-        // bytes are filled from the pty master and returned by count.
+        // bytes are filled from the host socket and returned by count.
         let buf = unsafe { std::slice::from_raw_parts_mut(buf, capacity) };
         // SAFETY: non-null, live handle per the ABI contract.
         unsafe { instance_ref(embed) }.read_output(buf)
@@ -193,8 +193,8 @@ pub extern "C" fn herdr_embed_read_output(
     }
 }
 
-/// Applies a new window size to the pty and raises SIGWINCH so the client
-/// re-renders (crate docs: the client's crossterm owns the handler).
+/// Applies a new window size by publishing the grid through the size env
+/// (embed patch 0006's geometry seam); the client's resize poll re-renders.
 #[no_mangle]
 pub extern "C" fn herdr_embed_set_winsize(
     embed: *mut herdr_embed,
@@ -244,7 +244,7 @@ pub extern "C" fn herdr_embed_socket_path(embed: *mut herdr_embed) -> *const c_c
 }
 
 /// Stops the client, joins its thread, restores the host stdio, closes every
-/// pty/pipe fd, and frees the handle — which is dead afterwards. On
+/// socket/pipe fd, and frees the handle — which is dead afterwards. On
 /// HERDR_EMBED_CODE_STOP_TIMEOUT the instance stays alive and stop may be
 /// retried with the same handle.
 #[no_mangle]

@@ -1,13 +1,23 @@
 # herdr-ios-embed
 
 In-process C ABI that runs the REAL herdr TUI client against a host-owned
-pty (plan `.omo/plans/herdr-embed.md`, task 3). `herdr_embed_start` opens a
-pty pair, spawns a thread that dup2s the slave onto fds 0/1/2 and runs
-`herdr::run_client()` there, and keeps the master for the host: input via
-`herdr_embed_write_input`, rendered output via the cancellable blocking
-`herdr_embed_read_output`, resizes via `herdr_embed_set_winsize`
-(TIOCSWINSZ + SIGWINCH), teardown via `herdr_embed_stop`. The C surface is
-declared in `include/HerdrEmbed.h` (cbindgen-generated, never hand-edited).
+AF_UNIX socketpair (plan `.omo/plans/herdr-embed.md`, task 3).
+`herdr_embed_start` opens the pair, spawns a thread that dup2s the client
+end onto fds 0/1/2 and runs `herdr::run_client()` there, and keeps the host
+end for the host: input via `herdr_embed_write_input`, rendered output via
+the cancellable blocking `herdr_embed_read_output`, resizes via
+`herdr_embed_set_winsize` (explicit env-published grid), teardown via
+`herdr_embed_stop`. The C surface is declared in `include/HerdrEmbed.h`
+(cbindgen-generated, never hand-edited).
+
+The pair is a socketpair, not a pty, because the iOS app sandbox denies
+`openpty` with EPERM on physical devices (device probe 2026-09-17,
+`.sisyphus/evidence/device-probe.log`) while socketpair/fcntl/dup2 are legal
+there. Two consequences are handled by embed patch 0006 in the client:
+`isatty` is false on both ends (crossterm raw mode and `ratatui::init` are
+bypassed when stdin is not a tty), and `ioctl(TIOCSWINSZ)` returns ENOTSUP
+on sockets (the grid travels as `HERDR_EMBED_COLS`/`HERDR_EMBED_ROWS` env
+state consumed by the client's 100ms resize poll).
 
 ## Build flow
 
@@ -35,22 +45,18 @@ the crate pins toolchain 1.96.1 to match the working copy.
 
 ## Process-global contract (the honest list)
 
-* **stdio** — dup2 makes the pty slave the process-wide stdin/stdout/stderr.
-  On iOS those point at `/dev/null`; the originals are saved and restored by
-  `herdr_embed_stop`. crossterm reads input from fd 0 and writes output to
-  fd 1/2, so only ONE embedded client TUI may run at a time process-wide;
-  multi-machine herds ride one client through its endpoint catalog.
-* **SIGWINCH** — this crate never installs a SIGWINCH handler. The embedded
-  client owns the process-wide handler (herdr's own sigaction flag consumed
-  by its 100ms resize poll). `set_winsize` applies TIOCSWINSZ on the master
-  and raises SIGWINCH via `kill(getpid(), ...)`: whichever unblocked thread
-  catches it runs that handler. `start` blocks SIGWINCH on the calling
-  (host) thread before spawning — every thread created afterwards inherits
-  the block — and the embed thread unblocks it in itself, making the embed
-  thread the preferred recipient. Host rule: Swift must not install its own
-  SIGWINCH handler (use view-layout callbacks); a pre-existing thread that
-  catches the signal merely runs the client's idempotent flag-setting
-  handler.
+* **stdio** — dup2 makes the client socket end the process-wide
+  stdin/stdout/stderr. On iOS those point at `/dev/null`; the originals are
+  saved and restored by `herdr_embed_stop`. The client reads input from fd 0
+  and writes output to fd 1/2, so only ONE embedded client TUI may run at a
+  time process-wide; multi-machine herds ride one client through its
+  endpoint catalog.
+* **resize** — there is no pty to size and no signal to steer:
+  `ioctl(TIOCSWINSZ)` fails ENOTSUP on sockets (device probe, 2026-09-17),
+  so `set_winsize` publishes the authoritative grid through the
+  `HERDR_EMBED_COLS`/`HERDR_EMBED_ROWS` env vars (embed patch 0006's geometry
+  seam) and the client's 100ms resize poll re-reads them and re-renders. No
+  SIGWINCH is raised and this crate installs no handler for it.
 * **SIGTERM** — `stop` raises SIGTERM to trigger the client's clean quit
   (its ctrlc handler sets should_quit). The crate installs its own
   flag-setting SIGTERM handler at start as the safety net for kills that
@@ -60,7 +66,7 @@ the crate pins toolchain 1.96.1 to match the working copy.
   default ctrl+b q) is the primary quit path for later instances.
 * **env** — `HERDR_CLIENT_SOCKET_PATH` is process-global; herdr resolves it
   once at the top of `run_client`. Starts serialize through a global gate:
-  the embed thread re-asserts its socket path (and clears
+  the embed thread re-asserts its socket path and grid (and clears
   `HERDR_SOCKET_PATH`, which would otherwise win) immediately before
   `run_client`. Start the next instance only after observing the previous
   instance's first output.
@@ -70,8 +76,8 @@ the crate pins toolchain 1.96.1 to match the working copy.
   with UI-thread writes). `herdr_embed_stop` consumes the handle: no other
   call may race it, and the handle is dead afterwards (a
   `HERDR_EMBED_CODE_STOP_TIMEOUT` result leaves it retryable).
-* **teardown order** — stop closes the pty master before neutering the
-  client's stdio onto /dev/null: closing the master wakes threads blocked
+* **teardown order** — stop closes the host socket before neutering the
+  client's stdio onto /dev/null: closing the socket wakes threads blocked
   reading it, and a dup2 over an fd another thread is blocked reading
   deadlocks on Darwin. The neuter keeps the client's post-teardown writes
   quiescent: an EIO write maps to a client error path that (since embed
@@ -80,5 +86,6 @@ the crate pins toolchain 1.96.1 to match the working copy.
   host process survives either way, but a clean stop owes the client a
   quiet stdio.
 * **diagnostics** — set `HERDR_EMBED_STDERR_LOG=<path>` to route the
-  client's stderr to a file instead of the pty (on iOS the process stderr
-  is /dev/null anyway); final client error messages survive teardown there.
+  client's stderr to a file instead of the socket (on iOS the process
+  stderr is /dev/null anyway); final client error messages survive teardown
+  there.

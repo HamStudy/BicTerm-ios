@@ -1,6 +1,7 @@
-//! Headless harness: `herdr_embed_set_winsize` applies the new pty geometry
-//! and the real client re-renders at the new size. Own process — see
-//! headless_frame.rs for the one-client-per-process rationale.
+//! Headless harness: `herdr_embed_set_winsize` publishes the new grid
+//! through the size env and the real client re-renders at the new size.
+//! Own process — see headless_frame.rs for the one-client-per-process
+//! rationale.
 mod common;
 
 use common::{
@@ -28,7 +29,7 @@ fn count_sgr(bytes: &[u8]) -> usize {
 }
 
 #[test]
-fn resize_updates_the_pty_and_the_client_redraws() {
+fn resize_updates_the_grid_and_the_client_redraws() {
     let _serial = serial();
     common::install_panic_log();
     let server = common::ServerFixture::start("resize");
@@ -46,8 +47,8 @@ fn resize_updates_the_pty_and_the_client_redraws() {
     let result = unsafe { herdr_embed_set_winsize(embed.handle(), 120, 40) };
     assert_eq!(result.code, HERDR_EMBED_CODE_OK, "{}", detail_text(result.detail));
 
-    // The client's resize watcher re-reads the pty geometry and re-renders;
-    // a full redraw at the new size is a substantial byte burst.
+    // The client's resize watcher re-reads the env-published grid and
+    // re-renders; a full redraw at the new size is a substantial byte burst.
     let (acc, _) = tap.wait_until(
         &|acc| acc.len() >= mark + 256,
         Duration::from_secs(10),
@@ -61,5 +62,5 @@ fn resize_updates_the_pty_and_the_client_redraws() {
     let result = embed.stop();
     assert_eq!(result.code, HERDR_EMBED_CODE_OK, "{}", detail_text(result.detail));
     let (_, ttys) = fd_state();
-    assert!(ttys.is_empty(), "pty fds leaked: {ttys:?}");
+    assert!(ttys.is_empty(), "tty fds leaked: {ttys:?}");
 }

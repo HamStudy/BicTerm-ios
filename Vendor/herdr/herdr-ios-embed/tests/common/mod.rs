@@ -21,7 +21,8 @@ pub fn repo_root() -> PathBuf {
 
 static SERIAL: Mutex<()> = Mutex::new(());
 
-/// Panics during an instance's redirected-stdio window vanish into the pty;
+/// Panics during an instance's redirected-stdio window vanish into the
+/// redirected stream;
 /// mirror them into a repo-local file so failures stay diagnosable.
 pub fn install_panic_log() {
     ONCE_PANIC_LOG.call_once(|| {

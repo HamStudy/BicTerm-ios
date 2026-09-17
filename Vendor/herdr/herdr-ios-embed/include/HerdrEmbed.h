@@ -41,10 +41,10 @@ typedef struct herdr_embed {
 
 /**
  * Start configuration. `socket_path` is required NUL-terminated UTF-8;
- * `cols`/`rows` size the initial pty window (each 1..=65535).
- * `detach_input` is the raw key sequence that detaches the client (sent by
- * `herdr_embed_stop` for a graceful quit); null selects herdr's stock
- * default, ctrl+b followed by q.
+ * `cols`/`rows` seed the initial window grid published through the size
+ * env (each 1..=65535). `detach_input` is the raw key sequence that
+ * detaches the client (sent by `herdr_embed_stop` for a graceful quit);
+ * null selects herdr's stock default, ctrl+b followed by q.
  */
 typedef struct herdr_embed_config {
   const char *socket_path;
@@ -64,15 +64,15 @@ typedef struct HerdrEmbedResult {
 } HerdrEmbedResult;
 
 /**
- * Starts the embedded client against a new pty. Returns null on failure with
- * the structured reason in `error_out` (optional). The returned handle is
- * released by `herdr_embed_stop` — there is no separate destroy.
+ * Starts the embedded client against a new socketpair. Returns null on
+ * failure with the structured reason in `error_out` (optional). The returned
+ * handle is released by `herdr_embed_stop` — there is no separate destroy.
  */
 struct herdr_embed *herdr_embed_start(const struct herdr_embed_config *config,
                                       struct HerdrEmbedResult *error_out);
 
 /**
- * Feeds raw input bytes (keys, paste) to the client through the pty master.
+ * Feeds raw input bytes (keys, paste) to the client through the host socket.
  */
 struct HerdrEmbedResult herdr_embed_write_input(struct herdr_embed *embed,
                                                 const uint8_t *bytes,
@@ -89,8 +89,8 @@ int64_t herdr_embed_read_output(struct herdr_embed *embed,
                                 struct HerdrEmbedResult *error_out);
 
 /**
- * Applies a new window size to the pty and raises SIGWINCH so the client
- * re-renders (crate docs: the client's crossterm owns the handler).
+ * Applies a new window size by publishing the grid through the size env
+ * (embed patch 0006's geometry seam); the client's resize poll re-renders.
  */
 struct HerdrEmbedResult herdr_embed_set_winsize(struct herdr_embed *embed,
                                                 uint16_t cols,
@@ -110,7 +110,7 @@ const char *herdr_embed_socket_path(struct herdr_embed *embed);
 
 /**
  * Stops the client, joins its thread, restores the host stdio, closes every
- * pty/pipe fd, and frees the handle — which is dead afterwards. On
+ * socket/pipe fd, and frees the handle — which is dead afterwards. On
  * HERDR_EMBED_CODE_STOP_TIMEOUT the instance stays alive and stop may be
  * retried with the same handle.
  */

@@ -1,13 +1,22 @@
 //! In-process embed FFI for the real herdr TUI client (plan
 //! `.omo/plans/herdr-embed.md`, task 3).
 //!
-//! [`herdr_embed_start`] opens a pty pair, spawns a thread that dup2s the pty
-//! slave onto fds 0/1/2 and runs `herdr::run_client()` there, and keeps the
-//! pty master for the host: input via [`herdr_embed_write_input`], rendered
-//! output via the cancellable blocking [`herdr_embed_read_output`], resizes
-//! via [`herdr_embed_set_winsize`] (TIOCSWINSZ + SIGWINCH), teardown via
+//! [`herdr_embed_start`] opens an AF_UNIX stream socketpair, spawns a thread
+//! that dup2s the client end onto fds 0/1/2 and runs `herdr::run_client()`
+//! there, and keeps the host end for the host: input via
+//! [`herdr_embed_write_input`], rendered output via the cancellable blocking
+//! [`herdr_embed_read_output`], resizes via [`herdr_embed_set_winsize`]
+//! (explicit env-published grid — see "resize" below), teardown via
 //! [`herdr_embed_stop`]. The client connects to the herdr server socket named
 //! by `herdr_embed_config.socket_path` (env contract below).
+//!
+//! The pair is a socketpair, not a pty, because the iOS app sandbox denies
+//! `openpty` with EPERM on physical devices (device probe 2026-09-17,
+//! `.sisyphus/evidence/device-probe.log`) while socketpair/fcntl/dup2 are
+//! legal there. Two consequences ripple into the client (embed patch 0006):
+//! `isatty` is false on both ends, so crossterm raw mode and ratatui init are
+//! bypassed when stdin is not a tty, and `ioctl(TIOCSWINSZ)` returns ENOTSUP
+//! on sockets, so the window grid travels as explicit env state.
 //!
 //! FFI contract (mirrors herdr-ios-ffi):
 //! * No Rust panic unwinds across the boundary; every entry point runs under
@@ -23,25 +32,20 @@
 //!
 //! ## Process-global facts (the honest list)
 //!
-//! * **stdio** — dup2 makes the pty slave the process-wide stdin/stdout/
-//!   stderr. On iOS those point at `/dev/null`; the original fds are saved
-//!   and restored by `herdr_embed_stop`. crossterm reads input from fd 0 and
-//!   writes output to fd 1/2, so only ONE embedded client TUI may run at a
-//!   time process-wide; a second start while one runs steals its stdio
-//!   (openpty+dup2 design constraint; multi-machine herds ride one client
-//!   through its endpoint catalog instead).
-//! * **SIGWINCH** — this crate never installs a signal handler. The embedded
-//!   client's crossterm owns the process-wide SIGWINCH handler (installed
-//!   when its event loop starts; signal-hook flags). `set_winsize` applies
-//!   TIOCSWINSZ on the master and raises SIGWINCH via `kill(getpid(), ...)`,
-//!   which is process-directed by nature: whichever unblocked thread catches
-//!   it runs that handler. To steer it, `start` blocks SIGWINCH on the
-//!   calling (host) thread before spawning — every thread created afterwards
-//!   inherits the block — and the embed thread unblocks it in itself, making
-//!   the embed thread the preferred recipient. Host rule: Swift must not
-//!   install its own SIGWINCH handler (use view-layout callbacks); a
-//!   pre-existing thread catching the signal merely runs the client's
-//!   idempotent flag-setting handler.
+//! * **stdio** — dup2 makes the client socket end the process-wide stdin/
+//!   stdout/stderr. On iOS those point at `/dev/null`; the original fds are
+//!   saved and restored by `herdr_embed_stop`. The client reads input from
+//!   fd 0 and writes output to fd 1/2, so only ONE embedded client TUI may
+//!   run at a time process-wide; a second start while one runs steals its
+//!   stdio (socketpair+dup2 design constraint; multi-machine herds ride one
+//!   client through its endpoint catalog instead).
+//! * **resize** — there is no pty to size and no signal to steer:
+//!   `ioctl(TIOCSWINSZ)` fails ENOTSUP on sockets (device probe,
+//!   2026-09-17), so `set_winsize` publishes the authoritative grid through
+//!   the `HERDR_EMBED_COLS`/`HERDR_EMBED_ROWS` env vars (embed patch 0006's
+//!   geometry seam) and the client's 100ms resize poll re-reads them and
+//!   re-renders. No SIGWINCH is raised and this crate installs no handler
+//!   for it.
 //! * **env** — `HERDR_CLIENT_SOCKET_PATH` is process-global; herdr resolves
 //!   it once at the top of `run_client`. Starts serialize through a global
 //!   gate: the embed thread re-asserts its socket path (and clears
@@ -53,7 +57,7 @@
 //!   then been consumed).
 mod abi;
 mod instance;
-mod pty;
+mod stdio;
 
 pub use abi::*;
 
@@ -67,10 +71,10 @@ pub struct herdr_embed {
 }
 
 /// Start configuration. `socket_path` is required NUL-terminated UTF-8;
-/// `cols`/`rows` size the initial pty window (each 1..=65535).
-/// `detach_input` is the raw key sequence that detaches the client (sent by
-/// `herdr_embed_stop` for a graceful quit); null selects herdr's stock
-/// default, ctrl+b followed by q.
+/// `cols`/`rows` seed the initial window grid published through the size
+/// env (each 1..=65535). `detach_input` is the raw key sequence that
+/// detaches the client (sent by `herdr_embed_stop` for a graceful quit);
+/// null selects herdr's stock default, ctrl+b followed by q.
 #[repr(C)]
 pub struct herdr_embed_config {
     pub socket_path: *const c_char,

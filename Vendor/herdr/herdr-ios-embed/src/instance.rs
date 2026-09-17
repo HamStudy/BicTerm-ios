@@ -1,4 +1,4 @@
-//! Embed instance machinery: the client thread, the pty master surface, and
+//! Embed instance machinery: the client thread, the host socket surface, and
 //! the stop/join lifecycle behind the C API.
 use std::ffi::CString;
 use std::io;
@@ -9,13 +9,13 @@ use std::sync::{mpsc, Arc, Condvar, Mutex};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-use crate::pty::{self, PtyPair};
+use crate::stdio::{self, IoPair};
 use crate::{FfiError, HERDR_EMBED_CODE_IO, HERDR_EMBED_CODE_NOT_RUNNING};
 
-/// How long `stop` waits for the client thread to unwind after the pty master
-/// is closed (the client's event loop sees EOF and exits on its own). Well
-/// under the 30s test-sleep ceiling; a timeout leaves the instance joinable —
-/// calling `stop` again retries.
+/// How long `stop` waits for the client thread to unwind after the host
+/// socket is closed (the client's event loop sees EOF and exits on its
+/// own). Well under the 30s test-sleep ceiling; a timeout leaves the
+/// instance joinable — calling `stop` again retries.
 const STOP_JOIN_TIMEOUT: Duration = Duration::from_secs(15);
 
 /// How long `start` waits for the embed thread to reach `run_client` before
@@ -36,7 +36,7 @@ extern "C" fn termination_requested_handler(_signal: libc::c_int) {
 }
 
 /// How long stop() gives the client's ctrlc handler (SIGTERM → should_quit →
-/// clean unwind) before falling back to closing the pty master.
+/// clean unwind) before falling back to closing the host socket.
 const TERM_GRACE: Duration = Duration::from_secs(3);
 
 /// The embed thread's boot progress; `start` waits for `InRunClient`.
@@ -48,13 +48,17 @@ struct Inner {
     socket_path: PathBuf,
     socket_path_c: CString,
     detach_input: Vec<u8>,
-    master: AtomicI32,
+    host: AtomicI32,
     wake: [AtomicI32; 2],
     stopping: AtomicBool,
     client_exited: AtomicBool,
     saved_stdio: Mutex<Option<[RawFd; 3]>>,
     boot: Mutex<BootState>,
     boot_cv: Condvar,
+    /// Initial grid for the client-thread env re-assert (crate docs,
+    /// "resize"); the host's `set_winsize` calls supersede it.
+    initial_cols: u16,
+    initial_rows: u16,
     pub(crate) last_detail: Mutex<CString>,
     exit_detail: Mutex<Option<String>>,
 }
@@ -122,15 +126,9 @@ pub(crate) struct StartConfig {
 }
 
 pub(crate) fn start(config: StartConfig) -> io::Result<EmbedInstance> {
-    let pair = PtyPair::open(config.cols, config.rows)?;
-    let wake = pty::wake_pipe()?;
-    let (master, slave) = pair.into_parts();
-
-    // SIGWINCH steering (crate docs): the calling (host) thread — and every
-    // thread created after — stops receiving SIGWINCH, so a process-directed
-    // kill from set_winsize prefers the embed thread, which unblocks the
-    // signal in itself. Failure here only makes delivery less targeted.
-    let _ = pty::block_signal(libc::SIGWINCH);
+    let pair = IoPair::open()?;
+    let wake = stdio::wake_pipe()?;
+    let (host, client_fd) = pair.into_parts();
 
     // SIGTERM safety net (crate docs, "stop"): until the client installs its
     // own ctrlc handler, a stop()-raised SIGTERM must not take the default
@@ -149,7 +147,7 @@ pub(crate) fn start(config: StartConfig) -> io::Result<EmbedInstance> {
         socket_path: PathBuf::from(&config.socket_path),
         socket_path_c,
         detach_input,
-        master: AtomicI32::new(master),
+        host: AtomicI32::new(host),
         wake: [AtomicI32::new(wake[0]), AtomicI32::new(wake[1])],
         stopping: AtomicBool::new(false),
         client_exited: AtomicBool::new(false),
@@ -158,6 +156,8 @@ pub(crate) fn start(config: StartConfig) -> io::Result<EmbedInstance> {
             reached_run_client: false,
         }),
         boot_cv: Condvar::new(),
+        initial_cols: config.cols,
+        initial_rows: config.rows,
         last_detail: Mutex::new(CString::new("").expect("static")),
         exit_detail: Mutex::new(None),
     });
@@ -167,13 +167,13 @@ pub(crate) fn start(config: StartConfig) -> io::Result<EmbedInstance> {
     let thread = std::thread::Builder::new()
         .name("herdr-embed-client".to_owned())
         .spawn(move || {
-            client_thread(thread_inner, slave);
+            client_thread(thread_inner, client_fd);
             let _ = done_tx.send(());
         })
         .map_err(|error| {
-            // PtyPair was consumed by into_parts; close both fds on the
+            // IoPair was consumed by into_parts; close both fds on the
             // error path so a failed spawn leaks nothing.
-            for fd in [master, slave] {
+            for fd in [host, client_fd] {
                 // SAFETY: close(2) of fds we own on the error path.
                 if fd >= 0 {
                     let _ = unsafe { libc::close(fd) };
@@ -194,6 +194,7 @@ pub(crate) fn start(config: StartConfig) -> io::Result<EmbedInstance> {
         // re-assert below.
         let gate = ENV_GATE.lock().unwrap_or_else(|e| e.into_inner());
         set_socket_env(&config.socket_path);
+        stdio::set_size_env(config.cols, config.rows);
         drop(gate);
         let mut boot = inner
             .boot
@@ -246,7 +247,7 @@ fn install_termination_handler() {
 
 // SAFETY: dup2(2) of a freshly opened /dev/null onto the standard streams;
 // the client's remaining writes/reads land on /dev/null instead of a closed
-// pty. The saved originals are restored later by restore_stdio.
+// socket. The saved originals are restored later by restore_stdio.
 fn neuter_stdio() {
     // SAFETY: open(2) of a fixed kernel device path.
     let null_fd = unsafe { libc::open(b"/dev/null\0".as_ptr().cast(), libc::O_RDWR) };
@@ -255,7 +256,7 @@ fn neuter_stdio() {
     }
     for fd in [0, 1, 2] {
         // SAFETY: dup2(2) between two fds we own; failure leaves the
-        // redirected pty in place, which restore_stdio still reverses.
+        // redirected socket in place, which restore_stdio still reverses.
         if unsafe { libc::dup2(null_fd, fd) } < 0 {
             break;
         }
@@ -265,25 +266,23 @@ fn neuter_stdio() {
     let _ = unsafe { libc::close(null_fd) };
 }
 
-fn client_thread(inner: Arc<Inner>, slave: RawFd) {
-    // Preferred SIGWINCH recipient (crate docs): this thread unblocks the
-    // signal it inherited blocked from the spawning host thread.
-    pty::unblock_signal(libc::SIGWINCH);
-
+fn client_thread(inner: Arc<Inner>, client_fd: RawFd) {
     {
         let gate = ENV_GATE.lock().unwrap_or_else(|e| e.into_inner());
         let _gate = gate;
-        // Re-assert this instance's path as the thread's first action: start
-        // set it just before spawn, but the thread re-writing it under the
-        // gate shrinks the cross-instance race to the window between this
-        // unlock and run_client's own env read (documented residual window).
+        // Re-assert this instance's path and grid as the thread's first
+        // action: start set them just before spawn, but the thread re-writing
+        // them under the gate shrinks the cross-instance race to the window
+        // between this unlock and run_client's own env read (documented
+        // residual window).
         set_socket_env(&inner.socket_path.to_string_lossy());
+        stdio::set_size_env(inner.initial_cols, inner.initial_rows);
     }
 
-    let saved = pty::save_stdio();
-    let redirect = pty::redirect_stdio_onto(slave);
+    let saved = stdio::save_stdio();
+    let redirect = stdio::redirect_stdio_onto(client_fd);
     // Diagnostic escape hatch (crate docs): route the client's stderr to a
-    // file instead of the pty so final error messages survive teardown —
+    // file instead of the socket so final error messages survive teardown —
     // on iOS the process stderr is /dev/null anyway.
     if let Ok(path) = std::env::var("HERDR_EMBED_STDERR_LOG") {
         if let Ok(cpath) = std::ffi::CString::new(path) {
@@ -298,7 +297,7 @@ fn client_thread(inner: Arc<Inner>, slave: RawFd) {
             };
             if log_fd >= 0 {
                 // SAFETY: dup2(2) of the log fd onto fd 2; the original
-                // (pty) stderr dup is closed after.
+                // (socket) stderr dup is closed after.
                 if unsafe { libc::dup2(log_fd, 2) } >= 0 {
                     let _ = unsafe { libc::close(log_fd) };
                 } else {
@@ -307,14 +306,14 @@ fn client_thread(inner: Arc<Inner>, slave: RawFd) {
             }
         }
     }
-    // SAFETY: the slave fd is consumed by the dup2s above (or leaked on
+    // SAFETY: the client fd is consumed by the dup2s above (or leaked on
     // failure only until process exit — a failed dup2 leaves it open but the
-    // master close in stop still tears the pty down).
-    let _ = unsafe { libc::close(slave) };
+    // host close in stop still tears the socket down).
+    let _ = unsafe { libc::close(client_fd) };
     *inner.saved_stdio.lock().unwrap_or_else(|e| e.into_inner()) = Some(saved);
     if let Err(error) = redirect {
         inner.record_exit(&Err(io::Error::other(format!(
-            "stdio redirect onto the pty failed: {error}"
+            "stdio redirect onto the client socket failed: {error}"
         ))));
         return;
     }
@@ -329,19 +328,19 @@ fn client_thread(inner: Arc<Inner>, slave: RawFd) {
     inner.record_exit(&outcome);
 
     // Self-exit cleanup (detach key or loop error): an embedder that never
-    // calls herdr_embed_stop would otherwise leak the master and leave the
-    // process stdio dup2'd onto a dead pty — the NEXT instance's dup2 over
-    // fds 0/1/2 then deadlocks on the fd lock an abandoned slave reader
-    // holds (the Darwin lesson, self-exit edition). Master close first
-    // (wakes blocked slave readers with EOF/EIO), then neuter; stop() keeps
-    // working afterwards — its master swap sees -1 and skips, the join is
+    // calls herdr_embed_stop would otherwise leak the host socket and leave
+    // the process stdio dup2'd onto a dead socket — the NEXT instance's dup2
+    // over fds 0/1/2 then deadlocks on the fd lock an abandoned client-end
+    // reader holds (the Darwin lesson, self-exit edition). Host close first
+    // (wakes blocked client-end readers with EOF), then neuter; stop() keeps
+    // working afterwards — its host swap sees -1 and skips, the join is
     // instant, and it still owns the saved-stdio restore and wake-pipe
-    // close. Concurrent stop() is safe: the master close races through the
+    // close. Concurrent stop() is safe: the host close races through the
     // same atomic, so exactly one side closes it.
-    let master = inner.master.swap(-1, Ordering::AcqRel);
-    if master >= 0 {
-        // SAFETY: close(2) of the master fd this instance owns exactly once.
-        let _ = unsafe { libc::close(master) };
+    let host = inner.host.swap(-1, Ordering::AcqRel);
+    if host >= 0 {
+        // SAFETY: close(2) of the host fd this instance owns exactly once.
+        let _ = unsafe { libc::close(host) };
         neuter_stdio();
     }
 }
@@ -357,19 +356,19 @@ impl EmbedInstance {
         self.inner.client_exited.load(Ordering::Acquire)
     }
 
-    /// Best-effort single write of the detach key sequence into the master.
-    /// One syscall on purpose: a client that stopped reading must not block
-    /// stop() on a full pty buffer.
+    /// Best-effort single write of the detach key sequence into the host
+    /// socket. One syscall on purpose: a client that stopped reading must not
+    /// block stop() on a full socket buffer.
     fn send_detach_input(&self) {
-        let master = self.inner.master.load(Ordering::Acquire);
-        if master < 0 || self.inner.detach_input.is_empty() {
+        let host = self.inner.host.load(Ordering::Acquire);
+        if host < 0 || self.inner.detach_input.is_empty() {
             return;
         }
-        // SAFETY: write(2) of the instance-owned detach bytes into the pty
-        // master; partial writes are acceptable (best effort).
+        // SAFETY: write(2) of the instance-owned detach bytes into the host
+        // socket; partial writes are acceptable (best effort).
         unsafe {
             libc::write(
-                master,
+                host,
                 self.inner.detach_input.as_ptr().cast(),
                 self.inner.detach_input.len(),
             )
@@ -399,7 +398,7 @@ impl EmbedInstance {
             && !self.inner.client_exited.load(Ordering::Acquire)
     }
 
-    /// Blocking, cancellable read from the pty master. Returns `Ok(0)` when
+    /// Blocking, cancellable read from the host socket. Returns `Ok(0)` when
     /// the instance stopped or the client exited with nothing more to drain;
     /// `Ok(n)` with client bytes otherwise.
     pub(crate) fn read_output(&self, buf: &mut [u8]) -> Result<usize, FfiError> {
@@ -413,17 +412,17 @@ impl EmbedInstance {
             if self.inner.stopping.load(Ordering::Acquire) {
                 return Ok(0);
             }
-            let master = self.inner.master.load(Ordering::Acquire);
+            let host = self.inner.host.load(Ordering::Acquire);
             let wake_rx = self.inner.wake[0].load(Ordering::Acquire);
-            // After the client exits the slave stays open through the
-            // redirected stdio fds, so the master never EOFs on its own; a
-            // bounded poll keeps draining until stop closes it. The exit
+            // After the client exits the client end stays open through the
+            // redirected stdio fds, so the host socket never EOFs on its own;
+            // a bounded poll keeps draining until stop closes it. The exit
             // wake is one-shot and may already be consumed.
             let exited = self.inner.client_exited.load(Ordering::Acquire);
             let timeout_ms: libc::c_int = if exited { 100 } else { -1 };
             let mut fds = [
                 libc::pollfd {
-                    fd: master,
+                    fd: host,
                     events: libc::POLLIN,
                     revents: 0,
                 },
@@ -450,10 +449,10 @@ impl EmbedInstance {
                     return Ok(0);
                 }
             }
-            if master >= 0 && fds[0].revents & (libc::POLLIN | libc::POLLHUP) != 0 {
+            if host >= 0 && fds[0].revents & (libc::POLLIN | libc::POLLHUP) != 0 {
                 // SAFETY: read(2) into the caller-provided buffer of exactly
                 // buf.len() bytes; the C ABI documents the borrow for the call.
-                let n = unsafe { libc::read(master, buf.as_mut_ptr().cast(), buf.len()) };
+                let n = unsafe { libc::read(host, buf.as_mut_ptr().cast(), buf.len()) };
                 if n > 0 {
                     return Ok(n as usize);
                 }
@@ -470,15 +469,15 @@ impl EmbedInstance {
                         return Err(FfiError::new(HERDR_EMBED_CODE_IO, format!("read: {error}")));
                     }
                 }
-            } else if master >= 0 && fds[0].revents & libc::POLLNVAL != 0 {
+            } else if host >= 0 && fds[0].revents & libc::POLLNVAL != 0 {
                 // Closed underneath us by a concurrent stop.
                 return Ok(0);
             }
             if self.inner.client_exited.load(Ordering::Acquire) {
-                // Exit wake: one last poll for buffered master bytes, then EOF.
-                if master >= 0 {
+                // Exit wake: one last poll for buffered host bytes, then EOF.
+                if host >= 0 {
                     let mut probe = [libc::pollfd {
-                        fd: master,
+                        fd: host,
                         events: libc::POLLIN,
                         revents: 0,
                     }];
@@ -487,7 +486,7 @@ impl EmbedInstance {
                         && probe[0].revents & (libc::POLLIN | libc::POLLHUP) != 0
                     {
                         // SAFETY: read(2) as above, under a fresh readable poll.
-                        let n = unsafe { libc::read(master, buf.as_mut_ptr().cast(), buf.len()) };
+                        let n = unsafe { libc::read(host, buf.as_mut_ptr().cast(), buf.len()) };
                         if n > 0 {
                             return Ok(n as usize);
                         }
@@ -502,8 +501,8 @@ impl EmbedInstance {
         if bytes.is_empty() {
             return Ok(());
         }
-        let master = self.inner.master.load(Ordering::Acquire);
-        if master < 0
+        let host = self.inner.host.load(Ordering::Acquire);
+        if host < 0
             || self.inner.stopping.load(Ordering::Acquire)
             || self.inner.client_exited.load(Ordering::Acquire)
         {
@@ -517,7 +516,7 @@ impl EmbedInstance {
             // SAFETY: write(2) from the caller-provided slice of exactly
             // bytes.len() bytes, documented as borrowed for the call.
             let n = unsafe {
-                libc::write(master, bytes[written..].as_ptr().cast(), bytes.len() - written)
+                libc::write(host, bytes[written..].as_ptr().cast(), bytes.len() - written)
             };
             if n >= 0 {
                 written += n as usize;
@@ -526,12 +525,13 @@ impl EmbedInstance {
             let error = io::Error::last_os_error();
             match error.kind() {
                 io::ErrorKind::Interrupted => continue,
-                // A full pty buffer means the client stopped draining; treat
-                // like a dead client rather than blocking the caller forever.
+                // The host end is non-blocking: a full socket buffer means
+                // the client stopped draining; treat like a dead client
+                // rather than blocking the caller forever.
                 io::ErrorKind::WouldBlock => {
                     return Err(FfiError::new(
                         HERDR_EMBED_CODE_IO,
-                        "pty input buffer is full (client stopped reading)",
+                        "embed input buffer is full (client stopped reading)",
                     ))
                 }
                 _ => {
@@ -546,25 +546,19 @@ impl EmbedInstance {
         Ok(())
     }
 
-    /// Applies the new size to the pty and raises SIGWINCH process-wide
-    /// (crate docs: the embedded client's crossterm owns the handler).
+    /// Publishes the new grid through the size env (embed patch 0006's
+    /// geometry seam); the client's 100ms resize poll observes the change
+    /// and re-renders. No `ioctl(TIOCSWINSZ)` (ENOTSUP on sockets) and no
+    /// SIGWINCH — there is no pty to size and no signal to steer.
     pub(crate) fn set_winsize(&self, cols: u16, rows: u16) -> Result<(), FfiError> {
-        let master = self.inner.master.load(Ordering::Acquire);
-        if master < 0 {
+        let host = self.inner.host.load(Ordering::Acquire);
+        if host < 0 {
             return Err(FfiError::new(
                 HERDR_EMBED_CODE_NOT_RUNNING,
                 "the embedded client is not running",
             ));
         }
-        pty::set_fd_winsize(master, cols, rows)
-            .map_err(|error| FfiError::new(HERDR_EMBED_CODE_IO, format!("TIOCSWINSZ: {error}")))?;
-        // SAFETY: kill(2) directed at our own process; the signal has a
-        // process-wide handler installed by the embedded client (or none yet,
-        // in which case the default action is ignore).
-        if unsafe { libc::kill(libc::getpid(), libc::SIGWINCH) } != 0 {
-            let error = io::Error::last_os_error();
-            return Err(FfiError::new(HERDR_EMBED_CODE_IO, format!("kill SIGWINCH: {error}")));
-        }
+        stdio::set_size_env(cols, rows);
         Ok(())
     }
 
@@ -573,8 +567,8 @@ impl EmbedInstance {
     /// raise SIGTERM (the client's ctrlc handler sets should_quit — note the
     /// ctrlc Apple backend only honors the FIRST client's handler in a
     /// process, so the detach input is the primary path), then close the
-    /// master, join the client thread, restore stdio, and close the wake
-    /// pipe. On timeout the instance survives and `stop` may be retried.
+    /// host socket, join the client thread, restore stdio, and close the
+    /// wake pipe. On timeout the instance survives and `stop` may be retried.
     pub(crate) fn stop(&self) -> Result<(), FfiError> {
         if self.finished.load(Ordering::Acquire) {
             return Ok(());
@@ -592,15 +586,15 @@ impl EmbedInstance {
                 self.wait_for_exit(TERM_GRACE);
             }
         }
-        let master = self.inner.master.swap(-1, Ordering::AcqRel);
-        if master >= 0 {
-            // SAFETY: close(2) of the master fd this instance owns exactly once.
-            let _ = unsafe { libc::close(master) };
-            // Neuter the client's stdio AFTER the master close: the close
-            // wakes any thread blocked reading the pty (a dup2 over an fd
+        let host = self.inner.host.swap(-1, Ordering::AcqRel);
+        if host >= 0 {
+            // SAFETY: close(2) of the host fd this instance owns exactly once.
+            let _ = unsafe { libc::close(host) };
+            // Neuter the client's stdio AFTER the host close: the close
+            // wakes any thread blocked reading the socket (a dup2 over an fd
             // another thread is blocked reading deadlocks on Darwin), and
             // the client's later writes must land on /dev/null rather than
-            // fail with EIO on the closed pty (an EIO write maps to a
+            // fail with EIO on the closed socket (an EIO write maps to a
             // client error path; since embed patch 0005 that path returns
             // an error instead of exiting the process, but a clean stop
             // still owes the client a quiescent stdio).
@@ -648,7 +642,7 @@ impl EmbedInstance {
             .unwrap_or_else(|e| e.into_inner())
             .take()
         {
-            pty::restore_stdio(saved);
+            stdio::restore_stdio(saved);
         }
         for slot in &self.inner.wake {
             let fd = slot.swap(-1, Ordering::AcqRel);

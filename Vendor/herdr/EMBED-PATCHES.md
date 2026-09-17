@@ -19,15 +19,18 @@ upstreamable; patch 4 is BicTerm-specific and feature-gated.
 | `0003-lib-split-the-crate-into-a-library-plus-a-thin-herdr.patch` | `src/lib.rs` (new, verbatim move of the former `src/main.rs` plus 12 lines), `src/main.rs` (reduced to a 5-line shim) | Crate root moves to `src/lib.rs`; exposes `pub fn run()` (the old `fn main` body) and `pub use client::run_client` so embedding frontends link the client instead of spawning a process | yes |
 | `0004-transport-add-bicterm-transport-feature-for-host-inj.patch` | `Cargo.toml` (+8), `src/remote/saved.rs` (+~60) | New `bicterm-transport` cargo feature: `connect_saved_ssh` drops the `ssh` subprocess bridge (`RemoteSsh` probes + `SshStdioBridge`) and connects to a host-provided per-machine socket at `{HERDR_EMBED_TRANSPORT_DIR}/{profile id}.sock`; handshake/supervision unchanged. Default builds keep the stock body byte for byte | no (BicTerm embed) |
 | `0005-embed-never-exit-the-host-process-from-run_cl.patch` | `Cargo.toml` (+5), `src/client/mod.rs` (+9) | New `bicterm-embed` cargo feature: `run_client_with_mode`'s non-detached loop-failure path returns `io::Error` from `run_client` instead of `std::process::exit(1)` — an embedding host owns the process lifetime and records the exit detail. Stock CLI builds keep the exit contract byte for byte. `herdr-ios-embed` enables the feature on its dependency unconditionally | yes (upstream may want a no-exit embedding mode) |
+| `0006-embed-socketpair-stdio-tty-and-geometry-seams.patch` | `src/client/terminal_setup.rs` (+29), `src/platform/unix_common.rs` (+19), `src/client/terminal_geometry.rs` (+12) | Extends `bicterm-embed`: when stdin is not a tty, `setup_terminal` enters the alternate screen without `ratatui::init` (crossterm raw mode would tcgetattr `/dev/tty`, absent in the iOS app sandbox) and the restore path leaves the screen without `disable_raw_mode`; `read_terminal_grid_size` prefers the host-published `HERDR_EMBED_COLS`/`HERDR_EMBED_ROWS` grid (TIOCSWINSZ/TIOCGWINSZ fail ENOTSUP on sockets); `ioctl_terminal_geometry` returns None so crossterm cannot reach through `/dev/tty` on a host. Stock builds keep every path byte for byte | no (BicTerm embed; the socketpair redesign is forced by the device sandbox) |
 
 ## Feature-gating contract
 
 Without `--features bicterm-transport` the patched tree behaves exactly like
 stock herdr: the default `connect_saved_ssh` body is unchanged, no new
 dependencies, no behavior change. The feature is never enabled by BicTerm's
-stock builds. Same shape for `bicterm-embed` (patch 0005): without it
-`run_client` keeps the upstream `std::process::exit(1)` contract; only the
-`herdr-ios-embed` staticlib selects the error-return path.
+stock builds. Same shape for `bicterm-embed` (patches 0005 and 0006):
+without it `run_client` keeps the upstream `std::process::exit(1)` contract
+and every terminal-setup/geometry path is byte-for-byte upstream; only the
+`herdr-ios-embed` staticlib selects the error-return and socketpair-stdio
+seams.
 
 ## libghostty-vt link stub
 
@@ -59,7 +62,7 @@ Evidence: `.sisyphus/evidence/herdr-embed-t1.log`.
 `Vendor/herdr/herdr-ios-embed/` is a standalone workspace (excluded from the
 Vendor/herdr workspace) that path-depends on the patched working copy above
 and exposes the in-process embed C ABI (`herdr_embed_*`: start/stop,
-write(input), cancellable blocking read(output), winsize+SIGWINCH) with the
+write(input), cancellable blocking read(output), env-published winsize) with the
 cbindgen header at `herdr-ios-embed/include/HerdrEmbed.h`. Build proof:
 `scripts/herdr-embed-prepare.sh` now (a) defaults
 `HERDR_EMBED_GHOSTTY_VT_A` to the REAL committed aarch64-ios archive from
@@ -245,3 +248,58 @@ same rationale as `Vendor/herdr`'s `ios-release`), and
 `.build-artifacts/herdr/embed-dsym/{device,simulator}/HerdrEmbed.<slice>.dSYM`
 via the same throwaway stub-dylib + `dsymutil` pattern as
 `build-herdr-core.sh`. Evidence: `.sisyphus/evidence/herdr-embed-t8.log`.
+
+## Socketpair stdio redesign (2026-09-17)
+
+The embed client's stdio transport is an AF_UNIX stream socketpair, not a
+pty pair. Why (device-proven, `.sisyphus/evidence/device-probe.log`,
+`Docs/DEVICE-SANDBOX.md`): the iOS app sandbox denies `openpty` and
+`open("/dev/ptmx")` with EPERM on physical devices — the embed start's
+first op died there (`herdr embed error 4: start: Operation not
+permitted`), while `socketpair`, `fcntl(F_SETFL, O_NONBLOCK)`, and `dup2`
+are all legal on the same device. The simulator does not enforce the app
+sandbox profile, which is why every earlier pty-based run passed there.
+
+Two-sided change:
+
+* **`herdr-ios-embed` (this repo, direct edits — not patches)**: `src/pty.rs`
+  is deleted (the pty path is gone, not gated) and `src/stdio.rs` replaces it
+  — `IoPair::open` is `socketpair(AF_UNIX, SOCK_STREAM)` with the host end
+  non-blocking (a client that stops draining surfaces as `WouldBlock`, a
+  typed IO error, instead of blocking the host write path) and the client
+  end blocking. `instance.rs` keeps the fd-hygiene/Drop semantics, the
+  start/boot-gate shape, and the stop ordering (host close before the
+  /dev/null neuter — the Darwin dup2-over-a-blocked-reader deadlock lesson).
+  Resize is explicit state: `set_winsize` publishes
+  `HERDR_EMBED_COLS`/`HERDR_EMBED_ROWS` (start seeds them from the config
+  grid; the client thread re-asserts under the env gate) and NO
+  `ioctl(TIOCSWINSZ)` (ENOTSUP on sockets, both platforms) and NO SIGWINCH
+  self-signal (no pty to size). The C ABI is unchanged.
+* **Patch 0006 (this series)**: the client's tty assumptions are bypassed
+  behind `bicterm-embed` when stdin is not a tty — `ratatui::init` /
+  `try_restore` (raw mode would tcgetattr `/dev/tty`, absent in the app
+  sandbox; on a host it would raw-mode the WRONG terminal), the grid from
+  the env seam instead of TIOCGWINSZ, and no exact-geometry ioctl
+  (`crossterm::terminal::window_size` opens `/dev/tty` first — on a host it
+  would report the controlling terminal's geometry over the embed grid).
+  The client's Unix input path needed no patch: it already reads raw bytes
+  from fd 0 (`unix_stdin_reader_loop`), not crossterm's event source.
+
+Host-test fallout (both fixed in the embed crate's tests): the lifecycle
+SIGWINCH-delivery test became the env-grid seam test (a silent UDS listener
+holds the client in its 5s local-handshake window so `set_winsize` runs
+against a live instance — after self-exit the host socket is closed and
+`set_winsize` correctly refuses NOT_RUNNING), and the headless detach test
+retries the prefix+q pair: the socketpair surfaces the first frame fast
+enough that the test's keystrokes can land inside the client's startup
+window, where the first snapshot commit clears the prefix state (the pty's
+line-discipline latency used to hide this race). The stdio unit tests
+serialize on a module mutex and the redirect round-trip drains the host end
+first — the test harness's own fd-1 output lands in the socketpair during
+the redirect window.
+
+Verification: `cargo test` in `herdr-ios-embed` (unit + lifecycle +
+headless frame/detach/resize against the pinned server fixture) green on
+the host; `scripts/herdr-embed-core.sh` rebuilds both slices; device proof
+`BicTermTests/Device/HerdrEmbedDeviceBootTests.swift` →
+`.sisyphus/evidence/embed-device-boot.log`.

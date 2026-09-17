@@ -1,0 +1,124 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: BicTerm <embed@bicterm.invalid>
+Date: Thu, 17 Sep 2026 13:45:00 -0600
+Subject: [PATCH] embed: socketpair-stdio tty and geometry seams
+
+behind the bicterm-embed feature, the client tolerates non-tty
+socketpair stdio (the iOS app sandbox denies openpty with EPERM on
+physical devices, so the embed host runs the client on an AF_UNIX
+socketpair dup2'd onto fds 0/1/2): ratatui::init/try_restore are
+bypassed when stdin is not a tty (crossterm raw mode would tcgetattr
+/dev/tty, absent in the app sandbox), the terminal grid is read from
+HERDR_EMBED_COLS/HERDR_EMBED_ROWS instead of TIOCGWINSZ (ENOTSUP on
+sockets), and the exact-geometry ioctl is skipped so crossterm cannot
+reach through /dev/tty on a host. Stock builds keep every path byte for
+byte.
+---
+ src/client/terminal_geometry.rs | 12 ++++++++++++
+ src/client/terminal_setup.rs    | 29 +++++++++++++++++++++++++++++
+ src/platform/unix_common.rs     | 19 +++++++++++++++++++
+ 3 files changed, 60 insertions(+)
+
+diff --git a/src/client/terminal_geometry.rs b/src/client/terminal_geometry.rs
+index aaf216d..c137c26 100644
+--- a/src/client/terminal_geometry.rs
++++ b/src/client/terminal_geometry.rs
+@@ -31,6 +31,18 @@ pub(super) fn ioctl_cell_size(
+ }
+ 
+ fn ioctl_terminal_geometry() -> Option<(u16, u16, u32, u32)> {
++    // BICTERM-PATCH (embed): on socketpair stdio crossterm's window_size
++    // reaches through /dev/tty — absent in the app sandbox on device, and
++    // on a host it would report the WRONG terminal (the process's
++    // controlling terminal, not the embed socket). Without a tty there is
++    // no exact pixel geometry; the env-published grid (embed patch 0006's
++    // seam in platform::terminal_grid_size) is authoritative and pixel
++    // input falls back to the reported cell size. Stock builds keep the
++    // crossterm call byte for byte.
++    #[cfg(all(unix, feature = "bicterm-embed"))]
++    if unsafe { libc::isatty(libc::STDIN_FILENO) } != 1 {
++        return None;
++    }
+     let size = crossterm::terminal::window_size().ok()?;
+     let (cell_width_px, cell_height_px) = ioctl_cell_size(
+         size.columns,
+diff --git a/src/client/terminal_setup.rs b/src/client/terminal_setup.rs
+index 9c03534..21e373c 100644
+--- a/src/client/terminal_setup.rs
++++ b/src/client/terminal_setup.rs
+@@ -40,6 +40,22 @@ pub(super) fn setup_terminal_with_capabilities(
+     enable_client_protocols: bool,
+     mouse_capture: bool,
+ ) -> io::Result<TerminalGuard> {
++    // BICTERM-PATCH (embed): the iOS embed host runs this client on
++    // socketpair stdio, which is not a tty — crossterm's raw mode would
++    // tcgetattr /dev/tty (absent in the app sandbox) and ratatui::init
++    // would panic. The embed host owns the byte stream end to end, so raw
++    // mode is neither possible nor needed; the alternate screen and every
++    // sequence below are plain output writes. Stock builds keep
++    // ratatui::init() byte for byte.
++    #[cfg(all(unix, feature = "bicterm-embed"))]
++    {
++        if unsafe { libc::isatty(libc::STDIN_FILENO) } != 1 {
++            execute!(io::stdout(), crossterm::terminal::EnterAlternateScreen)?;
++        } else {
++            ratatui::init();
++        }
++    }
++    #[cfg(not(all(unix, feature = "bicterm-embed")))]
+     ratatui::init();
+     crate::terminal_modes::clear_host_mouse_reporting(&mut io::stdout())?;
+     let host_color_scheme_reports =
+@@ -341,6 +357,19 @@ fn restore_terminal_state(
+         restore_windows_input_mode_value(mode);
+     }
+ 
++    // BICTERM-PATCH (embed): mirror of the setup bypass above —
++    // ratatui::try_restore disables raw mode FIRST, and on socketpair
++    // stdio that would tcsetattr /dev/tty (absent in the app sandbox) and
++    // skip the alternate-screen leave entirely. The embed host never
++    // enabled raw mode, so only the leave is owed. Stock builds keep
++    // ratatui::try_restore() byte for byte.
++    #[cfg(all(unix, feature = "bicterm-embed"))]
++    let restore_result = if unsafe { libc::isatty(libc::STDIN_FILENO) } != 1 {
++        execute!(io::stdout(), crossterm::terminal::LeaveAlternateScreen)
++    } else {
++        ratatui::try_restore()
++    };
++    #[cfg(not(all(unix, feature = "bicterm-embed")))]
+     let restore_result = ratatui::try_restore();
+     let postlude_result =
+         write_terminal_restore_postlude(&mut io::stdout(), reset_host_color_scheme_reports);
+diff --git a/src/platform/unix_common.rs b/src/platform/unix_common.rs
+index 104f6b6..3d2cb38 100644
+--- a/src/platform/unix_common.rs
++++ b/src/platform/unix_common.rs
+@@ -28,9 +28,28 @@ pub(crate) fn wait_client_stream_readable(stream: &crate::ipc::LocalStream) -> s
+ }
+ 
+ pub(super) fn read_terminal_grid_size() -> std::io::Result<(u16, u16)> {
++    // BICTERM-PATCH (embed): the iOS embed host runs the client on
++    // socketpair stdio, where TIOCGWINSZ fails (ENOTSUP on sockets) and
++    // crossterm falls back to /dev/tty — absent in the app sandbox. The
++    // embed host publishes the authoritative grid through
++    // HERDR_EMBED_COLS/HERDR_EMBED_ROWS (set at start, updated on resize;
++    // the client's 100ms resize poll picks changes up without SIGWINCH).
++    // Unset or invalid vars keep the stock ioctl path byte for byte.
++    #[cfg(feature = "bicterm-embed")]
++    if let Some(size) = embed_reported_grid_size() {
++        return Ok(size);
++    }
+     crossterm::terminal::window_size().map(|size| (size.columns, size.rows))
+ }
+ 
++/// Host-published grid for embed builds; see `read_terminal_grid_size`.
++#[cfg(feature = "bicterm-embed")]
++fn embed_reported_grid_size() -> Option<(u16, u16)> {
++    let cols: u16 = std::env::var("HERDR_EMBED_COLS").ok()?.parse().ok()?;
++    let rows: u16 = std::env::var("HERDR_EMBED_ROWS").ok()?.parse().ok()?;
++    (cols > 0 && rows > 0).then_some((cols, rows))
++}
++
+ fn set_sigpipe_disposition(handler: libc::sighandler_t) {
+     let mut action: libc::sigaction = unsafe { std::mem::zeroed() };
+     action.sa_sigaction = handler;

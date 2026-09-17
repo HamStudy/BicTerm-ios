@@ -1,5 +1,5 @@
-//! Headless harness: the REAL herdr client renders its TUI into the host pty
-//! through the embed FFI (plan task 3 acceptance line).
+//! Headless harness: the REAL herdr client renders its TUI into the host
+//! socket through the embed FFI (plan task 3 acceptance line).
 //!
 //! One test per file on purpose: each integration test file is its own
 //! process, and the embedded client's SIGTERM quit path (its ctrlc handler)
@@ -38,7 +38,7 @@ fn printable_count(bytes: &[u8]) -> usize {
 }
 
 #[test]
-fn embedded_client_renders_its_tui_into_the_host_pty() {
+fn embedded_client_renders_its_tui_into_the_host_socket() {
     let _serial = serial();
     common::install_panic_log();
     let server = common::ServerFixture::start("frame");
@@ -66,7 +66,7 @@ fn embedded_client_renders_its_tui_into_the_host_pty() {
     let _ = std::fs::write(dump_dir.join("client-output.bin"), &acc);
     assert!(
         ready,
-        "no recognizable TUI frame reached the pty master ({} bytes so far)",
+        "no recognizable TUI frame reached the host socket ({} bytes so far)",
         acc.len()
     );
     assert!(
@@ -83,10 +83,10 @@ fn embedded_client_renders_its_tui_into_the_host_pty() {
 
     let result = embed.stop();
     assert_eq!(result.code, HERDR_EMBED_CODE_OK, "{}", detail_text(result.detail));
-    // The shim's own hygiene: every pty fd must be gone. (The client itself
-    // may retain one process-global fd per cycle — its tokio runtime shuts
-    // down on a 100ms budget — so an exact whole-process count is not
+    // The shim's own hygiene: every socket fd must be gone. (The client
+    // itself may retain one process-global fd per cycle — its tokio runtime
+    // shuts down on a 100ms budget — so an exact whole-process count is not
     // assertable here; the shim-level lifecycle test covers exact counts.)
     let (_, ttys_after) = fd_state();
-    assert!(ttys_after.is_empty(), "pty fds leaked: {ttys_after:?}");
+    assert!(ttys_after.is_empty(), "tty fds leaked: {ttys_after:?}");
 }
