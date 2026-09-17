@@ -102,7 +102,7 @@ final class HerdrEmbedTransportEarlyFailureTests: XCTestCase {
         await assertEarlyFailure(
             coordinator: coordinator,
             carriers: carriers,
-            expectedPath: blocker.path,
+            expectedPath: scratch.appendingPathComponent(coordinator.transportDirectory).path,
             reasonContains: "creating the transport directory failed"
         )
         XCTAssertEqual(

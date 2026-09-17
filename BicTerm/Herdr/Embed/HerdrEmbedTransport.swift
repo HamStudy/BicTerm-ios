@@ -1,5 +1,6 @@
 import BicTermCore
 import Foundation
+import NIOSSH
 import Observation
 
 /// One machine in the embedded client's endpoint catalog (plan herdr-embed
@@ -55,8 +56,9 @@ enum HerdrEmbedClientCatalog {
     /// (both the Swift listener and the in-process Rust client share it).
     /// It lives under the container's `tmp/` — the data-container ROOT is
     /// not writable on device (EPERM; the simulator does not enforce
-    /// this) — and `tmp/herdr-embed-transport/<32-hex>.sock` stays ~62
-    /// bytes, well under sun_path.
+    /// this) — and each bring-up namespaces its sockets under
+    /// `tmp/herdr-embed-transport/<8-hex token>/<32-hex>.sock` (~72
+    /// bytes, still well under sun_path).
     static let transportDirectoryRelativePath = "tmp/herdr-embed-transport"
 
     /// Re-seeding semantics (T6): the file set is rewritten atomically per
@@ -197,6 +199,32 @@ final class HerdrEmbedTransportCoordinator {
 
     private var servers: [HerdrEmbedBridgeServer] = []
     private var carriers: [String: any SSHExecCapableConnection] = [:]
+    /// Per-bring-up namespace under the transport base directory: this
+    /// run's bridge sockets live at
+    /// `tmp/herdr-embed-transport/<token>/<profile id>.sock`. The token
+    /// makes every bring-up's paths UNIQUE, so a previous run's teardown —
+    /// whose bridge stops close listeners and unlink socket files while a
+    /// newer run is already sweeping, binding, and dialing — can never
+    /// collide with the newer run on the same machine paths (the device
+    /// bug: the reopened herd's machine dialed a socket the old run was
+    /// mid-unlinking, failed ConnectionRefused then ENOENT, and landed in
+    /// herdr's "needs attention" state). Stale token directories from
+    /// crashed runs are never reused and age out with the container tmp/.
+    private let transportToken = HerdrEmbedTransportCoordinator.makeTransportToken()
+    /// Per-bring-up authentication-key resolution: each key reference is
+    /// read from its provider at most ONCE, with concurrent first-reads
+    /// coalesced onto the single in-flight read. A herd's machines
+    /// establish their SSH carriers CONCURRENTLY, and each establish
+    /// resolves its connection's keys through the Keychain — for a
+    /// BIOMETRY-PROTECTED key that read is a Face ID evaluation, and iOS
+    /// runs one evaluation at a time: the losing machine's concurrent
+    /// read failed and it was dropped from the bring-up (no bridge
+    /// socket; the client's dial then failed ENOENT and the machine
+    /// landed in herdr's terminal "needs attention" state — the reported
+    /// device bug, one machine working and the other always failing,
+    /// alternating). One resolution per key also means ONE biometric
+    /// prompt per herd open instead of one per machine.
+    private let keyResolution = KeyResolutionCache()
     /// Per-machine establish tasks of the in-flight prepare() — cancelled
     /// when the bring-up is cancelled so their awaits unwind.
     private var establishTasks: [Task<Result<Established, HerdrEmbedTransportFailure>, Never>] = []
@@ -337,6 +365,7 @@ final class HerdrEmbedTransportCoordinator {
         if let authenticationKeyProvider {
             keyProvider = await authenticationKeyProvider()
         }
+        keyProvider = keyResolution.wrapping(keyProvider)
         var resolvedPaths = searchPaths
         #if DEBUG
         if HerdrWorkspaceUITest.untrustedStoreRequested {
@@ -403,17 +432,14 @@ final class HerdrEmbedTransportCoordinator {
             await unwindBringUp(established: established, started: [])
             throw error
         }
-        let transportDirectory = URL(
+        let transportDirectoryURL = URL(
             fileURLWithPath: homeDirectory,
             isDirectory: true
         )
-        .appendingPathComponent(
-            HerdrEmbedClientCatalog.transportDirectoryRelativePath,
-            isDirectory: true
-        )
+        .appendingPathComponent(transportDirectory, isDirectory: true)
         do {
             try FileManager.default.createDirectory(
-                at: transportDirectory,
+                at: transportDirectoryURL,
                 withIntermediateDirectories: true
             )
         } catch {
@@ -424,7 +450,7 @@ final class HerdrEmbedTransportCoordinator {
             // the pin this bring-up just took.
             await unwindBringUp(established: established, started: [])
             throw .bridge(.bindFailed(
-                path: transportDirectory.path,
+                path: transportDirectoryURL.path,
                 reason: "creating the transport directory failed: \(error)"
             ))
         }
@@ -437,7 +463,7 @@ final class HerdrEmbedTransportCoordinator {
                 throw .cancelled
             }
             let bridge = HerdrEmbedBridgeServer(
-                socketPath: Self.socketPath(machine: item.link.machine),
+                socketPath: socketPath(for: item.link.machine),
                 carrier: item.carrier,
                 executablePath: item.executablePath,
                 sessionName: item.link.bridgeSessionName
@@ -459,7 +485,7 @@ final class HerdrEmbedTransportCoordinator {
                 await item.carrier.close()
                 if bridgeFailure == nil {
                     bridgeFailure = .bridge(.bindFailed(
-                        path: Self.socketPath(machine: item.link.machine),
+                        path: socketPath(for: item.link.machine),
                         reason: "\(error)"
                     ))
                 }
@@ -508,11 +534,11 @@ final class HerdrEmbedTransportCoordinator {
             ))
         }
         HerdrEmbedClientCatalog.applyEnvironment(
-            transportDirectory: HerdrEmbedClientCatalog.transportDirectoryRelativePath,
+            transportDirectory: transportDirectory,
             stateHome: stateHome
         )
 
-        return "\(HerdrEmbedClientCatalog.transportDirectoryRelativePath)/local.sock"
+        return "\(transportDirectory)/local.sock"
     }
 
     /// Server-death analog for one machine (E2E seam + debugging): closes
@@ -526,7 +552,8 @@ final class HerdrEmbedTransportCoordinator {
     }
 
     /// Idempotent: stops every bridge (which closes the carriers and
-    /// unlinks the sockets) and restores the process cwd.
+    /// unlinks the sockets), removes this bring-up's token directory, and
+    /// restores the process cwd.
     func teardown() async {
         let bridges = servers
         servers.removeAll()
@@ -534,6 +561,7 @@ final class HerdrEmbedTransportCoordinator {
         for bridge in bridges {
             await bridge.stop()
         }
+        removeTransportDirectory()
         restoreCWD()
     }
 
@@ -554,8 +582,20 @@ final class HerdrEmbedTransportCoordinator {
         }
     }
 
-    static func socketPath(machine: HerdrEmbedMachine) -> String {
-        "\(HerdrEmbedClientCatalog.transportDirectoryRelativePath)/\(machine.profileID).sock"
+    /// This bring-up's transport directory (relative to the pinned cwd):
+    /// the base directory plus this run's unique token.
+    var transportDirectory: String {
+        "\(HerdrEmbedClientCatalog.transportDirectoryRelativePath)/\(transportToken)"
+    }
+
+    /// This bring-up's bridge socket path for one machine.
+    func socketPath(for machine: HerdrEmbedMachine) -> String {
+        "\(transportDirectory)/\(machine.profileID).sock"
+    }
+
+    private static func makeTransportToken() -> String {
+        let raw = UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
+        return String(raw.prefix(8))
     }
 
     // MARK: - Establish
@@ -629,7 +669,8 @@ final class HerdrEmbedTransportCoordinator {
     /// before bridge startup (cwd pin, transport-directory creation):
     /// stops the bridges it started (each stop closes its carrier and
     /// unlinks the UDS listener), closes the carriers of
-    /// established-but-unbridged machines, and restores the pinned cwd.
+    /// established-but-unbridged machines, removes this bring-up's token
+    /// directory, and restores the pinned cwd.
     private func unwindBringUp(
         established: [Established],
         started: [(link: HerdrEmbedMachineLink, bridge: HerdrEmbedBridgeServer)]
@@ -643,7 +684,18 @@ final class HerdrEmbedTransportCoordinator {
         }
         servers.removeAll()
         carriers.removeAll()
+        removeTransportDirectory()
         restoreCWD()
+    }
+
+    /// Best-effort removal of this bring-up's token directory — the
+    /// bridge stops already unlinked the socket files, so this clears the
+    /// (unique, never-reused) directory itself. A crashed run's leftover
+    /// directory is harmless and ages out with the container tmp/.
+    private func removeTransportDirectory() {
+        try? FileManager.default.removeItem(
+            at: URL(fileURLWithPath: transportDirectory, isDirectory: true)
+        )
     }
 
     private func establishOne(
@@ -739,5 +791,63 @@ private final class EventSink: @unchecked Sendable {
             line = "bridge stopped unlinked=\(unlinked) relays=\(relaysTornDown)"
         }
         emit("\(label): \(line)")
+    }
+}
+
+/// Coalesces authentication-key reads for one bring-up (see the
+/// coordinator's `keyResolution`): the first read for a reference goes to
+/// the underlying provider, concurrent readers of the same reference
+/// await that one in-flight read, and later reads return the resolved
+/// key. The resolved `NIOSSHPrivateKey` is an opaque signing handle
+/// that already lives in memory for each connection's lifetime; sharing
+/// one instance across this bring-up's connections is the same exposure
+/// class, and it is what turns N concurrent biometric evaluations (one
+/// per machine) into ONE.
+private actor KeyResolutionCache {
+    private var resolved: [String: NIOSSHPrivateKey] = [:]
+    private var inFlight: [String: Task<NIOSSHPrivateKey, any Error>] = [:]
+
+    nonisolated func wrapping(
+        _ underlying: any SSHAuthenticationKeyProvider
+    ) -> any SSHAuthenticationKeyProvider {
+        CoalescedKeyProvider(cache: self, underlying: underlying)
+    }
+
+    func key(
+        for reference: String,
+        reason: String,
+        underlying: any SSHAuthenticationKeyProvider
+    ) async throws -> NIOSSHPrivateKey {
+        if let key = resolved[reference] {
+            return key
+        }
+        if let task = inFlight[reference] {
+            return try await task.value
+        }
+        let task = Task {
+            try await underlying.authenticationPrivateKey(with: reference, reason: reason)
+        }
+        inFlight[reference] = task
+        do {
+            let key = try await task.value
+            resolved[reference] = key
+            inFlight[reference] = nil
+            return key
+        } catch {
+            inFlight[reference] = nil
+            throw error
+        }
+    }
+}
+
+private struct CoalescedKeyProvider: SSHAuthenticationKeyProvider {
+    let cache: KeyResolutionCache
+    let underlying: any SSHAuthenticationKeyProvider
+
+    func authenticationPrivateKey(
+        with reference: String,
+        reason: String
+    ) async throws -> NIOSSHPrivateKey {
+        try await cache.key(for: reference, reason: reason, underlying: underlying)
     }
 }

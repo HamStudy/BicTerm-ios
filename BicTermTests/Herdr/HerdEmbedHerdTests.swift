@@ -78,7 +78,401 @@ final class HerdrEmbedHerdTests: XCTestCase {
 
         try await teardownHerd(
             runtime: runtime,
+            coordinator: coordinator,
             machines: [try makeDirectMachine(label: "alpha"), try makeJumpMachine(label: "beta")],
+            cwdBeforeStart: cwdBeforeStart
+        )
+    }
+
+    /// Regression: two machines in one herd must BOTH be working
+    /// simultaneously — not merely open a bridge relay. The reported device
+    /// bug: every machine after the first lands in herdr's "needs
+    /// attention" state, regardless of the machine. The reported herd
+    /// shape: BOTH machines' connections target the SAME host:port (two
+    /// connection entries to one box), so this test uses two same-host
+    /// fixture connections — the mixed direct+jump shape is covered by
+    /// ``testHerdSeedsBothMachinesIntoRealClientSidebarAndInputFlows()``.
+    ///
+    /// "Working" is asserted through the two durable signals, not the
+    /// sidebar text (the client switches its sidebar section once a
+    /// machine's workspace activates, so the machine rows are not
+    /// reliably visible to sample): every machine's bridge relay opened
+    /// through THIS run's bridges, and the client's own log records no
+    /// "endpoint needs attention" warning for the whole run.
+    func testTwoMachinesBothReachOnlineSimultaneously() async throws {
+        try requireBothFixtures()
+        let cwdBeforeStart = FileManager.default.currentDirectoryPath
+        let logLinesBefore = Self.clientLogLineCount()
+        let (runtime, coordinator) = try await startHerdRuntime(
+            machines: [
+                try makeDirectMachine(label: "alpha"),
+                try makeDirectMachine(label: "beta"),
+            ]
+        )
+        let hosted = try await hostAndWaitForRender(runtime)
+
+        await waitFor(
+            coordinator.eventLines.contains { $0.hasPrefix("alpha: bridge relay opened") },
+            "the client connected machine alpha through its own bridge",
+            timeout: 20
+        )
+        await waitFor(
+            coordinator.eventLines.contains { $0.hasPrefix("beta: bridge relay opened") },
+            "the client connected machine beta through its own bridge",
+            timeout: 20
+        )
+
+        // Both machines must STAY working: a machine that connects then
+        // drops to attention fails loudly. The client's own log is the
+        // ground truth for the attention state.
+        for _ in 0..<10 {
+            try await Task.sleep(nanoseconds: 500_000_000)
+            XCTAssertEqual(runtime.phase, .running, "the embedded client keeps running")
+            let newLines = Self.clientLogLines(after: logLinesBefore)
+            XCTAssertFalse(
+                newLines.contains("needs attention"),
+                "a machine landed in herdr's needs-attention state:\n\(newLines)"
+            )
+            XCTAssertFalse(
+                coordinator.eventLines.contains { $0.contains("carrier lost") },
+                "a machine's bridge carrier was lost:\n\(coordinator.eventLines.joined(separator: "\n"))"
+            )
+        }
+
+        Self.dumpDiagnostics(runtime: runtime, view: hosted)
+        try await teardownHerd(
+            runtime: runtime,
+            coordinator: coordinator,
+            machines: [try makeDirectMachine(label: "alpha"), try makeJumpMachine(label: "beta")],
+            cwdBeforeStart: cwdBeforeStart
+        )
+    }
+
+    /// The embedded client's rotating log — the ground truth for the
+    /// machines' attention state (the client warns "endpoint needs
+    /// attention" per machine; the sidebar text is not reliably
+    /// sampleable because the client switches its sidebar section once a
+    /// machine's workspace activates).
+    private static var clientLogURL: URL {
+        URL.applicationSupportDirectory
+            .appendingPathComponent("herdr-embed/config-home/herdr/herdr-client.log")
+    }
+
+    private static func clientLogLineCount() -> Int {
+        guard let text = try? String(contentsOf: clientLogURL, encoding: .utf8) else {
+            return 0
+        }
+        return text.split(separator: "\n").count
+    }
+
+    /// Log lines appended after `lineCount` (a snapshot taken before the
+    /// run under test), so stale lines from earlier runs never satisfy or
+    /// fail the assertions.
+    private static func clientLogLines(after lineCount: Int) -> String {
+        guard let text = try? String(contentsOf: clientLogURL, encoding: .utf8) else {
+            return ""
+        }
+        return text.split(separator: "\n")
+            .dropFirst(lineCount)
+            .joined(separator: "\n")
+    }
+
+    /// Regression for the reported device bug: reopening a herd while the
+    /// previous run's teardown is still unwinding. The app's close-reopen
+    /// flow spawns `requestStop` UNAWAITED (`onDisappear`) and the next
+    /// workspace's `.task` calls `startIfNeeded` on a runtime whose phase
+    /// is already `.stopped` — so the new bring-up's bridge sweep/bind can
+    /// race the old run's bridge stops, which close listeners and unlink
+    /// the SAME socket paths (same connections → same profile ids).
+    /// Device evidence (client log): the dropped machine's dial fails
+    /// ConnectionRefused (file present, listener gone) then ENOENT (file
+    /// unlinked) → herdr "needs attention", alternating between machines.
+    ///
+    /// The race's teardown phase is seconds long on device (TERM_GRACE
+    /// plus WAN carrier closes) but milliseconds on fixtures, so this
+    /// test holds the previous run's transport alive directly
+    /// (`prepare()` without a runtime — the suspended-teardown state) and
+    /// releases it mid-run, which is the same interleaving deterministically.
+    func testReopenHerdWhilePreviousTeardownUnwindsKeepsBothMachines() async throws {
+        try requireBothFixtures()
+        let cwdBeforeStart = FileManager.default.currentDirectoryPath
+        let machines = [try makeDirectMachine(label: "alpha"), try makeJumpMachine(label: "beta")]
+        let key = try await parseFixtureKey()
+
+        // Run 1's transport, held alive: bridges listening, carriers
+        // established, catalog seeded — the state the previous run's
+        // teardown is still holding when the reopened herd brings up.
+        let coordinatorOne = HerdrEmbedTransportCoordinator(
+            machines: machines,
+            connector: fixtureConnectorFactory(key: key)
+        )
+        _ = try await coordinatorOne.prepare()
+
+        let runtime = HerdrEmbedRuntime()
+        addTeardownBlock { @MainActor in
+            await runtime.requestStop()
+            await coordinatorOne.teardown()
+        }
+        let previous = getenv("HERDR_EMBED_TRANSPORT_DIR").map { String(cString: $0) }
+        let statePrevious = getenv("XDG_STATE_HOME").map { String(cString: $0) }
+        addTeardownBlock { @MainActor in
+            if let previous {
+                setenv("HERDR_EMBED_TRANSPORT_DIR", previous, 1)
+            } else {
+                unsetenv("HERDR_EMBED_TRANSPORT_DIR")
+            }
+            if let statePrevious {
+                setenv("XDG_STATE_HOME", statePrevious, 1)
+            } else {
+                unsetenv("XDG_STATE_HOME")
+            }
+        }
+
+        // The reopen: a fresh coordinator brings up while run 1's bridges
+        // still own the machine socket paths.
+        let logLinesBefore = Self.clientLogLineCount()
+        let coordinator = HerdrEmbedTransportCoordinator(
+            machines: machines,
+            connector: fixtureConnectorFactory(key: key)
+        )
+        runtime.attachTransport(coordinator)
+        await runtime.startIfNeeded(ownerID: UUID())
+        if case let .failed(message) = runtime.phase {
+            XCTFail("reopened herd failed to start: \(message)")
+        }
+        let hosted = try await hostAndWaitForRender(runtime)
+
+        // Both machines connected through THIS run's bridges — without the
+        // per-bring-up socket namespace, the machine whose path the old
+        // run still owns is dropped from the bring-up (liveListenerExists)
+        // and its relay opens on the OLD coordinator instead.
+        await waitFor(
+            coordinator.eventLines.contains { $0.hasPrefix("alpha: bridge relay opened") },
+            "the reopened herd connected machine alpha through its OWN bridge",
+            timeout: 30
+        )
+        await waitFor(
+            coordinator.eventLines.contains { $0.hasPrefix("beta: bridge relay opened") },
+            "the reopened herd connected machine beta through its OWN bridge",
+            timeout: 30
+        )
+
+        // The previous run's teardown completes mid-run: its bridge stops
+        // close listeners and unlink socket files. The reopened herd's
+        // machines must be untouched — their sockets live in this run's
+        // own namespace, not the previous run's paths.
+        await coordinatorOne.teardown()
+        for _ in 0..<10 {
+            try await Task.sleep(nanoseconds: 500_000_000)
+            XCTAssertEqual(runtime.phase, .running, "the reopened herd keeps running")
+            let newLines = Self.clientLogLines(after: logLinesBefore)
+            XCTAssertFalse(
+                newLines.contains("needs attention"),
+                "a machine landed in herdr's needs-attention state after the previous run's teardown:\n\(newLines)"
+            )
+            XCTAssertFalse(
+                coordinator.eventLines.contains { $0.contains("carrier lost") },
+                "a machine's bridge carrier was lost:\n\(coordinator.eventLines.joined(separator: "\n"))"
+            )
+        }
+
+        Self.dumpDiagnostics(runtime: runtime, view: hosted)
+        try await teardownHerd(
+            runtime: runtime,
+            coordinator: coordinator,
+            machines: [try makeDirectMachine(label: "alpha"), try makeJumpMachine(label: "beta")],
+            cwdBeforeStart: cwdBeforeStart
+        )
+    }
+
+    /// First-connect repro through the PRODUCTION connector shape: the
+    /// coordinator built the way the workspace view builds it (a SHARED
+    /// host-key verifier through `makeConnector()`, not the test factory)
+    /// — the one simulator shape the fixture tests never exercised. The
+    /// reported device bug: fresh herd, two machines, first connect, one
+    /// machine in herdr's "needs attention" state, 100% of the time,
+    /// not always the same machine.
+    func testFirstConnectProductionConnectorShapeKeepsBothMachines() async throws {
+        try requireBothFixtures()
+        let cwdBeforeStart = FileManager.default.currentDirectoryPath
+        let logLinesBefore = Self.clientLogLineCount()
+        let machines = [
+            try makeDirectMachine(label: "alpha"),
+            try makeDirectMachine(label: "beta"),
+        ]
+        let key = try await parseFixtureKey()
+
+        // The production shape: ONE shared verifier (HerdrWindowRoot passes
+        // `store.hostKeyVerifier`), the fixture key through the
+        // authentication-key provider seam, and the fixture search path.
+        let sharedVerifier = try await makeAllEndpointsTrustedVerifier()
+        let coordinator = HerdrEmbedTransportCoordinator(
+            machines: machines,
+            preferredSelection: nil,
+            hostKeyVerifier: sharedVerifier,
+            authenticationKeyProvider: { FixtureHerdKeyProvider(key: key) },
+            metadataProvider: FixtureHerdrKeyMetadataProvider(),
+            searchPaths: [Self.herdrBin]
+        )
+
+        let runtime = HerdrEmbedRuntime()
+        runtime.attachTransport(coordinator)
+        addTeardownBlock { @MainActor in
+            await runtime.requestStop()
+        }
+        let previous = getenv("HERDR_EMBED_TRANSPORT_DIR").map { String(cString: $0) }
+        let statePrevious = getenv("XDG_STATE_HOME").map { String(cString: $0) }
+        addTeardownBlock { @MainActor in
+            if let previous {
+                setenv("HERDR_EMBED_TRANSPORT_DIR", previous, 1)
+            } else {
+                unsetenv("HERDR_EMBED_TRANSPORT_DIR")
+            }
+            if let statePrevious {
+                setenv("XDG_STATE_HOME", statePrevious, 1)
+            } else {
+                unsetenv("XDG_STATE_HOME")
+            }
+        }
+        await runtime.startIfNeeded(ownerID: UUID())
+        if case let .failed(message) = runtime.phase {
+            XCTFail("herd bring-up failed: \(message)")
+        }
+        let hosted = try await hostAndWaitForRender(runtime)
+
+        await waitFor(
+            coordinator.eventLines.contains { $0.hasPrefix("alpha: bridge relay opened") },
+            "the client connected machine alpha through its own bridge",
+            timeout: 20
+        )
+        await waitFor(
+            coordinator.eventLines.contains { $0.hasPrefix("beta: bridge relay opened") },
+            "the client connected machine beta through its own bridge",
+            timeout: 20
+        )
+        for _ in 0..<6 {
+            try await Task.sleep(nanoseconds: 500_000_000)
+            XCTAssertEqual(runtime.phase, .running, "the embedded client keeps running")
+            let newLines = Self.clientLogLines(after: logLinesBefore)
+            XCTAssertFalse(
+                newLines.contains("needs attention"),
+                "a machine landed in herdr's needs-attention state:\n\(newLines)"
+            )
+        }
+
+        Self.dumpDiagnostics(runtime: runtime, view: hosted)
+        try await teardownHerd(
+            runtime: runtime,
+            coordinator: coordinator,
+            machines: [try makeDirectMachine(label: "alpha"), try makeJumpMachine(label: "beta")],
+            cwdBeforeStart: cwdBeforeStart
+        )
+    }
+
+    /// Repro for the reported device bug's mechanism: a herd's machines
+    /// establish their SSH carriers CONCURRENTLY, and each establish
+    /// resolves its connection's authentication key from the Keychain —
+    /// for a BIOMETRY-PROTECTED key that read is a Face ID evaluation,
+    /// and iOS runs one evaluation at a time: the losing machine's
+    /// concurrent read fails, its establish is dropped from the bring-up
+    /// (no bridge socket), and the client's dial of that machine fails
+    /// ENOENT → herdr's "needs attention" state, permanently (attention
+    /// is terminal). One machine works, the other always fails, and
+    /// WHICH machine loses alternates — exactly the reported symptom.
+    ///
+    /// The simulator's Keychain does not enforce biometry (verified: a
+    /// `.biometryCurrentSet` item reads fine with no Face ID enrolled),
+    /// so the device constraint is modeled by the key provider double:
+    /// a read that starts while another is in flight fails — the
+    /// observed device behavior. The fix (per-bring-up key resolution:
+    /// one coalesced read per key reference) makes both machines share
+    /// ONE read, so the constraint can never race.
+    func testTwoMachinesSharingOneKeyBothConnect() async throws {
+        try requireBothFixtures()
+        let key = try await parseFixtureKey()
+        let racingProvider = SingleEvaluationKeyProvider(
+            underlying: FixtureHerdKeyProvider(key: key)
+        )
+
+        // Two machines whose connections offer the SAME key reference —
+        // the user's herd shape (both connections to one host, one key).
+        func machine(label: String) throws -> HerdrEmbedMachineLink {
+            let connection = try Connection(
+                name: label,
+                type: .ssh,
+                host: "127.0.0.1",
+                port: 12222,
+                username: Self.fixtureUsername,
+                customKeys: ["fixture-ed25519"]
+            )
+            return HerdrEmbedMachineLink(
+                machine: HerdrEmbedMachine.forConnection(connection),
+                connection: connection,
+                bridgeSessionName: nil
+            )
+        }
+        let machines = [try machine(label: "alpha"), try machine(label: "beta")]
+
+        let cwdBeforeStart = FileManager.default.currentDirectoryPath
+        let logLinesBefore = Self.clientLogLineCount()
+        let coordinator = HerdrEmbedTransportCoordinator(
+            machines: machines,
+            preferredSelection: nil,
+            hostKeyVerifier: try await makeAllEndpointsTrustedVerifier(),
+            authenticationKeyProvider: { racingProvider },
+            metadataProvider: FixtureHerdrKeyMetadataProvider(),
+            searchPaths: [Self.herdrBin]
+        )
+        let runtime = HerdrEmbedRuntime()
+        runtime.attachTransport(coordinator)
+        addTeardownBlock { @MainActor in
+            await runtime.requestStop()
+        }
+        let previous = getenv("HERDR_EMBED_TRANSPORT_DIR").map { String(cString: $0) }
+        let statePrevious = getenv("XDG_STATE_HOME").map { String(cString: $0) }
+        addTeardownBlock { @MainActor in
+            if let previous {
+                setenv("HERDR_EMBED_TRANSPORT_DIR", previous, 1)
+            } else {
+                unsetenv("HERDR_EMBED_TRANSPORT_DIR")
+            }
+            if let statePrevious {
+                setenv("XDG_STATE_HOME", statePrevious, 1)
+            } else {
+                unsetenv("XDG_STATE_HOME")
+            }
+        }
+        await runtime.startIfNeeded(ownerID: UUID())
+        if case let .failed(message) = runtime.phase {
+            XCTFail("herd bring-up failed: \(message)")
+        }
+        _ = try await hostAndWaitForRender(runtime)
+
+        // BOTH machines must establish and dial through their own bridges.
+        // Without per-bring-up key resolution, the two concurrent
+        // establishes race two concurrent key evaluations and the loser
+        // is dropped — its relay never opens and the client logs
+        // "needs attention" for it.
+        await waitFor(
+            coordinator.eventLines.contains { $0.hasPrefix("alpha: bridge relay opened") },
+            "machine alpha connected through its own bridge (key resolved once, shared)",
+            timeout: 30
+        )
+        await waitFor(
+            coordinator.eventLines.contains { $0.hasPrefix("beta: bridge relay opened") },
+            "machine beta connected through its own bridge (key resolved once, shared)",
+            timeout: 30
+        )
+        let newLines = Self.clientLogLines(after: logLinesBefore)
+        XCTAssertFalse(
+            newLines.contains("needs attention"),
+            "a machine landed in herdr's needs-attention state:\n\(newLines)"
+        )
+
+        try await teardownHerd(
+            runtime: runtime,
+            coordinator: coordinator,
+            machines: machines,
             cwdBeforeStart: cwdBeforeStart
         )
     }
@@ -125,6 +519,7 @@ final class HerdrEmbedHerdTests: XCTestCase {
 
         try await teardownHerd(
             runtime: runtime,
+            coordinator: coordinator,
             machines: [try makeDirectMachine(label: "alpha"), try makeJumpMachine(label: "beta")],
             cwdBeforeStart: cwdBeforeStart
         )
@@ -138,7 +533,7 @@ final class HerdrEmbedHerdTests: XCTestCase {
 
         let parsed = try await parseFixtureKey()
         let ownerOne = UUID()
-        let (runtime, _) = try await startHerdRuntime(
+        let (runtime, coordinatorOne) = try await startHerdRuntime(
             machines: [first], ownerID: ownerOne, key: parsed
         )
         guard case .running = runtime.phase else {
@@ -146,7 +541,7 @@ final class HerdrEmbedHerdTests: XCTestCase {
             return
         }
         XCTAssertTrue(
-            FileManager.default.fileExists(atPath: socketFile(for: first)),
+            FileManager.default.fileExists(atPath: socketFile(for: first, coordinator: coordinatorOne)),
             "herd one's machine socket exists while its run is live"
         )
 
@@ -164,11 +559,11 @@ final class HerdrEmbedHerdTests: XCTestCase {
             return
         }
         await waitFor(
-            !FileManager.default.fileExists(atPath: socketFile(for: first)),
+            !FileManager.default.fileExists(atPath: socketFile(for: first, coordinator: coordinatorOne)),
             "herd one's socket was cleaned up when its run closed"
         )
         XCTAssertTrue(
-            FileManager.default.fileExists(atPath: socketFile(for: second)),
+            FileManager.default.fileExists(atPath: socketFile(for: second, coordinator: coordinatorTwo)),
             "herd two's machine socket exists for its own run"
         )
         let catalog = try String(
@@ -187,6 +582,7 @@ final class HerdrEmbedHerdTests: XCTestCase {
 
         try await teardownHerd(
             runtime: runtime,
+            coordinator: coordinatorTwo,
             machines: [try makeDirectMachine(label: "alpha"), try makeJumpMachine(label: "beta")],
             cwdBeforeStart: cwdBeforeStart
         )
@@ -329,6 +725,7 @@ final class HerdrEmbedHerdTests: XCTestCase {
     /// and the process cwd is restored.
     private func teardownHerd(
         runtime: HerdrEmbedRuntime,
+        coordinator: HerdrEmbedTransportCoordinator,
         machines: [HerdrEmbedMachineLink],
         cwdBeforeStart: String
     ) async throws {
@@ -340,7 +737,9 @@ final class HerdrEmbedHerdTests: XCTestCase {
         )
         for machine in machines {
             await waitFor(
-                !FileManager.default.fileExists(atPath: socketFile(for: machine)),
+                !FileManager.default.fileExists(
+                    atPath: socketFile(for: machine, coordinator: coordinator)
+                ),
                 "machine \(machine.machine.label)'s bridge socket removed at teardown",
                 timeout: 10
             )
@@ -499,9 +898,11 @@ final class HerdrEmbedHerdTests: XCTestCase {
         }
     }
 
-    private func socketFile(for machine: HerdrEmbedMachineLink) -> String {
-        NSHomeDirectory()
-            + "/\(HerdrEmbedClientCatalog.transportDirectoryRelativePath)/\(machine.machine.profileID).sock"
+    private func socketFile(
+        for machine: HerdrEmbedMachineLink,
+        coordinator: HerdrEmbedTransportCoordinator
+    ) -> String {
+        NSHomeDirectory() + "/\(coordinator.socketPath(for: machine.machine))"
     }
 
     private func catalogFile() -> URL {
@@ -540,6 +941,48 @@ private struct FixtureHerdKeyProvider: SSHAuthenticationKeyProvider {
 
     func authenticationPrivateKey(with reference: String, reason: String) async throws -> NIOSSHPrivateKey {
         key
+    }
+}
+
+/// Models the device constraint behind the reported herd bug: reading a
+/// BIOMETRY-PROTECTED key from the Keychain is a Face ID evaluation, and
+/// iOS runs one evaluation at a time — a read that starts while another
+/// is in flight FAILS (device evidence 2026-09-17: one of two concurrent
+/// herd establishes failed fast and that machine was dropped into
+/// herdr's "needs attention" state, alternating between machines). The
+/// simulator's Keychain does not enforce biometry, so the constraint is
+/// modeled here: concurrent reads of the same key race exactly as they
+/// do on the device.
+private actor SingleEvaluationKeyProvider: SSHAuthenticationKeyProvider {
+    let underlying: any SSHAuthenticationKeyProvider
+    private var evaluating = false
+    private(set) var reads = 0
+
+    init(underlying: any SSHAuthenticationKeyProvider) {
+        self.underlying = underlying
+    }
+
+    func authenticationPrivateKey(
+        with reference: String,
+        reason: String
+    ) async throws -> NIOSSHPrivateKey {
+        if evaluating {
+            throw KeyRepositoryError.keychain(errSecInteractionNotAllowed)
+        }
+        evaluating = true
+        reads += 1
+        do {
+            // A biometric evaluation takes human-scale time on device
+            // (the Face ID prompt); model that latency so a concurrent
+            // read actually lands inside the evaluation window.
+            try await Task.sleep(nanoseconds: 300_000_000)
+            let key = try await underlying.authenticationPrivateKey(with: reference, reason: reason)
+            evaluating = false
+            return key
+        } catch {
+            evaluating = false
+            throw error
+        }
     }
 }
 

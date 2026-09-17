@@ -245,7 +245,7 @@ final class HerdrEmbedHardeningTests: XCTestCase {
         try requireFixtures(serverPort: 12222)
         let connection = try makeDirectConnection(label: "detach")
         let cwdBeforeStart = FileManager.default.currentDirectoryPath
-        let (runtime, _) = try await startTransportRuntime(connection: connection)
+        let (runtime, coordinator) = try await startTransportRuntime(connection: connection)
 
         _ = try await hostAndWaitForRender(runtime)
 
@@ -272,7 +272,7 @@ final class HerdrEmbedHardeningTests: XCTestCase {
         }
         XCTAssertNil(exit, "a detach-key stop is a clean drain")
 
-        let socketFile = expectedSocketFile(for: connection)
+        let socketFile = expectedSocketFile(for: connection, coordinator: coordinator)
         await waitFor(
             !FileManager.default.fileExists(atPath: socketFile),
             "bridge socket removed after detach",
@@ -835,10 +835,10 @@ final class HerdrEmbedHardeningTests: XCTestCase {
         return NIOSSHPrivateKey(ed25519Key: parsed.privateKey)
     }
 
-    private func expectedSocketFile(for connection: Connection) -> String {
-        let profile = HerdrEmbedMachine.profileID(for: connection.id)
-        return NSHomeDirectory()
-            + "/\(HerdrEmbedClientCatalog.transportDirectoryRelativePath)/\(profile).sock"
+    private func expectedSocketFile(
+        for connection: Connection, coordinator: HerdrEmbedTransportCoordinator
+    ) -> String {
+        NSHomeDirectory() + "/\(coordinator.socketPath(for: .forConnection(connection)))"
     }
 
     private func requireFixtures(serverPort: Int) throws {

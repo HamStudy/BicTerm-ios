@@ -67,15 +67,12 @@ final class HerdrEmbedStartFailureTeardownTests: XCTestCase {
             port: 1,
             username: "fixture"
         )
-        let profile = HerdrEmbedMachine.profileID(for: connection.id)
-        let socketFile = scratch
-            .appendingPathComponent(HerdrEmbedClientCatalog.transportDirectoryRelativePath)
-            .appendingPathComponent("\(profile).sock")
-
         let session = StartThrowingSession()
         let runtime = HerdrEmbedRuntime(sessionFactory: { session })
 
         let first = makeCoordinator(connection: connection)
+        let firstSocketFile = scratch
+            .appendingPathComponent(first.socketPath(for: .forConnection(connection)))
         runtime.attachTransport(first)
         await runtime.startIfNeeded()
 
@@ -88,7 +85,7 @@ final class HerdrEmbedStartFailureTeardownTests: XCTestCase {
             "the failure is the session's own, not a bridge error: \(message)"
         )
         XCTAssertFalse(
-            FileManager.default.fileExists(atPath: socketFile.path),
+            FileManager.default.fileExists(atPath: firstSocketFile.path),
             "the failed start tore down its bridge listener (no orphaned socket)"
         )
         XCTAssertEqual(
@@ -99,6 +96,8 @@ final class HerdrEmbedStartFailureTeardownTests: XCTestCase {
         // The retry must bind cleanly: the first run's leaked listener is
         // exactly what produced liveListenerExists on device, run after run.
         let retry = makeCoordinator(connection: connection)
+        let retrySocketFile = scratch
+            .appendingPathComponent(retry.socketPath(for: .forConnection(connection)))
         runtime.attachTransport(retry)
         await runtime.startIfNeeded()
 
@@ -111,7 +110,7 @@ final class HerdrEmbedStartFailureTeardownTests: XCTestCase {
             "the retry bound its bridges cleanly (no liveListenerExists): \(retryMessage)"
         )
         XCTAssertFalse(
-            FileManager.default.fileExists(atPath: socketFile.path),
+            FileManager.default.fileExists(atPath: retrySocketFile.path),
             "the retry's own failure also tore its listener down"
         )
     }

@@ -56,6 +56,7 @@ final class HerdrEmbedCloseDuringBringupTests: XCTestCase {
             customKeys: ["fixture-ed25519"]
         )
         weak var weakCoordinator: HerdrEmbedTransportCoordinator?
+        var bringUpSocketPath = ""
         do {
             let coordinator = HerdrEmbedTransportCoordinator(
                 connection: connection,
@@ -68,6 +69,7 @@ final class HerdrEmbedCloseDuringBringupTests: XCTestCase {
             )
             weakCoordinator = coordinator
             runtime.attachTransport(coordinator)
+            bringUpSocketPath = coordinator.socketPath(for: .forConnection(connection))
         }
         addTeardownBlock { @MainActor in gate.open() }
         let cwdBefore = FileManager.default.currentDirectoryPath
@@ -96,7 +98,7 @@ final class HerdrEmbedCloseDuringBringupTests: XCTestCase {
             "the pinned cwd was restored (never left) by the unwind"
         )
         XCTAssertFalse(
-            FileManager.default.fileExists(atPath: expectedSocketFile(for: connection)),
+            FileManager.default.fileExists(atPath: bringUpSocketPath),
             "no bridge socket survived the closed bring-up"
         )
         let released = await poll({ weakCoordinator == nil }, timeout: 10)
@@ -132,6 +134,7 @@ final class HerdrEmbedCloseDuringBringupTests: XCTestCase {
         let connection = try makeDirectConnection(label: "close-tofu")
         let key = try await parseFixtureKey()
         weak var weakCoordinator: HerdrEmbedTransportCoordinator?
+        var bringUpSocketPath = ""
         do {
             let coordinator = HerdrEmbedTransportCoordinator(
                 connection: connection,
@@ -142,6 +145,7 @@ final class HerdrEmbedCloseDuringBringupTests: XCTestCase {
             )
             weakCoordinator = coordinator
             runtime.attachTransport(coordinator)
+            bringUpSocketPath = coordinator.socketPath(for: .forConnection(connection))
             addTeardownBlock { @MainActor [weak coordinator] in
                 coordinator?.resolveTrustPrompt(false)
             }
@@ -175,7 +179,7 @@ final class HerdrEmbedCloseDuringBringupTests: XCTestCase {
             "the pinned cwd was restored by the unwind"
         )
         XCTAssertFalse(
-            FileManager.default.fileExists(atPath: expectedSocketFile(for: connection)),
+            FileManager.default.fileExists(atPath: bringUpSocketPath),
             "no bridge socket survived the closed bring-up"
         )
         let released = await poll({ weakCoordinator == nil }, timeout: 10)
@@ -197,7 +201,8 @@ final class HerdrEmbedCloseDuringBringupTests: XCTestCase {
             return
         }
         XCTAssertEqual(stub.startCalls, 1, "the reopened run booted exactly one (stub) client")
-        let socketFile = expectedSocketFile(for: connection)
+        let socketFile = NSHomeDirectory()
+            + "/\(fresh.socketPath(for: .forConnection(connection)))"
         XCTAssertTrue(
             FileManager.default.fileExists(atPath: socketFile),
             "the reopened bring-up bound its bridge listener"
@@ -352,12 +357,6 @@ final class HerdrEmbedCloseDuringBringupTests: XCTestCase {
             metadataProvider: FixtureHerdrKeyMetadataProvider(),
             searchPaths: [Self.herdrBin]
         )
-    }
-
-    private func expectedSocketFile(for connection: Connection) -> String {
-        let profile = HerdrEmbedMachine.profileID(for: connection.id)
-        return NSHomeDirectory()
-            + "/\(HerdrEmbedClientCatalog.transportDirectoryRelativePath)/\(profile).sock"
     }
 }
 

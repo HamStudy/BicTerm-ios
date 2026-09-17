@@ -28,14 +28,14 @@ final class HerdrEmbedTransportTests: XCTestCase {
         try requireFixtures(serverPort: 12222)
         let connection = try makeDirectConnection()
         let cwdBeforeStart = FileManager.default.currentDirectoryPath
-        let runtime = try await startTransportRuntime(connection: connection)
+        let (runtime, coordinator) = try await startTransportRuntime(connection: connection)
 
         _ = try await hostAndWaitForRender(runtime)
 
         runtime.writeInput(Data("j".utf8))
         await waitFor(runtime.bytesWritten > 0, "keystroke reached the embedded client")
 
-        let socketFile = expectedSocketFile(for: connection)
+        let socketFile = expectedSocketFile(for: connection, coordinator: coordinator)
         XCTAssertTrue(
             FileManager.default.fileExists(atPath: socketFile),
             "bridge socket exists while the run is live"
@@ -81,14 +81,14 @@ final class HerdrEmbedTransportTests: XCTestCase {
             jumpChain: [hop]
         )
         let cwdBeforeStart = FileManager.default.currentDirectoryPath
-        let runtime = try await startTransportRuntime(connection: connection)
+        let (runtime, coordinator) = try await startTransportRuntime(connection: connection)
 
         _ = try await hostAndWaitForRender(runtime, timeout: 30)
 
         runtime.writeInput(Data("k".utf8))
         await waitFor(runtime.bytesWritten > 0, "keystroke reached the embedded client through the jump chain")
 
-        let socketFile = expectedSocketFile(for: connection)
+        let socketFile = expectedSocketFile(for: connection, coordinator: coordinator)
         XCTAssertTrue(
             FileManager.default.fileExists(atPath: socketFile),
             "bridge socket exists while the jump-chain run is live"
@@ -219,7 +219,7 @@ final class HerdrEmbedTransportTests: XCTestCase {
 
     private func startTransportRuntime(
         connection: Connection
-    ) async throws -> HerdrEmbedRuntime {
+    ) async throws -> (HerdrEmbedRuntime, HerdrEmbedTransportCoordinator) {
         let parsed = try await OpenSSHPrivateKeyParser().parse(
             Data(contentsOf: Self.repoRoot.appendingPathComponent("Fixtures/keys/bicterm-fixture-ed25519"))
         )
@@ -264,13 +264,13 @@ final class HerdrEmbedTransportTests: XCTestCase {
         if case let .failed(message) = runtime.phase {
             XCTFail("transport bring-up failed: \(message)")
         }
-        return runtime
+        return (runtime, coordinator)
     }
 
-    private func expectedSocketFile(for connection: Connection) -> String {
-        let profile = HerdrEmbedMachine.profileID(for: connection.id)
-        return NSHomeDirectory()
-            + "/\(HerdrEmbedClientCatalog.transportDirectoryRelativePath)/\(profile).sock"
+    private func expectedSocketFile(
+        for connection: Connection, coordinator: HerdrEmbedTransportCoordinator
+    ) -> String {
+        NSHomeDirectory() + "/\(coordinator.socketPath(for: .forConnection(connection)))"
     }
 
     private func waitFor(
