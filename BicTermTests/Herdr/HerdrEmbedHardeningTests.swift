@@ -482,6 +482,7 @@ final class HerdrEmbedHardeningTests: XCTestCase {
             machines: machines,
             hostKeyVerifier: HostKeyVerifier(store: InMemoryHostKeyStoreFallback()),
             authenticationKeyProvider: { StaticFixtureKeyProvider(key: parsed) },
+            metadataProvider: FixtureHerdrKeyMetadataProvider(),
             searchPaths: [Self.herdrBin]
         )
         let runtime = HerdrEmbedRuntime()
@@ -540,6 +541,7 @@ final class HerdrEmbedHardeningTests: XCTestCase {
             machines: machines,
             hostKeyVerifier: HostKeyVerifier(store: InMemoryHostKeyStoreFallback()),
             authenticationKeyProvider: { StaticFixtureKeyProvider(key: parsed) },
+            metadataProvider: FixtureHerdrKeyMetadataProvider(),
             searchPaths: [Self.herdrBin]
         )
         let runtime = HerdrEmbedRuntime()
@@ -795,9 +797,15 @@ final class HerdrEmbedHardeningTests: XCTestCase {
         let key = try await parseFixtureKey()
         return HerdrEmbedTransportCoordinator(
             connection: connection,
-            hostKeyVerifier: verifier,
-            authenticationKeyProvider: { StaticFixtureKeyProvider(key: key) },
-            searchPaths: [Self.herdrBin]
+            connector: {
+                HerdrEndpointConnector(
+                    hostKeyVerifier: verifier,
+                    authenticationKeyProvider: StaticFixtureKeyProvider(key: key),
+                    metadataProvider: FixtureHerdrKeyMetadataProvider(),
+                    searchPaths: [Self.herdrBin],
+                    approveHostKey: { _ in true }
+                )
+            }
         )
     }
 
@@ -816,7 +824,7 @@ final class HerdrEmbedHardeningTests: XCTestCase {
             host: "127.0.0.1",
             port: 12222,
             username: Self.fixtureUsername,
-            keyReference: "fixture-ed25519"
+            customKeys: ["fixture-ed25519"]
         )
     }
 
@@ -830,7 +838,7 @@ final class HerdrEmbedHardeningTests: XCTestCase {
     private func expectedSocketFile(for connection: Connection) -> String {
         let profile = HerdrEmbedMachine.profileID(for: connection.id)
         return NSHomeDirectory()
-            + "/\(HerdrEmbedClientCatalog.transportDirectoryName)/\(profile).sock"
+            + "/\(HerdrEmbedClientCatalog.transportDirectoryRelativePath)/\(profile).sock"
     }
 
     private func requireFixtures(serverPort: Int) throws {

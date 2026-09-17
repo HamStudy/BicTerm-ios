@@ -69,7 +69,7 @@ final class HerdrEmbedTransportTests: XCTestCase {
             host: "127.0.0.1",
             port: 12222,
             username: Self.fixtureUsername,
-            keyReference: "fixture-ed25519"
+            customKeys: ["fixture-ed25519"]
         )
         let connection = try Connection(
             name: "fixture-embed-jump",
@@ -77,7 +77,7 @@ final class HerdrEmbedTransportTests: XCTestCase {
             host: "127.0.0.1",
             port: 12223,
             username: Self.fixtureUsername,
-            keyReference: "fixture-ed25519",
+            customKeys: ["fixture-ed25519"],
             jumpChain: [hop]
         )
         let cwdBeforeStart = FileManager.default.currentDirectoryPath
@@ -213,7 +213,7 @@ final class HerdrEmbedTransportTests: XCTestCase {
             host: "127.0.0.1",
             port: 12222,
             username: Self.fixtureUsername,
-            keyReference: "fixture-ed25519"
+            customKeys: ["fixture-ed25519"]
         )
     }
 
@@ -235,6 +235,7 @@ final class HerdrEmbedTransportTests: XCTestCase {
                 HerdrEndpointConnector(
                     hostKeyVerifier: verifier,
                     authenticationKeyProvider: FixtureKeyProvider(key: key),
+                    metadataProvider: FixtureHerdrKeyMetadataProvider(),
                     searchPaths: [Self.herdrBin],
                     approveHostKey: { _ in true }
                 )
@@ -269,7 +270,7 @@ final class HerdrEmbedTransportTests: XCTestCase {
     private func expectedSocketFile(for connection: Connection) -> String {
         let profile = HerdrEmbedMachine.profileID(for: connection.id)
         return NSHomeDirectory()
-            + "/\(HerdrEmbedClientCatalog.transportDirectoryName)/\(profile).sock"
+            + "/\(HerdrEmbedClientCatalog.transportDirectoryRelativePath)/\(profile).sock"
     }
 
     private func waitFor(

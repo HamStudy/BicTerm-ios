@@ -188,6 +188,11 @@ final class HerdrEmbedTransportCoordinator {
     private let connectorFactory: (@Sendable () async -> HerdrEndpointConnector)?
     private let providedVerifier: HostKeyVerifier?
     private let authenticationKeyProvider: (@Sendable () async -> any SSHAuthenticationKeyProvider)?
+    /// Test seam for the key-offer pool: production resolves the offer
+    /// from the real Keychain-backed default; fixture tests inject the
+    /// fixture key's metadata so the offer isn't empty in a Keychain-less
+    /// process.
+    private let providedMetadataProvider: (any SSHKeyMetadataProviding)?
     private let searchPaths: [String]
 
     private var servers: [HerdrEmbedBridgeServer] = []
@@ -223,6 +228,7 @@ final class HerdrEmbedTransportCoordinator {
         self.searchPaths = searchPaths
         self.connectorFactory = nil
         self.authenticationKeyProvider = nil
+        self.providedMetadataProvider = nil
     }
 
     /// Trust-prompt-coverable bring-up with an injected authentication
@@ -233,6 +239,7 @@ final class HerdrEmbedTransportCoordinator {
         connection: Connection,
         hostKeyVerifier: HostKeyVerifier?,
         authenticationKeyProvider: @escaping @Sendable () async -> any SSHAuthenticationKeyProvider,
+        metadataProvider: (any SSHKeyMetadataProviding)? = nil,
         searchPaths: [String] = HerdrProbe.defaultSearchPaths
     ) {
         self.links = [Self.link(for: connection)]
@@ -240,6 +247,7 @@ final class HerdrEmbedTransportCoordinator {
         self.providedVerifier = hostKeyVerifier
         self.searchPaths = searchPaths
         self.authenticationKeyProvider = authenticationKeyProvider
+        self.providedMetadataProvider = metadataProvider
         self.connectorFactory = nil
     }
 
@@ -249,6 +257,7 @@ final class HerdrEmbedTransportCoordinator {
         self.connectorFactory = connector
         self.providedVerifier = nil
         self.authenticationKeyProvider = nil
+        self.providedMetadataProvider = nil
         self.searchPaths = HerdrProbe.defaultSearchPaths
     }
 
@@ -261,12 +270,14 @@ final class HerdrEmbedTransportCoordinator {
         preferredSelection: String? = nil,
         hostKeyVerifier: HostKeyVerifier?,
         authenticationKeyProvider: @escaping @Sendable () async -> any SSHAuthenticationKeyProvider,
+        metadataProvider: (any SSHKeyMetadataProviding)? = nil,
         searchPaths: [String] = HerdrProbe.defaultSearchPaths
     ) {
         self.links = machines
         self.preferredSelection = preferredSelection
         self.providedVerifier = hostKeyVerifier
         self.authenticationKeyProvider = authenticationKeyProvider
+        self.providedMetadataProvider = metadataProvider
         self.searchPaths = searchPaths
         self.connectorFactory = nil
     }
@@ -281,6 +292,7 @@ final class HerdrEmbedTransportCoordinator {
         self.preferredSelection = preferredSelection
         self.providedVerifier = hostKeyVerifier
         self.authenticationKeyProvider = nil
+        self.providedMetadataProvider = nil
         self.searchPaths = searchPaths
         self.connectorFactory = nil
     }
@@ -295,6 +307,7 @@ final class HerdrEmbedTransportCoordinator {
         self.connectorFactory = connector
         self.providedVerifier = nil
         self.authenticationKeyProvider = nil
+        self.providedMetadataProvider = nil
         self.searchPaths = HerdrProbe.defaultSearchPaths
     }
 
@@ -336,6 +349,7 @@ final class HerdrEmbedTransportCoordinator {
         return HerdrEndpointConnector(
             hostKeyVerifier: verifier,
             authenticationKeyProvider: keyProvider,
+            metadataProvider: providedMetadataProvider ?? DefaultSSHKeyMetadataProvider(),
             searchPaths: resolvedPaths,
             approveHostKey: { [weak self] challenge in
                 await self?.approve(challenge) ?? false

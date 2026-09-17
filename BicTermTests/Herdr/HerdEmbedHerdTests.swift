@@ -203,7 +203,7 @@ final class HerdrEmbedHerdTests: XCTestCase {
             host: "127.0.0.1",
             port: 12222,
             username: Self.fixtureUsername,
-            keyReference: "fixture-ed25519"
+            customKeys: ["fixture-ed25519"]
         )
         let connection = try Connection(
             name: label,
@@ -211,7 +211,7 @@ final class HerdrEmbedHerdTests: XCTestCase {
             host: "127.0.0.1",
             port: 12223,
             username: Self.fixtureUsername,
-            keyReference: "fixture-ed25519",
+            customKeys: ["fixture-ed25519"],
             jumpChain: [hop]
         )
         return link(for: connection)
@@ -232,7 +232,7 @@ final class HerdrEmbedHerdTests: XCTestCase {
             host: "127.0.0.1",
             port: 12222,
             username: Self.fixtureUsername,
-            keyReference: "fixture-ed25519"
+            customKeys: ["fixture-ed25519"]
         )
     }
 
@@ -253,6 +253,7 @@ final class HerdrEmbedHerdTests: XCTestCase {
                 hostKeyVerifier: (try? await verifierTask.value)
                     ?? HostKeyVerifier(store: InMemoryHostKeyStoreFallback()),
                 authenticationKeyProvider: FixtureHerdKeyProvider(key: key),
+                metadataProvider: FixtureHerdrKeyMetadataProvider(),
                 searchPaths: [herdrBin],
                 approveHostKey: { _ in true }
             )
@@ -500,7 +501,7 @@ final class HerdrEmbedHerdTests: XCTestCase {
 
     private func socketFile(for machine: HerdrEmbedMachineLink) -> String {
         NSHomeDirectory()
-            + "/\(HerdrEmbedClientCatalog.transportDirectoryName)/\(machine.machine.profileID).sock"
+            + "/\(HerdrEmbedClientCatalog.transportDirectoryRelativePath)/\(machine.machine.profileID).sock"
     }
 
     private func catalogFile() -> URL {

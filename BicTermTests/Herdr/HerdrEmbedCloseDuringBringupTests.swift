@@ -53,7 +53,7 @@ final class HerdrEmbedCloseDuringBringupTests: XCTestCase {
             host: "127.0.0.1",
             port: 1,
             username: "fixture",
-            keyReference: "fixture-ed25519"
+            customKeys: ["fixture-ed25519"]
         )
         weak var weakCoordinator: HerdrEmbedTransportCoordinator?
         do {
@@ -137,6 +137,7 @@ final class HerdrEmbedCloseDuringBringupTests: XCTestCase {
                 connection: connection,
                 hostKeyVerifier: HostKeyVerifier(store: InMemoryHostKeyStoreFallback()),
                 authenticationKeyProvider: { StaticFixtureKeyProvider(key: key) },
+                metadataProvider: FixtureHerdrKeyMetadataProvider(),
                 searchPaths: [Self.herdrBin]
             )
             weakCoordinator = coordinator
@@ -316,7 +317,7 @@ final class HerdrEmbedCloseDuringBringupTests: XCTestCase {
             host: "127.0.0.1",
             port: 12222,
             username: Self.fixtureUsername,
-            keyReference: "fixture-ed25519"
+            customKeys: ["fixture-ed25519"]
         )
     }
 
@@ -348,6 +349,7 @@ final class HerdrEmbedCloseDuringBringupTests: XCTestCase {
             connection: connection,
             hostKeyVerifier: verifier,
             authenticationKeyProvider: { StaticFixtureKeyProvider(key: key) },
+            metadataProvider: FixtureHerdrKeyMetadataProvider(),
             searchPaths: [Self.herdrBin]
         )
     }
@@ -355,7 +357,7 @@ final class HerdrEmbedCloseDuringBringupTests: XCTestCase {
     private func expectedSocketFile(for connection: Connection) -> String {
         let profile = HerdrEmbedMachine.profileID(for: connection.id)
         return NSHomeDirectory()
-            + "/\(HerdrEmbedClientCatalog.transportDirectoryName)/\(profile).sock"
+            + "/\(HerdrEmbedClientCatalog.transportDirectoryRelativePath)/\(profile).sock"
     }
 }
 
