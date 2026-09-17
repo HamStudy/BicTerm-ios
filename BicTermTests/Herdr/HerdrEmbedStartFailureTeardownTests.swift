@@ -31,10 +31,18 @@ final class HerdrEmbedStartFailureTeardownTests: XCTestCase {
         try await super.setUp()
         cwdBefore = FileManager.default.currentDirectoryPath
         // Repo-local scratch (gitignored `Fixtures/run/`), unique per run:
-        // containment rule plus no parallel-test collisions.
-        scratch = Self.repoRoot
-            .appendingPathComponent("Fixtures/run/herdr-start-failure-tests", isDirectory: true)
-            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        // containment rule plus no parallel-test collisions. On a physical
+        // device the build-machine path does not exist — fall back to the
+        // app container's own tmp so the suite runs there too.
+        let scratchBase: URL
+        if FileManager.default.fileExists(atPath: Self.repoRoot.path) {
+            scratchBase = Self.repoRoot
+                .appendingPathComponent("Fixtures/run/herdr-start-failure-tests", isDirectory: true)
+        } else {
+            scratchBase = FileManager.default.temporaryDirectory
+                .appendingPathComponent("herdr-start-failure-tests", isDirectory: true)
+        }
+        scratch = scratchBase.appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(
             at: scratch,
             withIntermediateDirectories: true
