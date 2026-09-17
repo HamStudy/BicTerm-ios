@@ -1,0 +1,914 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: BicTerm <embed@bicterm.invalid>
+Date: Thu, 17 Sep 2026 16:20:00 -0600
+Subject: [PATCH] embed: hide the Local endpoint under HERDR_EMBED_HIDE_LOCAL
+
+behind the bicterm-embed feature, HERDR_EMBED_HIDE_LOCAL=1 hides the
+Local endpoint for embedding hosts that run no local herdr server (herd
+mode, where the stock Local row would redial a nonexistent socket
+forever). The env is parsed once at client boot and carried as
+immutable shell policy on ClientShellConfig; the startup Local dial,
+Local method registration, and the late Local catalog transition are
+skipped; catalog reloads never recreate the Local row; and removing the
+active machine selects the first enabled survivor instead of falling
+back to Local. With no active machine the Local id stays an internal
+no-active sentinel: the unavailable frame reads "No machine selected"
+and the new-workspace footer stays disabled. Endpoint chrome (machine
+rows, machine parents in navigation, the endpoint sidebar) now applies
+whenever any real machine exists, so a sole machine no longer falls
+into the legacy local-only renderers. Stock builds keep every path byte
+for byte: the exact value "1" is required and the stock const fn
+ignores the env entirely.
+---
+ src/client/catalog_reload.rs             | 149 ++++++++++++++++++-
+ src/client/mod.rs                        | 237 +++++++++++++++++++++----------
+ src/client/shell/aggregate_navigation.rs |   4 +-
+ src/client/shell/composition.rs          |   6 +
+ src/client/shell/config.rs               |   9 ++
+ src/client/shell/endpoint_sidebar.rs     |  27 ++--
+ src/client/shell/endpoints.rs            |  65 +++++++--
+ src/client/shell/mobile.rs               |   4 +-
+ src/client/shell/render.rs               |   5 +-
+ src/client/shell/state.rs                |  11 +-
+ src/client/shell/tests/endpoints.rs      |  65 +++++++++
+ src/client/tests/mod.rs                  |  32 +++++
+ 12 files changed, 512 insertions(+), 102 deletions(-)
+
+diff --git a/src/client/catalog_reload.rs b/src/client/catalog_reload.rs
+index 21f33be..d3a6f74 100644
+--- a/src/client/catalog_reload.rs
++++ b/src/client/catalog_reload.rs
+@@ -58,10 +58,36 @@ pub(super) fn apply_profiles(
+     catalog.ssh = profiles;
+     if active_removed {
+         endpoints.select_unavailable_local();
+-        catalog.select_local();
++        // BICTERM-PATCH (embed): with Local hidden there is no Local to fall
++        // back to — select the first enabled surviving machine, or leave the
++        // catalog unselected (None is "unselected" without Local).
++        let include_local = state
++            .shell
++            .as_ref()
++            .map_or(true, |shell| shell.include_local_endpoint());
++        let survivor = if include_local {
++            None
++        } else {
++            catalog
++                .ssh
++                .iter()
++                .find(|profile| profile.enabled)
++                .map(|profile| profile.id.clone())
++        };
++        match &survivor {
++            Some(profile_id) => {
++                catalog.select_ssh(profile_id);
++            }
++            None => catalog.select_local(),
++        }
+         state.freeze_presentation();
+         if let Some(shell) = state.shell.as_mut() {
+-            shell.select_unavailable_local();
++            match survivor {
++                Some(profile_id) => shell.select_unavailable_endpoint(
++                    endpoint::ClientEndpointId::Ssh(profile_id),
++                ),
++                None => shell.select_unavailable_local(),
++            }
+         }
+     } else if catalog.selected_profile.as_ref().is_some_and(|selected| {
+         !catalog
+@@ -273,4 +299,123 @@ mod tests {
+             }
+         }
+     }
++
++    #[cfg(feature = "bicterm-embed")]
++    fn state_without_local() -> ClientState {
++        let mut state = state();
++        state.shell = Some(shell::ClientShellState::new(
++            shell::ClientShellConfig::from_config(&crate::config::Config::default())
++                .with_local_endpoint_visibility(false),
++        ));
++        state
++    }
++
++    // BICTERM-PATCH (embed): hidden Local — removing the active machine
++    // selects the enabled survivor instead of falling back to Local.
++    #[cfg(feature = "bicterm-embed")]
++    #[test]
++    fn hidden_local_remove_active_machine_selects_enabled_survivor() {
++        let now = Instant::now();
++        let mut state = state_without_local();
++        let mut catalog = EndpointCatalog::default();
++        let removed_id = catalog.add_ssh("Old", "old", "main").unwrap();
++        let survivor_id = catalog.add_ssh("Stay", "stay", "main").unwrap();
++        let removed = ClientEndpointId::Ssh(removed_id.clone());
++        let survivor = ClientEndpointId::Ssh(survivor_id.clone());
++        catalog.select_ssh(&removed_id);
++        state
++            .shell
++            .as_mut()
++            .unwrap()
++            .set_endpoint_catalog(&catalog.ssh);
++        let mut supervisors = EndpointSupervisors::new(&catalog.ssh, now);
++        let mut endpoints = EndpointRegistry::empty();
++        let removed_disconnects = Arc::new(AtomicUsize::new(0));
++        endpoints.insert(
++            removed.clone(),
++            Transport(removed_disconnects.clone()),
++            2,
++            Default::default(),
++            true,
++        );
++        endpoints.set_active(&removed);
++        endpoints.unfreeze_input();
++        let mut commands = endpoint_commands::EndpointCommands::default();
++        let profiles: Vec<_> = catalog
++            .ssh
++            .iter()
++            .filter(|profile| profile.id == survivor_id)
++            .cloned()
++            .collect();
++        assert!(apply_profiles(
++            &mut state,
++            &mut endpoints,
++            &mut commands,
++            &mut supervisors,
++            &mut catalog,
++            profiles,
++            now
++        ));
++        assert_eq!(catalog.selected_profile, Some(survivor_id));
++        assert_eq!(endpoints.active_id(), &ClientEndpointId::Local);
++        assert!(!endpoints.active_surface_available());
++        assert!(state
++            .shell
++            .as_ref()
++            .unwrap()
++            .endpoint_is_active(&survivor));
++        assert!(!state.shell.as_ref().unwrap().has_presented_surface());
++        assert!(state.presentation_frozen);
++        assert_eq!(removed_disconnects.load(Ordering::Relaxed), 1);
++    }
++
++    // BICTERM-PATCH (embed): hidden Local — removing the only machine leaves
++    // the catalog unselected; the Local id stays the internal no-active
++    // sentinel without a Local row ever existing.
++    #[cfg(feature = "bicterm-embed")]
++    #[test]
++    fn hidden_local_remove_last_machine_stays_unselected() {
++        let now = Instant::now();
++        let mut state = state_without_local();
++        let mut catalog = EndpointCatalog::default();
++        let id = catalog.add_ssh("Gone", "gone", "main").unwrap();
++        let gone = ClientEndpointId::Ssh(id.clone());
++        catalog.select_ssh(&id);
++        state
++            .shell
++            .as_mut()
++            .unwrap()
++            .set_endpoint_catalog(&catalog.ssh);
++        let mut supervisors = EndpointSupervisors::new(&catalog.ssh, now);
++        let mut endpoints = EndpointRegistry::empty();
++        let disconnects = Arc::new(AtomicUsize::new(0));
++        endpoints.insert(
++            gone.clone(),
++            Transport(disconnects.clone()),
++            2,
++            Default::default(),
++            true,
++        );
++        endpoints.set_active(&gone);
++        endpoints.unfreeze_input();
++        let mut commands = endpoint_commands::EndpointCommands::default();
++        assert!(apply_profiles(
++            &mut state,
++            &mut endpoints,
++            &mut commands,
++            &mut supervisors,
++            &mut catalog,
++            Vec::new(),
++            now
++        ));
++        assert_eq!(catalog.selected_profile, None);
++        assert_eq!(endpoints.active_id(), &ClientEndpointId::Local);
++        assert!(state
++            .shell
++            .as_ref()
++            .unwrap()
++            .endpoint_is_active(&ClientEndpointId::Local));
++        assert!(state.presentation_frozen);
++        assert_eq!(disconnects.load(Ordering::Relaxed), 1);
++    }
+ }
+diff --git a/src/client/mod.rs b/src/client/mod.rs
+index 6e461ae..b729edf 100644
+--- a/src/client/mod.rs
++++ b/src/client/mod.rs
+@@ -134,6 +134,25 @@ use crate::protocol::{self, ClientMessage, FrameData, ServerMessage, MAX_GRAPHIC
+ use crate::protocol::{AttachScrollDirection, AttachScrollSource, NotifyKind};
+ use crate::server::socket_paths::client_socket_path;
+ 
++// BICTERM-PATCH (embed): HERDR_EMBED_HIDE_LOCAL=1 (exact) hides the Local
++// endpoint for herd embeds — the embedding host runs no local herdr server,
++// so the stock Local row would redial a nonexistent socket forever. Parsed
++// once here at client boot and carried as immutable shell policy; the process
++// env is never re-read during render or catalog reload.
++#[cfg(feature = "bicterm-embed")]
++fn embed_include_local_endpoint() -> bool {
++    std::env::var(EMBED_HIDE_LOCAL_ENV).as_deref() != Ok("1")
++}
++
++#[cfg(feature = "bicterm-embed")]
++const EMBED_HIDE_LOCAL_ENV: &str = "HERDR_EMBED_HIDE_LOCAL";
++
++/// Stock builds always include the Local endpoint.
++#[cfg(not(feature = "bicterm-embed"))]
++const fn embed_include_local_endpoint() -> bool {
++    true
++}
++
+ fn run_client_with_mode(
+     attach_request: Option<(String, bool)>,
+     attach_escape: Option<AttachEscapeState>,
+@@ -144,6 +163,10 @@ fn run_client_with_mode(
+     let loaded_config = crate::config::Config::load();
+     crate::terminal_modes::clear_host_mouse_reporting(&mut io::stdout())?;
+     let client_rendered_shell = attach_request.is_none();
++    // BICTERM-PATCH (embed): the Local-visibility policy is fixed for the
++    // process lifetime here; stock builds and direct attach always include
++    // Local.
++    let include_local_endpoint = embed_include_local_endpoint();
+     let socket_path = client_socket_path();
+     let keybinding_source = client_shell_keybinding_source();
+     let startup_config_diagnostic =
+@@ -158,6 +181,7 @@ fn run_client_with_mode(
+             .with_startup_onboarding(loaded_config.config.should_show_onboarding())
+             .with_keybinding_source(keybinding_source)
+             .with_local_endpoint(&socket_path)
++            .with_local_endpoint_visibility(include_local_endpoint)
+     });
+     let mouse_capture = loaded_config.config.ui.mouse_capture;
+     let mouse_scroll_lines = loaded_config.config.ui.mouse_scroll_lines();
+@@ -197,16 +221,24 @@ fn run_client_with_mode(
+     };
+     let federated = endpoint_catalog.has_enabled_ssh();
+ 
+-    let initial_stream = match crate::ipc::connect_local_stream(&socket_path) {
+-        Ok(stream) => Some(stream),
+-        Err(error) if federated => {
+-            warn!(%error, "Local is unavailable; keeping saved machines available");
+-            None
+-        }
+-        Err(error) => {
+-            return Err(io::Error::other(
+-                ClientError::ConnectionFailed(error).to_string(),
+-            ));
++    // BICTERM-PATCH (embed): a hidden-Local shell runs no local server at
++    // all — skip the initial client_socket_path() dial instead of failing or
++    // redialing a nonexistent socket forever. Direct attach still dials Local.
++    let skip_local_dial = client_rendered_shell && !include_local_endpoint;
++    let initial_stream = if skip_local_dial {
++        None
++    } else {
++        match crate::ipc::connect_local_stream(&socket_path) {
++            Ok(stream) => Some(stream),
++            Err(error) if federated => {
++                warn!(%error, "Local is unavailable; keeping saved machines available");
++                None
++            }
++            Err(error) => {
++                return Err(io::Error::other(
++                    ClientError::ConnectionFailed(error).to_string(),
++                ));
++            }
+         }
+     };
+ 
+@@ -416,21 +448,32 @@ async fn run_client_loop(
+         detached_process_children: Vec::new(),
+         shell: config.shell_config.map(shell::ClientShellState::new),
+     };
++    // BICTERM-PATCH (embed): the boot-time Local-visibility policy rides the
++    // shell config; a shell-less client (direct attach) always includes
++    // Local.
++    let include_local_endpoint = state
++        .shell
++        .as_ref()
++        .map_or(true, |shell| shell.include_local_endpoint());
+     let mut federated = endpoint_catalog.has_enabled_ssh();
+     if let Some(shell) = state.shell.as_mut() {
+         shell.set_graphics_cell_size(initial_cell_width_px, initial_cell_height_px);
+         shell.set_endpoint_catalog(&endpoint_catalog.ssh);
+-        shell.set_endpoint_methods_for(
+-            &endpoint::ClientEndpointId::Local,
+-            initial
+-                .as_ref()
+-                .and_then(|(_, handshake)| handshake.endpoint_methods.clone()),
+-        );
+-        if local_unavailable {
+-            shell.set_endpoint_status(
++        // BICTERM-PATCH (embed): hidden Local has no endpoint row and no
++        // connection — skip its method/status initialization entirely.
++        if include_local_endpoint {
++            shell.set_endpoint_methods_for(
+                 &endpoint::ClientEndpointId::Local,
+-                endpoint::ClientEndpointStatus::Connecting,
++                initial
++                    .as_ref()
++                    .and_then(|(_, handshake)| handshake.endpoint_methods.clone()),
+             );
++            if local_unavailable {
++                shell.set_endpoint_status(
++                    &endpoint::ClientEndpointId::Local,
++                    endpoint::ClientEndpointStatus::Connecting,
++                );
++            }
+         }
+     }
+     let host_mouse_capture_active = Arc::new(AtomicBool::new(state.mouse_capture_active));
+@@ -544,7 +587,9 @@ async fn run_client_loop(
+     };
+     let mut supervisors =
+         endpoint::EndpointSupervisors::new(&endpoint_catalog.ssh, std::time::Instant::now());
+-    if federated {
++    // BICTERM-PATCH (embed): hidden Local never gains a supervisor — the
++    // saved machines own every connection.
++    if federated && include_local_endpoint {
+         supervisors.add_local(
+             client_socket_path(),
+             write_stream
+@@ -586,25 +631,30 @@ async fn run_client_loop(
+                         let now = std::time::Instant::now();
+                         if !federated && profiles.iter().any(|profile| profile.enabled) {
+                             // Keep Local recovery once enabled, even after removing the last SSH profile.
+-                            federated = true;
+-                            supervisors.add_local(
+-                                client_socket_path(),
+-                                write_stream
++                            // BICTERM-PATCH (embed): hidden Local has no server to
++                            // recover — the late catalog transition adds no Local
++                            // supervisor or update notice.
++                            if include_local_endpoint {
++                                federated = true;
++                                supervisors.add_local(
++                                    client_socket_path(),
++                                    write_stream
++                                        .connection(&endpoint::ClientEndpointId::Local)
++                                        .map(|connection| connection.generation),
++                                    now,
++                                );
++                                if write_stream
+                                     .connection(&endpoint::ClientEndpointId::Local)
+-                                    .map(|connection| connection.generation),
+-                                now,
+-                            );
+-                            if write_stream
+-                                .connection(&endpoint::ClientEndpointId::Local)
+-                                .is_some_and(|connection| {
+-                                    !connection.negotiation.supports_surface_interest()
+-                                })
+-                            {
+-                                if let Some(shell) = state.shell.as_mut() {
+-                                    shell.receive_endpoint_unavailable(
+-                                        "Update the Local server before switching between machines"
+-                                            .into(),
+-                                    );
++                                    .is_some_and(|connection| {
++                                        !connection.negotiation.supports_surface_interest()
++                                    })
++                                {
++                                    if let Some(shell) = state.shell.as_mut() {
++                                        shell.receive_endpoint_unavailable(
++                                            "Update the Local server before switching between machines"
++                                                .into(),
++                                        );
++                                    }
+                                 }
+                             }
+                         }
+@@ -624,24 +674,49 @@ async fn run_client_loop(
+                                 &host_sgr_pixels_active,
+                             );
+                             scheduled_activation = None;
+-                            if state.shell.as_ref().is_some_and(|shell| {
+-                                shell.endpoint_projection_available(
+-                                    &endpoint::ClientEndpointId::Local,
+-                                )
+-                            }) && write_stream
+-                                .connection(&endpoint::ClientEndpointId::Local)
+-                                .is_some()
+-                            {
+-                                scheduled_activation = Some(ClientLoopEvent::ActivateEndpoint {
+-                                    endpoint_id: endpoint::ClientEndpointId::Local,
+-                                    target: None,
+-                                    force: true,
+-                                });
++                            // BICTERM-PATCH (embed): with Local hidden there is no
++                            // local fallback — activate the surviving selected
++                            // machine when it is already connected and projected,
++                            // else present the generic no-machine state.
++                            let fallback = if include_local_endpoint {
++                                Some(endpoint::ClientEndpointId::Local)
+                             } else {
+-                                present_handoff_unavailable(
+-                                    &mut state,
+-                                    "Local is unavailable; reconnecting".into(),
+-                                );
++                                endpoint_catalog
++                                    .selected_profile
++                                    .as_ref()
++                                    .map(|profile_id| {
++                                        endpoint::ClientEndpointId::Ssh(profile_id.clone())
++                                    })
++                            };
++                            let fallback_ready = fallback.as_ref().is_some_and(|endpoint_id| {
++                                state
++                                    .shell
++                                    .as_ref()
++                                    .is_some_and(|shell| {
++                                        shell.endpoint_projection_available(endpoint_id)
++                                    })
++                                    && write_stream.connection(endpoint_id).is_some()
++                            });
++                            match fallback {
++                                Some(endpoint_id) if fallback_ready => {
++                                    scheduled_activation = Some(ClientLoopEvent::ActivateEndpoint {
++                                        endpoint_id,
++                                        target: None,
++                                        force: true,
++                                    });
++                                }
++                                _ if include_local_endpoint => {
++                                    present_handoff_unavailable(
++                                        &mut state,
++                                        "Local is unavailable; reconnecting".into(),
++                                    );
++                                }
++                                _ => {
++                                    present_handoff_unavailable(
++                                        &mut state,
++                                        "No machine selected".into(),
++                                    );
++                                }
+                             }
+                         }
+                     }
+@@ -1898,28 +1973,38 @@ async fn run_client_loop(
+                             }
+                         }
+                         write_stream.mark_ready(&endpoint_id, generation);
+-                        let selected_endpoint = endpoint_catalog
+-                            .selected_profile
+-                            .as_ref()
+-                            .map_or(endpoint::ClientEndpointId::Local, |profile_id| {
+-                                endpoint::ClientEndpointId::Ssh(profile_id.clone())
+-                            });
+-                        let activation_ready = state.shell.as_ref().is_some_and(|shell| {
+-                            shell.endpoint_has_snapshot(&selected_endpoint)
+-                                && (!write_stream
+-                                    .connection(write_stream.active_id())
+-                                    .is_some_and(|connection| connection.surface_active)
+-                                    || shell.endpoint_boot_id(write_stream.active_id()).is_some())
+-                        });
+-                        let needs_surface = write_stream
+-                            .connection(&selected_endpoint)
+-                            .is_some_and(|connection| !connection.surface_active);
+-                        if activation_ready && needs_surface && pending_activation.is_none() {
+-                            scheduled_activation = Some(ClientLoopEvent::ActivateEndpoint {
+-                                endpoint_id: selected_endpoint,
+-                                target: None,
+-                                force: false,
++                        // BICTERM-PATCH (embed): with Local hidden an absent
++                        // selection stays unselected — None must never map onto
++                        // a dialed Local.
++                        let selected_endpoint = match endpoint_catalog.selected_profile.as_ref() {
++                            Some(profile_id) => {
++                                Some(endpoint::ClientEndpointId::Ssh(profile_id.clone()))
++                            }
++                            None if include_local_endpoint => {
++                                Some(endpoint::ClientEndpointId::Local)
++                            }
++                            None => None,
++                        };
++                        if let Some(selected_endpoint) = selected_endpoint {
++                            let activation_ready = state.shell.as_ref().is_some_and(|shell| {
++                                shell.endpoint_has_snapshot(&selected_endpoint)
++                                    && (!write_stream
++                                        .connection(write_stream.active_id())
++                                        .is_some_and(|connection| connection.surface_active)
++                                        || shell
++                                            .endpoint_boot_id(write_stream.active_id())
++                                            .is_some())
+                             });
++                            let needs_surface = write_stream
++                                .connection(&selected_endpoint)
++                                .is_some_and(|connection| !connection.surface_active);
++                            if activation_ready && needs_surface && pending_activation.is_none() {
++                                scheduled_activation = Some(ClientLoopEvent::ActivateEndpoint {
++                                    endpoint_id: selected_endpoint,
++                                    target: None,
++                                    force: false,
++                                });
++                            }
+                         }
+                     }
+                     ServerMessage::Welcome { .. } => {
+diff --git a/src/client/shell/aggregate_navigation.rs b/src/client/shell/aggregate_navigation.rs
+index 5c826bf..4311fa1 100644
+--- a/src/client/shell/aggregate_navigation.rs
++++ b/src/client/shell/aggregate_navigation.rs
+@@ -113,7 +113,9 @@ pub(super) fn navigator_rows(
+     };
+     let text = |value: &str| query.is_empty() || value.to_lowercase().contains(&query);
+     let filtering = navigator.filter.is_some() || !query.is_empty();
+-    let federated = endpoints.len() > 1;
++    // BICTERM-PATCH (embed): a sole non-Local endpoint still gets machine
++    // parents (hidden Local, one-machine herd).
++    let federated = endpoint_chrome_active(endpoints);
+     let depth_offset = u8::from(federated);
+     let mut rows = Vec::new();
+ 
+diff --git a/src/client/shell/composition.rs b/src/client/shell/composition.rs
+index a80ebb3..f593fd9 100644
+--- a/src/client/shell/composition.rs
++++ b/src/client/shell/composition.rs
+@@ -63,6 +63,12 @@ impl ClientShellState {
+             self.hits = ShellHitMap::default();
+         }
+         let message = self.endpoint_error.clone().unwrap_or_else(|| {
++            // BICTERM-PATCH (embed): with Local hidden, the Local id is an
++            // internal no-active sentinel with no endpoint row — present the
++            // generic no-machine state instead of a Local-specific message.
++            if self.endpoint_status(&self.active_endpoint_id).is_none() {
++                return "No machine selected".to_owned();
++            }
+             let status = self
+                 .endpoint_status(&self.active_endpoint_id)
+                 .unwrap_or(ClientEndpointStatus::Connecting);
+diff --git a/src/client/shell/config.rs b/src/client/shell/config.rs
+index e8a9b4b..c70df0c 100644
+--- a/src/client/shell/config.rs
++++ b/src/client/shell/config.rs
+@@ -142,6 +142,7 @@ impl ClientShellConfig {
+             preferences: preferences::ClientChromePreferences::default(),
+             startup_config_diagnostic: None,
+             startup_onboarding: false,
++            include_local_endpoint: true,
+         }
+     }
+ 
+@@ -177,6 +178,14 @@ impl ClientShellConfig {
+         self.with_preferences_path(preferences::path_for_local_endpoint(socket_path))
+     }
+ 
++    /// BICTERM-PATCH (embed): HERDR_EMBED_HIDE_LOCAL=1 hides the Local
++    /// endpoint for hosts that embed the client without a local server (herd
++    /// mode). Stock builds always pass true.
++    pub(crate) fn with_local_endpoint_visibility(mut self, include_local: bool) -> Self {
++        self.include_local_endpoint = include_local;
++        self
++    }
++
+     pub(super) fn with_preferences_path(mut self, path: std::path::PathBuf) -> Self {
+         self.preferences = preferences::load(&path).unwrap_or_default();
+         self.preferences_path = Some(path);
+diff --git a/src/client/shell/endpoint_sidebar.rs b/src/client/shell/endpoint_sidebar.rs
+index 51c940c..934d683 100644
+--- a/src/client/shell/endpoint_sidebar.rs
++++ b/src/client/shell/endpoint_sidebar.rs
+@@ -338,13 +338,22 @@ pub(super) fn render_expanded(
+ 
+     let footer_y = workspace_area.bottom().saturating_sub(1);
+     if config.mouse_capture {
+-        let label = format!(" new · {}", active_endpoint_label(state));
+-        hits.new_workspace = Rect::new(
+-            workspace_area.x,
+-            footer_y,
+-            display_width(&label).min(workspace_area.width),
+-            u16::from(workspace_area.height > 0),
+-        );
++        // BICTERM-PATCH (embed): with Local hidden the active id can be the
++        // internal no-active sentinel — no "new workspace" target exists yet.
++        let label = match active_endpoint_label(state) {
++            Some(endpoint_label) => format!(" new · {endpoint_label}"),
++            None => " new".to_owned(),
++        };
++        if active_endpoint_label(state).is_some() {
++            hits.new_workspace = Rect::new(
++                workspace_area.x,
++                footer_y,
++                display_width(&label).min(workspace_area.width),
++                u16::from(workspace_area.height > 0),
++            );
++        } else {
++            hits.new_workspace = Rect::default();
++        }
+         put_text(
+             buffer,
+             workspace_area.x,
+@@ -399,12 +408,12 @@ pub(super) fn render_expanded(
+     );
+ }
+ 
+-fn active_endpoint_label<'a>(state: &'a ShellRenderState<'_>) -> &'a str {
++fn active_endpoint_label<'a>(state: &'a ShellRenderState<'_>) -> Option<&'a str> {
+     state
+         .endpoints
+         .iter()
+         .find(|endpoint| &endpoint.endpoint_id == state.active_endpoint_id)
+-        .map_or("Local", |endpoint| endpoint.label.as_str())
++        .map(|endpoint| endpoint.label.as_str())
+ }
+ 
+ fn render_endpoint_row(
+diff --git a/src/client/shell/endpoints.rs b/src/client/shell/endpoints.rs
+index 2f5a8e4..6916730 100644
+--- a/src/client/shell/endpoints.rs
++++ b/src/client/shell/endpoints.rs
+@@ -27,14 +27,20 @@ pub(crate) enum ClientEndpointFocusTarget {
+ 
+ impl ClientShellState {
+     pub(crate) fn set_endpoint_catalog(&mut self, profiles: &[SavedSshEndpoint]) {
+-        let mut next = Vec::with_capacity(profiles.len().saturating_add(1));
+-        let local = self
+-            .endpoints
+-            .iter()
+-            .find(|endpoint| endpoint.endpoint_id.is_local())
+-            .cloned()
+-            .unwrap_or_else(local_endpoint);
+-        next.push(local);
++        let include_local = self.config.include_local_endpoint;
++        let mut next =
++            Vec::with_capacity(profiles.len().saturating_add(usize::from(include_local)));
++        // BICTERM-PATCH (embed): hidden Local is never recreated — the
++        // catalog rows are exactly the saved machines.
++        if include_local {
++            let local = self
++                .endpoints
++                .iter()
++                .find(|endpoint| endpoint.endpoint_id.is_local())
++                .cloned()
++                .unwrap_or_else(local_endpoint);
++            next.push(local);
++        }
+         for profile in profiles {
+             let endpoint_id = ClientEndpointId::Ssh(profile.id.clone());
+             let previous = self
+@@ -71,7 +77,23 @@ impl ClientShellState {
+             .iter()
+             .any(|endpoint| endpoint.endpoint_id == self.active_endpoint_id)
+         {
+-            self.select_unavailable_local();
++            // BICTERM-PATCH (embed): with Local hidden there is no Local row
++            // to fall back to — select the first enabled surviving machine,
++            // or keep the Local id as the internal no-active sentinel.
++            let survivor = if include_local {
++                None
++            } else {
++                next.iter()
++                    .find(|endpoint| {
++                        !endpoint.endpoint_id.is_local()
++                            && endpoint.status != ClientEndpointStatus::Disabled
++                    })
++                    .map(|endpoint| endpoint.endpoint_id.clone())
++            };
++            match survivor {
++                Some(endpoint_id) => self.select_unavailable_endpoint(endpoint_id),
++                None => self.select_unavailable_local(),
++            }
+         }
+         self.collapsed_endpoints.retain(|endpoint_id| {
+             next.iter()
+@@ -81,11 +103,16 @@ impl ClientShellState {
+     }
+ 
+     pub(crate) fn select_unavailable_local(&mut self) {
++        self.select_unavailable_endpoint(ClientEndpointId::Local);
++    }
++
++    pub(crate) fn select_unavailable_endpoint(&mut self, endpoint_id: ClientEndpointId) {
+         self.reset_endpoint_projection();
+-        self.active_endpoint_id = ClientEndpointId::Local;
++        self.active_endpoint_id = endpoint_id.clone();
+         self.mode = ClientShellMode::Terminal;
+         self.snapshot = None;
+-        self.graphics.set_scope("local:unavailable");
++        self.graphics
++            .set_scope(&format!("{}:unavailable", endpoint_id.storage_key()));
+         self.reconcile_input_source();
+     }
+ 
+@@ -275,6 +302,12 @@ impl ClientShellState {
+         self.endpoints.len() > 1
+     }
+ 
++    /// BICTERM-PATCH (embed): false only when the embedding host hides Local
++    /// (HERDR_EMBED_HIDE_LOCAL=1); stock builds always include it.
++    pub(crate) fn include_local_endpoint(&self) -> bool {
++        self.config.include_local_endpoint
++    }
++
+     #[cfg(test)]
+     pub(crate) fn set_snapshot(&mut self, snapshot: Box<ClientShellSnapshot>) {
+         let endpoint_id = self.active_endpoint_id.clone();
+@@ -492,6 +525,16 @@ pub(super) fn endpoint_status_presentation(
+     }
+ }
+ 
++/// BICTERM-PATCH (embed): endpoint-qualified chrome (machine rows, machine
++/// parents in navigation) applies whenever a real machine exists — multiple
++/// endpoints, or a sole endpoint that is not Local. With Local hidden, a
++/// one-machine herd must not fall into the legacy local-only renderers.
++pub(super) fn endpoint_chrome_active(endpoints: &[ClientShellEndpoint]) -> bool {
++    endpoints
++        .iter()
++        .any(|endpoint| !endpoint.endpoint_id.is_local())
++}
++
+ pub(super) fn local_endpoint() -> ClientShellEndpoint {
+     ClientShellEndpoint {
+         endpoint_id: ClientEndpointId::Local,
+diff --git a/src/client/shell/mobile.rs b/src/client/shell/mobile.rs
+index abe5059..da0dee9 100644
+--- a/src/client/shell/mobile.rs
++++ b/src/client/shell/mobile.rs
+@@ -582,7 +582,9 @@ fn mobile_items(
+ ) -> Vec<MobileItem> {
+     let palette = &config.palette;
+     let mut items = Vec::new();
+-    if endpoints.len() > 1 {
++    // BICTERM-PATCH (embed): a sole non-Local endpoint still lists its
++    // machine row (hidden Local, one-machine herd).
++    if endpoint_chrome_active(endpoints) {
+         items.push(MobileItem::section("machines", palette));
+         for endpoint in endpoints {
+             let background = palette.panel_bg;
+diff --git a/src/client/shell/render.rs b/src/client/shell/render.rs
+index ad9ac8b..245d817 100644
+--- a/src/client/shell/render.rs
++++ b/src/client/shell/render.rs
+@@ -246,7 +246,10 @@ pub(super) fn render_shell(
+         );
+     }
+     if layout.sidebar.width > 0 {
+-        if state.endpoints.len() > 1 {
++        // BICTERM-PATCH (embed): a sole non-Local endpoint (hidden Local,
++        // one-machine herd) uses the endpoint sidebar too; the legacy
++        // local-only renderers below stay reachable only without machines.
++        if endpoint_chrome_active(state.endpoints) {
+             if state.sidebar_collapsed {
+                 super::endpoint_sidebar::render_collapsed(
+                     buffer,
+diff --git a/src/client/shell/state.rs b/src/client/shell/state.rs
+index 81845d3..914b223 100644
+--- a/src/client/shell/state.rs
++++ b/src/client/shell/state.rs
+@@ -107,6 +107,7 @@ pub(crate) struct ClientShellConfig {
+     pub(super) preferences: preferences::ClientChromePreferences,
+     pub(super) startup_config_diagnostic: Option<String>,
+     pub(super) startup_onboarding: bool,
++    pub(super) include_local_endpoint: bool,
+ }
+ 
+ #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+@@ -1031,6 +1032,7 @@ impl ClientShellState {
+         if let Some(sort) = preferences.agent_panel_sort {
+             config.agent_panel_sort = sort;
+         }
++        let include_local_endpoint = config.include_local_endpoint;
+         Self {
+             config,
+             snapshot: None,
+@@ -1065,7 +1067,14 @@ impl ClientShellState {
+             last_tab_bar_width: None,
+             last_composed_size: None,
+             hits: ShellHitMap::default(),
+-            endpoints: vec![local_endpoint()],
++            // BICTERM-PATCH (embed): hidden Local starts with no endpoint
++            // rows; the Local id below stays the internal no-active sentinel
++            // until a machine activates.
++            endpoints: if include_local_endpoint {
++                vec![local_endpoint()]
++            } else {
++                Vec::new()
++            },
+             active_endpoint_id: ClientEndpointId::Local,
+             collapsed_endpoints: HashSet::new(),
+             mode: ClientShellMode::Terminal,
+diff --git a/src/client/shell/tests/endpoints.rs b/src/client/shell/tests/endpoints.rs
+index 52c7192..1c9c1d2 100644
+--- a/src/client/shell/tests/endpoints.rs
++++ b/src/client/shell/tests/endpoints.rs
+@@ -1203,3 +1203,68 @@ fn navigator_foreign_tab_selection_keeps_the_tab_target() {
+         }] if activated == &endpoint_id && tab_id == "tab_1"
+     ));
+ }
++
++// BICTERM-PATCH (embed): hidden Local — catalog rows are exactly the saved
++// machines, and a sole machine still gets endpoint chrome and machine hits.
++#[cfg(feature = "bicterm-embed")]
++#[test]
++fn hidden_local_single_machine_uses_endpoint_chrome() {
++    let mut state = ClientShellState::new(
++        ClientShellConfig::from_config(&Config::default()).with_local_endpoint_visibility(false),
++    );
++    assert!(state.endpoints.is_empty());
++    let profile = remote_profile();
++    let remote = ClientEndpointId::Ssh(profile.id.clone());
++    state.set_endpoint_catalog(&[profile]);
++    assert_eq!(state.endpoints.len(), 1);
++    assert!(
++        !state
++            .endpoints
++            .iter()
++            .any(|endpoint| endpoint.endpoint_id.is_local())
++    );
++    assert!(state.endpoint_is_active(&remote));
++    assert!(state.endpoint_status(&ClientEndpointId::Local).is_none());
++    state.set_endpoint_status(&remote, ClientEndpointStatus::Online);
++    state.set_endpoint_snapshot(&remote, Box::new(snapshot()));
++    state
++        .compose(100, 28)
++        .expect("single machine without Local composes");
++    assert!(
++        state
++            .hits
++            .machines
++            .iter()
++            .any(|hit| hit.endpoint_id == remote)
++    );
++    assert!(
++        !state
++            .hits
++            .machines
++            .iter()
++            .any(|hit| hit.endpoint_id.is_local())
++    );
++}
++
++// BICTERM-PATCH (embed): hidden Local with an empty catalog — the Local id
++// stays the internal no-active sentinel, the frame says so, and the new
++// workspace footer stays disabled until a machine activates.
++#[cfg(feature = "bicterm-embed")]
++#[test]
++fn hidden_local_empty_catalog_presents_no_machine_selected() {
++    let mut state = ClientShellState::new(
++        ClientShellConfig::from_config(&Config::default()).with_local_endpoint_visibility(false),
++    );
++    state.set_endpoint_catalog(&[]);
++    assert!(state.endpoints.is_empty());
++    assert!(state.endpoint_is_active(&ClientEndpointId::Local));
++    let frame = state.compose(100, 28).expect("no-machine frame composes");
++    let buffer = frame.to_ratatui_buffer().unwrap();
++    let text = buffer
++        .content()
++        .iter()
++        .map(|cell| cell.symbol())
++        .collect::<String>();
++    assert!(text.contains("No machine selected"));
++    assert!(state.hits.new_workspace.is_empty());
++}
+diff --git a/src/client/tests/mod.rs b/src/client/tests/mod.rs
+index cca7323..dc85632 100644
+--- a/src/client/tests/mod.rs
++++ b/src/client/tests/mod.rs
+@@ -127,6 +127,38 @@ impl Drop for EnvVarsRemovedGuard {
+     }
+ }
+ 
++// BICTERM-PATCH (embed): HERDR_EMBED_HIDE_LOCAL hides Local only under the
++// embed feature and only for the exact value "1".
++#[cfg(feature = "bicterm-embed")]
++#[test]
++fn embed_hide_local_requires_exact_one() {
++    let _lock = env_lock().lock().unwrap();
++    {
++        let _guard = EnvVarsRemovedGuard::new(&[EMBED_HIDE_LOCAL_ENV]);
++        assert!(embed_include_local_endpoint());
++    }
++    {
++        let _guard = EnvVarGuard::set(EMBED_HIDE_LOCAL_ENV, "1");
++        assert!(!embed_include_local_endpoint());
++    }
++    for value in ["0", "true", "01", " 1", "1 "] {
++        let _guard = EnvVarGuard::set(EMBED_HIDE_LOCAL_ENV, value);
++        assert!(
++            embed_include_local_endpoint(),
++            "value {value:?} must not hide Local"
++        );
++    }
++}
++
++// BICTERM-PATCH (embed): stock builds ignore HERDR_EMBED_HIDE_LOCAL.
++#[cfg(not(feature = "bicterm-embed"))]
++#[test]
++fn stock_build_always_includes_local_endpoint() {
++    let _lock = env_lock().lock().unwrap();
++    let _guard = EnvVarGuard::set("HERDR_EMBED_HIDE_LOCAL", "1");
++    assert!(embed_include_local_endpoint());
++}
++
+ #[test]
+ fn remote_client_uses_extended_handshake_timeout() {
+     let _guard = env_lock().lock().unwrap();
