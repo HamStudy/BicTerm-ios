@@ -227,6 +227,23 @@ public actor SSHTransport {
             if let typed = recorded as? SSHTransportError {
                 throw typed
             }
+            // The typed contract cannot carry the real cause (Secure
+            // Enclave signing, Keychain, channel death) — capture it for
+            // the device diagnostic before the `.channelDenied` collapse.
+            SSHEstablishDiagnostics.shared.record(
+                "session channel open failed, channel-open error",
+                error: error
+            )
+            if let recorded {
+                SSHEstablishDiagnostics.shared.record(
+                    "session channel open failed, pipeline-recorded error",
+                    error: recorded
+                )
+            } else {
+                SSHEstablishDiagnostics.shared.record(
+                    "session channel open failed with no pipeline-recorded error"
+                )
+            }
             throw .channelDenied
         }
 

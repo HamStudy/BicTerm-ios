@@ -214,7 +214,8 @@ final class HerdrEmbedTransportCoordinator {
     /// Per-bring-up authentication-key resolution: each key reference is
     /// read from its provider at most ONCE, with concurrent first-reads
     /// coalesced onto the single in-flight read. A herd's machines
-    /// establish their SSH carriers CONCURRENTLY, and each establish
+    /// establish their SSH carriers one at a time (``establishAll``
+    /// serializes them), and each establish
     /// resolves its connection's keys through the Keychain — for a
     /// BIOMETRY-PROTECTED key that read is a Face ID evaluation, and iOS
     /// runs one evaluation at a time: the losing machine's concurrent
@@ -386,8 +387,9 @@ final class HerdrEmbedTransportCoordinator {
         )
     }
 
-    /// Establishes every machine's carrier (concurrently — challenges queue
-    /// one decision at a time), starts one bridge listener per success,
+    /// Establishes every machine's carrier (sequentially, one machine's
+    /// handshake at a time — see ``establishAll()``), starts one bridge
+    /// listener per success,
     /// seeds the client catalog with ALL machines, and applies the
     /// transport environment. Returns the LOCAL endpoint socket path the
     /// embed crate should point at (no local server exists in the embed
@@ -610,20 +612,33 @@ final class HerdrEmbedTransportCoordinator {
         let executablePath: String
     }
 
-    /// One carrier per machine, concurrently (the native herd's
-    /// machineTasks shape); failures are recorded per machine and never
-    /// block the others. Returns the first failure for the total-failure
-    /// path (its connector case carries T5's typed mapping).
+    /// One carrier per machine, SEQUENTIALLY in catalog order; failures
+    /// are recorded per machine and never block the others. Returns the
+    /// first failure for the total-failure path (its connector case
+    /// carries T5's typed mapping).
+    ///
+    /// Why serial (not the native herd's concurrent Task-per-link shape):
+    /// a herd's machines share ONE resolved key instance
+    /// (``keyResolution``, aa4f75b), so concurrent handshakes sign
+    /// through one shared LAContext / Secure Enclave path — and on
+    /// device the SE does not tolerate two concurrent signatures: the
+    /// losing establish threw a non-`SSHTransportError` that
+    /// `establishOne`'s catch-all swallowed to `.channelDenied` (device
+    /// evidence: `.sisyphus/evidence/device-container/herd-diagnostic.txt`
+    /// — BOTH concurrent establishes failed; the simulator has no SE, so
+    /// the race never reproduces there). One handshake at a time means
+    /// one signature at a time; the loser-gets-no-socket failure mode
+    /// cannot occur. Each machine still gets its own task so the F2
+    /// cancellation contract (cancel the in-flight establish so its
+    /// awaits unwind) is unchanged.
     private func establishAll() async -> ([Established], HerdrEmbedTransportFailure?) {
-        let tasks = links.map { link in
-            Task { @MainActor in
-                await self.establishOne(link)
-            }
-        }
-        establishTasks = tasks
         var established: [Established] = []
         var firstFailure: HerdrEmbedTransportFailure?
-        for (task, link) in zip(tasks, links) {
+        for link in links {
+            let task = Task { @MainActor in
+                await self.establishOne(link)
+            }
+            establishTasks = [task]
             switch await task.value {
             case let .success(item):
                 established.append(item)
@@ -715,6 +730,10 @@ final class HerdrEmbedTransportCoordinator {
         } catch let error as HerdrEndpointConnectorError {
             return .failure(.connector(error))
         } catch {
+            SSHEstablishDiagnostics.shared.record(
+                "machine \(link.machine.label) establish failed with a non-connector error",
+                error: error
+            )
             return .failure(.connector(.sshEstablish(.channelDenied)))
         }
     }

@@ -81,6 +81,10 @@ final class CascadeUserAuthenticationDelegate: NIOSSHClientUserAuthenticationDel
                     nextChallengePromise.succeed(.init(username: request.username, serviceName: "ssh-connection",
                                                         offer: .privateKey(.init(privateKey: key))))
                 } catch {
+                    SSHEstablishDiagnostics.shared.record(
+                        "key resolution failed for reference \(reference)",
+                        error: error
+                    )
                     nextChallengePromise.fail(SSHTransportError.authenticationFailed)
                 }
             }
@@ -107,6 +111,10 @@ final class CascadeUserAuthenticationDelegate: NIOSSHClientUserAuthenticationDel
                 nextChallengePromise.succeed(.init(username: request.username, serviceName: "ssh-connection",
                                                     offer: .password(.init(password: password))))
             } catch {
+                SSHEstablishDiagnostics.shared.record(
+                    "password resolution failed",
+                    error: error
+                )
                 nextChallengePromise.fail(SSHTransportError.authenticationFailed)
             }
         }

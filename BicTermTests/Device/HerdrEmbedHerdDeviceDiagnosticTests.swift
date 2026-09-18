@@ -94,6 +94,13 @@ final class HerdrEmbedHerdDeviceDiagnosticTests: XCTestCase {
             searchPaths: HerdrProbe.defaultSearchPaths
         )
 
+        // Fresh capture: every establish-path swallow point (SSHTransport's
+        // channel-open collapse, the auth cascade's key/password resolution
+        // failures, the connector's catch-alls) records the FULL underlying
+        // error chain here — the typed `.channelDenied` the event lines
+        // show is otherwise a dead end.
+        SSHEstablishDiagnostics.shared.removeAll()
+
         do {
             _ = try await coordinator.prepare()
             lines.append("prepare: COMPLETED")
@@ -102,6 +109,9 @@ final class HerdrEmbedHerdDeviceDiagnosticTests: XCTestCase {
         }
         lines.append("eventLines:")
         lines.append(contentsOf: coordinator.eventLines)
+        let diagnostics = SSHEstablishDiagnostics.shared.snapshot()
+        lines.append("establishDiagnostics: \(diagnostics.count) captured")
+        lines.append(contentsOf: diagnostics)
         record("prepare", "event lines captured (see herd-diagnostic.txt)")
 
         await coordinator.teardown()

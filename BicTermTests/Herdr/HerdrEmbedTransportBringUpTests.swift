@@ -72,15 +72,30 @@ final class HerdrEmbedTransportBringUpTests: XCTestCase {
     /// change production and expectation in lockstep and stay green).
     private static let specifiedTransportDirectory = "tmp/herdr-embed-transport"
 
+    /// Structural SPEC for one bring-up's transport paths (aa4f75b):
+    /// `<specifiedTransportDirectory>/<8-lowercase-hex token>/<leaf>` —
+    /// the tmp/ prefix is the container-root EPERM guard; the token
+    /// segment is the per-bring-up socket namespace that keeps a reopened
+    /// herd's binds from colliding with a superseded run's teardown. The
+    /// token is random per bring-up, so expectations match the SHAPE —
+    /// never a hardcoded token.
+    private static func matchesTokenizedPath(_ path: String, leaf: String) -> Bool {
+        let pattern = "^"
+            + NSRegularExpression.escapedPattern(for: specifiedTransportDirectory)
+            + "/[0-9a-f]{8}/"
+            + NSRegularExpression.escapedPattern(for: leaf)
+            + "$"
+        return path.range(of: pattern, options: .regularExpression) != nil
+    }
+
     func testPrepareBindsPerMachineSocketsSeedsCatalogAndTeardownUnlinks() async throws {
         let (coordinator, carriers, links) = makeCoordinator(machineCount: 2)
         coordinator.homeDirectoryForTesting = scratch.path
 
         let localPath = try await coordinator.prepare()
-        XCTAssertEqual(
-            localPath,
-            "\(Self.specifiedTransportDirectory)/local.sock",
-            "the client endpoint path is the relative local.sock under tmp/"
+        XCTAssertTrue(
+            Self.matchesTokenizedPath(localPath, leaf: "local.sock"),
+            "the client endpoint path is local.sock under tmp/herdr-embed-transport/<token>: \(localPath)"
         )
 
         // The pinned cwd is the scratch home while the run is alive.
@@ -89,13 +104,18 @@ final class HerdrEmbedTransportBringUpTests: XCTestCase {
             "prepare() pinned the cwd to the home the relative binds resolve against"
         )
 
-        // One live socket per machine, under <home>/tmp/herdr-embed-transport/
-        // — the tmp/ prefix is the guard against the container-root EPERM
-        // regression (the reported bindFailed at the data-container root).
+        // One live socket per machine, under
+        // <home>/tmp/herdr-embed-transport/<token>/ — the tmp/ prefix is
+        // the guard against the container-root EPERM regression (the
+        // reported bindFailed at the data-container root), and the token
+        // segment is this bring-up's socket namespace (aa4f75b).
         for link in links {
-            let socket = scratch.appendingPathComponent(
-                "\(Self.specifiedTransportDirectory)/\(link.machine.profileID).sock"
+            let relativeSocket = coordinator.socketPath(for: link.machine)
+            XCTAssertTrue(
+                Self.matchesTokenizedPath(relativeSocket, leaf: "\(link.machine.profileID).sock"),
+                "machine socket keeps the tmp/ + token layout: \(relativeSocket)"
             )
+            let socket = scratch.appendingPathComponent(relativeSocket)
             XCTAssertTrue(
                 FileManager.default.fileExists(atPath: socket.path),
                 "bridge socket bound at \(socket.path)"
@@ -110,17 +130,16 @@ final class HerdrEmbedTransportBringUpTests: XCTestCase {
             // same dial the embedded client performs. The stub carrier
             // refuses the exec open (typed carrierLost), but the
             // bind/listen/accept contract is what "starting herdr" needs.
-            let fd = try Self.connectSocket(
-                path: "\(Self.specifiedTransportDirectory)/\(link.machine.profileID).sock"
-            )
+            let fd = try Self.connectSocket(path: relativeSocket)
             Darwin.close(fd)
         }
 
-        // Transport environment applied: the client resolves the same
-        // relative directory, and the catalog landed in the state home.
+        // Transport environment applied: the client resolves THIS
+        // bring-up's tokenized directory, and the catalog landed in the
+        // state home.
         XCTAssertEqual(
             getenv("HERDR_EMBED_TRANSPORT_DIR").map { String(cString: $0) },
-            Self.specifiedTransportDirectory
+            coordinator.transportDirectory
         )
         let stateHome = getenv("XDG_STATE_HOME").map { String(cString: $0) }
         XCTAssertNotNil(stateHome, "XDG_STATE_HOME applied for the client catalog")
@@ -137,7 +156,7 @@ final class HerdrEmbedTransportBringUpTests: XCTestCase {
         await coordinator.teardown()
         for link in links {
             let socket = scratch.appendingPathComponent(
-                "\(Self.specifiedTransportDirectory)/\(link.machine.profileID).sock"
+                coordinator.socketPath(for: link.machine)
             )
             XCTAssertFalse(
                 FileManager.default.fileExists(atPath: socket.path),
@@ -170,7 +189,7 @@ final class HerdrEmbedTransportBringUpTests: XCTestCase {
         _ = try await coordinator.prepare()
 
         let socket = scratch.appendingPathComponent(
-            "\(Self.specifiedTransportDirectory)/\(links[0].machine.profileID).sock"
+            coordinator.socketPath(for: links[0].machine)
         )
         XCTAssertTrue(
             FileManager.default.fileExists(atPath: socket.path),
@@ -192,17 +211,18 @@ final class HerdrEmbedTransportBringUpTests: XCTestCase {
 
         _ = try await coordinator.prepare()
 
-        let home = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
-        let socket = home.appendingPathComponent(
-            "\(Self.specifiedTransportDirectory)/\(links[0].machine.profileID).sock"
+        let relativeSocket = coordinator.socketPath(for: links[0].machine)
+        XCTAssertTrue(
+            Self.matchesTokenizedPath(relativeSocket, leaf: "\(links[0].machine.profileID).sock"),
+            "machine socket keeps the tmp/ + token layout: \(relativeSocket)"
         )
+        let home = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
+        let socket = home.appendingPathComponent(relativeSocket)
         XCTAssertTrue(
             FileManager.default.fileExists(atPath: socket.path),
             "bridge socket bound under the real app home's tmp/ at \(socket.path)"
         )
-        let fd = try Self.connectSocket(
-            path: "\(Self.specifiedTransportDirectory)/\(links[0].machine.profileID).sock"
-        )
+        let fd = try Self.connectSocket(path: relativeSocket)
         Darwin.close(fd)
 
         await coordinator.teardown()

@@ -240,9 +240,17 @@ public struct HerdrEndpointConnector: Sendable {
                 } catch let error as SSHTransportError {
                     throw .sshEstablish(error)
                 } catch {
+                    SSHEstablishDiagnostics.shared.record(
+                        "direct establish retry failed with a non-SSH error",
+                        error: error
+                    )
                     throw .sshEstablish(.channelDenied)
                 }
             } catch {
+                SSHEstablishDiagnostics.shared.record(
+                    "direct establish failed with a non-SSH error",
+                    error: error
+                )
                 throw .sshEstablish(.channelDenied)
             }
             return transport
@@ -260,6 +268,10 @@ public struct HerdrEndpointConnector: Sendable {
             return try await builder.buildExecConnection(connection: connection)
         } catch let error as JumpError {
             guard case let .hopFailed(_, host, port, underlying) = error else {
+                SSHEstablishDiagnostics.shared.record(
+                    "jump chain failed with a non-hop error",
+                    error: error
+                )
                 throw .sshEstablish(.channelDenied)
             }
             try await handleTrustDemand(underlying, host: host, port: port)
@@ -320,6 +332,10 @@ public struct HerdrEndpointConnector: Sendable {
         if let error = error as? SSHTransportError {
             return error
         }
+        SSHEstablishDiagnostics.shared.record(
+            "jump establish failed with an unattributed error",
+            error: error
+        )
         return .channelDenied
     }
 
