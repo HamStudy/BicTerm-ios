@@ -579,6 +579,96 @@ final class SessionRegistryTests: XCTestCase {
         await registry.closeSession(sceneID: "s1")
     }
 
+    // MARK: - Startup command injection (adopt seam)
+
+    func testStartupCommandSentOnceWithCarriageReturnOnStartSession() async throws {
+        let factory = FakeSessionTransportFactory()
+        let registry = makeRegistry(factory: factory)
+        let connection = try makeUnitConnection(startupCommand: "tmux new-session -A -s main")
+
+        try await registry.startSession(sceneID: "s1", connection: connection)
+
+        let sent = await factory.transports[0].sent
+        XCTAssertEqual(
+            sent,
+            [Data("tmux new-session -A -s main".utf8) + Data([0x0D])],
+            "the command plus CR must be the first bytes the fresh shell sees"
+        )
+        await registry.closeSession(sceneID: "s1")
+    }
+
+    func testStartupCommandReSentOnManualReconnect() async throws {
+        let factory = FakeSessionTransportFactory()
+        let registry = makeRegistry(factory: factory)
+        let connection = try makeUnitConnection(startupCommand: "tmux attach")
+        try await registry.startSession(sceneID: "s1", connection: connection)
+
+        await registry.didEnterBackground(sceneID: "s1")
+        try await registry.reconnect(sceneID: "s1")
+
+        let state = await registry.state(sceneID: "s1")
+        XCTAssertEqual(state, .active)
+        let expected = Data("tmux attach".utf8) + Data([0x0D])
+        let firstSent = await factory.transports[0].sent
+        XCTAssertEqual(firstSent, [expected], "first connect injects once")
+        let secondSent = await factory.transports[1].sent
+        XCTAssertEqual(secondSent, [expected], "manual reconnect re-injects on the fresh transport")
+        await registry.closeSession(sceneID: "s1")
+    }
+
+    /// The tmux-reattach contract: a network drop kills the remote shell,
+    /// so the command must run again on the fresh transport for
+    /// `tmux new-session -A` to reattach the persistent session.
+    func testStartupCommandReSentOnDropTriggeredAutoReconnect() async throws {
+        let factory = FakeSessionTransportFactory()
+        let registry = makeRegistry(factory: factory)
+        let connection = try makeUnitConnection(startupCommand: "tmux new-session -A -s main")
+        try await registry.startSession(sceneID: "s1", connection: connection)
+
+        await factory.transports[0].finishOutput()
+
+        let reconnected = await waitForCondition {
+            guard factory.makeCount >= 2 else { return false }
+            let sent = await factory.transports[1].sent
+            return !sent.isEmpty
+        }
+        XCTAssertTrue(reconnected, "drop-triggered auto-reconnect must re-inject the startup command")
+
+        let expected = Data("tmux new-session -A -s main".utf8) + Data([0x0D])
+        let secondSent = await factory.transports[1].sent
+        XCTAssertEqual(secondSent, [expected])
+        let history = await registry.stateHistory(sceneID: "s1")
+        XCTAssertEqual(history, [.connecting, .active, .disconnected, .reconnecting, .active])
+        await registry.closeSession(sceneID: "s1")
+    }
+
+    func testNoStartupCommandMeansNoBytesSentOnAdopt() async throws {
+        let factory = FakeSessionTransportFactory()
+        let registry = makeRegistry(factory: factory)
+
+        try await registry.startSession(sceneID: "s1", connection: makeUnitConnection())
+
+        let sent = await factory.transports[0].sent
+        XCTAssertTrue(sent.isEmpty, "a connection without a startup command must send nothing")
+        await registry.closeSession(sceneID: "s1")
+    }
+
+    func testFailedStartupCommandSendDoesNotFailEstablish() async throws {
+        let factory = FakeSessionTransportFactory(sendError: .channelDenied)
+        let registry = makeRegistry(factory: factory)
+        let connection = try makeUnitConnection(startupCommand: "tmux attach")
+
+        try await registry.startSession(sceneID: "s1", connection: connection)
+
+        let state = await registry.state(sceneID: "s1")
+        XCTAssertEqual(state, .active, "a failed startup-command send must never fail the establish")
+        let history = await registry.stateHistory(sceneID: "s1")
+        XCTAssertEqual(history, [.connecting, .active])
+        let sent = await factory.transports[0].sent
+        XCTAssertTrue(sent.isEmpty, "the throwing send recorded nothing")
+        await registry.closeSession(sceneID: "s1")
+    }
+
     private func waitForCondition(
         timeoutMilliseconds: UInt64 = 5000,
         _ condition: @escaping @Sendable () async -> Bool

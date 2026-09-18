@@ -252,7 +252,23 @@ public actor SessionRegistry {
             pokeRedraw(record)
         }
         setState(record, .active)
+        await sendStartupCommand(record)
         try? await snapshotStore.deleteSnapshot(sceneID: record.sceneID)
+    }
+
+    /// The connection's startup command (e.g. `tmux new-session -A -s main`)
+    /// is terminal input for the fresh shell, so it must fire on EVERY adopt
+    /// — first connect, manual reconnect, auto-reconnect-after-drop, and
+    /// foreground resume all converge here — to reattach the persistent
+    /// multiplexer session after a drop. Best-effort like ``pokeRedraw``: a
+    /// failed send must never fail the establish. `.nativeRoaming` resumes
+    /// return before ``adopt`` (their shell never died) and herdr carriers
+    /// never reach this registry, so the command only ever runs on real
+    /// terminal shells.
+    private func sendStartupCommand(_ record: SessionRecord) async {
+        guard let command = record.connection.startupCommand, !command.isEmpty,
+              let transport = record.transport else { return }
+        try? await transport.send(Data(command.utf8) + Data([0x0D]))
     }
 
     // MARK: - I/O

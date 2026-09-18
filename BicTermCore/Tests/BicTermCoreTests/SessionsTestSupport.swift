@@ -58,10 +58,12 @@ actor FakeSessionTransport: SessionTransport {
     private var gateReleased = false
     private var connectWaiters: [CheckedContinuation<Void, Never>] = []
     private var dropObserver: (@Sendable () -> Void)?
+    private var sendError: SessionTransportError?
 
-    init(behavior: ConnectBehavior = .succeed, roaming: Bool = false) {
+    init(behavior: ConnectBehavior = .succeed, roaming: Bool = false, sendError: SessionTransportError? = nil) {
         self.behavior = behavior
         self.roaming = roaming
+        self.sendError = sendError
         let (stream, continuation) = AsyncStream<Data>.makeStream(bufferingPolicy: .bufferingNewest(32))
         self.outputStream = stream
         self.continuation = continuation
@@ -86,6 +88,7 @@ actor FakeSessionTransport: SessionTransport {
     }
 
     func send(_ bytes: Data) async throws(SessionTransportError) {
+        if let sendError { throw sendError }
         sent.append(bytes)
     }
 
@@ -152,16 +155,19 @@ final class FakeSessionTransportFactory: SessionTransportFactory, @unchecked Sen
     private var queuedBehaviors: [FakeSessionTransport.ConnectBehavior]
     private let fallbackBehavior: FakeSessionTransport.ConnectBehavior
     private let roaming: Bool
+    private let sendError: SessionTransportError?
     private var created: [FakeSessionTransport] = []
 
     init(
         queued: [FakeSessionTransport.ConnectBehavior] = [],
         fallback: FakeSessionTransport.ConnectBehavior = .succeed,
-        roaming: Bool = false
+        roaming: Bool = false,
+        sendError: SessionTransportError? = nil
     ) {
         self.queuedBehaviors = queued
         self.fallbackBehavior = fallback
         self.roaming = roaming
+        self.sendError = sendError
     }
 
     var transports: [FakeSessionTransport] {
@@ -180,7 +186,7 @@ final class FakeSessionTransportFactory: SessionTransportFactory, @unchecked Sen
         lock.lock()
         defer { lock.unlock() }
         let behavior = queuedBehaviors.isEmpty ? fallbackBehavior : queuedBehaviors.removeFirst()
-        let transport = FakeSessionTransport(behavior: behavior, roaming: roaming)
+        let transport = FakeSessionTransport(behavior: behavior, roaming: roaming, sendError: sendError)
         created.append(transport)
         return transport
     }
@@ -203,7 +209,11 @@ func waitForState(
     return false
 }
 
-func makeUnitConnection(name: String = "unit", id: UUID = UUID()) throws -> Connection {
+func makeUnitConnection(
+    name: String = "unit",
+    id: UUID = UUID(),
+    startupCommand: String? = nil
+) throws -> Connection {
     try Connection(
         id: id,
         name: name,
@@ -211,6 +221,7 @@ func makeUnitConnection(name: String = "unit", id: UUID = UUID()) throws -> Conn
         host: "unit.invalid",
         port: 22,
         username: "unit",
-            customKeys: ["unit-key"]
+            customKeys: ["unit-key"],
+        startupCommand: startupCommand
     )
 }

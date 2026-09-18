@@ -275,6 +275,9 @@ final class HerdSessionCoordinator {
             customKeys: connection.customKeys,
             passwordTag: connection.passwordTag,
             jumpChain: connection.jumpChain,
+            // startupCommand deliberately omitted (init default nil): herd
+            // members ride the herdr bridge and never open a terminal shell,
+            // so the per-connection startup command must not leak in here.
             protocolOptions: options
         )
     }

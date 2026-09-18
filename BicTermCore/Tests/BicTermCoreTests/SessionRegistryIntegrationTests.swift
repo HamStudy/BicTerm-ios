@@ -45,11 +45,12 @@ final class SessionRegistryIntegrationTests: XCTestCase {
 
     private func startAndCollect(
         _ registry: SessionRegistry,
-        sceneID: String
+        sceneID: String,
+        connection: Connection? = nil
     ) async throws -> SSHOutputSink {
         try await registry.startSession(
             sceneID: sceneID,
-            connection: SSHTestFixture.makeConnection(),
+            connection: try connection ?? SSHTestFixture.makeConnection(),
             cols: 80,
             rows: 24
         )
@@ -75,6 +76,28 @@ final class SessionRegistryIntegrationTests: XCTestCase {
         let ready = await waitForContent(sink: sink, marker: "__READY__", timeoutMilliseconds: 15000)
         XCTAssertTrue(ready, "shell did not reach ready marker for \(sceneID)")
         await sink.reset()
+    }
+
+    /// The startup command runs against a real shell: the registry injects
+    /// it when the session is adopted, and its output must appear on the
+    /// session's stable output stream.
+    func testStartupCommandRunsWhenShellComesUp() async throws {
+        let (registry, _) = try await makeRegistry()
+        let sceneID = "scene-startup"
+        let connection = try Connection(
+            name: "fixture-hop1-startup",
+            type: .ssh,
+            host: SSHTestFixture.hop1Host,
+            port: SSHTestFixture.hop1Port,
+            username: SSHTestFixture.username,
+            customKeys: ["fixture-ed25519"],
+            startupCommand: #"printf '__START''UP__\n'"#
+        )
+        let sink = try await startAndCollect(registry, sceneID: sceneID, connection: connection)
+        defer { Task { await registry.closeSession(sceneID: sceneID) } }
+
+        let sawStartup = await waitForContent(sink: sink, marker: "__STARTUP__", timeoutMilliseconds: 15000)
+        XCTAssertTrue(sawStartup, "the startup command's output must appear in session output")
     }
 
     func testCleanShellExitWaitsForManualReconnect() async throws {

@@ -33,6 +33,13 @@ public struct Connection: Codable, Equatable, Identifiable, Sendable {
     public let passwordTag: String?
     public let jumpChain: [Hop]
     public let protocolOptions: ProtocolOptions
+    /// Optional command line (e.g. `tmux new-session -A -s main`) sent as
+    /// terminal input when the session's shell comes up — on first connect
+    /// and every reconnect — to create-or-reattach a persistent multiplexer
+    /// session. Never a protocol option: `protocolOptions.values` is copied
+    /// wholesale onto herd paths, which must stay free of terminal-shell
+    /// behavior.
+    public let startupCommand: String?
 
     public init(
         id: UUID = UUID(),
@@ -45,7 +52,8 @@ public struct Connection: Codable, Equatable, Identifiable, Sendable {
         customKeys: [String]? = nil,
         passwordTag: String? = nil,
         jumpChain: [Hop] = [],
-        protocolOptions: ProtocolOptions = ProtocolOptions()
+        protocolOptions: ProtocolOptions = ProtocolOptions(),
+        startupCommand: String? = nil
     ) throws(ConnectionValidationError) {
         guard jumpChain.count <= Self.maximumJumpChainLength else {
             throw .jumpChainTooLong(
@@ -65,11 +73,13 @@ public struct Connection: Codable, Equatable, Identifiable, Sendable {
         self.passwordTag = passwordTag == "" ? nil : passwordTag
         self.jumpChain = jumpChain
         self.protocolOptions = protocolOptions
+        self.startupCommand = startupCommand == "" ? nil : startupCommand
     }
 
     private enum CodingKeys: String, CodingKey {
         case id, name, type, host, port, username, keyReference, authMethod
         case jumpChain, protocolOptions, offersKeys, customKeys, passwordTag
+        case startupCommand
     }
 
     public func encode(to encoder: any Encoder) throws {
@@ -85,6 +95,7 @@ public struct Connection: Codable, Equatable, Identifiable, Sendable {
         try container.encode(offersKeys, forKey: .offersKeys)
         try container.encodeIfPresent(customKeys, forKey: .customKeys)
         try container.encodeIfPresent(passwordTag, forKey: .passwordTag)
+        try container.encodeIfPresent(startupCommand, forKey: .startupCommand)
     }
 
     public init(from decoder: any Decoder) throws {
@@ -117,7 +128,10 @@ public struct Connection: Codable, Equatable, Identifiable, Sendable {
             customKeys: customKeys,
             passwordTag: passwordTag,
             jumpChain: container.decode([Hop].self, forKey: .jumpChain),
-            protocolOptions: container.decode(ProtocolOptions.self, forKey: .protocolOptions)
+            protocolOptions: container.decode(ProtocolOptions.self, forKey: .protocolOptions),
+            // Legacy payloads predate the key: absent decodes as nil. Wrong-
+            // typed junk fails the row (typed throw), matching passwordTag.
+            startupCommand: container.decodeIfPresent(String.self, forKey: .startupCommand)
         )
     }
 
