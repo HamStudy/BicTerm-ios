@@ -515,7 +515,8 @@ public struct HerdrEndpointConnector: Sendable {
         let requiredGeneration = HerdrProbe.Result.requiredGeneration
         guard let path = result.foundPath else {
             return "No herdr executable was found on \(result.host). "
-                + "Install herdr 0.9 or newer on the host; this app never installs or updates it."
+                + "Install herdr 0.9 or newer on the host, or allow the pinned 0.9.0 install "
+                + "when BicTerm offers it during connect."
         }
         if result.platformOS == nil || result.platformArch == nil {
             let platform = [result.rawOS, result.rawArch]
