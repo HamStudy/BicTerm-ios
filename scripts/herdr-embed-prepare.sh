@@ -27,7 +27,7 @@ export RUSTUP_HOME="$ROOT/.build-artifacts/rustup"
 UPSTREAM="$ROOT/Vendor/herdr/upstream"
 PATCHES="$ROOT/Vendor/herdr/embed-patches"
 OUT="${HERDR_EMBED_DIR:-$ROOT/.build-artifacts/herdr-embed}"
-BASE="b99002ac99b09e00b4ca692436cb15a6b0d676f1"
+BASE="065ef9d6a531c49fb8bee7e818ef837065b21ee9"
 
 test -d "$UPSTREAM/.git" || { echo "missing $UPSTREAM checkout" >&2; exit 1; }
 test -d "$PATCHES" || { echo "missing $PATCHES" >&2; exit 1; }

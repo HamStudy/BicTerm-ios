@@ -52,19 +52,31 @@ export HERDR_LIBGHOSTTY_VT_PREBUILT=1
 cd "$EMBED_CRATE"
 
 echo "== embed staticlib: aarch64-apple-ios (release, bicterm-transport)"
-cargo build --locked --release --features bicterm-transport --target aarch64-apple-ios
+# The patched build.rs links whatever .a sits at the vendored zig-out path for
+# the requested target; host-side proofs leave a macOS build there, so install
+# the device slice explicitly before the device build (same swap as below).
 DEVICE_A="$CARGO_TARGET_DIR/aarch64-apple-ios/release/libherdr_ios_embed.a"
+cp "$VT_DEVICE" "$VT_LIB"
+# build.rs declares no rerun-if-changed on the prebuilt .a, so cargo would
+# reuse a staticlib merged from a stale slice; drop the embed crate's
+# fingerprints and artifact (cargo clean -p matches nothing in this shared
+# target dir) to force re-emission with the slice just installed.
+rm -rf "$CARGO_TARGET_DIR/aarch64-apple-ios/release/.fingerprint/"herdr-ios-embed-*
+rm -f "$DEVICE_A" "$CARGO_TARGET_DIR/aarch64-apple-ios/release/deps/libherdr_ios_embed"*
+cargo build --locked --release --features bicterm-transport --target aarch64-apple-ios
 test -s "$DEVICE_A" || { echo "device staticlib missing" >&2; exit 1; }
 
 echo "== embed staticlib: aarch64-apple-ios-sim (release, bicterm-transport)"
 # The patched build.rs links whatever .a sits at the vendored zig-out path for
 # the requested target; swap the simulator slice in for this build, then put
 # the device slice back so the working copy stays device-consistent.
+SIM_A="$CARGO_TARGET_DIR/aarch64-apple-ios-sim/release/libherdr_ios_embed.a"
 cp "$VT_DEVICE" "$VT_LIB"
 trap 'cp "$VT_DEVICE" "$VT_LIB"' EXIT
 cp "$VT_SIM" "$VT_LIB"
+rm -rf "$CARGO_TARGET_DIR/aarch64-apple-ios-sim/release/.fingerprint/"herdr-ios-embed-*
+rm -f "$SIM_A" "$CARGO_TARGET_DIR/aarch64-apple-ios-sim/release/deps/libherdr_ios_embed"*
 cargo build --locked --release --features bicterm-transport --target aarch64-apple-ios-sim
-SIM_A="$CARGO_TARGET_DIR/aarch64-apple-ios-sim/release/libherdr_ios_embed.a"
 test -s "$SIM_A" || { echo "simulator staticlib missing" >&2; exit 1; }
 cp "$VT_DEVICE" "$VT_LIB"
 trap - EXIT

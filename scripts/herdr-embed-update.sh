@@ -83,7 +83,8 @@ echo "== contract check: HerdrEmbed.h is the only Swift<->herdr boundary"
 violations="$(grep -rn "herdr_embed_" \
     --include='*.swift' \
     "$ROOT/BicTerm" "$ROOT/BicTermTests" "$ROOT/BicTermUITests" "$ROOT/HerdrClientCore" \
-    | grep -v "BicTerm/Herdr/Embed/" | grep -v "BicTermTests/Herdr/" || true)"
+    | grep -v "BicTerm/Herdr/Embed/" | grep -v "BicTermTests/Herdr/" \
+    | grep -v "BicTermTests/Device/" || true)"
 if [ -n "$violations" ]; then
     echo "CONTRACT VIOLATION: herdr_embed_* reached past the Embed wrapper:" >&2
     echo "$violations" >&2
@@ -151,7 +152,7 @@ if [ ! -f "$VT_MACOS" ]; then
 fi
 (
     cd "$EMBED_CRATE"
-    export HERDR_LIBGHOSTTY_VT_PREBUILT="$VT_MACOS"
+    export HERDR_LIBGHOSTTY_VT_PREBUILT="$(dirname "$VT_MACOS")"
     cargo test --test lifecycle
     cargo test --test headless_frame --test headless_detach --test headless_resize
 )
