@@ -61,10 +61,13 @@ enum HerdrEmbedClientCatalog {
     /// bytes, still well under sun_path).
     static let transportDirectoryRelativePath = "tmp/herdr-embed-transport"
 
-    /// Re-seeding semantics (T6): the file set is rewritten atomically per
+    /// Seeding semantics (T6): the file set is rewritten atomically per
     /// open — machines added/removed in the herd editor are reflected on
-    /// the NEXT open of that herd; a live embedded instance is NOT
-    /// re-seeded mid-run (v1 single-instance rule).
+    /// the NEXT open of that herd. A LIVE herd run is additionally
+    /// re-seeded mid-run on every app config reload (``reseed``): the
+    /// client's 1s catalog poll treats ANY rewrite of `endpoints.json` —
+    /// even a byte-identical one — as a reload event and re-arms machines
+    /// in "needs attention" state so they redial (embed patch 0008).
     static func seed(
         machines: [HerdrEmbedMachine],
         selectedProfileID: String?,
@@ -78,15 +81,7 @@ enum HerdrEmbedClientCatalog {
         )
         var catalog: [String: Any] = [
             "version": 1,
-            "ssh": machines.map { machine in
-                [
-                    "id": machine.profileID,
-                    "label": machine.label,
-                    "target": machine.target,
-                    "session": machine.sessionName,
-                    "enabled": true,
-                ]
-            },
+            "ssh": catalogEntries(machines),
         ]
         if let selectedProfileID {
             catalog["selected_profile"] = selectedProfileID
@@ -101,9 +96,45 @@ enum HerdrEmbedClientCatalog {
         )
     }
 
+    /// Mid-run re-seed (app config reload → embed patch 0008): rewrites
+    /// ONLY `endpoints.json` — atomically, like ``seed`` — with the
+    /// herd's current machine list. `endpoint-selection.json` is NEVER
+    /// rewritten mid-run: the live client owns it (it persists the user's
+    /// machine selection there), and overwriting it would yank the user's
+    /// view on every config edit. `selected_profile` is likewise omitted
+    /// from the rewritten catalog — the client's reload path reads only
+    /// the `ssh` array, and the selection file stays the selection's
+    /// single writer. A byte-identical rewrite is still a rewrite: the
+    /// mtime change alone fires the client's reload (the host's
+    /// "retry attention machines now" signal).
+    static func reseed(machines: [HerdrEmbedMachine], stateHome: URL) throws {
+        let clientDirectory = stateHome
+            .appendingPathComponent("herdr/client", isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: clientDirectory,
+            withIntermediateDirectories: true
+        )
+        try writeJSON(
+            ["version": 1, "ssh": catalogEntries(machines)],
+            to: clientDirectory.appendingPathComponent("endpoints.json")
+        )
+    }
+
     static func applyEnvironment(transportDirectory: String, stateHome: URL) {
         setenv("HERDR_EMBED_TRANSPORT_DIR", transportDirectory, 1)
         setenv("XDG_STATE_HOME", stateHome.path(percentEncoded: false), 1)
+    }
+
+    private static func catalogEntries(_ machines: [HerdrEmbedMachine]) -> [[String: Any]] {
+        machines.map { machine in
+            [
+                "id": machine.profileID,
+                "label": machine.label,
+                "target": machine.target,
+                "session": machine.sessionName,
+                "enabled": true,
+            ]
+        }
     }
 
     private static func writeJSON(_ object: [String: Any], to url: URL) throws {
@@ -145,6 +176,38 @@ enum HerdrEmbedHerdSeeder {
             ))
         }
         return links
+    }
+
+    /// Config-reload re-seed resolution (embed patch 0008): reloads the
+    /// herd's CURRENT definition from the store and resolves fresh links,
+    /// so membership edits since the run opened are reflected — machines
+    /// added to the herd appear via the client's upstream reconcile,
+    /// removed machines retire (stock herdr behavior). Returns nil when
+    /// the herd record itself is gone: deleting a herd must not yank a
+    /// live workspace's catalog.
+    @MainActor
+    static func reloadLinks(
+        herdID: UUID,
+        herdStore: any HerdStoreProtocol,
+        lookup: HerdSessionCoordinator.ConnectionLookup = HerdSessionCoordinator.liveLookup()
+    ) async -> [HerdrEmbedMachineLink]? {
+        guard let herd = try? await herdStore.herd(id: herdID) else { return nil }
+        var machines: [HerdMachineDescriptor] = []
+        for machine in herd.machines {
+            let connection = await lookup(machine.connectionID)
+            machines.append(HerdMachineDescriptor(
+                endpointID: HerdDescriptor.endpointID(
+                    herdID: herd.id, connectionID: machine.connectionID
+                ),
+                connectionID: machine.connectionID,
+                label: machine.label ?? connection?.name ?? "Missing connection",
+                sessionName: machine.sessionName
+            ))
+        }
+        return await links(
+            for: HerdDescriptor(herdID: herd.id, herdName: herd.name, machines: machines),
+            lookup: lookup
+        )
     }
 }
 
@@ -207,6 +270,16 @@ final class HerdrEmbedTransportCoordinator {
     /// to the one machine's bridge as its Local endpoint — upstream
     /// `herdr --remote` behavior — so the catalog stays empty.
     private(set) var seedsCatalog: Bool
+    /// The open herd's identity, used by ``reseedCatalog()`` to reload the
+    /// herd's CURRENT definition on a config reload; nil for Mode A (a
+    /// mode-A run has no catalog to re-seed).
+    private let herdID: UUID?
+    /// The state home this bring-up seeded the client catalog into —
+    /// recorded by ``prepare()`` so a mid-run re-seed rewrites the SAME
+    /// catalog the live client polls, and cleared by ``teardown()`` so a
+    /// dead run never re-seeds. The per-bring-up transport token/socket
+    /// namespace is not part of the catalog and is never recomputed here.
+    private var seededStateHome: URL?
     private let connectorFactory: (@Sendable () async -> HerdrEndpointConnector)?
     private let providedVerifier: HostKeyVerifier?
     private let authenticationKeyProvider: (@Sendable () async -> any SSHAuthenticationKeyProvider)?
@@ -272,6 +345,12 @@ final class HerdrEmbedTransportCoordinator {
     /// seam-backed installer so no test touches the network.
     var remoteInstallerForTesting: HerdrRemoteInstaller?
 
+    /// Test seams for ``reseedCatalog()``: replace the composition root's
+    /// herd store / live connection lookup so a mid-run re-seed resolves a
+    /// scripted membership without touching the real stores.
+    var reseedHerdStoreForTesting: (any HerdStoreProtocol)?
+    var reseedConnectionLookupForTesting: HerdSessionCoordinator.ConnectionLookup?
+
     init(
         connection: Connection,
         hostKeyVerifier: HostKeyVerifier?,
@@ -280,6 +359,7 @@ final class HerdrEmbedTransportCoordinator {
         self.links = [Self.link(for: connection)]
         self.preferredSelection = nil
         self.seedsCatalog = false
+        self.herdID = nil
         self.providedVerifier = hostKeyVerifier
         self.searchPaths = searchPaths
         self.connectorFactory = nil
@@ -301,6 +381,7 @@ final class HerdrEmbedTransportCoordinator {
         self.links = [Self.link(for: connection)]
         self.preferredSelection = nil
         self.seedsCatalog = false
+        self.herdID = nil
         self.providedVerifier = hostKeyVerifier
         self.searchPaths = searchPaths
         self.authenticationKeyProvider = authenticationKeyProvider
@@ -312,6 +393,7 @@ final class HerdrEmbedTransportCoordinator {
         self.links = [Self.link(for: connection)]
         self.preferredSelection = nil
         self.seedsCatalog = false
+        self.herdID = nil
         self.connectorFactory = connector
         self.providedVerifier = nil
         self.authenticationKeyProvider = nil
@@ -326,6 +408,7 @@ final class HerdrEmbedTransportCoordinator {
     init(
         machines: [HerdrEmbedMachineLink],
         preferredSelection: String? = nil,
+        herdID: UUID? = nil,
         hostKeyVerifier: HostKeyVerifier?,
         authenticationKeyProvider: @escaping @Sendable () async -> any SSHAuthenticationKeyProvider,
         metadataProvider: (any SSHKeyMetadataProviding)? = nil,
@@ -334,6 +417,7 @@ final class HerdrEmbedTransportCoordinator {
         self.links = machines
         self.preferredSelection = preferredSelection
         self.seedsCatalog = true
+        self.herdID = herdID
         self.providedVerifier = hostKeyVerifier
         self.authenticationKeyProvider = authenticationKeyProvider
         self.providedMetadataProvider = metadataProvider
@@ -344,12 +428,14 @@ final class HerdrEmbedTransportCoordinator {
     init(
         machines: [HerdrEmbedMachineLink],
         preferredSelection: String? = nil,
+        herdID: UUID? = nil,
         hostKeyVerifier: HostKeyVerifier?,
         searchPaths: [String] = HerdrProbe.defaultSearchPaths
     ) {
         self.links = machines
         self.preferredSelection = preferredSelection
         self.seedsCatalog = true
+        self.herdID = herdID
         self.providedVerifier = hostKeyVerifier
         self.authenticationKeyProvider = nil
         self.providedMetadataProvider = nil
@@ -360,11 +446,13 @@ final class HerdrEmbedTransportCoordinator {
     init(
         machines: [HerdrEmbedMachineLink],
         preferredSelection: String? = nil,
+        herdID: UUID? = nil,
         connector: @escaping @Sendable () async -> HerdrEndpointConnector
     ) {
         self.links = machines
         self.preferredSelection = preferredSelection
         self.seedsCatalog = true
+        self.herdID = herdID
         self.connectorFactory = connector
         self.providedVerifier = nil
         self.authenticationKeyProvider = nil
@@ -566,6 +654,7 @@ final class HerdrEmbedTransportCoordinator {
                     : nil,
                 stateHome: stateHome
             )
+            seededStateHome = stateHome
         } catch {
             for (_, bridge) in started {
                 await bridge.stop()
@@ -606,11 +695,43 @@ final class HerdrEmbedTransportCoordinator {
         let bridges = servers
         servers.removeAll()
         carriers.removeAll()
+        seededStateHome = nil
         for bridge in bridges {
             await bridge.stop()
         }
         removeTransportDirectory()
         restoreCWD()
+    }
+
+    /// Mid-run catalog re-seed (app config reload → embed patch 0008):
+    /// re-resolves the live herd's membership from CURRENT store state and
+    /// rewrites `endpoints.json` — ONLY that file; `endpoint-selection.json`
+    /// stays client-owned — in THIS run's existing state home (the transport
+    /// token/socket namespace is never recomputed mid-run). Even a
+    /// byte-identical rewrite is the client's "retry now" signal: its 1s
+    /// poll treats any rewrite as a reload and re-arms machines in "needs
+    /// attention" state so they redial. Mode-A runs (no catalog, no herd),
+    /// un-prepared coordinators, and torn-down runs never write.
+    func reseedCatalog() async {
+        guard seedsCatalog, let herdID, let stateHome = seededStateHome else { return }
+        guard let links = await HerdrEmbedHerdSeeder.reloadLinks(
+            herdID: herdID,
+            herdStore: reseedHerdStoreForTesting ?? AppServices.shared.herdStore,
+            lookup: reseedConnectionLookupForTesting ?? HerdSessionCoordinator.liveLookup()
+        ) else {
+            // The herd record itself is gone: keep the live catalog —
+            // deleting a herd never yanks a running workspace's machines.
+            return
+        }
+        do {
+            try HerdrEmbedClientCatalog.reseed(
+                machines: links.map(\.machine),
+                stateHome: stateHome
+            )
+            eventLines.append("catalog re-seeded on config reload (\(links.count) machines)")
+        } catch {
+            eventLines.append("catalog re-seed failed: \(error)")
+        }
     }
 
     func resolveTrustPrompt(_ approved: Bool) {

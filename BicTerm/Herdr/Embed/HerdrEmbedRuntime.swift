@@ -97,6 +97,20 @@ final class HerdrEmbedRuntime {
         stagedTransport = coordinator
     }
 
+    /// Config-reload hook (herd/connection edits): a live HERD run re-seeds
+    /// the embedded client's machine catalog (`endpoints.json` only — the
+    /// selection file stays client-owned) so the client's 1s catalog poll
+    /// treats the rewrite as a reload and re-arms machines in "needs
+    /// attention" state (embed patch 0008) — attention machines redial
+    /// without closing/reopening the workspace. Gated on the ACTIVE run's
+    /// steady `.running` phase: bring-up (`.starting`) and teardown
+    /// transitions are never re-seeded, and a Mode-A run keeps its empty
+    /// catalog (the coordinator declines).
+    func reseedCatalogIfLive() async {
+        guard phase == .running, let transport = activeTransport else { return }
+        await transport.reseedCatalog()
+    }
+
     /// Starts the embedded client if no run is alive; a live run is reused
     /// (single-instance rule) unless the caller owns a DIFFERENT identity —
     /// opening herd B closes herd A's run cleanly first (v1: one embedded

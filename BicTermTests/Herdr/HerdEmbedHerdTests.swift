@@ -592,6 +592,186 @@ final class HerdrEmbedHerdTests: XCTestCase {
         )
     }
 
+    // MARK: - Config-reload re-seed (embed patch 0008, Swift half)
+
+    /// The user-facing contract "any remotes in attention state reconnect
+    /// whenever the config is reloaded", Swift side: a config reload on a
+    /// LIVE herd run rewrites the client-polled `endpoints.json` from
+    /// CURRENT store state (embed patch 0008's mtime detection then
+    /// re-arms attention machines — the re-arm itself is covered by the
+    /// patch's Rust unit tests; a fixture cannot stage an attention
+    /// machine whose re-dial is observable, since the attention-producing
+    /// dial failures — ENOENT against a missing bridge socket — keep
+    /// failing on the re-dial too). Asserted here: exactly one re-seed
+    /// per reload event, membership re-resolved live, the client-owned
+    /// selection file byte-identical, and no re-seed after the run stops.
+    func testConfigReloadReseedsLiveHerdCatalogOncePerReload() async throws {
+        try requireBothFixtures()
+        let cwdBeforeStart = FileManager.default.currentDirectoryPath
+        let alpha = try makeDirectMachine(label: "alpha")
+        let beta = try makeJumpMachine(label: "beta")
+        let herd = try Herd(
+            name: "fleet",
+            machines: [
+                HerdMachine(connectionID: alpha.connection.id),
+                HerdMachine(connectionID: beta.connection.id),
+            ]
+        )
+        let store = StubHerdStore(herd: herd)
+        let key = try await parseFixtureKey()
+        let coordinator = HerdrEmbedTransportCoordinator(
+            machines: [alpha, beta],
+            herdID: herd.id,
+            connector: fixtureConnectorFactory(key: key)
+        )
+        coordinator.reseedHerdStoreForTesting = store
+        coordinator.reseedConnectionLookupForTesting = { id in
+            [alpha.connection, beta.connection].first { $0.id == id }
+        }
+
+        let runtime = HerdrEmbedRuntime()
+        runtime.attachTransport(coordinator)
+        addTeardownBlock { @MainActor in
+            await runtime.requestStop()
+        }
+        let previous = getenv("HERDR_EMBED_TRANSPORT_DIR").map { String(cString: $0) }
+        let statePrevious = getenv("XDG_STATE_HOME").map { String(cString: $0) }
+        addTeardownBlock { @MainActor in
+            if let previous {
+                setenv("HERDR_EMBED_TRANSPORT_DIR", previous, 1)
+            } else {
+                unsetenv("HERDR_EMBED_TRANSPORT_DIR")
+            }
+            if let statePrevious {
+                setenv("XDG_STATE_HOME", statePrevious, 1)
+            } else {
+                unsetenv("XDG_STATE_HOME")
+            }
+        }
+        await runtime.startIfNeeded(ownerID: UUID())
+        if case let .failed(message) = runtime.phase {
+            XCTFail("herd bring-up failed: \(message)")
+        }
+
+        await waitFor(
+            coordinator.eventLines.contains { $0.hasPrefix("alpha: bridge relay opened") },
+            "the client connected machine alpha through its own bridge",
+            timeout: 20
+        )
+        await waitFor(
+            coordinator.eventLines.contains { $0.hasPrefix("beta: bridge relay opened") },
+            "the client connected machine beta through its own bridge",
+            timeout: 20
+        )
+
+        func reseedLineCount() -> Int {
+            coordinator.eventLines.filter { $0.contains("catalog re-seeded") }.count
+        }
+        let selectionBefore = try Data(contentsOf: selectionFile())
+
+        // Reload event 1: identical membership — the rewrite is still the
+        // client's "retry now" signal (patch 0008 fires on mtime alone).
+        await runtime.reseedCatalogIfLive()
+        XCTAssertEqual(reseedLineCount(), 1, "one reload event re-seeds exactly once")
+        var catalog = try String(contentsOf: catalogFile(), encoding: .utf8)
+        XCTAssertTrue(catalog.contains(alpha.machine.profileID))
+        XCTAssertTrue(catalog.contains(beta.machine.profileID))
+
+        // The herd edit lands in the store mid-run (beta removed): the
+        // next reload re-resolves CURRENT membership and beta retires.
+        try await store.save(Herd(
+            id: herd.id,
+            name: herd.name,
+            machines: [HerdMachine(connectionID: alpha.connection.id)]
+        ))
+        await runtime.reseedCatalogIfLive()
+        XCTAssertEqual(reseedLineCount(), 2, "the second reload event re-seeds exactly once more")
+        catalog = try String(contentsOf: catalogFile(), encoding: .utf8)
+        XCTAssertTrue(catalog.contains(alpha.machine.profileID))
+        XCTAssertFalse(
+            catalog.contains(beta.machine.profileID),
+            "a machine removed from the herd retires from the live catalog"
+        )
+
+        XCTAssertEqual(
+            try Data(contentsOf: selectionFile()), selectionBefore,
+            "the client-owned selection file is never rewritten mid-run"
+        )
+
+        try await teardownHerd(
+            runtime: runtime,
+            coordinator: coordinator,
+            machines: [alpha, beta],
+            cwdBeforeStart: cwdBeforeStart
+        )
+
+        // No live run: the reload hook is a no-op.
+        await runtime.reseedCatalogIfLive()
+        XCTAssertEqual(reseedLineCount(), 2, "a stopped run never re-seeds")
+    }
+
+    /// Mode-A runs have no machine catalog to re-seed (the client attaches
+    /// to the one bridge as its Local endpoint): a config reload leaves
+    /// the empty catalog byte- AND mtime-identical.
+    func testConfigReloadLeavesModeARunUntouched() async throws {
+        try requireBothFixtures()
+        let connection = try makeDirectConnection(label: "solo")
+        let key = try await parseFixtureKey()
+        let coordinator = HerdrEmbedTransportCoordinator(
+            connection: connection,
+            connector: fixtureConnectorFactory(key: key)
+        )
+        let runtime = HerdrEmbedRuntime()
+        runtime.attachTransport(coordinator)
+        addTeardownBlock { @MainActor in
+            await runtime.requestStop()
+        }
+        let previous = getenv("HERDR_EMBED_TRANSPORT_DIR").map { String(cString: $0) }
+        let statePrevious = getenv("XDG_STATE_HOME").map { String(cString: $0) }
+        addTeardownBlock { @MainActor in
+            if let previous {
+                setenv("HERDR_EMBED_TRANSPORT_DIR", previous, 1)
+            } else {
+                unsetenv("HERDR_EMBED_TRANSPORT_DIR")
+            }
+            if let statePrevious {
+                setenv("XDG_STATE_HOME", statePrevious, 1)
+            } else {
+                unsetenv("XDG_STATE_HOME")
+            }
+        }
+        await runtime.startIfNeeded(ownerID: UUID())
+        guard case .running = runtime.phase else {
+            XCTFail("mode-A run never reached running: \(runtime.phase)")
+            return
+        }
+
+        let catalog = catalogFile()
+        let bytesBefore = try Data(contentsOf: catalog)
+        let mtimeBefore = try FileManager.default.attributesOfItem(atPath: catalog.path)[.modificationDate]
+
+        await runtime.reseedCatalogIfLive()
+
+        XCTAssertFalse(
+            coordinator.eventLines.contains { $0.contains("catalog re-seeded") },
+            "Mode A never re-seeds"
+        )
+        XCTAssertEqual(try Data(contentsOf: catalog), bytesBefore)
+        XCTAssertEqual(
+            try FileManager.default.attributesOfItem(atPath: catalog.path)[.modificationDate]
+                as? Date,
+            mtimeBefore as? Date,
+            "the mode-A catalog file is not even rewritten (no spurious reload signal)"
+        )
+
+        await runtime.requestStop()
+    }
+
+    private func selectionFile() -> URL {
+        URL.applicationSupportDirectory
+            .appendingPathComponent("herdr-embed/state-home/herdr/client/endpoint-selection.json")
+    }
+
     // MARK: - Herd bring-up plumbing
 
     private func makeDirectMachine(label: String) throws -> HerdrEmbedMachineLink {

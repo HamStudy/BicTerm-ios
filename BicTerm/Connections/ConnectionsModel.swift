@@ -139,6 +139,10 @@ final class ConnectionsModel {
                 connections.append(connection)
             }
             loadError = nil
+            // A connection edit is a config reload for a live herd run:
+            // re-seed its catalog so attention-state machines redial now
+            // (embed patch 0008). No-op unless a herd run is live.
+            await services.herdrEmbedRuntime.reseedCatalogIfLive()
             return .success(())
         } catch {
             return .failure(error)

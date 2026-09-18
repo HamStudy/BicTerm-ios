@@ -163,8 +163,10 @@ struct ConnectionListContainer: View {
 
     private func openHerd(_ herd: Herd) {
         // T6: the herd entry carries its machines; the embed view resolves
-        // one transport link per machine when it appears — herd edits are
-        // reflected on the next open; a live instance is not re-seeded.
+        // one transport link per machine when it appears. Herd/connection
+        // edits additionally re-seed the LIVE run's machine catalog on
+        // each config reload (embed patch 0008), so attention-state
+        // machines redial without reopening the workspace.
         Task { @MainActor in
             let lookup = HerdSessionCoordinator.liveLookup()
             var machines: [HerdMachineDescriptor] = []

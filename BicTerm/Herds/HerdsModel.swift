@@ -12,6 +12,10 @@ import Observation
 final class HerdsModel {
     private let connectionStore: any ConnectionStoreProtocol
     private let herdStore: any HerdStoreProtocol
+    /// Config-reload reach into a live embedded herd run: herd/connection
+    /// reloads re-seed its machine catalog so attention-state machines
+    /// redial (embed patch 0008). No-op unless a herd run is live.
+    private let embedRuntime: HerdrEmbedRuntime
 
     private(set) var herds: [Herd] = []
     private(set) var connections: [Connection] = []
@@ -20,14 +24,17 @@ final class HerdsModel {
     init(services: AppServices = .shared) {
         self.connectionStore = services.connectionStore
         self.herdStore = services.herdStore
+        self.embedRuntime = services.herdrEmbedRuntime
     }
 
     init(
         connectionStore: any ConnectionStoreProtocol,
-        herdStore: any HerdStoreProtocol
+        herdStore: any HerdStoreProtocol,
+        embedRuntime: HerdrEmbedRuntime = .shared
     ) {
         self.connectionStore = connectionStore
         self.herdStore = herdStore
+        self.embedRuntime = embedRuntime
     }
 
     func bootstrap() async {
@@ -42,6 +49,7 @@ final class HerdsModel {
             herds = try await herdStore.loadHerds()
             connections = try await connectionStore.loadConnections()
             loadError = nil
+            await embedRuntime.reseedCatalogIfLive()
         } catch {
             loadError = "Couldn't load herds: \(error.localizedDescription)"
         }
@@ -57,6 +65,9 @@ final class HerdsModel {
             }
             herds.sort { $0.name < $1.name }
             loadError = nil
+            // A herd edit is a config reload for a live herd run: re-seed
+            // its catalog so attention-state machines redial now.
+            await embedRuntime.reseedCatalogIfLive()
             return .success(())
         } catch {
             return .failure(error)

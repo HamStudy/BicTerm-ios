@@ -30,6 +30,11 @@ final class AppServices {
     let herdrRemoteInstaller = HerdrRemoteInstaller(
         binaryProvider: HerdrReleaseBinaryProvider()
     )
+    /// The embedded herdr client runtime (one live run per process): the
+    /// models' config-reload points re-seed a live herd run's machine
+    /// catalog through it so attention-state machines redial without
+    /// reopening the workspace (embed patch 0008).
+    let herdrEmbedRuntime: HerdrEmbedRuntime = .shared
 
     #if DEBUG
     /// Set by the `--uitest-demo-editor` launch hook: name of a connection

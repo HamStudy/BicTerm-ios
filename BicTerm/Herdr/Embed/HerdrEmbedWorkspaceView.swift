@@ -150,6 +150,7 @@ struct HerdrEmbedWorkspaceView: View {
                 preferredSelection: embedHerd
                     .restoredSelection(defaults: .standard)
                     .map { HerdrEmbedMachine.profileID(for: $0.connectionID) },
+                herdID: embedHerd.herdID,
                 hostKeyVerifier: hostKeyVerifier
             )
         }
