@@ -6,7 +6,7 @@ import XCTest
 /// serves herdr's `bicterm-transport` host socket and relays local-socket
 /// bytes to a fresh `remote-client-bridge` exec channel on the established
 /// carrier — direct (12222) and jump-chained (12222 → 12223) — against the
-/// prebuilt herdr 0.9.0 fixture servers. The local side of each test is a
+/// prebuilt herdr 0.9.1 fixture servers. The local side of each test is a
 /// plain POSIX UDS client standing in for the embedded Rust client (same
 /// dial the embed crate performs); the E2E with the REAL embedded TUI
 /// lives in the app suite (`HerdrEmbedTransportTests`).
@@ -97,7 +97,7 @@ final class HerdrEmbedBridgeServerTests: XCTestCase {
             timeout: .seconds(15)
         )
         let parsed = try HerdrServerFixtureHandshakeTests.parseWelcome(frame: welcome)
-        XCTAssertTrue(parsed.json.contains("\"server_version\":\"0.9.0\""), parsed.json)
+        XCTAssertTrue(parsed.json.contains("\"server_version\":\"0.9.1\""), parsed.json)
 
         await server.stop()
         let stoppedEvent = await eventLog.firstStopped()

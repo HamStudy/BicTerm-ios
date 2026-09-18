@@ -26,7 +26,7 @@ fixtures run a REAL herdr v0.9.0 server, but never one built from source.
 `herdr-macos-aarch64` from
 `https://github.com/herdrdev/herdr/releases/download/v0.9.0/` into the
 gitignored `Fixtures/run/herdr/herdr` and verifies it byte-exact against
-the committed sha256 lockfile `Fixtures/herdr/server-0.9.0.sha256`
+the committed sha256 lockfile `Fixtures/herdr/server-0.9.1.sha256`
 (idempotent; a mismatch re-downloads or fails loudly). The binary is test
 fixture data, not a linked dependency — it adds nothing to the app's
 dependency graph or license surface beyond the vendored herdr source above

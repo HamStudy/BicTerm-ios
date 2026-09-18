@@ -80,7 +80,7 @@ policy; no zig anywhere in the fixture chain):
 - **Binary**: `scripts/herdr-server-fetch.sh` downloads
   `herdr-macos-aarch64` from the upstream v0.9.0 GitHub release into
   `Fixtures/run/herdr/herdr` (gitignored) and verifies it against the
-  committed sha256 lockfile `Fixtures/herdr/server-0.9.0.sha256`.
+  committed sha256 lockfile `Fixtures/herdr/server-0.9.1.sha256`.
   Idempotent: a binary already matching the lockfile is left alone.
 - **Servers**: `fixtures-up.sh` starts one headless server per fixture
   sshd port (`herdr server`), each with fully isolated state under

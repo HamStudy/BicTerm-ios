@@ -185,7 +185,7 @@ is one of the user decisions listed in the h16 fixture doc.
 The zig blocker recorded above no longer applies to the fixture path:
 `scripts/herdr-server-fetch.sh` now fetches the pinned prebuilt herdr
 v0.9.0 release binary (sha256-verified against
-`Fixtures/herdr/server-0.9.0.sha256`; the server is never built from
+`Fixtures/herdr/server-0.9.1.sha256`; the server is never built from
 source), and `scripts/fixtures-up.sh` runs one herdr server per fixture
 port. Live E2E against both servers shipped with herdr-support T6 (mode A)
 and T9 (herd switching; evidence `.sisyphus/evidence/herdr-support-t6.log`,

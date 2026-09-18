@@ -8,7 +8,7 @@ import XCTest
 @testable import BicTerm
 
 /// T6 herds through the REAL client, end to end against BOTH prebuilt
-/// herdr 0.9.0 fixture servers: a herd seeds the embedded client's
+/// herdr 0.9.1 fixture servers: a herd seeds the embedded client's
 /// machine catalog (one bridge socket per machine — direct 12222 and
 /// jump-chained 12222 → 12223), the client's own sidebar lists every
 /// machine, machine selection rides a real SGR mouse click through the

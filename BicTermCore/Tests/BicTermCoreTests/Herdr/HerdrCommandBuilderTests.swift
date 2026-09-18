@@ -3,7 +3,7 @@ import XCTest
 @testable import BicTermCore
 
 /// T15 command-construction injection resistance. The fixed wrapper is
-/// `exec '<path>' [--session '<name>'] remote-client-bridge` (herdr v0.9.0
+/// `exec '<path>' [--session '<name>'] remote-client-bridge` (herdr v0.9.1
 /// `remote_bridge_command` shape); session names are validated against
 /// herdr's OWN grammar (`session::validate_name`) BEFORE any quoting, and
 /// the executable path is always passed through the one POSIX

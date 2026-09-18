@@ -6,7 +6,7 @@ import XCTest
 /// through BicTermCore (TOFU prompt surfaces through the shared
 /// HostTrustPromptView) → the embedded real-herdr client boots → typed
 /// keystrokes reach the client. Requires fixtures-up with the prebuilt
-/// herdr v0.9.0 server (`scripts/herdr-server-fetch.sh`,
+/// herdr v0.9.1 server (`scripts/herdr-server-fetch.sh`,
 /// `HERDR_LOSSY=12322:delay=80ms scripts/fixtures-up.sh`).
 @MainActor
 final class HerdrConnectUITests: XCTestCase {

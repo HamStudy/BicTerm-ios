@@ -3,7 +3,7 @@ import XCTest
 @testable import BicTermCore
 
 /// T3 live proof: a REAL `remote-client-bridge` handshake through the fixture
-/// sshd (127.0.0.1:12222) against the prebuilt herdr 0.9.0 fixture server.
+/// sshd (127.0.0.1:12222) against the prebuilt herdr 0.9.1 fixture server.
 ///
 /// Prerequisites (skips with a clear reason otherwise): `scripts/fixtures-up.sh`
 /// with the herdr fixture servers running — fetch the pinned binary first with
@@ -110,7 +110,7 @@ final class HerdrServerFixtureHandshakeTests: XCTestCase {
             JSONSerialization.jsonObject(with: Data(welcome.json.utf8)) as? [String: Any]
         )
         XCTAssertEqual(decoded["generation"] as? Int, 1)
-        XCTAssertEqual(decoded["server_version"] as? String, "0.9.0")
+        XCTAssertEqual(decoded["server_version"] as? String, "0.9.1")
         let capabilities = try XCTUnwrap(decoded["capabilities"] as? [String])
         XCTAssertTrue(capabilities.contains("surface_interest"), "missing surface_interest in \(capabilities)")
         XCTAssertTrue(capabilities.contains("health_check"), "missing health_check in \(capabilities)")

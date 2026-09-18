@@ -12,7 +12,7 @@ import XCTest
 /// `bicterm-transport` host socket served by ``HerdrEmbedBridgeServer``,
 /// which relays to `remote-client-bridge` over an established carrier
 /// (direct 12222, jump-chained 12222 → 12223) — against the prebuilt herdr
-/// 0.9.0 fixture servers. Proves: TUI renders, keys flow, the detach key
+/// 0.9.1 fixture servers. Proves: TUI renders, keys flow, the detach key
 /// ends the run, and teardown leaves no socket file and restores the cwd.
 @MainActor
 final class HerdrEmbedTransportTests: XCTestCase {
