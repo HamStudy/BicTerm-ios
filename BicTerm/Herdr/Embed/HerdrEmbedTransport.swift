@@ -803,8 +803,21 @@ final class HerdrEmbedTransportCoordinator {
             // Stage B: the missing-binary probe outcome proposes the
             // pinned install through this coordinator's prompt queue
             // before the carrier closes; without the installer seam the
-            // variant is exactly establishProbed.
-            let probed = try await connector.establishProbedOfferingInstall(link.connection)
+            // variant is exactly establishProbed. The installer's
+            // milestone lines surface on eventLines (the device-diagnostic
+            // evidence log) prefixed with the machine's label — the
+            // callback arrives off the main actor, so each line hops;
+            // best-effort ordering is fine for an evidence log and the
+            // install never blocks on the hop.
+            let label = link.machine.label
+            let probed = try await connector.establishProbedOfferingInstall(
+                link.connection,
+                installProgress: { [weak self] line in
+                    Task { @MainActor [weak self] in
+                        self?.eventLines.append("\(label): install: \(line)")
+                    }
+                }
+            )
             return .success(Established(
                 link: link,
                 carrier: probed.carrier,

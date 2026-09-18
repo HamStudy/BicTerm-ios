@@ -266,6 +266,52 @@ final class HerdrEmbedInstallPromptTests: XCTestCase {
         }
     }
 
+    // MARK: - Install progress surfaces on the evidence log
+
+    /// The installer's milestone lines reach `eventLines` (the
+    /// device-diagnostic evidence log), each prefixed with the machine's
+    /// label — the progress callback arrives off the main actor, so the
+    /// lines land through the hop shortly after the install settles.
+    func testApprovedInstallSurfacesProgressMilestonesInEventLines() async throws {
+        try requireFixtures()
+        let provider = RecordingBinaryProvider()
+        let coordinator = try await makeMissingHerdrCoordinator(
+            connections: [try makeDirectConnection(label: "install-progress")],
+            provider: provider
+        )
+        let runtime = HerdrEmbedRuntime(sessionFactory: { CloseAuditStubSession() })
+        runtime.attachTransport(coordinator)
+        addTeardownBlock { @MainActor in
+            await runtime.requestStop()
+        }
+
+        let settled = XCTestExpectation(description: "bring-up settled")
+        let startTask = Task {
+            await runtime.startIfNeeded()
+            settled.fulfill()
+        }
+
+        let proposed = await poll({ coordinator.installPrompt != nil }, timeout: 15)
+        XCTAssertTrue(proposed, "the install consent was presented")
+        coordinator.resolveInstallPrompt(true)
+
+        await fulfillment(of: [settled], timeout: 30)
+        _ = await startTask.result
+
+        XCTAssertEqual(provider.requestedTargets.count, 1, "the approved install ran")
+        let milestonesArrived = await poll(
+            {
+                coordinator.eventLines.contains { $0.hasPrefix("install-progress: install: fetching herdr") }
+                    && coordinator.eventLines.contains { $0.hasPrefix("install-progress: install: verifying sha256") }
+            },
+            timeout: 10
+        )
+        XCTAssertTrue(
+            milestonesArrived,
+            "the installer's milestones must surface on eventLines with the machine label: \(coordinator.eventLines)"
+        )
+    }
+
     // MARK: - Close with a pending consent
 
     /// The bring-up suspends at the install consent; closing the
