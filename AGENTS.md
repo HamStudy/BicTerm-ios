@@ -82,6 +82,7 @@ Reference centrality: not measured (no codegraph index; Swift LSP not wired in t
 - Never hand-edit or commit `BicTerm.xcodeproj`.
 - Never use pty/device-node APIs (`openpty`, `/dev/ptmx`) or `getpwuid`-based `$HOME` in app or vendored code — sandbox-denied on device; the simulator does not enforce the sandbox. Verified matrix and design rules: `Docs/DEVICE-SANDBOX.md`.
 - OSC 52 remote clipboard writes follow the app-side hardened policy (fork hunk 11 surfaces a typed `ClipboardWriteRequest`; the app applies the foreground gate, 100 KiB cap, default-ON Settings toggle, and attribution toast). OSC 52 read/query stays denied unconditionally under every flag; paste remains a local user action only.
+- herdr remote install follows the app-side hardened policy: the consent-gated `HerdrRemoteInstaller` offers the pinned, sha256-verified herdr release for the missing-binary case only (never replace/upgrade, no sudo or package managers, `$HOME/.local/bin`); `HerdrInstallBoundaryTests` enforces the vocabulary, sequence-confinement, and reachability boundary, and the probe itself stays read-only.
 
 ## UNIQUE STYLES
 - Partial `BicTerm/Info.plist` via xcodegen `info:` block for iPad orientation declaration (`~ipad` keys can't be `INFOPLIST_KEY_` settings — xcodebuild silently drops them). Don't hand-edit the plist; edit `project.yml`.

@@ -29,7 +29,7 @@ plan); everything else 13–19 is complete.
 | New, known, and changed host keys behave correctly | Delivered (phase 1 TOFU; herdr endpoints verified per-hop by the same `HostKeyVerifier`; per-host forget added by T20) |
 | Non-default ports, IPv6 literals, DNS names, jump hosts | Delivered (phase 1; T15 exercises the exec channel over jump chains) |
 | Channel is non-PTY and stdout is never text-normalized | Delivered (T15 — `HerdrSSHTransport` non-PTY exec; opaque-bytes contract pinned by tests) |
-| Missing/incompatible Herdr → diagnostics only, never install/update | Delivered (T19 probe + `HerdrProbeDiagnosticView`; boundary tests `HerdrInstallBoundaryTests`; T20 App Review notes restate it) |
+| Missing/incompatible Herdr → diagnostics only, never install/update | Delivered (T19 probe; revised 2026-09-18 by the herdr auto-install stages A–C — a MISSING binary on a supported platform now offers the pinned, sha256-verified herdr 0.9.0 install after a per-attempt consent prompt, see the remote-install amendment below, while an incompatible/present herdr stays diagnostic-only and the probe itself stays read-only; boundary enforced by the revised `HerdrInstallBoundaryTests`) |
 | Endpoint generation and codecs are negotiated, not assumed | Delivered (T13 handshake gates; T14 FFI admission; T20 fuzz `endpoint_json`) |
 | Named sessions correctly quoted and isolated | Delivered (T15 `HerdrCommandBuilder` quoting vectors) |
 | Full snapshot, incremental patch, focus, resize, shutdown | Partial (T16 snapshots + surfaces, T17 resize/focus routing; patch engine extracted and unit-tested in T13, but the FFI lane does not yet route `PaneSurfacePatch` frames — full-surface refresh is shipped instead; shutdown taxonomy T19) |
@@ -249,4 +249,53 @@ its chrome (header `Herdr — {label}`, `embedded client running` status,
 deliverable, and `HerdrConnectUITests` (rewritten T7) exercises it on
 both simulators. Evidence: `.sisyphus/evidence/herdr-embed-t7.log`,
 `.sisyphus/evidence/herdr-embed-t7/`.
+
+## herdr remote-install amendment (2026-09-18, stages A–C)
+
+The §15 row "Missing/incompatible Herdr → diagnostics only, never
+install/update" is superseded for the MISSING-binary case only: when the
+probe finds no herdr binary on an otherwise-supported host (linux/macos ×
+x86_64/aarch64), both bring-up paths (herd via `HerdSessionCoordinator`,
+embed via `HerdrEmbedTransportCoordinator.establishOne`) present a
+per-attempt consent sheet (`HerdrInstallConsentView`: host, version,
+destination, source) and, on approval, `HerdrRemoteInstaller` (stage A,
+`a1772f9`) installs the pinned herdr 0.9.0 release over the live SSH
+carrier — upstream's own attach.rs prepare/tee/chmod 755/mv upload model
+— after which the connector re-probes with the same search paths. Decline
+is a quiet typed `.installDeclined`; install failure is a typed
+`.installFailed` diagnostic. A present-but-incompatible herdr never
+proposes (no replace/upgrade flows), and the probe itself stays read-only
+(`HerdrProbe.swift` boundary doc). The revised
+`HerdrInstallBoundaryTests` (stage C) enforces the contract: forbidden
+install vocabulary everywhere except the installer's own comment-stripped
+file, the deliberate sequence confined to that file, and the installer
+family reachable only from the connector's install-offering variants,
+its binary-provider seam, the composition root, and the embed bring-up
+path.
+
+### Release-pin provenance
+
+- Source: the `0.9.0` entry of the `releases` map in
+  `https://herdr.dev/latest.json` (upstream's stable update manifest),
+  fetched 2026-09-18. Recorded as compile-time constants in
+  `BicTermCore/Sources/BicTermCore/Herdr/HerdrReleasePins.swift`
+  (download URLs follow
+  `https://github.com/herdrdev/herdr/releases/download/v0.9.0/herdr-<os>-<arch>`;
+  the exact per-target URLs live in `HerdrReleasePins.asset(for:)`).
+  Bumping the pin is a deliberate, reviewed act: version, the four asset
+  entries, and the fixture lockfile move together.
+- The four pinned targets and their sha256 values:
+  - linux-x86_64:
+    `4fa1a01158dd8043da92d31b270780b0dcc10603038d9b61cac4d81ab63fb71f`
+  - linux-aarch64:
+    `9c8db20fb7e7427b138d5367113f1621ffd319f2f65d6f009e2594029115f0d2`
+  - macos-x86_64:
+    `d0c920b2a126a74809fa1491411c9a097a44786cac9c2ca51b818a995581cf16`
+  - macos-aarch64:
+    `32b53df09872628059c789a69f02a6b8e29e14ddf26711421f3463f70c1aef17`
+- The macos-aarch64 pin is byte-identical to the committed fixture
+  lockfile `Fixtures/herdr/server-0.9.0.sha256` (same artifact family);
+  `HerdrRemoteInstallerTests.testMacosAarch64PinMatchesCommittedFixtureLockfile`
+  asserts the two never drift apart silently, so the offline fixture
+  round-trip installs exactly the pinned bytes.
 
