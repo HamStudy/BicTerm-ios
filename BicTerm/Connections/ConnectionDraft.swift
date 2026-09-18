@@ -96,6 +96,12 @@ struct ConnectionDraft: Equatable {
     /// persisted while ``herdrEnabled`` is on — the toggle is the sole
     /// authority for whether herdr applies at all.
     var herdrSessionName = ""
+    /// Optional command line (e.g. `tmux new-session -A -s main`) sent as
+    /// terminal input when the session's shell comes up, on first connect
+    /// and every reconnect. The editor hides the field while ``herdrEnabled``
+    /// is on (herdr connections never open a terminal shell) but the value
+    /// is PRESERVED across saves — hiding must not delete user data.
+    var startupCommand = ""
 
     init() {}
 
@@ -113,6 +119,7 @@ struct ConnectionDraft: Equatable {
         agentForwarding = connection.protocolOptions["agentForwarding"]?.boolValue == true
         herdrEnabled = connection.herdrEnabled
         herdrSessionName = connection.herdrSessionName ?? ""
+        startupCommand = connection.startupCommand ?? ""
     }
 
     /// Duplicate-as-new: copies every editable value from `connection` —
@@ -266,6 +273,7 @@ struct ConnectionDraft: Equatable {
         if !optionValues.isEmpty {
             options = try ProtocolOptions(optionValues)
         }
+        let trimmedStartupCommand = startupCommand.trimmingCharacters(in: .whitespacesAndNewlines)
         return try Connection(
             id: id,
             name: name.trimmingCharacters(in: .whitespaces),
@@ -277,7 +285,8 @@ struct ConnectionDraft: Equatable {
             customKeys: customKeys,
             passwordTag: passwordTag,
             jumpChain: jumpChain,
-            protocolOptions: options
+            protocolOptions: options,
+            startupCommand: trimmedStartupCommand.isEmpty ? nil : trimmedStartupCommand
         )
     }
 }

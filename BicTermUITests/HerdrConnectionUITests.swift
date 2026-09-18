@@ -199,6 +199,67 @@ final class HerdrConnectionUITests: XCTestCase {
         app.buttons["cancel-editor"].tap()
     }
 
+    /// Startup command (sent as terminal input when the shell comes up):
+    /// visible only while herdr is off, preserved — hidden, not deleted —
+    /// while herdr is on, and persisted across save + reopen.
+    func testStartupCommandFieldVisibilityAndPersistence() {
+        app.launchArguments = ["--uitest-reset", "--uitest-seed-keys"]
+        app.launch()
+
+        openEditorForNewConnection()
+        typeInto(app.textFields["field-name"], "Startup Cmd")
+        typeInto(app.textFields["field-host"], "10.4.5.9")
+        typeInto(app.textFields["field-username"], "alice")
+        selectAuthenticationKey("Fixture Ed25519")
+
+        let toggle = app.switches["herdr-toggle"]
+        scrollTo(toggle)
+        XCTAssertTrue(toggle.waitForExistence(timeout: 5), "SSH connections offer the Herdr section")
+
+        let startupField = app.textFields["startup-command-field"]
+        XCTAssertTrue(
+            startupField.waitForExistence(timeout: 5),
+            "herdr off: the startup-command field is visible"
+        )
+        typeInto(startupField, "tmux new-session -A -s main")
+
+        XCTAssertTrue(setToggle(toggle, on: true), "the herdr toggle must flip on")
+        XCTAssertTrue(
+            app.textFields["startup-command-field"].waitForNonExistence(timeout: 10),
+            "enabling herdr hides the startup-command field"
+        )
+
+        XCTAssertTrue(setToggle(toggle, on: false), "the herdr toggle must flip back off")
+        let restoredField = app.textFields["startup-command-field"]
+        XCTAssertTrue(
+            restoredField.waitForExistence(timeout: 5),
+            "disabling herdr reveals the field again"
+        )
+        XCTAssertEqual(
+            restoredField.value as? String,
+            "tmux new-session -A -s main",
+            "the value is preserved, not deleted, while herdr was on"
+        )
+
+        scrollTo(app.buttons["save-editor"])
+        waitForEnabled(app.buttons["save-editor"])
+        app.buttons["save-editor"].tap()
+
+        let row = app.buttons["connection-Startup-Cmd"]
+        XCTAssertTrue(row.waitForExistence(timeout: 10), "the connection must save")
+
+        openEditorForConnection(named: "Startup-Cmd")
+        let reopenedField = app.textFields["startup-command-field"]
+        scrollTo(reopenedField)
+        XCTAssertTrue(reopenedField.waitForExistence(timeout: 5))
+        XCTAssertEqual(
+            reopenedField.value as? String,
+            "tmux new-session -A -s main",
+            "the startup command must persist across save + reopen"
+        )
+        app.buttons["cancel-editor"].tap()
+    }
+
     // MARK: Helpers
 
     private func openEditorForNewConnection() {

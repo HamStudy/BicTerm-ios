@@ -37,7 +37,7 @@ struct ConnectionEditorView: View {
     @FocusState private var focus: FocusField?
 
     enum FocusField {
-        case name, host, port, username, password, herdrSession
+        case name, host, port, username, password, herdrSession, startupCommand
     }
 
     struct HopSheetTarget: Hashable, Identifiable {
@@ -510,6 +510,18 @@ struct ConnectionEditorView: View {
 
     private var herdrSection: some View {
         Section {
+            if !draft.herdrEnabled {
+                labeledField(
+                    "Startup Command (optional)",
+                    text: $draft.startupCommand,
+                    identifier: "startup-command-field",
+                    error: nil,
+                    focus: .startupCommand
+                )
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+            }
+
             Toggle(isOn: $draft.herdrEnabled) {
                 VStack(alignment: .leading, spacing: spacing.xxxs) {
                     Text("Use Herdr")

@@ -120,4 +120,41 @@ final class ConnectionDraftRoundTripTests: XCTestCase {
             }
         }
     }
+
+    /// The startup command survives the draft round-trip, including when
+    /// herdr is on: the editor hides the field in that case, but hiding must
+    /// not silently delete the stored value.
+    func testStartupCommandSurvivesDraftRoundTripEvenWithHerdrEnabled() throws {
+        let connection = try Connection(
+            name: "Startup", type: .ssh, host: "example.com", port: 22, username: "user",
+            customKeys: ["key-a"],
+            protocolOptions: try ProtocolOptions([ProtocolOptions.herdrEnabledKey: .bool(true)]),
+            startupCommand: "tmux new-session -A -s main"
+        )
+
+        let draft = ConnectionDraft(connection: connection, keyLabel: nil)
+        XCTAssertEqual(draft.startupCommand, "tmux new-session -A -s main")
+        XCTAssertTrue(draft.herdrEnabled)
+
+        let remade = try draft.makeConnection()
+        XCTAssertEqual(remade, connection)
+        XCTAssertEqual(
+            remade.startupCommand, "tmux new-session -A -s main",
+            "a herdr-hidden startup command must be preserved, not deleted"
+        )
+    }
+
+    func testBlankAndWhitespaceStartupCommandsNormalizeToNil() throws {
+        for blank in ["", "   ", " \t\n "] {
+            var draft = ConnectionDraft(connection: try Connection(
+                name: "Blank", type: .ssh, host: "example.com", port: 22, username: "user",
+                customKeys: ["key-a"]
+            ), keyLabel: nil)
+            draft.startupCommand = blank
+            XCTAssertNil(
+                try draft.makeConnection().startupCommand,
+                "blank \(blank.debugDescription) must save as nil"
+            )
+        }
+    }
 }
