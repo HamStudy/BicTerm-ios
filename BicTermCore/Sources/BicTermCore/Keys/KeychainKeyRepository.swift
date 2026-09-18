@@ -7,13 +7,16 @@ import Security
 public final class KeychainKeyRepository: @unchecked Sendable {
     public let keychainService: String
     private let parser: OpenSSHPrivateKeyParser
+    private let gate: BiometricEvaluationGate
 
     public init(
         keychainService: String = "com.bicterm.keys.ed25519",
-        parser: OpenSSHPrivateKeyParser = OpenSSHPrivateKeyParser()
+        parser: OpenSSHPrivateKeyParser = OpenSSHPrivateKeyParser(),
+        gate: BiometricEvaluationGate = .shared
     ) {
         self.keychainService = keychainService
         self.parser = parser
+        self.gate = gate
     }
 
     public func generateEd25519(label: String, requiresBiometry: Bool) async throws -> KeyMetadata {
@@ -55,7 +58,7 @@ public final class KeychainKeyRepository: @unchecked Sendable {
             service: keychainService,
             reference: reference
         )
-        var rawKey = try privateKeyData(
+        var rawKey = try await gatedPrivateKeyData(
             reference: reference,
             reason: metadata.requiresBiometry ? "Authenticate to use your SSH key" : nil
         )
@@ -68,7 +71,14 @@ public final class KeychainKeyRepository: @unchecked Sendable {
         with reference: String,
         reason: String
     ) async throws -> NIOSSHPrivateKey {
-        let rawKey = try privateKeyData(reference: reference, reason: reason)
+        let metadata = try KeychainMetadataStore.metadata(
+            service: keychainService,
+            reference: reference
+        )
+        let rawKey = try await gatedPrivateKeyData(
+            reference: reference,
+            reason: metadata.requiresBiometry ? reason : nil
+        )
         let key = try Curve25519.Signing.PrivateKey(rawRepresentation: rawKey)
         return NIOSSHPrivateKey(ed25519Key: key)
     }
@@ -98,6 +108,19 @@ public final class KeychainKeyRepository: @unchecked Sendable {
             requiresBiometry: requiresBiometry
         )
         return metadata
+    }
+
+    /// `SecItemCopyMatching` on a biometry-protected item is where the
+    /// LAContext evaluation happens, so that call — and only that call — is
+    /// routed through the gate. A nil reason means the key is not
+    /// biometry-protected and the read must not be serialized.
+    private func gatedPrivateKeyData(reference: String, reason: String?) async throws -> Data {
+        guard let reason else {
+            return try privateKeyData(reference: reference, reason: nil)
+        }
+        return try await gate.enqueue {
+            try self.privateKeyData(reference: reference, reason: reason)
+        }
     }
 
     private func privateKeyData(reference: String, reason: String?) throws -> Data {
