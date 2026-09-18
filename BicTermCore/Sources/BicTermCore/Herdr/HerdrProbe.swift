@@ -7,9 +7,12 @@ import Foundation
 /// capabilities.
 ///
 /// Boundary (doc §11, permanent): the probe is read-only. It never installs,
-/// updates, replaces, or elevates anything on the remote — a missing or
-/// incompatible herdr is a diagnostic screen plus a documentation link, and
-/// nothing else.
+/// updates, replaces, or elevates anything on the remote. An incompatible
+/// herdr stays a diagnostic screen plus a documentation link; a missing
+/// binary has exactly one remediation path, outside this file: the separate,
+/// consent-gated ``HerdrRemoteInstaller`` the connector's install-offering
+/// variants run after an explicit per-attempt user approval — never the
+/// probe itself.
 public enum HerdrProbe {
     /// Structured outcome of one probe run. Everything except `host` is
     /// optional: each field is whatever the remote actually reported, so an

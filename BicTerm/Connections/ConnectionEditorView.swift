@@ -537,7 +537,7 @@ struct ConnectionEditorView: View {
         } header: {
             Text("Herdr")
         } footer: {
-            Text("Connecting opens this machine's herdr workspace (tabs and panes) instead of a plain terminal. The host must already run herdr 0.9 or newer; this app never installs or updates it.")
+            Text("Connecting opens this machine's herdr workspace (tabs and panes) instead of a plain terminal. The host must run herdr 0.9 or newer; if no herdr is installed, this app can offer to install the pinned herdr 0.9.0 release (asked each time, sha256-verified, $HOME/.local/bin) and never replaces or upgrades an existing herdr.")
                 .font(typography.caption)
                 .foregroundColor(colors.dimmed)
                 .accessibilityIdentifier("herdr-section-footer")
