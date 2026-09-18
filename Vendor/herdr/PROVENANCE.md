@@ -9,20 +9,28 @@ provenance, not legal approval or an App Store release certification.
 ## Upstream source
 
 - Repository: https://github.com/herdrdev/herdr
-- Release: v0.9.0 (multi-machine)
-- Verified commit: `b99002ac99b09e00b4ca692436cb15a6b0d676f1`
+- Release: v0.9.1 (multi-machine)
+- Verified commit: `065ef9d6a531c49fb8bee7e818ef837065b21ee9`
 - Unmodified reference checkout: `Vendor/herdr/upstream/` (ignored)
 - Source archive: `Vendor/herdr/UPSTREAM_SOURCE.tar` (ignored)
-- SHA256: `6026052a4e11914fa7bc1d4080f44130dfa2640b02851029f6712613e6062beb`
+- SHA256: `050b31ce77072c7ddf98e8f43cd261f531ff4fec3d4a0da9adcf9e1f50c56aa7`
 - Hash record: `Vendor/herdr/UPSTREAM_SOURCE.sha256`
 - Vendored license: [LICENSE](LICENSE), byte-for-byte upstream Apache-2.0 text.
+
+The extracted crates below (`herdr-protocol`, `herdr-client-core`) were taken
+from v0.9.0 (`b99002ac99b09e00b4ca692436cb15a6b0d676f1`) and have not been
+re-extracted; `extract-protocol.sh` and `extract-client-core.sh` still verify
+that pin. The reference checkout and source archive track v0.9.1, the embed
+stack baseline (`MODIFICATIONS.md`, `EMBED-PATCHES.md`). Wire compatibility is
+preserved: PROTOCOL_VERSION 22 and ENDPOINT_PROTOCOL_GENERATION 1 are
+unchanged between the two releases.
 
 Commands run from the BicTerm repository root:
 
 ```sh
 source scripts/env-local-caches.sh
 GIT_MASTER=1 git clone https://github.com/herdrdev/herdr Vendor/herdr/upstream
-GIT_MASTER=1 git -C Vendor/herdr/upstream checkout b99002ac99b09e00b4ca692436cb15a6b0d676f1
+GIT_MASTER=1 git -C Vendor/herdr/upstream checkout 065ef9d6a531c49fb8bee7e818ef837065b21ee9
 GIT_MASTER=1 git -C Vendor/herdr/upstream rev-parse HEAD
 GIT_MASTER=1 git -C Vendor/herdr/upstream archive --format=tar HEAD \
   -o "$PWD/Vendor/herdr/UPSTREAM_SOURCE.tar"

@@ -7,7 +7,7 @@ mod common;
 use common::{detail_text, fd_state, poll_until, redirect_client_env, serial, start_instance};
 use herdr_ios_embed::{
     herdr_embed_is_running, herdr_embed_read_output, herdr_embed_set_winsize, HerdrEmbedResult,
-    HERDR_EMBED_CODE_OK,
+    HERDR_EMBED_CODE_IO, HERDR_EMBED_CODE_OK,
 };
 use std::ffi::CString;
 use std::time::Duration;
@@ -42,22 +42,35 @@ fn instance_exits_against_a_missing_socket_and_stop_restores_fd_hygiene() {
     let exited = poll_until(Duration::from_secs(10), &|| !herdr_embed_is_running(embed.handle()));
     assert!(exited, "client did not exit against a missing socket");
 
-    // Drain: the final read must be the clean 0 (stopped/exited), never an
-    // error. (A failed connect produces no flushed output: the client's only
-    // stdout writes are newline-less control sequences that stay buffered.)
+    // Drain: buffered output first, then either the clean 0 (stopped/exited)
+    // or the typed IO error carrying the recorded exit detail — a missing
+    // socket fails the client's startup dial, and read_output surfaces that
+    // exit error once the drain empties (clean exits keep the bare EOF).
     let mut buf = [0u8; 4096];
+    let mut exit_detail = None;
     for _ in 0..64 {
-        let n = herdr_embed_read_output(
-            embed.handle(),
-            buf.as_mut_ptr(),
-            buf.len(),
-            std::ptr::null_mut(),
-        );
-        assert!(n >= 0, "read_output errored after exit");
+        let mut error = HerdrEmbedResult {
+            code: HERDR_EMBED_CODE_OK,
+            detail: std::ptr::null(),
+        };
+        let n = herdr_embed_read_output(embed.handle(), buf.as_mut_ptr(), buf.len(), &mut error);
         if n == 0 {
             break;
         }
+        if n < 0 {
+            assert_eq!(
+                error.code, HERDR_EMBED_CODE_IO,
+                "unexpected read_output error code"
+            );
+            exit_detail = Some(detail_text(error.detail));
+            break;
+        }
     }
+    let exit_detail = exit_detail.expect("missing-socket exit must surface its detail");
+    assert!(
+        exit_detail.contains("failed to connect to server"),
+        "unexpected exit detail: {exit_detail}"
+    );
 
     let result = embed.stop();
     assert_eq!(result.code, HERDR_EMBED_CODE_OK, "{}", detail_text(result.detail));

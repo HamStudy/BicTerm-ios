@@ -1,6 +1,6 @@
 # herdr embed patch series
 
-Baseline: herdr `b99002ac99b09e00b4ca692436cb15a6b0d676f1` (v0.9.0), the same
+Baseline: herdr `065ef9d6a531c49fb8bee7e818ef837065b21ee9` (v0.9.1), the same
 pin as `MODIFICATIONS.md`. The pristine upstream checkout under `upstream/`
 stays untouched; these patches are applied by `scripts/herdr-embed-prepare.sh`
 into a working copy under `.build-artifacts/herdr-embed/`.
@@ -20,7 +20,7 @@ upstreamable; patch 4 is BicTerm-specific and feature-gated.
 | `0004-transport-add-bicterm-transport-feature-for-host-inj.patch` | `Cargo.toml` (+8), `src/remote/saved.rs` (+~60) | New `bicterm-transport` cargo feature: `connect_saved_ssh` drops the `ssh` subprocess bridge (`RemoteSsh` probes + `SshStdioBridge`) and connects to a host-provided per-machine socket at `{HERDR_EMBED_TRANSPORT_DIR}/{profile id}.sock`; handshake/supervision unchanged. Default builds keep the stock body byte for byte | no (BicTerm embed) |
 | `0005-embed-never-exit-the-host-process-from-run_cl.patch` | `Cargo.toml` (+5), `src/client/mod.rs` (+9) | New `bicterm-embed` cargo feature: `run_client_with_mode`'s non-detached loop-failure path returns `io::Error` from `run_client` instead of `std::process::exit(1)` — an embedding host owns the process lifetime and records the exit detail. Stock CLI builds keep the exit contract byte for byte. `herdr-ios-embed` enables the feature on its dependency unconditionally | yes (upstream may want a no-exit embedding mode) |
 | `0006-embed-socketpair-stdio-tty-and-geometry-seams.patch` | `src/client/terminal_setup.rs` (+29), `src/platform/unix_common.rs` (+19), `src/client/terminal_geometry.rs` (+12) | Extends `bicterm-embed`: when stdin is not a tty, `setup_terminal` enters the alternate screen without `ratatui::init` (crossterm raw mode would tcgetattr `/dev/tty`, absent in the iOS app sandbox) and the restore path leaves the screen without `disable_raw_mode`; `read_terminal_grid_size` prefers the host-published `HERDR_EMBED_COLS`/`HERDR_EMBED_ROWS` grid (TIOCSWINSZ/TIOCGWINSZ fail ENOTSUP on sockets); `ioctl_terminal_geometry` returns None so crossterm cannot reach through `/dev/tty` on a host. Stock builds keep every path byte for byte | no (BicTerm embed; the socketpair redesign is forced by the device sandbox) |
-| `0007-embed-hide-the-local-endpoint-under-HERDR_EMB.patch` | `src/client/mod.rs` (+161), `src/client/catalog_reload.rs` (+147), `src/client/shell/endpoints.rs` (+54), `src/client/shell/{config,state,composition,endpoint_sidebar,render,mobile,aggregate_navigation}.rs` (+54), `src/client/{tests/mod.rs,shell/tests/endpoints.rs}` (+97) | Extends `bicterm-embed`: `HERDR_EMBED_HIDE_LOCAL=1` (exact value, parsed once at client boot and carried as immutable `ClientShellConfig` policy) hides the Local endpoint for embedding hosts that run no local herdr server — the startup Local dial, Local method registration, and the late Local catalog transition are skipped; `set_endpoint_catalog` never recreates the Local row; removing the active machine selects the first enabled survivor instead of falling back to Local; with no active machine the Local id stays an internal no-active sentinel rendering "No machine selected" with the new-workspace footer disabled. Endpoint chrome (machine rows, navigator machine parents, the endpoint sidebar) now applies whenever any real machine exists, so a sole machine no longer falls into the legacy local-only renderers. Stock builds keep every path byte for byte (the stock `embed_include_local_endpoint` is a `const fn` returning true; the env is never read) | no (BicTerm embed; herd hosts have no local server) |
+| `0007-embed-hide-the-local-endpoint-under-HERDR_EMB.patch` | `src/client/mod.rs` (+176), `src/client/catalog_reload.rs` (+147), `src/client/shell/endpoints.rs` (+54), `src/client/shell/{config,state,composition,endpoint_sidebar,render,mobile,aggregate_navigation}.rs` (+56), `src/client/{tests/mod.rs,shell/tests/endpoints.rs}` (+97) | Extends `bicterm-embed`: `HERDR_EMBED_HIDE_LOCAL=1` (exact value, parsed once at client boot and carried as immutable `ClientShellConfig` policy) hides the Local endpoint for embedding hosts that run no local herdr server — the startup Local dial, Local method registration, and the late Local catalog transition are skipped; `set_endpoint_catalog` never recreates the Local row; removing the active machine selects the first enabled survivor instead of falling back to Local; with no active machine the Local id stays an internal no-active sentinel rendering "No machine selected" with the new-workspace footer disabled. Endpoint chrome (machine rows, navigator machine parents, the endpoint sidebar) now applies whenever any real machine exists, so a sole machine no longer falls into the legacy local-only renderers. The sole-endpoint local-snapshot branch in `compose_unavailable` additionally gates on `endpoint_id.is_local()`, so a lone real machine never renders the legacy local sidebar against a missing Local snapshot. Stock builds keep every path byte for byte (the stock `embed_include_local_endpoint` is a `const fn` returning true; the env is never read) | no (BicTerm embed; herd hosts have no local server) |
 
 ## Feature-gating contract
 
@@ -37,7 +37,7 @@ and hidden-Local seams.
 ## libghostty-vt link stub
 
 `libghostty-vt.linkstub-aarch64-ios.a` is a **link stub only**: an arm64
-static archive defining the 173 `ghostty_*` symbols referenced by
+static archive defining the 199 `ghostty_*` symbols referenced by
 `src/ghostty/bindings.rs` as aborting stubs, compiled with
 `zig cc -target aarch64-ios` + `zig ar`. It proves the Rust link pipeline for
 iOS but cannot parse VT output. It is superseded by the real
@@ -45,7 +45,7 @@ iOS but cannot parse VT output. It is superseded by the real
 `HERDR_EMBED_GHOSTTY_VT_A` or dropped into
 `vendor/libghostty-vt/zig-out/lib/` of the working copy.
 
-- sha256: `282f51909742aa683759252c8cec9ee347d73f528d0a491ee4b1427b830abd6f`
+- sha256: `0435d789cb0fc8fcc9df9ff6e5164fdb16ca0e4a682b9a71cb5094ce9e7da84e`
 
 ## Build proof
 
@@ -71,7 +71,7 @@ cbindgen header at `herdr-ios-embed/include/HerdrEmbed.h`. Build proof:
 plan task 2 (the link stub stays available via the env override), and
 (b) after the herdr binary proofs, builds the embed crate for
 `aarch64-apple-ios` in both feature variants, audits the staticlib for the
-ABI + all 173 `ghostty_*` symbols, and regenerates/verifies the header.
+ABI + all 199 `ghostty_*` symbols, and regenerates/verifies the header.
 Host harness tests run the real client against the pinned prebuilt server
 fixture through the shim; evidence `.sisyphus/evidence/herdr-embed-t3.log`.
 No patch-series files were modified for this task; only this script's

@@ -1,6 +1,6 @@
-From 8c02922ca012aeb34fe86792519b77409074843b Mon Sep 17 00:00:00 2001
+From 9a389df7e2cf83aba269a1467abeca6abe19467a Mon Sep 17 00:00:00 2001
 From: BicTerm <embed@bicterm.invalid>
-Date: Sun, 13 Sep 2026 08:09:29 -0600
+Date: Fri, 18 Sep 2026 13:59:27 -0600
 Subject: [PATCH 4/4] transport: add bicterm-transport feature for
  host-injected ssh streams
 
@@ -10,14 +10,14 @@ HERDR_EMBED_TRANSPORT_DIR instead; default builds keep the stock bridge
 byte for byte.
 ---
  Cargo.toml          |  9 +++++++
- src/remote/saved.rs | 59 +++++++++++++++++++++++++++++++++++++++++++++
- 2 files changed, 68 insertions(+)
+ src/remote/saved.rs | 62 ++++++++++++++++++++++++++++++++++++++++++++-
+ 2 files changed, 70 insertions(+), 1 deletion(-)
 
 diff --git a/Cargo.toml b/Cargo.toml
-index d28ba46..1c1c03c 100644
+index 09ceaf7..589439d 100644
 --- a/Cargo.toml
 +++ b/Cargo.toml
-@@ -50,6 +50,15 @@ schemars = { version = "1.2.1", features = ["derive"] }
+@@ -51,6 +51,15 @@ schemars = { version = "1.2.1", features = ["derive"] }
  [patch.crates-io]
  portable-pty = { path = "vendor/portable-pty" }
  
@@ -34,15 +34,17 @@ index d28ba46..1c1c03c 100644
  # UTF-16 SDDL input for interprocess security descriptors.
  widestring = "1.2"
 diff --git a/src/remote/saved.rs b/src/remote/saved.rs
-index 5b570af..7a140b7 100644
+index 561ee1a..01ce294 100644
 --- a/src/remote/saved.rs
 +++ b/src/remote/saved.rs
-@@ -1,17 +1,64 @@
+@@ -1,17 +1,65 @@
  use std::io;
  use std::path::PathBuf;
  
+-use super::attach::{find_installed_remote_herdr, RemoteSsh, SshStdioBridge};
 +#[cfg(not(feature = "bicterm-transport"))]
- use super::attach::{find_installed_remote_herdr, RemoteSsh, SshStdioBridge};
++use super::attach::find_installed_remote_herdr;
++use super::attach::{RemoteSsh, SshStdioBridge};
  
 +#[cfg(not(feature = "bicterm-transport"))]
  pub(crate) struct SavedSshBridge {
@@ -102,7 +104,7 @@ index 5b570af..7a140b7 100644
  pub(crate) fn connect_saved_ssh(
      profile_id: &str,
      target: &str,
-@@ -73,6 +120,7 @@ pub(crate) fn saved_ssh_failure_needs_attention(error: &io::Error) -> bool {
+@@ -107,6 +155,7 @@ pub(crate) fn saved_ssh_failure_needs_attention(error: &io::Error) -> bool {
      .any(|needle| message.contains(needle))
  }
  
@@ -110,7 +112,7 @@ index 5b570af..7a140b7 100644
  fn saved_bridge_path(profile_id: &str) -> PathBuf {
      let pid = std::process::id();
      let readable = format!("herdr-ssh-{pid}-{profile_id}.sock");
-@@ -100,6 +148,7 @@ mod tests {
+@@ -141,6 +190,7 @@ mod tests {
      use super::*;
  
      #[test]
@@ -118,7 +120,7 @@ index 5b570af..7a140b7 100644
      fn bridge_paths_use_profile_identity_not_target_or_session() {
          let first = saved_bridge_path("0123456789abcdef0123456789abcdef");
          let second = saved_bridge_path("fedcba9876543210fedcba9876543210");
-@@ -108,6 +157,16 @@ mod tests {
+@@ -149,6 +199,16 @@ mod tests {
          assert!(!first.to_string_lossy().contains("default"));
      }
  

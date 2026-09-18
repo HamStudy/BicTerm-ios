@@ -1,6 +1,6 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: BicTerm <embed@bicterm.invalid>
-Date: Thu, 17 Sep 2026 16:20:00 -0600
+Date: Fri, 18 Sep 2026 15:32:24 -0600
 Subject: [PATCH] embed: hide the Local endpoint under HERDR_EMBED_HIDE_LOCAL
 
 behind the bicterm-embed feature, HERDR_EMBED_HIDE_LOCAL=1 hides the
@@ -19,23 +19,27 @@ whenever any real machine exists, so a sole machine no longer falls
 into the legacy local-only renderers. Stock builds keep every path byte
 for byte: the exact value "1" is required and the stock const fn
 ignores the env entirely.
+against 0.9.1 the compose_unavailable local_snapshot shortcut (a sole
+endpoint gets the legacy local-only sidebar) now also requires that sole
+endpoint to really be Local: with Local hidden it is a machine and must
+keep the endpoint sidebar and its machine hits.
 ---
- src/client/catalog_reload.rs             | 149 ++++++++++++++++++-
- src/client/mod.rs                        | 237 +++++++++++++++++++++----------
+ src/client/catalog_reload.rs             | 149 ++++++++++++-
+ src/client/mod.rs                        | 267 +++++++++++++++--------
  src/client/shell/aggregate_navigation.rs |   4 +-
- src/client/shell/composition.rs          |   6 +
- src/client/shell/config.rs               |   9 ++
- src/client/shell/endpoint_sidebar.rs     |  27 ++--
- src/client/shell/endpoints.rs            |  65 +++++++--
+ src/client/shell/composition.rs          |   9 +
+ src/client/shell/config.rs               |   9 +
+ src/client/shell/endpoint_sidebar.rs     |  27 ++-
+ src/client/shell/endpoints.rs            |  65 +++++-
  src/client/shell/mobile.rs               |   4 +-
  src/client/shell/render.rs               |   5 +-
  src/client/shell/state.rs                |  11 +-
- src/client/shell/tests/endpoints.rs      |  65 +++++++++
- src/client/tests/mod.rs                  |  32 +++++
- 12 files changed, 512 insertions(+), 102 deletions(-)
+ src/client/shell/tests/endpoints.rs      |  65 ++++++
+ src/client/tests/mod.rs                  |  32 +++
+ 12 files changed, 530 insertions(+), 117 deletions(-)
 
 diff --git a/src/client/catalog_reload.rs b/src/client/catalog_reload.rs
-index 21f33be..d3a6f74 100644
+index a20b74d..dc5c6ab 100644
 --- a/src/client/catalog_reload.rs
 +++ b/src/client/catalog_reload.rs
 @@ -58,10 +58,36 @@ pub(super) fn apply_profiles(
@@ -77,7 +81,7 @@ index 21f33be..d3a6f74 100644
          }
      } else if catalog.selected_profile.as_ref().is_some_and(|selected| {
          !catalog
-@@ -273,4 +299,123 @@ mod tests {
+@@ -238,4 +264,123 @@ mod tests {
              }
          }
      }
@@ -202,10 +206,10 @@ index 21f33be..d3a6f74 100644
 +    }
  }
 diff --git a/src/client/mod.rs b/src/client/mod.rs
-index 6e461ae..b729edf 100644
+index a1e0341..a9e65e8 100644
 --- a/src/client/mod.rs
 +++ b/src/client/mod.rs
-@@ -134,6 +134,25 @@ use crate::protocol::{self, ClientMessage, FrameData, ServerMessage, MAX_GRAPHIC
+@@ -141,6 +141,25 @@ use crate::protocol::{self, ClientMessage, FrameData, ServerMessage, MAX_GRAPHIC
  use crate::protocol::{AttachScrollDirection, AttachScrollSource, NotifyKind};
  use crate::server::socket_paths::client_socket_path;
  
@@ -231,8 +235,8 @@ index 6e461ae..b729edf 100644
  fn run_client_with_mode(
      attach_request: Option<(String, bool)>,
      attach_escape: Option<AttachEscapeState>,
-@@ -144,6 +163,10 @@ fn run_client_with_mode(
-     let loaded_config = crate::config::Config::load();
+@@ -155,6 +174,10 @@ fn run_client_with_mode(
+     #[cfg(not(windows))]
      crate::terminal_modes::clear_host_mouse_reporting(&mut io::stdout())?;
      let client_rendered_shell = attach_request.is_none();
 +    // BICTERM-PATCH (embed): the Local-visibility policy is fixed for the
@@ -242,7 +246,7 @@ index 6e461ae..b729edf 100644
      let socket_path = client_socket_path();
      let keybinding_source = client_shell_keybinding_source();
      let startup_config_diagnostic =
-@@ -158,6 +181,7 @@ fn run_client_with_mode(
+@@ -169,6 +192,7 @@ fn run_client_with_mode(
              .with_startup_onboarding(loaded_config.config.should_show_onboarding())
              .with_keybinding_source(keybinding_source)
              .with_local_endpoint(&socket_path)
@@ -250,7 +254,7 @@ index 6e461ae..b729edf 100644
      });
      let mouse_capture = loaded_config.config.ui.mouse_capture;
      let mouse_scroll_lines = loaded_config.config.ui.mouse_scroll_lines();
-@@ -197,16 +221,24 @@ fn run_client_with_mode(
+@@ -208,16 +232,24 @@ fn run_client_with_mode(
      };
      let federated = endpoint_catalog.has_enabled_ssh();
  
@@ -285,7 +289,7 @@ index 6e461ae..b729edf 100644
          }
      };
  
-@@ -416,21 +448,32 @@ async fn run_client_loop(
+@@ -428,32 +460,43 @@ async fn run_client_loop(
          detached_process_children: Vec::new(),
          shell: config.shell_config.map(shell::ClientShellState::new),
      };
@@ -306,6 +310,17 @@ index 6e461ae..b729edf 100644
 -                .as_ref()
 -                .and_then(|(_, handshake)| handshake.endpoint_methods.clone()),
 -        );
+-        shell.set_endpoint_agent_view_projection_supported(
+-            &endpoint::ClientEndpointId::Local,
+-            initial
+-                .as_ref()
+-                .and_then(|(_, handshake)| handshake.endpoint_capabilities.as_ref())
+-                .is_some_and(|capabilities| {
+-                    capabilities.iter().any(|capability| {
+-                        capability == crate::protocol::endpoint::AGENT_VIEW_PROJECTION_CAPABILITY
+-                    })
+-                }),
+-        );
 -        if local_unavailable {
 -            shell.set_endpoint_status(
 +        // BICTERM-PATCH (embed): hidden Local has no endpoint row and no
@@ -317,6 +332,17 @@ index 6e461ae..b729edf 100644
 +                initial
 +                    .as_ref()
 +                    .and_then(|(_, handshake)| handshake.endpoint_methods.clone()),
++            );
++            shell.set_endpoint_agent_view_projection_supported(
++                &endpoint::ClientEndpointId::Local,
++                initial
++                    .as_ref()
++                    .and_then(|(_, handshake)| handshake.endpoint_capabilities.as_ref())
++                    .is_some_and(|capabilities| {
++                        capabilities.iter().any(|capability| {
++                            capability == crate::protocol::endpoint::AGENT_VIEW_PROJECTION_CAPABILITY
++                        })
++                    }),
              );
 +            if local_unavailable {
 +                shell.set_endpoint_status(
@@ -327,7 +353,7 @@ index 6e461ae..b729edf 100644
          }
      }
      let host_mouse_capture_active = Arc::new(AtomicBool::new(state.mouse_capture_active));
-@@ -544,7 +587,9 @@ async fn run_client_loop(
+@@ -572,7 +615,9 @@ async fn run_client_loop(
      };
      let mut supervisors =
          endpoint::EndpointSupervisors::new(&endpoint_catalog.ssh, std::time::Instant::now());
@@ -338,7 +364,7 @@ index 6e461ae..b729edf 100644
          supervisors.add_local(
              client_socket_path(),
              write_stream
-@@ -586,25 +631,30 @@ async fn run_client_loop(
+@@ -614,25 +659,30 @@ async fn run_client_loop(
                          let now = std::time::Instant::now();
                          if !federated && profiles.iter().any(|profile| profile.enabled) {
                              // Keep Local recovery once enabled, even after removing the last SSH profile.
@@ -387,7 +413,7 @@ index 6e461ae..b729edf 100644
                                  }
                              }
                          }
-@@ -624,24 +674,49 @@ async fn run_client_loop(
+@@ -652,24 +702,49 @@ async fn run_client_loop(
                                  &host_sgr_pixels_active,
                              );
                              scheduled_activation = None;
@@ -454,10 +480,10 @@ index 6e461ae..b729edf 100644
                              }
                          }
                      }
-@@ -1898,28 +1973,38 @@ async fn run_client_loop(
+@@ -1980,32 +2055,42 @@ async fn run_client_loop(
+                                 continue;
                              }
                          }
-                         write_stream.mark_ready(&endpoint_id, generation);
 -                        let selected_endpoint = endpoint_catalog
 -                            .selected_profile
 -                            .as_ref()
@@ -474,7 +500,11 @@ index 6e461ae..b729edf 100644
 -                        let needs_surface = write_stream
 -                            .connection(&selected_endpoint)
 -                            .is_some_and(|connection| !connection.surface_active);
--                        if activation_ready && needs_surface && pending_activation.is_none() {
+-                        if activation_ready
+-                            && needs_surface
+-                            && pending_activation.is_none()
+-                            && state.deferred_local_activation.is_none()
+-                        {
 -                            scheduled_activation = Some(ClientLoopEvent::ActivateEndpoint {
 -                                endpoint_id: selected_endpoint,
 -                                target: None,
@@ -504,7 +534,11 @@ index 6e461ae..b729edf 100644
 +                            let needs_surface = write_stream
 +                                .connection(&selected_endpoint)
 +                                .is_some_and(|connection| !connection.surface_active);
-+                            if activation_ready && needs_surface && pending_activation.is_none() {
++                            if activation_ready
++                                && needs_surface
++                                && pending_activation.is_none()
++                                && state.deferred_local_activation.is_none()
++                            {
 +                                scheduled_activation = Some(ClientLoopEvent::ActivateEndpoint {
 +                                    endpoint_id: selected_endpoint,
 +                                    target: None,
@@ -515,10 +549,10 @@ index 6e461ae..b729edf 100644
                      }
                      ServerMessage::Welcome { .. } => {
 diff --git a/src/client/shell/aggregate_navigation.rs b/src/client/shell/aggregate_navigation.rs
-index 5c826bf..4311fa1 100644
+index c0195f9..c6f5a7e 100644
 --- a/src/client/shell/aggregate_navigation.rs
 +++ b/src/client/shell/aggregate_navigation.rs
-@@ -113,7 +113,9 @@ pub(super) fn navigator_rows(
+@@ -290,7 +290,9 @@ pub(super) fn navigator_rows(
      };
      let text = |value: &str| query.is_empty() || value.to_lowercase().contains(&query);
      let filtering = navigator.filter.is_some() || !query.is_empty();
@@ -530,10 +564,20 @@ index 5c826bf..4311fa1 100644
      let mut rows = Vec::new();
  
 diff --git a/src/client/shell/composition.rs b/src/client/shell/composition.rs
-index a80ebb3..f593fd9 100644
+index e0888d0..1aebfc2 100644
 --- a/src/client/shell/composition.rs
 +++ b/src/client/shell/composition.rs
-@@ -63,6 +63,12 @@ impl ClientShellState {
+@@ -43,6 +43,9 @@ impl ClientShellState {
+         // A resize invalidates pane geometry, not the healthy Local workspace chrome.
+         let local_snapshot = self.snapshot.as_deref().filter(|_| {
+             self.endpoints.len() == 1
++                // BICTERM-PATCH (embed): with Local hidden, the sole endpoint is
++                // a machine, not healthy Local chrome — keep the endpoint sidebar.
++                && self.endpoints[0].endpoint_id.is_local()
+                 && !self.sidebar_collapsed
+                 && layout.sidebar.width > 0
+                 && self.endpoint_status(&self.active_endpoint_id)
+@@ -93,6 +96,12 @@ impl ClientShellState {
              self.hits = ShellHitMap::default();
          }
          let message = self.endpoint_error.clone().unwrap_or_else(|| {
@@ -547,10 +591,10 @@ index a80ebb3..f593fd9 100644
                  .endpoint_status(&self.active_endpoint_id)
                  .unwrap_or(ClientEndpointStatus::Connecting);
 diff --git a/src/client/shell/config.rs b/src/client/shell/config.rs
-index e8a9b4b..c70df0c 100644
+index 2d16b00..4d3a365 100644
 --- a/src/client/shell/config.rs
 +++ b/src/client/shell/config.rs
-@@ -142,6 +142,7 @@ impl ClientShellConfig {
+@@ -159,6 +159,7 @@ impl ClientShellConfig {
              preferences: preferences::ClientChromePreferences::default(),
              startup_config_diagnostic: None,
              startup_onboarding: false,
@@ -558,7 +602,7 @@ index e8a9b4b..c70df0c 100644
          }
      }
  
-@@ -177,6 +178,14 @@ impl ClientShellConfig {
+@@ -194,6 +195,14 @@ impl ClientShellConfig {
          self.with_preferences_path(preferences::path_for_local_endpoint(socket_path))
      }
  
@@ -574,10 +618,10 @@ index e8a9b4b..c70df0c 100644
          self.preferences = preferences::load(&path).unwrap_or_default();
          self.preferences_path = Some(path);
 diff --git a/src/client/shell/endpoint_sidebar.rs b/src/client/shell/endpoint_sidebar.rs
-index 51c940c..934d683 100644
+index 34d2ccd..615e337 100644
 --- a/src/client/shell/endpoint_sidebar.rs
 +++ b/src/client/shell/endpoint_sidebar.rs
-@@ -338,13 +338,22 @@ pub(super) fn render_expanded(
+@@ -499,13 +499,22 @@ pub(super) fn render_expanded(
  
      let footer_y = workspace_area.bottom().saturating_sub(1);
      if config.mouse_capture {
@@ -607,7 +651,7 @@ index 51c940c..934d683 100644
          put_text(
              buffer,
              workspace_area.x,
-@@ -399,12 +408,12 @@ pub(super) fn render_expanded(
+@@ -560,12 +569,12 @@ pub(super) fn render_expanded(
      );
  }
  
@@ -623,10 +667,10 @@ index 51c940c..934d683 100644
  
  fn render_endpoint_row(
 diff --git a/src/client/shell/endpoints.rs b/src/client/shell/endpoints.rs
-index 2f5a8e4..6916730 100644
+index c27358e..07318c4 100644
 --- a/src/client/shell/endpoints.rs
 +++ b/src/client/shell/endpoints.rs
-@@ -27,14 +27,20 @@ pub(crate) enum ClientEndpointFocusTarget {
+@@ -39,14 +39,20 @@ pub(crate) enum ClientEndpointFocusTarget {
  
  impl ClientShellState {
      pub(crate) fn set_endpoint_catalog(&mut self, profiles: &[SavedSshEndpoint]) {
@@ -655,7 +699,7 @@ index 2f5a8e4..6916730 100644
          for profile in profiles {
              let endpoint_id = ClientEndpointId::Ssh(profile.id.clone());
              let previous = self
-@@ -71,7 +77,23 @@ impl ClientShellState {
+@@ -89,7 +95,23 @@ impl ClientShellState {
              .iter()
              .any(|endpoint| endpoint.endpoint_id == self.active_endpoint_id)
          {
@@ -680,7 +724,7 @@ index 2f5a8e4..6916730 100644
          }
          self.collapsed_endpoints.retain(|endpoint_id| {
              next.iter()
-@@ -81,11 +103,16 @@ impl ClientShellState {
+@@ -99,11 +121,16 @@ impl ClientShellState {
      }
  
      pub(crate) fn select_unavailable_local(&mut self) {
@@ -699,7 +743,7 @@ index 2f5a8e4..6916730 100644
          self.reconcile_input_source();
      }
  
-@@ -275,6 +302,12 @@ impl ClientShellState {
+@@ -435,6 +462,12 @@ impl ClientShellState {
          self.endpoints.len() > 1
      }
  
@@ -712,7 +756,7 @@ index 2f5a8e4..6916730 100644
      #[cfg(test)]
      pub(crate) fn set_snapshot(&mut self, snapshot: Box<ClientShellSnapshot>) {
          let endpoint_id = self.active_endpoint_id.clone();
-@@ -492,6 +525,16 @@ pub(super) fn endpoint_status_presentation(
+@@ -686,6 +719,16 @@ pub(super) fn endpoint_status_presentation(
      }
  }
  
@@ -730,7 +774,7 @@ index 2f5a8e4..6916730 100644
      ClientShellEndpoint {
          endpoint_id: ClientEndpointId::Local,
 diff --git a/src/client/shell/mobile.rs b/src/client/shell/mobile.rs
-index abe5059..da0dee9 100644
+index 8f06f54..361175c 100644
 --- a/src/client/shell/mobile.rs
 +++ b/src/client/shell/mobile.rs
 @@ -582,7 +582,9 @@ fn mobile_items(
@@ -745,10 +789,10 @@ index abe5059..da0dee9 100644
          for endpoint in endpoints {
              let background = palette.panel_bg;
 diff --git a/src/client/shell/render.rs b/src/client/shell/render.rs
-index ad9ac8b..245d817 100644
+index 8038701..a8dce32 100644
 --- a/src/client/shell/render.rs
 +++ b/src/client/shell/render.rs
-@@ -246,7 +246,10 @@ pub(super) fn render_shell(
+@@ -267,7 +267,10 @@ pub(super) fn render_shell(
          );
      }
      if layout.sidebar.width > 0 {
@@ -761,10 +805,10 @@ index ad9ac8b..245d817 100644
                  super::endpoint_sidebar::render_collapsed(
                      buffer,
 diff --git a/src/client/shell/state.rs b/src/client/shell/state.rs
-index 81845d3..914b223 100644
+index 901c5a2..2855732 100644
 --- a/src/client/shell/state.rs
 +++ b/src/client/shell/state.rs
-@@ -107,6 +107,7 @@ pub(crate) struct ClientShellConfig {
+@@ -51,6 +51,7 @@ pub(crate) struct ClientShellConfig {
      pub(super) preferences: preferences::ClientChromePreferences,
      pub(super) startup_config_diagnostic: Option<String>,
      pub(super) startup_onboarding: bool,
@@ -772,17 +816,17 @@ index 81845d3..914b223 100644
  }
  
  #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-@@ -1031,6 +1032,7 @@ impl ClientShellState {
-         if let Some(sort) = preferences.agent_panel_sort {
-             config.agent_panel_sort = sort;
+@@ -995,6 +996,7 @@ impl ClientShellState {
+                 .or_default()
+                 .extend(saved.collapsed_groups);
          }
 +        let include_local_endpoint = config.include_local_endpoint;
          Self {
              config,
              snapshot: None,
-@@ -1065,7 +1067,14 @@ impl ClientShellState {
-             last_tab_bar_width: None,
-             last_composed_size: None,
+@@ -1034,7 +1036,14 @@ impl ClientShellState {
+             last_composed_at: None,
+             selection_repaint_deadline: None,
              hits: ShellHitMap::default(),
 -            endpoints: vec![local_endpoint()],
 +            // BICTERM-PATCH (embed): hidden Local starts with no endpoint
@@ -797,10 +841,10 @@ index 81845d3..914b223 100644
              collapsed_endpoints: HashSet::new(),
              mode: ClientShellMode::Terminal,
 diff --git a/src/client/shell/tests/endpoints.rs b/src/client/shell/tests/endpoints.rs
-index 52c7192..1c9c1d2 100644
+index 846806f..c4028cb 100644
 --- a/src/client/shell/tests/endpoints.rs
 +++ b/src/client/shell/tests/endpoints.rs
-@@ -1203,3 +1203,68 @@ fn navigator_foreign_tab_selection_keeps_the_tab_target() {
+@@ -2387,3 +2387,68 @@ fn navigator_foreign_tab_selection_keeps_the_tab_target() {
          }] if activated == &endpoint_id && tab_id == "tab_1"
      ));
  }
@@ -870,10 +914,10 @@ index 52c7192..1c9c1d2 100644
 +    assert!(state.hits.new_workspace.is_empty());
 +}
 diff --git a/src/client/tests/mod.rs b/src/client/tests/mod.rs
-index cca7323..dc85632 100644
+index 1072bd3..0380226 100644
 --- a/src/client/tests/mod.rs
 +++ b/src/client/tests/mod.rs
-@@ -127,6 +127,38 @@ impl Drop for EnvVarsRemovedGuard {
+@@ -150,6 +150,38 @@ impl Drop for EnvVarsRemovedGuard {
      }
  }
  
@@ -912,3 +956,6 @@ index cca7323..dc85632 100644
  #[test]
  fn remote_client_uses_extended_handshake_timeout() {
      let _guard = env_lock().lock().unwrap();
+-- 
+2.38.0
+

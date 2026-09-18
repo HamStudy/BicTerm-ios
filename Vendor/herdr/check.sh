@@ -6,7 +6,7 @@ export PATH="$PWD/.build-artifacts/tools/bin:$PATH"
 manifest=Vendor/herdr/Cargo.toml
 evidence=.sisyphus/evidence
 test -d "$evidence"
-test "$(GIT_MASTER=1 git -C Vendor/herdr/upstream rev-parse HEAD)" = b99002ac99b09e00b4ca692436cb15a6b0d676f1
+test "$(GIT_MASTER=1 git -C Vendor/herdr/upstream rev-parse HEAD)" = 065ef9d6a531c49fb8bee7e818ef837065b21ee9
 test -z "$(GIT_MASTER=1 git -C Vendor/herdr/upstream status --porcelain)"
 cargo fmt --manifest-path "$manifest" --all -- --check
 cargo test --locked --manifest-path "$manifest" -p herdr-protocol -p herdr-client-core -p herdr-ios-ffi 2>&1 | tee "$evidence/phase2-h13-tests.log"

@@ -1,6 +1,6 @@
-From 69435c05f6c5d511e171b692b1836cc404205a5c Mon Sep 17 00:00:00 2001
+From 152a9e4e7c61e3a0615bf3459be36c75bcf433ad Mon Sep 17 00:00:00 2001
 From: BicTerm <embed@bicterm.invalid>
-Date: Sun, 13 Sep 2026 08:07:52 -0600
+Date: Fri, 18 Sep 2026 14:24:02 -0600
 Subject: [PATCH 2/4] platform: cover remaining unix helpers in the fallback
  platform
 
@@ -8,25 +8,97 @@ unix fallback targets (ios and friends) failed to compile because
 wait_client_stream_readable was only re-exported by the linux and macos
 modules and foreground_process_group_id_for_tty_fd was not defined at
 all; both are plain unix facilities, so provide them under cfg(unix).
+
+herdr 0.9.1 moved more helpers into unix_common and left the fallback
+without them again: shutdown_client_stream, write_client_stream, and
+ClientStreamReader join the re-export set, and the new config-write
+helpers (config_file_link_count, check_config_write_target,
+write_existing_config, create_config_temporary, write_config_temporary)
+get the plain-unix bodies shared by the linux module, minus the
+per-platform ACL/xattr copying.
 ---
- src/platform/fallback.rs | 9 +++++++++
- 1 file changed, 9 insertions(+)
+ src/platform/fallback.rs | 73 ++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 73 insertions(+)
 
 diff --git a/src/platform/fallback.rs b/src/platform/fallback.rs
-index 09d82c6..fb88b31 100644
+index 21d13ba..d550963 100644
 --- a/src/platform/fallback.rs
 +++ b/src/platform/fallback.rs
-@@ -6,6 +6,15 @@ use super::{ClipboardImage, ForegroundJob, Signal};
+@@ -6,6 +6,79 @@ use super::{ClipboardImage, ForegroundJob, Signal};
  #[cfg(unix)]
  pub(crate) use super::unix_common::set_default_plugin_pane_pwd;
  
 +#[cfg(unix)]
-+pub(crate) use super::unix_common::wait_client_stream_readable;
++pub(crate) use super::unix_common::{
++    shutdown_client_stream, wait_client_stream_readable, write_client_stream, ClientStreamReader,
++};
 +
 +#[cfg(unix)]
 +pub fn foreground_process_group_id_for_tty_fd(fd: std::os::fd::RawFd) -> Option<u32> {
 +    let pgid = unsafe { libc::tcgetpgrp(fd) };
 +    (pgid > 0).then_some(pgid as u32)
++}
++
++#[cfg(unix)]
++pub(crate) fn config_file_link_count(path: &std::path::Path) -> std::io::Result<u64> {
++    use std::os::unix::fs::MetadataExt;
++    Ok(std::fs::metadata(path)?.nlink())
++}
++
++#[cfg(unix)]
++pub(crate) fn check_config_write_target(_target: &std::path::Path) -> std::io::Result<()> {
++    Ok(())
++}
++
++#[cfg(unix)]
++pub(crate) fn write_existing_config(
++    _target: &std::path::Path,
++    _contents: &[u8],
++) -> std::io::Result<bool> {
++    // Unix keeps atomic replacement for existing files too.
++    Ok(false)
++}
++
++#[cfg(unix)]
++pub(crate) fn create_config_temporary(
++    path: &std::path::Path,
++    private: bool,
++) -> std::io::Result<std::fs::File> {
++    use std::os::unix::fs::OpenOptionsExt;
++    std::fs::OpenOptions::new()
++        .write(true)
++        .create_new(true)
++        .mode(if private { 0o600 } else { 0o666 })
++        .open(path)
++}
++
++#[cfg(unix)]
++pub(crate) fn write_config_temporary(
++    source: Option<&std::path::Path>,
++    temporary: &std::path::Path,
++    contents: &[u8],
++) -> std::io::Result<()> {
++    use std::io::Write;
++    use std::os::{fd::AsRawFd, unix::fs::MetadataExt};
++    let mut output = std::fs::OpenOptions::new()
++        .write(true)
++        .truncate(true)
++        .open(temporary)?;
++    if let Some(source) = source {
++        let input = std::fs::File::open(source)?;
++        let metadata = input.metadata()?;
++        let current = output.metadata()?;
++        // Keep ownership before restoring mode bits; chown can clear them.
++        // ACL/xattr copying stays with the linux/macos platform modules.
++        if (metadata.uid(), metadata.gid()) != (current.uid(), current.gid())
++            && unsafe { libc::fchown(output.as_raw_fd(), metadata.uid(), metadata.gid()) } != 0
++        {
++            return Err(std::io::Error::last_os_error());
++        }
++        output.set_permissions(metadata.permissions())?;
++    }
++    output.write_all(contents)?;
++    output.sync_all()
 +}
 +
  #[cfg(not(unix))]
