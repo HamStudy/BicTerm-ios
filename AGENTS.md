@@ -68,6 +68,7 @@ Reference centrality: not measured (no codegraph index; Swift LSP not wired in t
 - `project.yml` is the ONLY Xcode project source of truth — run `xcodegen generate` after editing. `BicTerm.xcodeproj` is untracked (only its SwiftPM `Package.resolved` pin is tracked).
 - Source `scripts/env-local-caches.sh` before any cargo/swift/xcodebuild — forces repo-local caches (containment rule above).
 - Build/test scripts honor env overrides: `DEST_OVERRIDE`, `DERIVED_DATA`, `ONLY_TESTING`, `EVIDENCE_LOG`.
+- Test scope discipline: during development, run ONLY the tests covering the changed area (`ONLY_TESTING=<suite>` per script, or a direct `xcodebuild` with repeated `-only-testing:` flags when spanning targets). Full `scripts/test-core.sh` + `scripts/test-ui.sh` runs are a final pre-release gate, not a per-change gate. Never burn a multi-hour full-suite run on an unrelated small change.
 - Swift 6 strict concurrency in every target (`SWIFT_VERSION "6.0"`).
 - Helper frameworks are `MACH_O_TYPE=staticlib`, link-only (`embed: false`) — never embed.
 - Vendored-fork patches are recorded in patch docs (e.g. `Vendor/SwiftTerm/BICTERM-PATCH.md`); update the doc with every fork hunk.
