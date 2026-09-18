@@ -11,11 +11,17 @@ import XCTest
 final class HerdrProbeTests: XCTestCase {
     private var transport: SSHTransport?
 
+    override func setUp() {
+        super.setUp()
+        SSHEstablishDiagnostics.shared.removeAll()
+    }
+
     override func tearDown() async throws {
         if let transport {
             await transport.close()
         }
         transport = nil
+        SSHEstablishDiagnostics.shared.removeAll()
         try await super.tearDown()
     }
 
@@ -209,5 +215,43 @@ final class HerdrProbeTests: XCTestCase {
         XCTAssertEqual(result.endpointGeneration, 1)
         XCTAssertTrue(result.capabilities.contains("surface_interest"))
         XCTAssertTrue(result.isCompatible)
+    }
+
+    // MARK: - Exec-open failure diagnostics
+
+    /// Exec-open always fails with the sentinel — the diagnostics-path stub.
+    private struct ExecOpenFailingConnection: SSHExecCapableConnection {
+        let error: TransportError
+
+        func openExecChannel(command: String) async throws(TransportError) -> SSHExecSession {
+            throw error
+        }
+
+        func close() async {}
+    }
+
+    /// The exec-open failure path must not swallow the underlying error:
+    /// the sink records the full reflected chain before the payload-less
+    /// `.execChannelFailed` collapse (device diagnostic dependency).
+    func testExecChannelOpenFailureRecordsTheUnderlyingErrorInTheSink() async throws {
+        let sentinel = TransportError.protocolUnavailable(protocolID: "herdr-probe-diag-sentinel")
+        let connection = ExecOpenFailingConnection(error: sentinel)
+        do {
+            _ = try await HerdrProbe.run(on: connection, host: "sentinel.example")
+            XCTFail("a failed exec open must surface .execChannelFailed")
+        } catch {
+            XCTAssertEqual(error, .execChannelFailed)
+        }
+        guard let line = SSHEstablishDiagnostics.shared.snapshot().last else {
+            return XCTFail("the sink recorded nothing for the failed exec open")
+        }
+        XCTAssertTrue(
+            line.hasPrefix("herdr probe exec channel open: "),
+            "unexpected sink line: \(line)"
+        )
+        XCTAssertTrue(
+            line.contains(String(reflecting: sentinel)),
+            "the sink line must carry the sentinel's reflected description: \(line)"
+        )
     }
 }

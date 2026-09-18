@@ -217,6 +217,9 @@ public enum HerdrProbe {
         do {
             session = try await transport.openExecChannel(command: probeCommand)
         } catch {
+            // The typed contract carries no payload; capture the real
+            // reason for the device diagnostic before the collapse.
+            SSHEstablishDiagnostics.shared.record("herdr probe exec channel open", error: error)
             throw .execChannelFailed
         }
         async let stdout = readBounded(session.stdout, cap: 16 * 1024)
