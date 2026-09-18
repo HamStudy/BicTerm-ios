@@ -26,15 +26,37 @@ public struct HerdrHostTrustChallenge: Equatable, Sendable {
     }
 }
 
+/// Everything the install-consent surface needs to present ONE
+/// missing-binary install proposal (stage B): the host, the pinned
+/// release target that would be installed, and the install dir the
+/// binary would land in. Public facts only — never secret material.
+public struct HerdrInstallConsent: Equatable, Sendable {
+    public let host: String
+    public let target: HerdrReleasePins.Target
+    public let installDir: String
+
+    init(host: String, target: HerdrReleasePins.Target, installDir: String) {
+        self.host = host
+        self.target = target
+        self.installDir = installDir
+    }
+
+    /// The pinned release version that would be installed.
+    public var version: String { HerdrReleasePins.version }
+
+    /// The remote destination the binary would be committed to.
+    public var destinationPath: String { installDir + "/herdr" }
+}
+
 /// Typed failure of one ``HerdrEndpointConnector/connect(_:)`` attempt. The
 /// app layer maps each case onto its herdr surfaces: `sshEstablish` with
 /// `.authenticationFailed`/`.authRequired` → `HerdrDiagnostic` `.authLost`,
 /// every other `sshEstablish`/`probeFailed`/`bridgeChannelFailed` payload →
 /// `.transportLost`; `incompatibleEndpoint` → the endpoint's probe state
 /// (`HerdrSessionLifecycle.failProbe`) with `diagnosticDetail` as the
-/// off-version/unknown-version wording; `trustDeclined` and
-/// `invalidSessionName` are user-facing cancellations/configuration errors,
-/// not diagnostic screens.
+/// off-version/unknown-version wording; `trustDeclined`,
+/// `installDeclined`, and `invalidSessionName` are user-facing
+/// cancellations/configuration errors, not diagnostic screens.
 public enum HerdrEndpointConnectorError: Error, Equatable, Sendable {
     /// SSH establish failed before any probe ran (reachability, auth,
     /// changed host key, trust-store anomaly). Carries the typed transport
@@ -43,6 +65,9 @@ public enum HerdrEndpointConnectorError: Error, Equatable, Sendable {
     /// The user declined the TOFU host-key prompt. Carries the declined
     /// challenge; nothing was trusted.
     case trustDeclined(HerdrHostTrustChallenge)
+    /// The user declined the missing-binary install proposal. Carries the
+    /// declined consent; nothing was installed and the carrier is closed.
+    case installDeclined(HerdrInstallConsent)
     /// The probe's exec channel failed before producing a result.
     case probeFailed(HerdrProbe.ProbeError)
     /// The probe completed but the endpoint cannot serve this app. Carries
@@ -51,6 +76,11 @@ public enum HerdrEndpointConnectorError: Error, Equatable, Sendable {
     case incompatibleEndpoint(result: HerdrProbe.Result, diagnosticDetail: String)
     /// The probe was compatible but the bridge exec channel failed to open.
     case bridgeChannelFailed(SSHTransportError)
+    /// The user-approved install of the pinned herdr binary failed on the
+    /// live connection. Carries the typed installer failure; the carrier
+    /// is closed and bring-up aborts with a typed diagnostic (never a
+    /// crash or a silent swallow).
+    case installFailed(HerdrRemoteInstallerError)
     /// The connection's herdr session name failed herdr's own grammar —
     /// rejected locally, before any network I/O.
     case invalidSessionName(String)
@@ -107,6 +137,7 @@ public struct HerdrProbedCarrier: Sendable {
 
 public struct HerdrEndpointConnector: Sendable {
     public typealias HostKeyApproval = @Sendable (HerdrHostTrustChallenge) async -> Bool
+    public typealias InstallApproval = @Sendable (HerdrInstallConsent) async -> Bool
 
     /// Nominal PTY dimensions for the direct establish's session channel
     /// (the established pattern; herdr never uses that shell — its probe
@@ -122,6 +153,13 @@ public struct HerdrEndpointConnector: Sendable {
     private let metadataProvider: any SSHKeyMetadataProviding
     private let searchPaths: [String]
     private let approveHostKey: HostKeyApproval
+    /// Stage B seams: when both are injected, the install-offering
+    /// variants propose the pinned install on the missing-binary probe
+    /// outcome. Nil (every pre-stage-B caller) never offers — the
+    /// missing-binary outcome stays ``HerdrEndpointConnectorError/incompatibleEndpoint(result:diagnosticDetail:)``.
+    private let installer: HerdrRemoteInstaller?
+    private let approveInstall: InstallApproval?
+    private let installDir: String
 
     public init(
         hostKeyVerifier: HostKeyVerifier,
@@ -131,7 +169,10 @@ public struct HerdrEndpointConnector: Sendable {
         keyOfferResolver: KeyOfferResolver = KeyOfferResolver(),
         metadataProvider: any SSHKeyMetadataProviding = DefaultSSHKeyMetadataProvider(),
         searchPaths: [String] = HerdrProbe.defaultSearchPaths,
-        approveHostKey: @escaping HostKeyApproval
+        approveHostKey: @escaping HostKeyApproval,
+        installer: HerdrRemoteInstaller? = nil,
+        approveInstall: InstallApproval? = nil,
+        installDir: String = HerdrRemoteInstaller.defaultInstallDir
     ) {
         self.hostKeyVerifier = hostKeyVerifier
         self.authenticationKeyProvider = authenticationKeyProvider
@@ -141,12 +182,35 @@ public struct HerdrEndpointConnector: Sendable {
         self.metadataProvider = metadataProvider
         self.searchPaths = searchPaths
         self.approveHostKey = approveHostKey
+        self.installer = installer
+        self.approveInstall = approveInstall
+        self.installDir = installDir
     }
 
     public func connect(
         _ connection: Connection
     ) async throws(HerdrEndpointConnectorError) -> HerdrSSHTransport {
         let probed = try await establishProbed(connection)
+        return try await Self.makeBridge(probed: probed, connection: connection)
+    }
+
+    /// ``connect(_:)`` with the stage-B install proposal wired in: a probe
+    /// that fails SOLELY because no herdr binary exists on an
+    /// otherwise-supported host asks the injected approval once, and on
+    /// approval installs the pinned binary over this same connection and
+    /// re-probes before the bridge opens. Without the installer/approval
+    /// seams injected this is exactly ``connect(_:)``.
+    public func connectOfferingInstall(
+        _ connection: Connection
+    ) async throws(HerdrEndpointConnectorError) -> HerdrSSHTransport {
+        let probed = try await establishProbedOfferingInstall(connection)
+        return try await Self.makeBridge(probed: probed, connection: connection)
+    }
+
+    private static func makeBridge(
+        probed: HerdrProbedCarrier,
+        connection: Connection
+    ) async throws(HerdrEndpointConnectorError) -> HerdrSSHTransport {
         do {
             return try await HerdrSSHTransport(
                 transport: probed.carrier,
@@ -174,16 +238,71 @@ public struct HerdrEndpointConnector: Sendable {
     public func establishProbed(
         _ connection: Connection
     ) async throws(HerdrEndpointConnectorError) -> HerdrProbedCarrier {
-        if let sessionName = connection.herdrSessionName,
-           !HerdrCommandBuilder.isValidSessionName(sessionName) {
-            throw .invalidSessionName(sessionName)
+        let (carrier, probe) = try await establishAndProbe(connection)
+        guard probe.isCompatible, let executablePath = probe.foundPath else {
+            await carrier.close()
+            throw .incompatibleEndpoint(
+                result: probe,
+                diagnosticDetail: Self.diagnosticDetail(for: probe)
+            )
         }
+        return HerdrProbedCarrier(carrier: carrier, probe: probe, executablePath: executablePath)
+    }
 
-        let carrier = try await establish(connection)
-
-        let probe: HerdrProbe.Result
+    /// ``establishProbed(_:)`` with the stage-B install proposal wired in:
+    /// a probe that fails SOLELY because no herdr binary exists on the
+    /// host (foundPath nil, platform otherwise supported) keeps the
+    /// carrier ALIVE, asks the injected approval once, and on approval
+    /// runs the injected installer over that SAME connection and re-probes
+    /// with the same search paths — bring-up then continues through the
+    /// normal compatibility gate. Decline aborts typed and quiet
+    /// (``HerdrEndpointConnectorError/installDeclined``); an install
+    /// failure aborts typed (``installFailed``). The trigger is STRICT:
+    /// a present-but-incompatible herdr never proposes (no upgrade or
+    /// replace flows — the existing `.incompatibleEndpoint` path), and
+    /// without the installer/approval seams injected this is exactly
+    /// ``establishProbed(_:)``.
+    public func establishProbedOfferingInstall(
+        _ connection: Connection
+    ) async throws(HerdrEndpointConnectorError) -> HerdrProbedCarrier {
+        let (carrier, probe) = try await establishAndProbe(connection)
+        if probe.isCompatible, let executablePath = probe.foundPath {
+            return HerdrProbedCarrier(carrier: carrier, probe: probe, executablePath: executablePath)
+        }
+        guard let installer, let approveInstall,
+              probe.foundPath == nil,
+              let platformOS = probe.platformOS,
+              let platformArch = probe.platformArch,
+              let target = HerdrReleasePins.target(os: platformOS, arch: platformArch)
+        else {
+            await carrier.close()
+            throw .incompatibleEndpoint(
+                result: probe,
+                diagnosticDetail: Self.diagnosticDetail(for: probe)
+            )
+        }
+        let consent = HerdrInstallConsent(
+            host: connection.host,
+            target: target,
+            installDir: installDir
+        )
+        guard await approveInstall(consent) else {
+            await carrier.close()
+            throw .installDeclined(consent)
+        }
         do {
-            probe = try await HerdrProbe.run(
+            _ = try await installer.install(
+                on: carrier,
+                probe: probe,
+                installDir: installDir
+            )
+        } catch let error as HerdrRemoteInstallerError {
+            await carrier.close()
+            throw .installFailed(error)
+        }
+        let reprobe: HerdrProbe.Result
+        do {
+            reprobe = try await HerdrProbe.run(
                 on: carrier,
                 host: connection.host,
                 searchPaths: searchPaths
@@ -195,14 +314,46 @@ public struct HerdrEndpointConnector: Sendable {
             await carrier.close()
             throw .probeFailed(.execChannelFailed)
         }
-        guard probe.isCompatible, let executablePath = probe.foundPath else {
+        guard reprobe.isCompatible, let executablePath = reprobe.foundPath else {
             await carrier.close()
             throw .incompatibleEndpoint(
-                result: probe,
-                diagnosticDetail: Self.diagnosticDetail(for: probe)
+                result: reprobe,
+                diagnosticDetail: Self.diagnosticDetail(for: reprobe)
             )
         }
-        return HerdrProbedCarrier(carrier: carrier, probe: probe, executablePath: executablePath)
+        return HerdrProbedCarrier(carrier: carrier, probe: reprobe, executablePath: executablePath)
+    }
+
+    /// Establish + probe, leaving the carrier's fate to the caller: the
+    /// probe-error paths close the carrier here (no probe result exists
+    /// to key an install off), while a COMPLETED probe returns the live
+    /// carrier so ``establishProbed(_:)`` can close it on incompatibility
+    /// and ``establishProbedOfferingInstall(_:)`` can keep it alive
+    /// through the missing-binary install proposal.
+    private func establishAndProbe(
+        _ connection: Connection
+    ) async throws(HerdrEndpointConnectorError) -> (carrier: any SSHExecCapableConnection, probe: HerdrProbe.Result) {
+        if let sessionName = connection.herdrSessionName,
+           !HerdrCommandBuilder.isValidSessionName(sessionName) {
+            throw .invalidSessionName(sessionName)
+        }
+
+        let carrier = try await establish(connection)
+
+        do {
+            let probe = try await HerdrProbe.run(
+                on: carrier,
+                host: connection.host,
+                searchPaths: searchPaths
+            )
+            return (carrier, probe)
+        } catch let error as HerdrProbe.ProbeError {
+            await carrier.close()
+            throw .probeFailed(error)
+        } catch {
+            await carrier.close()
+            throw .probeFailed(.execChannelFailed)
+        }
     }
 
     // MARK: - Establish
@@ -381,5 +532,30 @@ public struct HerdrEndpointConnector: Sendable {
         return "herdr \(version) at \(path) speaks endpoint protocol generation \(generation); "
             + "this app requires generation \(requiredGeneration). "
             + "Upgrade herdr on the host to 0.9 or newer."
+    }
+
+    /// User-facing detail for a failed install attempt (stage B): one
+    /// sentence per typed installer failure, public facts only. The app
+    /// layer surfaces this through the same failConnect diagnostic path
+    /// as ``HerdrEndpointConnectorError/probeFailed(_:)``.
+    public static func installDiagnosticDetail(for error: HerdrRemoteInstallerError) -> String {
+        switch error {
+        case let .unsupportedPlatform(os, arch):
+            "the host platform \(os ?? "unknown") \(arch ?? "unknown") has no pinned herdr release"
+        case let .herdrAlreadyPresent(path):
+            "an existing herdr was found at \(path); this app never replaces or upgrades it"
+        case let .invalidInstallDir(dir):
+            "refused an unsafe herdr install directory: \(dir)"
+        case let .downloadFailed(detail):
+            "downloading the pinned herdr release failed: \(detail)"
+        case let .checksumMismatch(target, expected, _):
+            "the downloaded herdr \(target.rawValue) did not match its sha256 pin \(expected)"
+        case let .remotePrepareFailed(detail):
+            "preparing the remote install directory failed: \(detail)"
+        case let .uploadFailed(detail):
+            "uploading the herdr binary to the host failed: \(detail)"
+        case let .commitFailed(detail):
+            "committing the herdr install on the host failed: \(detail)"
+        }
     }
 }
