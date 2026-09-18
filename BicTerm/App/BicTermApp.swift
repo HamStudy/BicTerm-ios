@@ -23,8 +23,10 @@ private extension View {
 /// the store whether a termination snapshot exists for that window's
 /// original session (state-restored windows keep their value across
 /// launches): when it does, the window becomes a reconnect-required scene;
-/// otherwise it returns to the connection list. Never auto-dismisses — closing
-/// the app's last visible scene would background the whole app.
+/// otherwise it returns to the connection list. Never dismisses on its
+/// own — and the session-close path (TerminalWindowRoot) dismisses its
+/// window only when another visible scene remains, because closing the
+/// app's LAST visible scene would background the whole app.
 private struct RestoredTerminalWindowHost: View {
     @Environment(\.terminalColors) private var colors
 
@@ -56,6 +58,7 @@ private struct RestoredTerminalWindowHost: View {
 @MainActor
 private struct TerminalWindowRoot: View {
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.dismissWindow) private var dismissWindow
     @Environment(\.supportsMultipleWindows) private var supportsMultipleWindows
 
     let store: SessionStore
@@ -162,7 +165,19 @@ private struct TerminalWindowRoot: View {
                 },
                 onNewConnection: { listPresented = true },
                 onSessionClosed: {
+                    // Teardown already ran (closeNow → SessionStore.closeScene).
+                    // The window now either dismisses — another visible scene
+                    // remains, e.g. the connection-list window that opened
+                    // this session — or falls through to the in-window
+                    // connection list below: it is the app's last visible
+                    // window, and dismissing it would background the app.
                     switchedSessionID = nil
+                    if AppSceneCounter.shouldDismissWindow(
+                        supportsMultipleWindows: supportsMultipleWindows,
+                        visibleWindowSceneCount: AppSceneCounter.visibleWindowSceneCount()
+                    ) {
+                        dismissWindow()
+                    }
                 }
             )
         )

@@ -234,6 +234,77 @@ final class SessionScenesUITests: XCTestCase {
         attachScreenshot(named: "task-14-rotation")
     }
 
+    // MARK: - Window dismissal on close
+
+    /// iPad: closing a session via the window's X DISMISSES the terminal
+    /// window when other visible windows remain — here the main
+    /// connection-list window that opened the session (the default
+    /// arrangement when connecting from the list). The app keeps showing
+    /// the connection list in that window, not inside the dying terminal
+    /// window.
+    ///
+    /// The LAST-window branch (X in the app's only visible window keeps
+    /// the window and falls back to the connection list) has no UI test:
+    /// XCUITest cannot dismiss one specific app window to build that
+    /// arrangement (the native window close control is system chrome,
+    /// like the resize grip FreeformResizeUITests routes through
+    /// SpringBoard). It is covered by AppSceneCounterTests at the
+    /// predicate level.
+    func testCloseSessionDismissesTerminalWindowWhenConnectionListWindowRemains() throws {
+        try XCTSkipUnless(
+            UIDevice.current.userInterfaceIdiom == .pad,
+            "Window-dismissal scenario requires the iPad form factor"
+        )
+
+        app.launchArguments = baseLaunchArguments(extra: ["--uitest-open-session", "Alpha"])
+        app.launch()
+
+        let alphaTitle = app.staticTexts["scene-title-Alpha"]
+        XCTAssertTrue(alphaTitle.waitForExistence(timeout: 60), "Alpha scene never appeared")
+
+        // Live session: X routes through the confirmation guard.
+        app.buttons["scene-close-Alpha"].tap()
+        let confirm = app.buttons["scene-confirm-close"]
+        XCTAssertTrue(
+            confirm.waitForExistence(timeout: 10),
+            "live-session close must confirm first"
+        )
+        // The dialog button is mirrored twice in the AX tree on this OS.
+        confirm.firstMatch.tap()
+
+        // The terminal window is gone...
+        let goneDeadline = Date().addingTimeInterval(15)
+        while Date() < goneDeadline && alphaTitle.exists {
+            Thread.sleep(forTimeInterval: 0.25)
+        }
+        XCTAssertFalse(alphaTitle.exists, "the terminal window must dismiss after close")
+        XCTAssertEqual(
+            app.windows.containing(.staticText, identifier: "scene-title-Alpha").count, 0,
+            "no window may keep hosting the closed session"
+        )
+
+        // ...and the app still shows the connection-list window.
+        XCTAssertTrue(
+            app.buttons["connection-Alpha"].waitForExistence(timeout: 15),
+            "the main connection-list window must remain after the terminal window dismissed"
+        )
+        XCTAssertTrue(app.buttons["add-connection"].exists)
+
+        // Suite hygiene: every other test here launches into a world where a
+        // restorable terminal scene EXISTS (the app reuses it as the dead
+        // window for the next session). This test destroyed that scene —
+        // leave one behind or the next launch sees a changed arrangement.
+        app.terminate()
+        app.launchArguments = baseLaunchArguments(extra: ["--uitest-open-session", "Alpha"])
+        app.launch()
+        XCTAssertTrue(
+            app.staticTexts["scene-title-Alpha"].waitForExistence(timeout: 60),
+            "hygiene relaunch must leave a terminal scene for the next test"
+        )
+
+        attachScreenshot(named: "session-close-dismisses-window")
+    }
+
     // MARK: - Host-key trust (TOFU)
 
     /// First contact with an unknown host (no pretrust): the originating
