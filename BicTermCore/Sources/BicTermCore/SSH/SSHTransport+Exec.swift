@@ -30,7 +30,14 @@ extension SSHTransport {
     /// The returned session owns its channel's lifecycle; closing it does
     /// not affect the connection or any sibling session.
     public func openExecChannel(command: String) async throws(TransportError) -> SSHExecSession {
-        guard let parent = connectionChannel, parent.isActive else { throw .channelDenied }
+        guard let parent = connectionChannel, parent.isActive else {
+            // The typed contract carries no payload; capture the real
+            // reason for the device diagnostic before the collapse.
+            SSHEstablishDiagnostics.shared.record(
+                "exec channel open: connection channel missing or inactive"
+            )
+            throw .channelDenied
+        }
 
         let core = ExecChannelCore()
         let handler = ExecChannelHandler(core: core)
@@ -55,6 +62,9 @@ extension SSHTransport {
         } catch let error as TransportError {
             throw error
         } catch {
+            // The typed contract carries no payload; capture the real
+            // reason for the device diagnostic before the collapse.
+            SSHEstablishDiagnostics.shared.record("exec channel open failed", error: error)
             throw .channelDenied
         }
 
@@ -66,6 +76,9 @@ extension SSHTransport {
                 SSHChannelRequestEvent.ExecRequest(command: command, wantReply: true)
             )
         } catch let error as TransportError {
+            // The typed contract carries no payload; capture the real
+            // reason for the device diagnostic before the collapse.
+            SSHEstablishDiagnostics.shared.record("exec channel request refused", error: error)
             try? await session.close().get()
             throw error
         }

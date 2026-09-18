@@ -235,6 +235,26 @@ final class SSHExecSessionTests: XCTestCase {
             _ = try await offline.openExecChannel(command: "printf x")
         }
     }
+
+    /// The guard-path collapse records the real reason in the device
+    /// diagnostic before throwing the payload-less typed error (same
+    /// contract as HerdrProbe's pre-collapse recording, df4beec).
+    func testOpenExecChannelGuardCollapseRecordsDiagnostic() async throws {
+        SSHEstablishDiagnostics.shared.removeAll()
+        let key = try await SSHTestFixture.loadFixtureEd25519Key()
+        let offline = SSHTransport(
+            hostKeyVerifier: try await SSHTestFixture.makeVerifier(),
+            authenticationKeyProvider: StaticKeyProvider(key: key),
+            metadataProvider: FixtureKeyMetadataProvider()
+        )
+        await assertThrowsAsyncError(TransportError.channelDenied) {
+            _ = try await offline.openExecChannel(command: "printf x")
+        }
+        XCTAssertEqual(
+            SSHEstablishDiagnostics.shared.snapshot(),
+            ["exec channel open: connection channel missing or inactive"]
+        )
+    }
 }
 
 // MARK: - Test helpers
