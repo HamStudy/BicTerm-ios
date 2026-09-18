@@ -416,13 +416,15 @@ final class HerdrEmbedHardeningTests: XCTestCase {
             .joined(separator: "\n") + "\n"
         try revoked.write(to: authorizedKeys, atomically: true, encoding: .utf8)
 
-        // The relay-end cascade (carrier close → sshd channel teardown →
-        // remote bridge process exit → stdout EOF) can lag well past 15s
-        // when the fixture was just churned by the open/close cycles test.
+        // Mode A is remote mode: severing the only (Local) endpoint kills
+        // the client with the typed loss detail — that exit, not the
+        // bridge's "relay ended" line, is the deterministic contract (the
+        // pump's up-direction can outlive the teardown, so the line is
+        // not guaranteed to appear).
         await coordinator.severMachineTransport(profileID: HerdrEmbedMachine.profileID(for: connection.id))
         await waitFor(
-            coordinator.eventLines.contains { $0.contains("relay ended") },
-            "the severed machine's relay ended while the key was revoked — phase: \(runtime.phase), tail: \(coordinator.eventLines.suffix(10).joined(separator: " | "))",
+            runtime.phase.stoppedExitDetail?.contains("lost connection to server") == true,
+            "the client exited with the connection-lost detail when its only endpoint was severed",
             timeout: 30
         )
         await runtime.requestStop()

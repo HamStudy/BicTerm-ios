@@ -229,10 +229,9 @@ final class HerdrEmbedTransportBringUpTests: XCTestCase {
 
         let profileID = HerdrEmbedMachine.forConnection(connection).profileID
         let localPath = try await coordinator.prepare()
-        XCTAssertEqual(
-            localPath,
-            "\(Self.specifiedTransportDirectory)/\(profileID).sock",
-            "Mode A attaches the client to the machine bridge as its Local endpoint"
+        XCTAssertTrue(
+            Self.matchesTokenizedPath(localPath, leaf: "\(profileID).sock"),
+            "Mode A attaches the client to the machine bridge as its Local endpoint, token-namespaced: \(localPath)"
         )
 
         let stateHome = getenv("XDG_STATE_HOME").map { String(cString: $0) }
