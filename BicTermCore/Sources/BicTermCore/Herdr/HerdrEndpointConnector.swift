@@ -199,11 +199,16 @@ public struct HerdrEndpointConnector: Sendable {
     /// otherwise-supported host asks the injected approval once, and on
     /// approval installs the pinned binary over this same connection and
     /// re-probes before the bridge opens. Without the installer/approval
-    /// seams injected this is exactly ``connect(_:)``.
+    /// seams injected this is exactly ``connect(_:)``. `installProgress`
+    /// is forwarded verbatim to the installer's milestone stream.
     public func connectOfferingInstall(
-        _ connection: Connection
+        _ connection: Connection,
+        installProgress: HerdrInstallProgress? = nil
     ) async throws(HerdrEndpointConnectorError) -> HerdrSSHTransport {
-        let probed = try await establishProbedOfferingInstall(connection)
+        let probed = try await establishProbedOfferingInstall(
+            connection,
+            installProgress: installProgress
+        )
         return try await Self.makeBridge(probed: probed, connection: connection)
     }
 
@@ -261,9 +266,11 @@ public struct HerdrEndpointConnector: Sendable {
     /// a present-but-incompatible herdr never proposes (no upgrade or
     /// replace flows — the existing `.incompatibleEndpoint` path), and
     /// without the installer/approval seams injected this is exactly
-    /// ``establishProbed(_:)``.
+    /// ``establishProbed(_:)``. `installProgress` is forwarded verbatim
+    /// to the installer's milestone stream.
     public func establishProbedOfferingInstall(
-        _ connection: Connection
+        _ connection: Connection,
+        installProgress: HerdrInstallProgress? = nil
     ) async throws(HerdrEndpointConnectorError) -> HerdrProbedCarrier {
         let (carrier, probe) = try await establishAndProbe(connection)
         if probe.isCompatible, let executablePath = probe.foundPath {
@@ -294,7 +301,8 @@ public struct HerdrEndpointConnector: Sendable {
             _ = try await installer.install(
                 on: carrier,
                 probe: probe,
-                installDir: installDir
+                installDir: installDir,
+                progress: installProgress
             )
         } catch let error as HerdrRemoteInstallerError {
             await carrier.close()

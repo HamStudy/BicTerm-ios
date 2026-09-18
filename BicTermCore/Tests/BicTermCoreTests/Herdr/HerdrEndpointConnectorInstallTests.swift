@@ -72,6 +72,21 @@ final class HerdrEndpointConnectorInstallTests: XCTestCase {
         }
     }
 
+    /// Lock-confined progress collector (the progress callback is
+    /// `@Sendable`; a captured local var array would not be).
+    private final class ProgressLog: @unchecked Sendable {
+        private let lock = NSLock()
+        private var lines: [String] = []
+
+        func append(_ line: String) {
+            lock.withLock { lines.append(line) }
+        }
+
+        var snapshot: [String] {
+            lock.withLock { lines }
+        }
+    }
+
     // MARK: - Fixture helpers
 
     private static func fixtureSSHDIsReachable() async -> Bool {
@@ -346,6 +361,7 @@ final class HerdrEndpointConnectorInstallTests: XCTestCase {
 
         let logOffset = fixtureLogSize("hop1.log")
         let approval = InstallApprovalRecorder(decision: true)
+        let progress = ProgressLog()
         let connector = try await makeConnector(
             searchPaths: [dest],
             installer: HerdrRemoteInstaller(
@@ -355,7 +371,10 @@ final class HerdrEndpointConnectorInstallTests: XCTestCase {
             installDir: installDir
         )
 
-        let probed = try await connector.establishProbedOfferingInstall(SSHTestFixture.makeConnection())
+        let probed = try await connector.establishProbedOfferingInstall(
+            SSHTestFixture.makeConnection(),
+            installProgress: { progress.append($0) }
+        )
         await probed.carrier.close()
 
         // The consent named the host, the pinned macos-aarch64 target,
@@ -368,6 +387,12 @@ final class HerdrEndpointConnectorInstallTests: XCTestCase {
                 installDir: installDir
             )]
         )
+
+        // The installer's milestone stream was forwarded verbatim.
+        let lines = progress.snapshot
+        XCTAssertFalse(lines.isEmpty, "the install must report progress milestones")
+        XCTAssertTrue(lines.contains { $0.contains("uploading") })
+        XCTAssertTrue(lines.contains { $0.contains("installed herdr 0.9.0") })
 
         // The connector's re-probe found the installed binary compatible.
         XCTAssertEqual(probed.executablePath, dest)
