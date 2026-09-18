@@ -23,7 +23,7 @@ An iOS 18+ SSH terminal client for iPhone and iPad, built on
 - **Terminal UI** — SwiftTerm-based, hardware keyboard, IME/CJK composition, multi-window on iPad with freeform resizing (iPadOS 26 classifies the app as continuously resizable — drag the window's corner grip to any size or aspect ratio; declared via the orientation arrays in the xcodegen-generated `BicTerm/Info.plist`, guarded by `BicTermUITests/FreeformResizeUITests.swift`)
 - **Multiple concurrent sessions** — session switcher with detach/reattach that preserves terminal state, on iPhone and iPad. The scene's top-right **session menu** (ellipsis) lists every live session with its state for jump-to-session (on iPad it focuses the window already hosting the session, or gives a detached session its own window), opens the full switcher via **Manage Sessions…**, starts a **New Session**, and opens **Settings…** (its own window on iPad, a sheet on iPhone)
 - **Graceful reconnect** — network drops reconnect automatically; a clean remote shell exit stays disconnected until manual Retry. Background suspends live sessions and foreground re-handshakes; app relaunch requires manual reconnect. Reconnect resets terminal mouse, paste, and keyboard modes and exits the alternate screen while preserving normal scrollback. New connections reuse dead iPad terminal windows; active sessions keep separate windows.
-- **Herdr** — the real herdr 0.9.0 TUI client compiled for iOS and embedded in-process. Its surface renders through the vendored SwiftTerm view inside the BicTerm host; its protocol networking rides the BicTermCore SSH stack via a per-machine bridge socket (no OpenSSH subprocess on device); its own native multi-machine sidebar drives Mode A and herd selection; its own input/clipboard/capability-query handling replaces the prior app-layer panes. Embed patch series in `Vendor/herdr/EMBED-PATCHES.md`; xcframework build in `scripts/herdr-embed-core.sh` (idempotent after `scripts/herdr-server-fetch.sh` + `scripts/fixtures-up.sh`).
+- **Herdr** — the real herdr 0.9.1 TUI client compiled for iOS and embedded in-process. Its surface renders through the vendored SwiftTerm view inside the BicTerm host; its protocol networking rides the BicTermCore SSH stack via a per-machine bridge socket (no OpenSSH subprocess on device); its own native multi-machine sidebar drives Mode A and herd selection; its own input/clipboard/capability-query handling replaces the prior app-layer panes. Embed patch series in `Vendor/herdr/EMBED-PATCHES.md`; xcframework build in `scripts/herdr-embed-core.sh` (idempotent after `scripts/herdr-server-fetch.sh` + `scripts/fixtures-up.sh`).
 - **Herdr in two modes** — (A) a per-connection "Use Herdr" toggle that opens one machine's herdr workspace over that SSH connection, and (B) Herd mode: named herds of existing connections that seed the embedded client's machine catalog so its own sidebar selects / dials / reports health per machine (selection-driven surface interest, per-machine failure isolation, one transport link per machine over the same SSH bridge)
 - **Multi-endpoint hardening** — one aggregate reconnect budget across every machine in a workspace (no reconnect storms), parallel background detach (an N-machine herd suspends in one drain window), bounded per-machine surface caches, and a typed authentication-lost diagnostic that never auto-retries
 - **Transport abstraction** — SSH is one conformer; ET/mosh can be added later without touching session layers
@@ -158,7 +158,7 @@ do not brew anything for them.
 | Python 3 | 3.9+ (stdlib only) | Runs the UDS forwarder (`Fixtures/bin/uds-forward.py`) and the readiness helpers inside `fixtures-up.sh` | Ships with the Xcode Command Line Tools; Homebrew alternative: `brew install python` |
 | Rust (rustup + cargo) | stable, with targets `aarch64-apple-ios` and `aarch64-apple-ios-sim` | Builds the herdr FFI core in `scripts/build-herdr-core.sh` and `Vendor/herdr/check.sh`. Both scripts override `RUSTUP_HOME` to the repo-local `.build-artifacts/rustup`, so add the targets with that env set: `RUSTUP_HOME=.build-artifacts/rustup rustup target add aarch64-apple-ios aarch64-apple-ios-sim` | `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \| sh` (or `brew install rustup-init` + `rustup-init`) |
 | cbindgen | pinned by `cargo install --locked` | Generates `HerdrCore.h`; `build-herdr-core.sh` installs it repo-locally into `.build-artifacts/tools/` on first run | No action needed |
-| Zig | 0.15.2 (aarch64-macos tarball, sha256-pinned) | Builds the vendored libghostty-vt static library for iOS in `scripts/herdr-vt-build.sh`; downloaded repo-locally on first run — but only needed to regenerate the artifact, since a prebuilt `libghostty-vt.a` is committed under `Vendor/herdr/embed/libghostty-vt/` | No action needed |
+| Zig | 0.16.0 (aarch64-macos tarball, sha256-pinned) | Builds the vendored libghostty-vt static library for iOS in `scripts/herdr-vt-build.sh`; downloaded repo-locally on first run — but only needed to regenerate the artifact, since a prebuilt `libghostty-vt.a` is committed under `Vendor/herdr/embed/libghostty-vt/` | No action needed |
 | cargo-deny | latest | License and advisory policy checks in `Vendor/herdr/check.sh` | `cargo install cargo-deny` |
 | jq | 1.6+ | License inventory assembly in `Vendor/herdr/check.sh` | `brew install jq` |
 | OpenSSH (`/usr/sbin/sshd`, `ssh`, `ssh-keygen`), `nc`, `curl` | system versions | SSH fixtures on ports 12222/12223 | Preinstalled on macOS; nothing to install |
@@ -172,14 +172,14 @@ do not brew anything for them.
 | Basic app build (`xcodegen generate`, open Xcode, build) | Xcode, XcodeGen |
 | Test fixtures (`scripts/fixtures-up.sh`) | Python 3 and the preinstalled OpenSSH/curl tools; for the herdr servers, the pinned prebuilt binary via `scripts/herdr-server-fetch.sh` (curl download, sha256-verified — never built from source) |
 | herdr FFI build (`scripts/build-herdr-core.sh`) | Rust with both iOS targets (cbindgen self-installs) |
-| Regenerating the vendored iOS libghostty-vt (`scripts/herdr-vt-build.sh`) | Zig 0.15.2 (self-downloads, sha256-verified); network on first run for the zig tarball and the pinned uucode 0.2.0 dependency |
+| Regenerating the vendored iOS libghostty-vt (`scripts/herdr-vt-build.sh`) | Zig 0.16.0 (self-downloads, sha256-verified); network on first run for the zig tarball and the pinned uucode 0.2.0 dependency |
 | Hardening / SBOM (`Vendor/herdr/check.sh`, fuzz targets) | cargo-deny, jq; cargo-audit and cargo-fuzz for the optional audit/fuzz passes |
 
 Not required: Docker (no container is used anywhere in the fixture flow).
 Zig is only needed to regenerate the vendored iOS libghostty-vt artifact
 (`scripts/herdr-vt-build.sh`); every normal build and test path uses the
 committed `.a` and needs no zig. The herdr server fixture is a pinned
-prebuilt release binary (`herdr-macos-aarch64`, v0.9.0) fetched and
+prebuilt release binary (`herdr-macos-aarch64`, v0.9.1) fetched and
 sha256-verified by `scripts/herdr-server-fetch.sh`; no test script builds
 the server from source.
 
@@ -249,7 +249,7 @@ scripts/fixtures-down.sh
 
 - [swift-nio-ssh](https://github.com/apple/swift-nio-ssh) 0.15.0 (Apache 2.0) — vendored fork with agent-forwarding patches
 - [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) 1.20.0 (MIT) — vendored fork
-- [herdr](https://github.com/herdrdev/herdr) 0.9.0 (Apache 2.0) — vendored protocol core + iOS FFI, **embedded in-process** in this app as the herdr TUI. The embed patch series lives under `Vendor/herdr/embed-patches/` and is replayed by `scripts/herdr-embed-prepare.sh`; the resulting staticlib ships as `HerdrEmbed.xcframework` (built by `scripts/herdr-embed-core.sh`). Full ledger of every patch and provenance step: `Vendor/herdr/EMBED-PATCHES.md`. Runbook for moving the embed stack to a new herdr release: `scripts/herdr-embed-update.sh` (enforces the embed ABI contract; regenerates `HerdrCore.h`; rebuilds the xcframework).
+- [herdr](https://github.com/herdrdev/herdr) 0.9.1 (Apache 2.0) — vendored protocol core + iOS FFI, **embedded in-process** in this app as the herdr TUI. The embed patch series lives under `Vendor/herdr/embed-patches/` and is replayed by `scripts/herdr-embed-prepare.sh`; the resulting staticlib ships as `HerdrEmbed.xcframework` (built by `scripts/herdr-embed-core.sh`). Full ledger of every patch and provenance step: `Vendor/herdr/EMBED-PATCHES.md`. Runbook for moving the embed stack to a new herdr release: `scripts/herdr-embed-update.sh` (enforces the embed ABI contract; regenerates `HerdrCore.h`; rebuilds the xcframework).
 
 See [DEPENDENCIES.md](DEPENDENCIES.md) for the full license inventory.
 
