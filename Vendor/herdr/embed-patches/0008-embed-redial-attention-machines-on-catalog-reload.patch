@@ -1,0 +1,354 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: BicTerm <embed@bicterm.invalid>
+Date: Fri, 18 Sep 2026 16:43:00 -0600
+Subject: [PATCH] embed: redial attention machines on catalog reload
+
+behind the bicterm-embed feature, every machine-catalog reload —
+including a rewrite of endpoints.json with identical content, which the
+embedding host uses as a "retry now" signal — re-arms the machines the
+shell reports as needing attention: the supervisor sets attempts = 0 and
+next_attempt = now, so the next spawn_due tick redials them with a fresh
+backoff budget. reconcile_profiles keeps an unchanged profile's
+ReconnectState, so without this an Attention machine sits at
+next_attempt = None forever. record_status itself never re-arms, so the
+pinned no-retry-storm semantics are untouched: Attention still stops
+retries until the next reload, unlisted endpoints (Online, Disabled,
+Reconnecting, Connecting) keep their state, in-flight attempts resolve
+on their existing generation, and the next spawn assigns a fresh
+generation before dialing. watch_profiles additionally treats a catalog
+file rewrite (mtime change) as a reload event so the identical-content
+re-seed reaches apply_profiles; stock builds keep upstream's pure
+content-diff detection (the stock catalog_stamp_changed is a constant
+false and never touches the filesystem).
+---
+ src/client/catalog_reload.rs      | 145 +++++++++++++++++++++++++++++++++++++-
+ src/client/endpoint/supervisor.rs | 108 ++++++++++++++++++++++++++++
+ src/client/shell/endpoints.rs     |  12 ++++
+ 3 files changed, 264 insertions(+), 1 deletion(-)
+
+diff --git a/src/client/catalog_reload.rs b/src/client/catalog_reload.rs
+index dc5c6ab..e4f606c 100644
+--- a/src/client/catalog_reload.rs
++++ b/src/client/catalog_reload.rs
+@@ -1,5 +1,26 @@
+ use super::*;
+ 
++// BICTERM-PATCH (embed): the embedding host re-seeds endpoints.json with
++// identical content as a "retry now" signal, so a rewrite (mtime change)
++// must emit a catalog event even when the parsed profiles compare equal.
++// Returns true when the file stamp changed since the previous poll and
++// records the new stamp. Stock builds never read the filesystem here.
++#[cfg(feature = "bicterm-embed")]
++fn catalog_stamp_changed(previous: &mut Option<Option<std::time::SystemTime>>) -> bool {
++    let stamp = std::fs::metadata(endpoint::catalog_path())
++        .and_then(|metadata| metadata.modified())
++        .ok();
++    let changed = previous.as_ref() != Some(&stamp);
++    *previous = Some(stamp);
++    changed
++}
++
++/// Stock builds keep upstream's pure content-diff reload detection.
++#[cfg(not(feature = "bicterm-embed"))]
++fn catalog_stamp_changed(_: &mut ()) -> bool {
++    false
++}
++
+ pub(super) fn watch_profiles(
+     event_tx: tokio::sync::mpsc::Sender<ClientLoopEvent>,
+     should_quit: Arc<AtomicBool>,
+@@ -7,9 +28,16 @@ pub(super) fn watch_profiles(
+     // One bounded read per second per client, independent of rendering and pane count.
+     std::thread::spawn(move || {
+         let mut previous = None;
++        // BICTERM-PATCH (embed): rewrite detection state (see
++        // catalog_stamp_changed); stock builds carry a unit placeholder.
++        #[cfg(feature = "bicterm-embed")]
++        let mut previous_stamp = None;
++        #[cfg(not(feature = "bicterm-embed"))]
++        let mut previous_stamp = ();
+         while !should_quit.load(Ordering::Acquire) {
++            let stamp_changed = catalog_stamp_changed(&mut previous_stamp);
+             let current = endpoint::EndpointCatalog::load_profiles();
+-            if previous.as_ref() != Some(&current) {
++            if stamp_changed || previous.as_ref() != Some(&current) {
+                 previous = Some(current.clone());
+                 if event_tx
+                     .blocking_send(ClientLoopEvent::EndpointCatalog(current))
+@@ -34,6 +62,23 @@ pub(super) fn apply_profiles(
+     profiles: Vec<endpoint::SavedSshEndpoint>,
+     now: std::time::Instant,
+ ) -> bool {
++    // BICTERM-PATCH (embed): any catalog reload — including an
++    // identical-content rewrite — is the host's explicit "retry now"
++    // signal: re-arm the machines the shell reports as needing attention so
++    // the next spawn_due tick redials them with a fresh backoff budget.
++    // reconcile_profiles keeps an unchanged profile's ReconnectState, so
++    // without this an Attention machine sits at next_attempt = None
++    // forever. record_status itself never re-arms, so Attention still stops
++    // retries until the next reload (no retry storm).
++    #[cfg(feature = "bicterm-embed")]
++    {
++        let attention = state
++            .shell
++            .as_ref()
++            .map(|shell| shell.attention_endpoint_ids())
++            .unwrap_or_default();
++        supervisors.rearm_attention(&attention, now);
++    }
+     if catalog.ssh == profiles {
+         return false;
+     }
+@@ -383,4 +428,102 @@ mod tests {
+         assert!(state.presentation_frozen);
+         assert_eq!(disconnects.load(Ordering::Relaxed), 1);
+     }
++
++    // BICTERM-PATCH (embed): a catalog reload re-arms attention machines —
++    // even an identical-content rewrite (the host's "retry now" signal),
++    // where apply_profiles declines the catalog itself.
++    #[cfg(feature = "bicterm-embed")]
++    #[test]
++    fn catalog_reload_rearms_attention_machine_on_identical_rewrite() {
++        let now = Instant::now();
++        let mut state = state();
++        let mut catalog = EndpointCatalog::default();
++        let attention_id = catalog.add_ssh("Build", "build", "main").unwrap();
++        let online_id = catalog.add_ssh("Stay", "stay", "main").unwrap();
++        let attention = ClientEndpointId::Ssh(attention_id);
++        let online = ClientEndpointId::Ssh(online_id);
++        state
++            .shell
++            .as_mut()
++            .unwrap()
++            .set_endpoint_catalog(&catalog.ssh);
++        let shell = state.shell.as_mut().unwrap();
++        shell.set_endpoint_status(&attention, endpoint::ClientEndpointStatus::Attention);
++        shell.set_endpoint_status(&online, endpoint::ClientEndpointStatus::Online);
++        let mut supervisors = EndpointSupervisors::new(&catalog.ssh, now);
++        // The stopped states a permanent dial failure leaves behind.
++        supervisors.set_reconnect_state_for_test(&attention, 5, None);
++        supervisors.set_reconnect_state_for_test(&online, 2, None);
++        let mut endpoints = EndpointRegistry::empty();
++        let mut commands = endpoint_commands::EndpointCommands::default();
++        let profiles = catalog.ssh.clone();
++        assert!(!apply_profiles(
++            &mut state,
++            &mut endpoints,
++            &mut commands,
++            &mut supervisors,
++            &mut catalog,
++            profiles,
++            now
++        ));
++        // The attention machine is re-armed for the next spawn_due tick with
++        // a fresh backoff budget; the online machine is untouched.
++        assert_eq!(
++            supervisors.reconnect_state_for_test(&attention),
++            Some((0, Some(now)))
++        );
++        assert_eq!(
++            supervisors.reconnect_state_for_test(&online),
++            Some((2, None))
++        );
++    }
++
++    // BICTERM-PATCH (embed): the reload re-arms ONLY attention machines —
++    // a disabled machine is never redialed by the reload signal.
++    #[cfg(feature = "bicterm-embed")]
++    #[test]
++    fn catalog_reload_never_rearms_disabled_machines() {
++        let now = Instant::now();
++        let mut state = state();
++        let mut catalog = EndpointCatalog::default();
++        let disabled_id = catalog.add_ssh("Off", "off", "main").unwrap();
++        let disabled = ClientEndpointId::Ssh(disabled_id);
++        state
++            .shell
++            .as_mut()
++            .unwrap()
++            .set_endpoint_catalog(&catalog.ssh);
++        state
++            .shell
++            .as_mut()
++            .unwrap()
++            .set_endpoint_status(&disabled, endpoint::ClientEndpointStatus::Disabled);
++        let mut supervisors = EndpointSupervisors::new(&catalog.ssh, now);
++        supervisors.set_reconnect_state_for_test(&disabled, 3, None);
++        let mut endpoints = EndpointRegistry::empty();
++        let mut commands = endpoint_commands::EndpointCommands::default();
++        let profiles = catalog.ssh.clone();
++        assert!(!apply_profiles(
++            &mut state,
++            &mut endpoints,
++            &mut commands,
++            &mut supervisors,
++            &mut catalog,
++            profiles,
++            now
++        ));
++        assert_eq!(
++            supervisors.reconnect_state_for_test(&disabled),
++            Some((3, None))
++        );
++    }
++
++    // BICTERM-PATCH (embed): stock builds keep upstream's content-diff-only
++    // reload detection — a file rewrite never fires a catalog event.
++    #[cfg(not(feature = "bicterm-embed"))]
++    #[test]
++    fn stock_catalog_reload_detection_ignores_file_rewrites() {
++        let mut stamp = ();
++        assert!(!catalog_stamp_changed(&mut stamp));
++    }
+ }
+diff --git a/src/client/endpoint/supervisor.rs b/src/client/endpoint/supervisor.rs
+index a515415..6d3c5a7 100644
+--- a/src/client/endpoint/supervisor.rs
++++ b/src/client/endpoint/supervisor.rs
+@@ -134,6 +134,53 @@ impl EndpointSupervisors {
+         retired
+     }
+ 
++    // BICTERM-PATCH (embed): a catalog reload is the embedding host's
++    // explicit "retry now" signal. reconcile_profiles keeps an unchanged
++    // profile's ReconnectState, so a machine whose dial failure was
++    // classified permanent (record_status Attention) sits at
++    // next_attempt = None forever; re-arm exactly the listed machines so
++    // the next spawn_due tick redials them with a fresh backoff budget.
++    // Unlisted endpoints (Online, Disabled, Reconnecting, Connecting) keep
++    // their state, and in-flight attempts resolve on their existing
++    // generation — re-arming never weakens the generation fence because
++    // the spawn that recorded Attention already delivered its one event,
++    // and the next spawn_due assigns a fresh generation before dialing.
++    #[cfg(feature = "bicterm-embed")]
++    pub(crate) fn rearm_attention(&mut self, attention: &[ClientEndpointId], now: Instant) {
++        for (endpoint_id, state) in &mut self.endpoints {
++            if !attention.contains(endpoint_id) || state.in_flight {
++                continue;
++            }
++            state.attempts = 0;
++            state.next_attempt = Some(now);
++        }
++    }
++
++    // BICTERM-PATCH (embed): test-only views so the catalog_reload tests
++    // drive and observe the re-arm without reaching into private fields.
++    #[cfg(all(test, feature = "bicterm-embed"))]
++    pub(crate) fn reconnect_state_for_test(
++        &self,
++        endpoint_id: &ClientEndpointId,
++    ) -> Option<(u32, Option<Instant>)> {
++        self.endpoints
++            .get(endpoint_id)
++            .map(|state| (state.attempts, state.next_attempt))
++    }
++
++    #[cfg(all(test, feature = "bicterm-embed"))]
++    pub(crate) fn set_reconnect_state_for_test(
++        &mut self,
++        endpoint_id: &ClientEndpointId,
++        attempts: u32,
++        next_attempt: Option<Instant>,
++    ) {
++        if let Some(state) = self.endpoints.get_mut(endpoint_id) {
++            state.attempts = attempts;
++            state.next_attempt = next_attempt;
++        }
++    }
++
+     pub(crate) fn spawn_due(
+         &mut self,
+         now: Instant,
+@@ -537,4 +584,65 @@ mod tests {
+         assert!(supervisors.record_status(&endpoint_id, 4, ClientEndpointStatus::Attention, now));
+         assert!(supervisors.endpoints[&endpoint_id].next_attempt.is_none());
+     }
++
++    // BICTERM-PATCH (embed): the catalog-reload re-arm retries only the
++    // machines the shell reports as Attention, exactly once per reload —
++    // record_status still stops retries and the generation fence still
++    // rejects stale events.
++    #[cfg(feature = "bicterm-embed")]
++    #[test]
++    fn embed_rearm_attention_retries_only_listed_endpoints_once() {
++        let now = Instant::now();
++        let mut supervisors = EndpointSupervisors::new(&[profile()], now);
++        let endpoint_id = ClientEndpointId::Ssh(profile().id);
++        supervisors
++            .endpoints
++            .get_mut(&endpoint_id)
++            .unwrap()
++            .generation = Some(4);
++        supervisors
++            .endpoints
++            .get_mut(&endpoint_id)
++            .unwrap()
++            .attempts = 5;
++        assert!(supervisors.record_status(&endpoint_id, 4, ClientEndpointStatus::Attention, now));
++        assert!(supervisors.endpoints[&endpoint_id].next_attempt.is_none());
++        // The reload re-arms with a fresh budget for the next spawn_due tick.
++        let reload = now + Duration::from_secs(10);
++        supervisors.rearm_attention(&[endpoint_id.clone()], reload);
++        assert_eq!(supervisors.endpoints[&endpoint_id].attempts, 0);
++        assert_eq!(
++            supervisors.endpoints[&endpoint_id].next_attempt,
++            Some(reload)
++        );
++        // The generation fence is intact: a stale generation is still rejected.
++        assert!(!supervisors.record_status(
++            &endpoint_id,
++            3,
++            ClientEndpointStatus::Reconnecting,
++            reload
++        ));
++        // A fresh permanent failure stops retries again until the next reload.
++        assert!(supervisors.record_status(
++            &endpoint_id,
++            4,
++            ClientEndpointStatus::Attention,
++            reload
++        ));
++        assert!(supervisors.endpoints[&endpoint_id].next_attempt.is_none());
++        // Unlisted endpoints keep their stopped state.
++        supervisors.rearm_attention(&[], reload);
++        assert!(supervisors.endpoints[&endpoint_id].next_attempt.is_none());
++        // In-flight attempts are left to resolve on their own generation.
++        supervisors.rearm_attention(&[endpoint_id.clone()], reload);
++        assert_eq!(
++            supervisors.endpoints[&endpoint_id].next_attempt,
++            Some(reload)
++        );
++        let state = supervisors.endpoints.get_mut(&endpoint_id).unwrap();
++        state.in_flight = true;
++        state.next_attempt = None;
++        supervisors.rearm_attention(&[endpoint_id.clone()], reload);
++        assert!(supervisors.endpoints[&endpoint_id].next_attempt.is_none());
++    }
+ }
+diff --git a/src/client/shell/endpoints.rs b/src/client/shell/endpoints.rs
+index 07318c4..a182a92 100644
+--- a/src/client/shell/endpoints.rs
++++ b/src/client/shell/endpoints.rs
+@@ -468,6 +468,18 @@ impl ClientShellState {
+         self.config.include_local_endpoint
+     }
+ 
++    /// BICTERM-PATCH (embed): the machines the shell currently reports as
++    /// needing attention — the supervisor re-arm set for a catalog reload.
++    /// The shell status mirrors the supervisor's record_status outcome.
++    #[cfg(feature = "bicterm-embed")]
++    pub(crate) fn attention_endpoint_ids(&self) -> Vec<ClientEndpointId> {
++        self.endpoints
++            .iter()
++            .filter(|endpoint| endpoint.status == ClientEndpointStatus::Attention)
++            .map(|endpoint| endpoint.endpoint_id.clone())
++            .collect()
++    }
++
+     #[cfg(test)]
+     pub(crate) fn set_snapshot(&mut self, snapshot: Box<ClientShellSnapshot>) {
+         let endpoint_id = self.active_endpoint_id.clone();
+-- 
+2.38.0
+
