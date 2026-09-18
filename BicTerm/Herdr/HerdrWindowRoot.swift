@@ -7,6 +7,7 @@ import SwiftUI
 @MainActor
 struct HerdrWindowRoot: View {
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.dismissWindow) private var dismissWindow
     @Environment(\.supportsMultipleWindows) private var supportsMultipleWindows
     @Environment(\.terminalColors) private var colors
 
@@ -36,7 +37,19 @@ struct HerdrWindowRoot: View {
                         },
                         onNewConnection: { listPresented = true },
                         onSessionClosed: {
+                            // Teardown already ran (SessionSceneView's
+                            // close path). The window now either dismisses
+                            // — another visible scene remains — or falls
+                            // through to the workspace / connection list
+                            // below: it is the app's last visible window,
+                            // and dismissing it would background the app.
                             switchedSessionID = nil
+                            if AppSceneCounter.shouldDismissWindow(
+                                supportsMultipleWindows: supportsMultipleWindows,
+                                visibleWindowSceneCount: AppSceneCounter.visibleWindowSceneCount()
+                            ) {
+                                dismissWindow()
+                            }
                         }
                     )
                 )
@@ -109,6 +122,17 @@ struct HerdrWindowRoot: View {
             onClose: {
                 Task {
                     await center.close(id: entry.id)
+                    // Close teardown completed first; the window now either
+                    // dismisses — another visible scene remains — or falls
+                    // through to the connection list: it is the app's last
+                    // visible window, and dismissing it would background
+                    // the app.
+                    if AppSceneCounter.shouldDismissWindow(
+                        supportsMultipleWindows: supportsMultipleWindows,
+                        visibleWindowSceneCount: AppSceneCounter.visibleWindowSceneCount()
+                    ) {
+                        dismissWindow()
+                    }
                 }
             },
             store: store,
