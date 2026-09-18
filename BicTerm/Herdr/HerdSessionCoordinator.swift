@@ -21,6 +21,16 @@ final class HerdSessionCoordinator {
         let continuation: CheckedContinuation<Bool, Never>
     }
 
+    /// Stage B install consent, queued exactly like ``TrustPrompt``: the
+    /// payload is the connector's ``HerdrInstallConsent`` (host, pinned
+    /// target, install dir) and the decision resumes the awaiting
+    /// machine's bring-up.
+    struct InstallPrompt: Identifiable {
+        let id = UUID()
+        let consent: HerdrInstallConsent
+        let continuation: CheckedContinuation<Bool, Never>
+    }
+
     typealias MachineConnect = @Sendable (
         _ connection: Connection,
         _ hostKeyVerifier: HostKeyVerifier?
@@ -37,6 +47,8 @@ final class HerdSessionCoordinator {
     private var selections: [UUID: HerdrEndpointID] = [:]
     var trustPrompt: TrustPrompt?
     private var queuedTrustPrompts: [TrustPrompt] = []
+    var installPrompt: InstallPrompt?
+    private var queuedInstallPrompts: [InstallPrompt] = []
 
     #if DEBUG
     private(set) var debugConnectAttempts = 0
@@ -58,6 +70,9 @@ final class HerdSessionCoordinator {
         connectMachineSeam ?? Self.liveConnector(
             approve: { [weak self] challenge in
                 await self?.approve(challenge) ?? false
+            },
+            approveInstall: { [weak self] consent in
+                await self?.approveInstall(consent) ?? false
             }
         )
     }
@@ -197,7 +212,7 @@ final class HerdSessionCoordinator {
         model: HerdrSessionModel
     ) {
         switch error {
-        case .trustDeclined:
+        case .trustDeclined, .installDeclined:
             return
         case let .invalidSessionName(name):
             model.failConnect(
@@ -213,6 +228,14 @@ final class HerdSessionCoordinator {
             model.failConnect(
                 endpoint: endpointID,
                 diagnostic: .simple(.transportLost, detail: Self.probeDetail(of: cause))
+            )
+        case let .installFailed(cause):
+            model.failConnect(
+                endpoint: endpointID,
+                diagnostic: .simple(
+                    .transportLost,
+                    detail: HerdrEndpointConnector.installDiagnosticDetail(for: cause)
+                )
             )
         case let .sshEstablish(cause), let .bridgeChannelFailed(cause):
             model.failConnect(
@@ -279,6 +302,25 @@ final class HerdSessionCoordinator {
         }
     }
 
+    /// Install consents queue exactly like TOFU challenges (stage B): one
+    /// decision at a time, per machine, per attempt — never persisted.
+    func resolveInstallPrompt(_ approved: Bool) {
+        guard let prompt = installPrompt else { return }
+        installPrompt = queuedInstallPrompts.isEmpty ? nil : queuedInstallPrompts.removeFirst()
+        prompt.continuation.resume(returning: approved)
+    }
+
+    private func approveInstall(_ consent: HerdrInstallConsent) async -> Bool {
+        await withCheckedContinuation { continuation in
+            let prompt = InstallPrompt(consent: consent, continuation: continuation)
+            if installPrompt == nil {
+                installPrompt = prompt
+            } else {
+                queuedInstallPrompts.append(prompt)
+            }
+        }
+    }
+
     // MARK: - Failure mapping (T4 error-enum contract, per machine)
 
     private static func diagnostic(for cause: SSHTransportError) -> HerdrDiagnostic {
@@ -308,10 +350,12 @@ final class HerdSessionCoordinator {
     }
 
     static func liveConnector(
-        approve: @escaping @Sendable (HerdrHostTrustChallenge) async -> Bool
+        approve: @escaping @Sendable (HerdrHostTrustChallenge) async -> Bool,
+        approveInstall: @escaping @Sendable (HerdrInstallConsent) async -> Bool
     ) -> MachineConnect {
         let searchPaths = liveSearchPaths()
         let hardwareKeysEnabledByDefault = AppServices.shared.keyAvailabilityPreferences.hardwareKeysEnabledByDefault
+        let installer = AppServices.shared.herdrRemoteInstaller
         return { connection, hostKeyVerifier in
             let verifier: HostKeyVerifier
             #if DEBUG
@@ -337,9 +381,11 @@ final class HerdSessionCoordinator {
                 hostKeyVerifier: verifier,
                 hardwareKeysEnabledByDefault: hardwareKeysEnabledByDefault,
                 searchPaths: searchPaths,
-                approveHostKey: approve
+                approveHostKey: approve,
+                installer: installer,
+                approveInstall: approveInstall
             )
-            return try await connector.connect(connection)
+            return try await connector.connectOfferingInstall(connection)
         }
     }
 
@@ -353,34 +399,66 @@ final class HerdSessionCoordinator {
     }
 }
 
-/// Presents the herd coordinator's pending TOFU challenge as a
-/// ``HostTrustPromptView`` sheet — the same approval surface Mode A and
-/// terminal sessions use. Attached where the HERD WORKSPACE is presented
+/// Presents the herd coordinator's pending TOFU challenge or install
+/// consent as ONE sheet — the same approval surfaces Mode A and terminal
+/// sessions use. Attached where the HERD WORKSPACE is presented
 /// (full-screen cover content on iPhone, the herdr window on iPad):
 /// machines connect only after the workspace is already on screen, so a
 /// prompt sheet attached to the covered connection list never surfaces.
-struct HerdTrustPromptPresenter: ViewModifier {
+/// A single presentation slot keeps a pending install consent from racing
+/// a pending trust challenge: the trust challenge presents first and the
+/// consent follows once it resolves.
+struct HerdPromptPresenter: ViewModifier {
     let herdConnect: HerdSessionCoordinator
+
+    private enum PendingPrompt: Identifiable {
+        case trust(HerdSessionCoordinator.TrustPrompt)
+        case install(HerdSessionCoordinator.InstallPrompt)
+
+        var id: UUID {
+            switch self {
+            case let .trust(prompt): prompt.id
+            case let .install(prompt): prompt.id
+            }
+        }
+    }
+
+    private var pending: PendingPrompt? {
+        if let trust = herdConnect.trustPrompt { return .trust(trust) }
+        if let install = herdConnect.installPrompt { return .install(install) }
+        return nil
+    }
 
     func body(content: Content) -> some View {
         content.sheet(
             item: Binding(
-                get: { herdConnect.trustPrompt },
-                set: { herdConnect.trustPrompt = $0 }
+                get: { pending },
+                set: { _ in }
             )
         ) { prompt in
-            HostTrustPromptView(
-                challenge: SessionStore.HostTrustChallenge(
-                    host: prompt.challenge.host,
-                    port: prompt.challenge.port,
-                    algorithm: prompt.challenge.algorithm,
-                    fingerprint: prompt.challenge.fingerprint,
-                    publicKeyData: prompt.challenge.publicKeyData
-                ),
-                errorMessage: nil,
-                onTrust: { herdConnect.resolveTrustPrompt(true) },
-                onCancel: { herdConnect.resolveTrustPrompt(false) }
-            )
+            Group {
+                switch prompt {
+                case let .trust(prompt):
+                    HostTrustPromptView(
+                        challenge: SessionStore.HostTrustChallenge(
+                            host: prompt.challenge.host,
+                            port: prompt.challenge.port,
+                            algorithm: prompt.challenge.algorithm,
+                            fingerprint: prompt.challenge.fingerprint,
+                            publicKeyData: prompt.challenge.publicKeyData
+                        ),
+                        errorMessage: nil,
+                        onTrust: { herdConnect.resolveTrustPrompt(true) },
+                        onCancel: { herdConnect.resolveTrustPrompt(false) }
+                    )
+                case let .install(prompt):
+                    HerdrInstallConsentView(
+                        consent: prompt.consent,
+                        onInstall: { herdConnect.resolveInstallPrompt(true) },
+                        onCancel: { herdConnect.resolveInstallPrompt(false) }
+                    )
+                }
+            }
             .interactiveDismissDisabled(true)
             .presentationDetents([.large])
             .terminalStyle()

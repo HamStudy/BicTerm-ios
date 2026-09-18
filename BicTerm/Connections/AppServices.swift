@@ -22,6 +22,14 @@ final class AppServices {
     let keyStore = KeyStore()
     let keyAvailabilityPreferences = KeyAvailabilityPreferences()
     let passwordStore: any PasswordStoring
+    /// Stage B composition root: the herdr remote installer every herdr
+    /// bring-up path shares, over the production release provider (GitHub
+    /// release download, sha256-pinned, cached under the app container's
+    /// default `Library/Caches/herdr-releases`). Per-attempt user consent
+    /// gates every use — see the coordinators' install prompts.
+    let herdrRemoteInstaller = HerdrRemoteInstaller(
+        binaryProvider: HerdrReleaseBinaryProvider()
+    )
 
     #if DEBUG
     /// Set by the `--uitest-demo-editor` launch hook: name of a connection

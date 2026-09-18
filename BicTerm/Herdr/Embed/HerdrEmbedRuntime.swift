@@ -445,7 +445,7 @@ final class HerdrEmbedRuntime {
             return
         case let .connector(error):
             switch error {
-            case .trustDeclined:
+            case .trustDeclined, .installDeclined:
                 phase = .stopped(exit: nil)
                 return
             case let .invalidSessionName(name):
@@ -467,6 +467,10 @@ final class HerdrEmbedRuntime {
                 case let .hostileSearchPath(path):
                     detail = "refused an unsafe herdr search path: \(path)"
                 }
+                failureDiagnostic = .simple(.transportLost, detail: detail)
+                phase = .failed(detail)
+            case let .installFailed(cause):
+                let detail = HerdrEndpointConnector.installDiagnosticDetail(for: cause)
                 failureDiagnostic = .simple(.transportLost, detail: detail)
                 phase = .failed(detail)
             case let .sshEstablish(cause), let .bridgeChannelFailed(cause):

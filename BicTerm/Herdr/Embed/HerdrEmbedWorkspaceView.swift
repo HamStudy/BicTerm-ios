@@ -122,7 +122,7 @@ struct HerdrEmbedWorkspaceView: View {
             Task { await runtime.requestStop(ownerID: ownerID) }
             osc52ToastTask?.cancel()
         }
-        .modifier(EmbedTrustPromptPresenter(coordinator: trustCoordinator))
+        .modifier(EmbedPromptPresenter(coordinator: trustCoordinator))
     }
 
     /// Surface an approved OSC 52 toast on the workspace chrome. The
@@ -302,32 +302,62 @@ struct HerdrEmbedWorkspaceView: View {
     #endif
 }
 
-/// Presents the embed transport's pending TOFU challenge above the
-/// workspace (the carrier connects while this surface is already on
-/// screen; a prompt attached to the covered connection list would never
-/// surface). Mirrors ``HerdTrustPromptPresenter``.
-private struct EmbedTrustPromptPresenter: ViewModifier {
+/// Presents the embed transport's pending TOFU challenge or install
+/// consent as ONE sheet above the workspace (the carrier connects while
+/// this surface is already on screen; a prompt attached to the covered
+/// connection list would never surface). Mirrors ``HerdPromptPresenter``.
+private struct EmbedPromptPresenter: ViewModifier {
     let coordinator: HerdrEmbedTransportCoordinator?
+
+    private enum PendingPrompt: Identifiable {
+        case trust(HerdrEmbedTransportCoordinator.TrustPrompt)
+        case install(HerdrEmbedTransportCoordinator.InstallPrompt)
+
+        var id: UUID {
+            switch self {
+            case let .trust(prompt): prompt.id
+            case let .install(prompt): prompt.id
+            }
+        }
+    }
+
+    private var pending: PendingPrompt? {
+        guard let coordinator else { return nil }
+        if let trust = coordinator.trustPrompt { return .trust(trust) }
+        if let install = coordinator.installPrompt { return .install(install) }
+        return nil
+    }
 
     func body(content: Content) -> some View {
         content.sheet(
             item: Binding(
-                get: { coordinator?.trustPrompt },
+                get: { pending },
                 set: { _ in }
             )
         ) { prompt in
-            HostTrustPromptView(
-                challenge: SessionStore.HostTrustChallenge(
-                    host: prompt.challenge.host,
-                    port: prompt.challenge.port,
-                    algorithm: prompt.challenge.algorithm,
-                    fingerprint: prompt.challenge.fingerprint,
-                    publicKeyData: prompt.challenge.publicKeyData
-                ),
-                errorMessage: nil,
-                onTrust: { coordinator?.resolveTrustPrompt(true) },
-                onCancel: { coordinator?.resolveTrustPrompt(false) }
-            )
+            Group {
+                switch prompt {
+                case let .trust(prompt):
+                    HostTrustPromptView(
+                        challenge: SessionStore.HostTrustChallenge(
+                            host: prompt.challenge.host,
+                            port: prompt.challenge.port,
+                            algorithm: prompt.challenge.algorithm,
+                            fingerprint: prompt.challenge.fingerprint,
+                            publicKeyData: prompt.challenge.publicKeyData
+                        ),
+                        errorMessage: nil,
+                        onTrust: { coordinator?.resolveTrustPrompt(true) },
+                        onCancel: { coordinator?.resolveTrustPrompt(false) }
+                    )
+                case let .install(prompt):
+                    HerdrInstallConsentView(
+                        consent: prompt.consent,
+                        onInstall: { coordinator?.resolveInstallPrompt(true) },
+                        onCancel: { coordinator?.resolveInstallPrompt(false) }
+                    )
+                }
+            }
             .interactiveDismissDisabled(true)
             .presentationDetents([.large])
             .terminalStyle()

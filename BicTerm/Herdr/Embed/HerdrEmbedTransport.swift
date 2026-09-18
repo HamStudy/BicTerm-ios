@@ -176,6 +176,15 @@ final class HerdrEmbedTransportCoordinator {
         let continuation: CheckedContinuation<Bool, Never>
     }
 
+    /// Stage B install consent, queued exactly like ``TrustPrompt``: the
+    /// payload is the connector's ``HerdrInstallConsent`` and the decision
+    /// resumes the awaiting machine's establish.
+    struct InstallPrompt: Identifiable {
+        let id = UUID()
+        let consent: HerdrInstallConsent
+        let continuation: CheckedContinuation<Bool, Never>
+    }
+
     /// Byte-flow + lifecycle lines surfaced to the runtime (evidence log);
     /// each line is prefixed with its machine's label.
     private(set) var eventLines: [String] = []
@@ -186,6 +195,8 @@ final class HerdrEmbedTransportCoordinator {
 
     private(set) var trustPrompt: TrustPrompt?
     private var queuedTrustPrompts: [TrustPrompt] = []
+    private(set) var installPrompt: InstallPrompt?
+    private var queuedInstallPrompts: [InstallPrompt] = []
 
     private let links: [HerdrEmbedMachineLink]
     /// Profile the client should select at boot (the herd's persisted
@@ -254,6 +265,12 @@ final class HerdrEmbedTransportCoordinator {
     /// pin; a transport-directory name occupied by a regular file fails
     /// the mkdir — both deterministically, before any bind.
     var homeDirectoryForTesting: String?
+
+    /// Stage B seam: the remote installer offered on the missing-binary
+    /// probe outcome. Production resolves the composition root's
+    /// installer (``AppServices/herdrRemoteInstaller``); tests inject a
+    /// seam-backed installer so no test touches the network.
+    var remoteInstallerForTesting: HerdrRemoteInstaller?
 
     init(
         connection: Connection,
@@ -398,6 +415,10 @@ final class HerdrEmbedTransportCoordinator {
             searchPaths: resolvedPaths,
             approveHostKey: { [weak self] challenge in
                 await self?.approve(challenge) ?? false
+            },
+            installer: remoteInstallerForTesting ?? AppServices.shared.herdrRemoteInstaller,
+            approveInstall: { [weak self] consent in
+                await self?.approveInstall(consent) ?? false
             }
         )
     }
@@ -609,6 +630,25 @@ final class HerdrEmbedTransportCoordinator {
         }
     }
 
+    /// Install consents queue exactly like TOFU challenges (stage B): one
+    /// decision at a time, per machine, per attempt — never persisted.
+    func resolveInstallPrompt(_ approved: Bool) {
+        guard let prompt = installPrompt else { return }
+        installPrompt = queuedInstallPrompts.isEmpty ? nil : queuedInstallPrompts.removeFirst()
+        prompt.continuation.resume(returning: approved)
+    }
+
+    private func approveInstall(_ consent: HerdrInstallConsent) async -> Bool {
+        await withCheckedContinuation { continuation in
+            let prompt = InstallPrompt(consent: consent, continuation: continuation)
+            if installPrompt == nil {
+                installPrompt = prompt
+            } else {
+                queuedInstallPrompts.append(prompt)
+            }
+        }
+    }
+
     /// This bring-up's transport directory (relative to the pinned cwd):
     /// the base directory plus this run's unique token.
     var transportDirectory: String {
@@ -689,20 +729,31 @@ final class HerdrEmbedTransportCoordinator {
 
     /// Runs on the MainActor hop from the cancellation handler: marks the
     /// prepare flag, cancels the per-machine establish tasks (their own
-    /// awaits unwind), and brings every undecided TOFU continuation down
-    /// with the bring-up so nothing parks the coordinator forever.
+    /// awaits unwind), and brings every undecided TOFU continuation and
+    /// install consent down with the bring-up so nothing parks the
+    /// coordinator forever.
     private func handlePrepareCancellation() {
         prepareCancelled = true
         for task in establishTasks {
             task.cancel()
         }
         resolvePendingTrustPromptsAsDeclined()
+        resolvePendingInstallPromptsAsDeclined()
     }
 
     private func resolvePendingTrustPromptsAsDeclined() {
         let pending = [trustPrompt].compactMap { $0 } + queuedTrustPrompts
         trustPrompt = nil
         queuedTrustPrompts.removeAll()
+        for prompt in pending {
+            prompt.continuation.resume(returning: false)
+        }
+    }
+
+    private func resolvePendingInstallPromptsAsDeclined() {
+        let pending = [installPrompt].compactMap { $0 } + queuedInstallPrompts
+        installPrompt = nil
+        queuedInstallPrompts.removeAll()
         for prompt in pending {
             prompt.continuation.resume(returning: false)
         }
@@ -749,7 +800,11 @@ final class HerdrEmbedTransportCoordinator {
         }
         let connector = await makeConnector()
         do {
-            let probed = try await connector.establishProbed(link.connection)
+            // Stage B: the missing-binary probe outcome proposes the
+            // pinned install through this coordinator's prompt queue
+            // before the carrier closes; without the installer seam the
+            // variant is exactly establishProbed.
+            let probed = try await connector.establishProbedOfferingInstall(link.connection)
             return .success(Established(
                 link: link,
                 carrier: probed.carrier,

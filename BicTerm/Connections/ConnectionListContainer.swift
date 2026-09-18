@@ -112,14 +112,14 @@ struct ConnectionListContainer: View {
                     .id(entry.id)
                     // Herd machines connect only after this cover is up;
                     // their TOFU challenges must present ABOVE it (F3-B).
-                    .modifier(HerdTrustPromptPresenter(herdConnect: herdConnect))
+                    .modifier(HerdPromptPresenter(herdConnect: herdConnect))
                     .terminalStyle()
             }
         }
         // F3-B backstop: herd prompts present from the workspace cover
         // (or window); this one resolves any prompt left pending when the
         // workspace presentation is gone (e.g. the user closed it).
-        .modifier(HerdTrustPromptPresenter(herdConnect: herdConnect))
+        .modifier(HerdPromptPresenter(herdConnect: herdConnect))
         .task {
             await reloadRestorableSessions()
             #if DEBUG

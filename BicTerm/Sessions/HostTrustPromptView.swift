@@ -1,6 +1,37 @@
 import BicTermCore
 import SwiftUI
 
+/// One titled fact row shared by the prompt surfaces (host-key trust and
+/// herdr install consent): caption label over a selectable, middle-
+/// truncated value on the selection-tinted card.
+struct HostPromptFactRow: View {
+    @Environment(\.terminalColors) private var colors
+    @Environment(\.terminalTypography) private var typography
+    @Environment(\.terminalSpacing) private var spacing
+
+    let title: String
+    let value: String
+    let identifier: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: spacing.xxxs) {
+            Text(title)
+                .font(typography.caption)
+                .foregroundColor(colors.dimmed)
+            Text(value)
+                .font(typography.body)
+                .foregroundColor(colors.foreground)
+                .textSelection(.enabled)
+                .lineLimit(2)
+                .truncationMode(.middle)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityIdentifier(identifier)
+        }
+        .padding(spacing.xs)
+        .background(colors.selection.opacity(0.35), in: RoundedRectangle(cornerRadius: 6))
+    }
+}
+
 /// TOFU host-key trust prompt, presented by the scene whose session hit the
 /// typed `.requiresTrust` failure. Shows the exact host, port, algorithm,
 /// and fingerprint; Trust persists via the production verifier and retries,
@@ -28,10 +59,10 @@ struct HostTrustPromptView: View {
                     .foregroundColor(colors.dimmed)
 
                 VStack(alignment: .leading, spacing: spacing.xs) {
-                    row(title: "Host", value: challenge.host, identifier: "trust-host")
-                    row(title: "Port", value: String(challenge.port), identifier: "trust-port")
-                    row(title: "Key Algorithm", value: challenge.algorithm, identifier: "trust-algorithm")
-                    row(title: "Fingerprint (SHA256)", value: challenge.fingerprint, identifier: "trust-fingerprint")
+                    HostPromptFactRow(title: "Host", value: challenge.host, identifier: "trust-host")
+                    HostPromptFactRow(title: "Port", value: String(challenge.port), identifier: "trust-port")
+                    HostPromptFactRow(title: "Key Algorithm", value: challenge.algorithm, identifier: "trust-algorithm")
+                    HostPromptFactRow(title: "Fingerprint (SHA256)", value: challenge.fingerprint, identifier: "trust-fingerprint")
                 }
 
                 if let errorMessage {
@@ -75,23 +106,5 @@ struct HostTrustPromptView: View {
             .navigationTitle("Verify Host")
             .navigationBarTitleDisplayMode(.inline)
         }
-    }
-
-    private func row(title: String, value: String, identifier: String) -> some View {
-        VStack(alignment: .leading, spacing: spacing.xxxs) {
-            Text(title)
-                .font(typography.caption)
-                .foregroundColor(colors.dimmed)
-            Text(value)
-                .font(typography.body)
-                .foregroundColor(colors.foreground)
-                .textSelection(.enabled)
-                .lineLimit(2)
-                .truncationMode(.middle)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityIdentifier(identifier)
-        }
-        .padding(spacing.xs)
-        .background(colors.selection.opacity(0.35), in: RoundedRectangle(cornerRadius: 6))
     }
 }
