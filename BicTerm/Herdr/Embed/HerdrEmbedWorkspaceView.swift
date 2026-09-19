@@ -89,7 +89,7 @@ struct HerdrEmbedWorkspaceView: View {
                     .foregroundStyle(colors.dimmed)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, spacing.sm)
-                    .padding(.vertical, 2)
+                    .padding(.vertical, spacing.xxxs)
                     .accessibilityIdentifier("herdr-embed-io")
                     .allowsHitTesting(false)
             }
@@ -100,8 +100,14 @@ struct HerdrEmbedWorkspaceView: View {
         .ignoresSafeArea(.keyboard)
         .overlay(alignment: .top) {
             if let toast = osc52Toast {
-                Osc52ToastView(toast: toast, sceneID: "herdr")
-                    .transition(.move(edge: .top).combined(with: .opacity))
+                Osc52ToastView(
+                    toast: toast,
+                    palette: colors,
+                    typography: typography,
+                    spacing: spacing,
+                    sceneID: "herdr"
+                )
+                .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
         .animation(.easeInOut(duration: 0.2), value: osc52Toast)

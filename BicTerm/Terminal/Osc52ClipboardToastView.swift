@@ -36,18 +36,22 @@ struct Osc52ClipboardToast: Equatable, Sendable {
 /// no accessibility element that steals the screen reader — toast is
 /// advisory only.
 ///
-/// Styling uses hard-coded `Color` / `Font` (not the `terminalColors` /
-/// `terminalTypography` environment) because the overlay is hosted by
+/// Styling reads the injected `palette` / `typography` / `spacing`
+/// parameters — NOT the `terminalColors` / `terminalTypography` /
+/// `terminalSpacing` environment — because the overlay is hosted by
 /// `SessionSceneView` inside a SwiftUI `.overlay { ... }` closure whose
 /// re-evaluation may sample the environment values from a build context
 /// that has not propagated the latest `terminalStyle()` injection —
 /// `@Environment(\.terminalColors)` returned empty colors for the
 /// overlay under iOS 26.3, causing the toast to render with
-/// `Color.clear` text/background and zero-frame image. Hard-coded tokens
-/// avoid the propagation race and keep the security guardrail visible
-/// regardless of where the toast is hosted.
+/// `Color.clear` text/background and zero-frame image. Callers inject
+/// their live environment values explicitly, avoiding the propagation
+/// race while keeping the toast on-palette in both appearance modes.
 struct Osc52ToastView: View {
     let toast: Osc52ClipboardToast
+    let palette: TerminalColors
+    let typography: TerminalTypography
+    let spacing: TerminalSpacing
     /// Identifier suffix so multiple sessions can coexist in the
     /// accessibility tree without colliding.
     var sceneID: String = ""
@@ -55,23 +59,24 @@ struct Osc52ToastView: View {
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: symbolName)
-                .foregroundColor(.green)
+                .foregroundColor(palette.success)
             Text(toast.fullText)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundColor(.primary)
+                .font(typography.body)
+                .foregroundColor(palette.foreground)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(Color(.systemBackground).opacity(0.92), in: Capsule())
+        .padding(.horizontal, spacing.sm)
+        .padding(.vertical, spacing.xs)
+        .background(palette.background.opacity(0.92), in: Capsule())
         .overlay(
             Capsule()
-                .strokeBorder(Color.green.opacity(0.6), lineWidth: 1)
+                .strokeBorder(palette.success.opacity(0.6), lineWidth: 1)
         )
+        // Drop shadows are scheme-independent — Color.black is correct in both modes.
         .shadow(color: Color.black.opacity(0.15), radius: 4, y: 2)
         .accessibilityElement(children: .ignore)
         .accessibilityIdentifier("osc52-toast-\(sceneID)")
         .accessibilityLabel(toast.fullText)
-        .padding(.top, 4)
+        .padding(.top, spacing.xxs)
         .allowsHitTesting(false)
     }
 

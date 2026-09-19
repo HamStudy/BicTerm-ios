@@ -43,7 +43,13 @@ struct SessionSceneView: View {
         return VStack(spacing: 0) {
             Group {
                 if let osc52Toast = toastToShow {
-                    Osc52ToastView(toast: osc52Toast, sceneID: sanitized)
+                    Osc52ToastView(
+                        toast: osc52Toast,
+                        palette: colors,
+                        typography: typography,
+                        spacing: spacing,
+                        sceneID: sanitized
+                    )
                 }
             }
             chrome
@@ -189,7 +195,7 @@ struct SessionSceneView: View {
                 model.requestClose()
             } label: {
                 Image(systemName: "xmark.circle.fill")
-                    .font(.title3)
+                    .font(typography.title)
             }
             .frame(minWidth: 44, minHeight: 44)
             .contentShape(Rectangle())
@@ -216,7 +222,7 @@ struct SessionSceneView: View {
                 model.clearScrollbackReleasedNotice()
             } label: {
                 Image(systemName: "xmark")
-                    .font(.caption)
+                    .font(typography.caption)
             }
             .frame(minWidth: 44, minHeight: 44)
             .contentShape(Rectangle())
@@ -251,7 +257,7 @@ struct SessionSceneView: View {
         }
         .padding(.horizontal, spacing.sm)
         .padding(.vertical, spacing.xxxs)
-        .background(colors.selection.opacity(0.4))
+        .background(colors.selection.opacity(TerminalMetric.bannerFill))
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Screen may be out of sync. Resync available.")
         .accessibilityIdentifier("scene-sync-banner-\(sanitized)")
@@ -334,7 +340,7 @@ struct SessionSceneView: View {
     private var closedPlaceholder: some View {
         VStack(spacing: spacing.sm) {
             Image(systemName: "checkmark.circle")
-                .font(.largeTitle)
+                .font(typography.title)
                 .foregroundColor(colors.dimmed)
             Text("Session ended")
                 .font(typography.body)

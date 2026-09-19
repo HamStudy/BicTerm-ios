@@ -104,7 +104,7 @@ private struct SessionSwitcherRow: View {
         HStack(spacing: spacing.sm) {
             if hasUnseenOutput {
                 Text("●")
-                    .font(.system(size: 12))
+                    .font(typography.caption)
                     .foregroundColor(colors.accent)
                     .accessibilityLabel("Unread activity")
                     .accessibilityIdentifier("switcher-unread-\(key)")
@@ -141,7 +141,7 @@ private struct SessionSwitcherRow: View {
                 store.existingModel(for: descriptor.id)?.requestClose()
             } label: {
                 Image(systemName: "xmark.circle.fill")
-                    .font(.title3)
+                    .font(typography.title)
                     .foregroundColor(colors.dimmed)
             }
             .frame(minWidth: 44, minHeight: 44)

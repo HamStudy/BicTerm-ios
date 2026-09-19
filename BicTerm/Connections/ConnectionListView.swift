@@ -395,14 +395,13 @@ struct ConnectionListView: View {
 
             VStack(alignment: .trailing, spacing: spacing.xxxs) {
                 if connection.herdrEnabled {
-                    Text("Herdr")
-                        .font(typography.caption)
-                        .foregroundColor(colors.accent)
-                        .padding(.horizontal, spacing.xs)
-                        .padding(.vertical, spacing.xxxs)
-                        .background(colors.accent.opacity(0.18), in: Capsule())
-                        .overlay(Capsule().stroke(colors.accent.opacity(0.5), lineWidth: 0.5))
-                        .accessibilityIdentifier("badge-herdr")
+                    TerminalBadge(
+                        "Herdr",
+                        tint: colors.accent,
+                        stroke: colors.accent.opacity(0.5),
+                        strokeWidth: 0.5
+                    )
+                    .accessibilityIdentifier("badge-herdr")
                 }
 
                 ProtocolBadge(protocolID: connection.type.rawValue)
@@ -440,7 +439,7 @@ struct ConnectionListView: View {
             .foregroundColor(colors.error)
             .frame(maxWidth: .infinity)
             .padding(spacing.xs)
-            .background(colors.error.opacity(0.15))
+            .background(colors.error.opacity(TerminalMetric.badgeFill))
             .accessibilityIdentifier("connections-error")
     }
 

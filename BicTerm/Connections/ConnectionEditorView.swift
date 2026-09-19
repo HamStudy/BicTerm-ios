@@ -77,7 +77,6 @@ struct ConnectionEditorView: View {
                             Button("Save") { persist(connectAfterSave: false) }
                                 .disabled(!canSubmit)
                                 .accessibilityIdentifier("save-editor")
-                                .fontWeight(.semibold)
                         }
             }
         .onAppear {

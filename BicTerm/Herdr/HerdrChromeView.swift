@@ -69,7 +69,7 @@ struct HerdrChromeView: View {
 
             Button(action: onClose) {
                 Image(systemName: "xmark.circle.fill")
-                    .font(.title3)
+                    .font(typography.title)
             }
             .frame(minWidth: 44, minHeight: 44)
             .contentShape(Rectangle())

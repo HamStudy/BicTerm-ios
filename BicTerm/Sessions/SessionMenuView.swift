@@ -21,6 +21,7 @@ struct SessionMenuView: View {
     @Environment(\.openWindow) private var openWindow
     @Environment(\.supportsMultipleWindows) private var supportsMultipleWindows
     @Environment(\.terminalColors) private var colors
+    @Environment(\.terminalTypography) private var typography
 
     let store: SessionStore
     /// The session attached in THIS scene (marked, and not jumpable).
@@ -50,7 +51,7 @@ struct SessionMenuView: View {
             settingsItem
         } label: {
             Image(systemName: "ellipsis")
-                .font(.title3)
+                .font(typography.title)
         }
         .frame(minWidth: 44, minHeight: 44)
         .contentShape(Rectangle())

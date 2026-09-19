@@ -214,7 +214,6 @@ struct HopEditorView: View {
                 }
                 .disabled(!draft.isComplete)
                 .accessibilityIdentifier("save-hop")
-                .fontWeight(.semibold)
             }
         }
         .environment(\.terminalColors, colors)

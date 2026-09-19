@@ -7,15 +7,16 @@ import SwiftUI
 struct AcknowledgementsView: View {
     @Environment(\.terminalColors) var colors
     @Environment(\.terminalTypography) var typography
+    @Environment(\.terminalSpacing) private var spacing
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: spacing) {
+            VStack(alignment: .leading, spacing: spacing.sm) {
                 Text("BicTerm embeds the Herdr client core (herdr-protocol, herdr-client-core, herdr-ios-ffi; Apache-2.0) and the third-party components below.")
                     .font(typography.body)
                     .foregroundColor(colors.foreground)
                 Text(notices)
-                    .font(.system(size: 12, design: .monospaced))
+                    .font(typography.caption)
                     .foregroundColor(colors.foreground)
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -23,16 +24,14 @@ struct AcknowledgementsView: View {
                     .font(typography.caption)
                     .foregroundColor(colors.dimmed)
             }
-            .padding(.vertical, spacing)
+            .padding(.vertical, spacing.sm)
         }
-        .padding(.horizontal, spacing)
+        .padding(.horizontal, spacing.sm)
         .scrollContentBackground(.hidden)
         .background(colors.background)
         .navigationTitle("Acknowledgements")
         .accessibilityIdentifier("acknowledgements")
     }
-
-    private var spacing: CGFloat { 12 }
 
     private var notices: String {
         guard let url = Bundle.main.url(forResource: "THIRD_PARTY_NOTICES", withExtension: "md"),
