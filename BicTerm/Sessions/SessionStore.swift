@@ -586,6 +586,19 @@ final class SessionStore {
         }
     }
 
+    /// UITEST isolation: the persisted host-key store survives app
+    /// relaunches inside the simulator container, so a Trust gesture from
+    /// an earlier run would silently satisfy the verifier and skip the
+    /// unknown-host prompt in later runs. The driver wipes every stored
+    /// trust decision before opening sessions (skipped on pretrusted
+    /// launches, whose in-memory store is isolated per launch already).
+    func clearHostKeysForUITests() async {
+        guard let records = try? await hostKeyStore?.loadAll() else { return }
+        for record in records {
+            try? await hostKeyStore?.forget(host: record.host, port: record.port)
+        }
+    }
+
     func waitUntilActive(_ descriptorID: UUID, timeout: TimeInterval) async -> Bool {
         guard let descriptor = descriptors[descriptorID] else { return false }
         let deadline = Date().addingTimeInterval(timeout)

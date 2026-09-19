@@ -62,6 +62,14 @@ enum SessionUITestDriver {
             await store.clearSnapshotsForUITests()
         }
 
+        // The persisted host-key store outlives the app inside the
+        // simulator container: without a wipe, a Trust gesture from an
+        // earlier run skips the unknown-host prompt in every later run.
+        // Pretrusted launches use an isolated in-memory store instead.
+        if !arguments.contains("--uitest-pretrust-fixtures") {
+            await store.clearHostKeysForUITests()
+        }
+
         // The toolbar visibility pref is app-global UserDefaults state that
         // survives relaunches: reset it to the hardware-keyboard heuristic
         // unless the test deliberately exercises persistence.
