@@ -14,6 +14,14 @@
 
 No convenience, default behavior, debugging need, or evidence requirement permits any exception beyond the unavoidable Apple tooling writes defined above.
 
+## NEVER Touch the Hardware Device Without Explicit Permission
+
+**Physical iOS devices belong to the user. Agents may use a hardware device only when the user explicitly authorizes it for the work at hand** — an unlock performed by the user is not authorization, and silence is never authorization.
+
+- Device-requiring operations — app install, launch, `xcodebuild test` with a device destination, `devicectl` copies to/from the app container, lock-state or other device queries — are forbidden without that explicit authorization.
+- Never poll or wait for device availability: no lock-state probe loops, no retries that wait for an unlock, no periodic re-checks. Waiting for access is wasted work by definition.
+- Instead: do everything device-free first (local builds such as `build-for-testing`, simulator suites, fixture-based tests), then ask the user once to intervene, state the exact resume commands, and stop.
+
 ---
 
 # PROJECT KNOWLEDGE BASE
@@ -72,6 +80,7 @@ Reference centrality: not measured (no codegraph index; Swift LSP not wired in t
 - Swift 6 strict concurrency in every target (`SWIFT_VERSION "6.0"`).
 - Helper frameworks are `MACH_O_TYPE=staticlib`, link-only (`embed: false`) — never embed.
 - Vendored-fork patches are recorded in patch docs (e.g. `Vendor/SwiftTerm/BICTERM-PATCH.md`); update the doc with every fork hunk.
+- Agents commit completed features themselves (user directive): follow the git-commits skill — atomic Conventional Commits, explicit path staging (never `git add -A`/`git add .`), review `git diff --cached` before every commit, leave others' in-flight work untouched, never push without explicit request.
 
 ## ANTI-PATTERNS (THIS PROJECT)
 - No SwiftUI/UIKit imports in BicTermCore — layering is enforced.
