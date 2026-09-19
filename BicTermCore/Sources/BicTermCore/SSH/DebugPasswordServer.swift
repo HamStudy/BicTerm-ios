@@ -18,12 +18,37 @@ import NIOSSH
 ///      can point password-method connections at.
 ///
 /// The session child channel answers pty-req/shell with success and echoes
-/// data back, which is all a client-side transport test needs. Release builds
-/// compile this file to nothing (whole-file `#if DEBUG`).
+/// data back; `exec` requests get a canned response (see
+/// ``LoopbackPasswordSSHServer/execResponse``). Release builds compile
+/// this file to nothing (whole-file `#if DEBUG`).
 public final class LoopbackPasswordSSHServer: @unchecked Sendable {
     public enum KeyAuthentication: Sendable, Equatable {
         case disabled, rejected, requiresPassword
         case acceptedPublicKeys([Data])
+    }
+
+    /// Per-connection policy for inbound `session`-type channel opens.
+    ///
+    /// `.lifetimeTotal(n)` reproduces, at the real NIOSSH protocol level,
+    /// the channel budget of CoderSSHGW_0.5.0 (the gateway behind
+    /// `emailsupport@coder.ham.dev`): that gateway permits exactly ONE
+    /// session channel per SSH connection LIFETIME — a second `session`
+    /// open is refused with `SSH_MSG_CHANNEL_OPEN_FAILURE` even after the
+    /// first channel closed cleanly (device-proven; an OpenSSH
+    /// ControlMaster reproduction confirms the limit is per connection
+    /// LIFETIME, not per concurrent channel). Under `.lifetimeTotal(n)`
+    /// the server counts `.session` channel opens per TCP connection and
+    /// the count NEVER decrements on close, so the (n+1)th open is
+    /// rejected the same way and the client observes the channel open
+    /// failing with `NIOSSHError.channelSetupRejected` — the same error
+    /// class the real gateway produces.
+    public enum SessionChannelPolicy: Sendable, Equatable {
+        /// Any number of `session` channel opens per TCP connection —
+        /// the historical behavior and the default.
+        case unlimited
+        /// At most `n` `session` channel opens per TCP connection
+        /// LIFETIME; the count never decrements when a channel closes.
+        case lifetimeTotal(Int)
     }
     public enum StartError: Error, Equatable {
         case alreadyStarted
@@ -34,22 +59,30 @@ public final class LoopbackPasswordSSHServer: @unchecked Sendable {
     /// live" marker tests wait for.
     public static let greeting = "loopback-password-server ready\r\n"
 
+    /// Default ``execResponse`` — the deterministic marker exec tests
+    /// wait for.
+    public static let defaultExecResponse = "exec-ok\n"
+
     private let username: String
     private let offeredPassword: String
     private let hostKey: NIOSSHPrivateKey
     private let keyAuthentication: KeyAuthentication
+    private let sessionChannelPolicy: SessionChannelPolicy
     private let lock = NSLock()
     private var group: MultiThreadedEventLoopGroup?
     private var serverChannel: (any Channel)?
     private var inboundChannelCount = 0
     private var authenticatedCount = 0
+    private var execResponseStorage = defaultExecResponse
 
     public init(username: String, password: String, keyAuthentication: KeyAuthentication = .disabled,
+                sessionChannelPolicy: SessionChannelPolicy = .unlimited,
                 hostKey: NIOSSHPrivateKey? = nil) {
         self.username = username
         self.offeredPassword = password
         self.hostKey = hostKey ?? NIOSSHPrivateKey(ed25519Key: Curve25519.Signing.PrivateKey())
         self.keyAuthentication = keyAuthentication
+        self.sessionChannelPolicy = sessionChannelPolicy
     }
 
     /// `"algorithm base64-wire-blob"` in authorized_keys format — tests
@@ -71,6 +104,24 @@ public final class LoopbackPasswordSSHServer: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         return authenticatedCount
+    }
+
+    /// Canned stdout the session handler writes for `exec` requests
+    /// (followed by exit-status 0, EOF, and channel close). Settable at any
+    /// time — including while connections are live — so connector tests can
+    /// point the herdr probe at this server (the probe greps
+    /// `command -v herdr`-style output). Lock-confined like the counters.
+    public var execResponse: String {
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            return execResponseStorage
+        }
+        set {
+            lock.lock()
+            execResponseStorage = newValue
+            lock.unlock()
+        }
     }
 
     private func noteInboundConnection() {
@@ -112,6 +163,7 @@ public final class LoopbackPasswordSSHServer: @unchecked Sendable {
         let username = username
         let password = offeredPassword
         let keyAuthentication = keyAuthentication
+        let sessionChannelPolicy = sessionChannelPolicy
 
         let bootstrap = ServerBootstrap(group: group)
             .serverChannelOption(.socketOption(.so_reuseaddr), value: 1)
@@ -121,6 +173,10 @@ public final class LoopbackPasswordSSHServer: @unchecked Sendable {
                     username: username, password: password, keyAuthentication: keyAuthentication,
                     onAuthenticated: { [weak self] in self?.noteAuthenticated() }
                 )
+                // One budget per accepted TCP connection: the count spans
+                // every session channel on that connection and never
+                // resets (the CoderSSHGW lifetime shape).
+                let sessionBudget = SessionChannelBudget(policy: sessionChannelPolicy)
                 return channel.eventLoop.makeCompletedFuture {
                     try channel.pipeline.syncOperations.addHandler(NIOSSHHandler(
                         role: .server(SSHServerConfiguration(
@@ -132,8 +188,17 @@ public final class LoopbackPasswordSSHServer: @unchecked Sendable {
                             guard channelType == .session else {
                                 return child.eventLoop.makeFailedFuture(TransportError.channelDenied)
                             }
+                            guard sessionBudget.consumeSessionOpen() else {
+                                // A failed initializer makes NIOSSH answer
+                                // the open with SSH_MSG_CHANNEL_OPEN_FAILURE;
+                                // the client observes
+                                // NIOSSHError.channelSetupRejected.
+                                return child.eventLoop.makeFailedFuture(TransportError.channelDenied)
+                            }
                             return child.eventLoop.makeCompletedFuture {
-                                try child.pipeline.syncOperations.addHandler(EchoSessionHandler())
+                                try child.pipeline.syncOperations.addHandler(
+                                    EchoSessionHandler(execResponse: { [weak self] in self?.execResponse ?? "" })
+                                )
                             }
                         }
                     ))
@@ -221,10 +286,20 @@ private final class AcceptanceCountingPasswordAuthDelegate: NIOSSHServerUserAuth
 
 /// Session channel behavior: grant pty/shell (success replies are only sent
 /// when the client asked for one), greet on shell, then echo data back.
+/// `exec` requests get a minimal canned-command round-trip: success reply,
+/// canned stdout, exit-status 0, EOF, then channel close — the wire shape a
+/// real remote command takes, so exec-based clients (the herdr probe) can
+/// run against this server.
 private final class EchoSessionHandler: ChannelDuplexHandler, @unchecked Sendable {
     typealias InboundIn = SSHChannelData
     typealias OutboundIn = SSHChannelData
     typealias OutboundOut = SSHChannelData
+
+    private let execResponse: @Sendable () -> String
+
+    init(execResponse: @escaping @Sendable () -> String) {
+        self.execResponse = execResponse
+    }
 
     func userInboundEventTriggered(context: ChannelHandlerContext, event: Any) {
         switch event {
@@ -239,6 +314,18 @@ private final class EchoSessionHandler: ChannelDuplexHandler, @unchecked Sendabl
             var buffer = context.channel.allocator.buffer(capacity: LoopbackPasswordSSHServer.greeting.utf8.count)
             buffer.writeString(LoopbackPasswordSSHServer.greeting)
             context.writeAndFlush(wrapOutboundOut(SSHChannelData(type: .channel, data: .byteBuffer(buffer))), promise: nil)
+        case let exec as SSHChannelRequestEvent.ExecRequest:
+            if exec.wantReply {
+                context.triggerUserOutboundEvent(ChannelSuccessEvent(), promise: nil)
+            }
+            let response = execResponse()
+            var buffer = context.channel.allocator.buffer(capacity: response.utf8.count)
+            buffer.writeString(response)
+            context.writeAndFlush(wrapOutboundOut(SSHChannelData(type: .channel, data: .byteBuffer(buffer))), promise: nil)
+            context.triggerUserOutboundEvent(SSHChannelRequestEvent.ExitStatus(exitStatus: 0), promise: nil)
+            // Wire order: data, exit-status, EOF, close (RFC 4254 §5.3).
+            context.channel.close(mode: .output, promise: nil)
+            context.close(promise: nil)
         default:
             context.fireUserInboundEventTriggered(event)
         }
@@ -248,6 +335,39 @@ private final class EchoSessionHandler: ChannelDuplexHandler, @unchecked Sendabl
         let message = unwrapInboundIn(data)
         guard message.type == .channel, case .byteBuffer = message.data else { return }
         context.writeAndFlush(data, promise: nil)
+    }
+}
+
+/// Per-TCP-connection lifetime budget for `.session` channel opens (see
+/// ``LoopbackPasswordSSHServer.SessionChannelPolicy``). One instance per
+/// accepted connection, captured by that connection's inbound child-channel
+/// initializer. The count only ever decrements — there is no close hook —
+/// so a cleanly-closed channel never refunds an open. Touched from NIOSSH's
+/// initializer on the connection's EventLoop; lock-confined (the file's
+/// counter idiom) so it can be captured across closure boundaries under
+/// strict concurrency.
+private final class SessionChannelBudget: @unchecked Sendable {
+    private let lock = NSLock()
+    private var remaining: Int?
+
+    init(policy: LoopbackPasswordSSHServer.SessionChannelPolicy) {
+        switch policy {
+        case .unlimited:
+            remaining = nil
+        case .lifetimeTotal(let total):
+            remaining = total
+        }
+    }
+
+    /// Consumes one session-channel open; `false` when the connection's
+    /// lifetime budget is exhausted.
+    func consumeSessionOpen() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let budget = remaining else { return true }
+        guard budget > 0 else { return false }
+        remaining = budget - 1
+        return true
     }
 }
 
