@@ -223,7 +223,7 @@ final class HerdrRemoteInstallerTests: XCTestCase {
     // MARK: - Pin table
 
     func testPinTableCompleteness() {
-        XCTAssertEqual(HerdrReleasePins.version, "0.9.0")
+        XCTAssertEqual(HerdrReleasePins.version, "0.9.1")
         XCTAssertEqual(
             HerdrReleasePins.Target.allCases.map(\.rawValue),
             ["linux-x86_64", "linux-aarch64", "macos-x86_64", "macos-aarch64"]
@@ -233,8 +233,8 @@ final class HerdrRemoteInstallerTests: XCTestCase {
             let asset = HerdrReleasePins.asset(for: target)
             XCTAssertEqual(
                 asset.url,
-                "https://github.com/herdrdev/herdr/releases/download/v0.9.0/herdr-\(target.rawValue)",
-                "asset URL must be the v0.9.0 GitHub release asset for \(target.rawValue)"
+                "https://github.com/herdrdev/herdr/releases/download/v0.9.1/herdr-\(target.rawValue)",
+                "asset URL must be the v0.9.1 GitHub release asset for \(target.rawValue)"
             )
             XCTAssertEqual(hex64?.firstMatch(
                 in: asset.sha256, range: NSRange(asset.sha256.startIndex..., in: asset.sha256)
@@ -255,7 +255,7 @@ final class HerdrRemoteInstallerTests: XCTestCase {
     /// the same artifact family — they must never drift apart silently.
     func testMacosAarch64PinMatchesCommittedFixtureLockfile() throws {
         let lockfile = SSHTestFixture.repoRoot
-            .appendingPathComponent("Fixtures/herdr/server-0.9.0.sha256")
+            .appendingPathComponent("Fixtures/herdr/server-0.9.1.sha256")
         let line = try String(contentsOf: lockfile, encoding: .utf8)
         let fields = line.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: true)
         XCTAssertEqual(fields.first.map(String.init), HerdrReleasePins.asset(for: .macosAarch64).sha256)
@@ -378,7 +378,7 @@ final class HerdrRemoteInstallerTests: XCTestCase {
             searchPaths: [dest]
         )
         XCTAssertEqual(reprobe.foundPath, dest)
-        XCTAssertEqual(reprobe.version, "0.9.0")
+        XCTAssertEqual(reprobe.version, "0.9.1")
         XCTAssertEqual(reprobe.endpointGeneration, HerdrProbe.Result.requiredGeneration)
         XCTAssertTrue(reprobe.isCompatible)
 
@@ -386,6 +386,6 @@ final class HerdrRemoteInstallerTests: XCTestCase {
         let lines = progress.snapshot
         XCTAssertFalse(lines.isEmpty, "install must report progress milestones")
         XCTAssertTrue(lines.contains { $0.contains("uploading") })
-        XCTAssertTrue(lines.contains { $0.contains("installed herdr 0.9.0") })
+        XCTAssertTrue(lines.contains { $0.contains("installed herdr 0.9.1") })
     }
 }

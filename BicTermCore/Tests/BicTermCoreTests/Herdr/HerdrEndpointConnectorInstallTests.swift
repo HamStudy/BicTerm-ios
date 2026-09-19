@@ -392,12 +392,12 @@ final class HerdrEndpointConnectorInstallTests: XCTestCase {
         let lines = progress.snapshot
         XCTAssertFalse(lines.isEmpty, "the install must report progress milestones")
         XCTAssertTrue(lines.contains { $0.contains("uploading") })
-        XCTAssertTrue(lines.contains { $0.contains("installed herdr 0.9.0") })
+        XCTAssertTrue(lines.contains { $0.contains("installed herdr 0.9.1") })
 
         // The connector's re-probe found the installed binary compatible.
         XCTAssertEqual(probed.executablePath, dest)
         XCTAssertEqual(probed.probe.foundPath, dest)
-        XCTAssertEqual(probed.probe.version, "0.9.0")
+        XCTAssertEqual(probed.probe.version, "0.9.1")
         XCTAssertEqual(probed.probe.endpointGeneration, HerdrProbe.Result.requiredGeneration)
         XCTAssertTrue(probed.probe.isCompatible)
         XCTAssertTrue(fm.fileExists(atPath: dest), "installed binary must exist at \(dest)")
