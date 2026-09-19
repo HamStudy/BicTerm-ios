@@ -234,6 +234,7 @@ struct BicTermApp: App {
                 } else {
                     ConnectionListContainer(store: sessionStore, herdConnect: herdConnect)
                         .terminalStyle()
+                        .modifier(UITestSettingsSceneOpener())
                 }
                 #else
                 ConnectionListContainer(store: sessionStore, herdConnect: herdConnect)

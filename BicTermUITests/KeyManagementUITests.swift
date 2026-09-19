@@ -56,9 +56,35 @@ final class KeyManagementUITests: XCTestCase {
         guard UIDevice.current.userInterfaceIdiom == .pad else {
             throw XCTSkip("Cold Settings restoration requires the prepared iPad scene")
         }
-        // The shell producer owns uninstall, both launches, and termination.
-        // Attaching must not replace Launch #2's deliberately seed-free vector.
+        // The test is its own producer. Launch #1 seeds the four fixture
+        // keys and opens the independent Settings window through the DEBUG
+        // seam (the user path — session menu → Settings… — needs a live
+        // SSH session, which this test's subject does not involve).
+        app.launchArguments = [
+            "-uitest-reset-keys",
+            "--uitest-reset",
+            "-uitest-seed-disabled-key",
+            "--uitest-open-settings-scene",
+        ]
+        app.launch()
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 20),
+                      "The Settings scene did not open on the seeding launch")
+
+        // iPadOS checkpoints the scene-session archive on a real background
+        // transition, not on terminate: background, let the checkpoint land,
+        // reactivate so Settings is the last-active (foreground-restored)
+        // scene, then terminate with the archive settled.
+        XCUIApplication(bundleIdentifier: "com.apple.springboard").activate()
+        Thread.sleep(forTimeInterval: 5)
         app.activate()
+        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 15),
+                      "The Settings scene must be foreground when the archive settles")
+        app.terminate()
+
+        // Launch #2 is deliberately seed-free: the cold-restored scene must
+        // load keys from the Keychain, not from any launch vector.
+        app.launchArguments = []
+        app.launch()
         XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 20),
                       "The independent Settings scene must be cold-restored")
         XCTAssertFalse(app.buttons["add-connection"].isHittable,

@@ -15,6 +15,7 @@ import SwiftUI
 ///   --uitest-keep-toolbar-pref             keep the persisted toolbar visibility choice (relaunch tests)
 ///   --uitest-keep-font-pref                keep the persisted terminal font size (persistence tests)
 ///   --uitest-keep-theme-pref               keep the persisted appearance preference (persistence tests)
+///   --uitest-open-settings-scene           open the independent Settings window once at bootstrap
 enum TerminalSceneUITest {
     static var seamsEnabled: Bool {
         ProcessInfo.processInfo.arguments.contains("--uitest-sessions")
@@ -165,6 +166,27 @@ enum SessionUITestDriver {
             try? await Task.sleep(for: .milliseconds(250))
         }
         return nil
+    }
+}
+
+/// Opens the independent Settings window once at bootstrap when UI tests
+/// launch with `--uitest-open-settings-scene`. The only user path to that
+/// window (session menu → Settings…) requires a live session; cold-restore
+/// tests must archive the Settings scene WITHOUT any SSH fixture, so they
+/// open it through this seam, then background + terminate to force an
+/// iPadOS scene-archive checkpoint before the seed-free relaunch.
+struct UITestSettingsSceneOpener: ViewModifier {
+    @Environment(\.openWindow) private var openWindow
+    @Environment(\.supportsMultipleWindows) private var supportsMultipleWindows
+
+    func body(content: Content) -> some View {
+        content
+            .onAppear {
+                guard supportsMultipleWindows,
+                      ProcessInfo.processInfo.arguments.contains("--uitest-open-settings-scene")
+                else { return }
+                openWindow(id: "settings", value: SettingsWindowValue.main)
+            }
     }
 }
 
