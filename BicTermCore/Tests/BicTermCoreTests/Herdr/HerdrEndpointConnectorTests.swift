@@ -99,7 +99,7 @@ final class HerdrEndpointConnectorTests: XCTestCase {
 
     // MARK: - Full ordering: establish → probe → bridge
 
-    func testCompatibleProbeOpensReadyBridgeOnSameConnection() async throws {
+    func testCompatibleProbeOpensReadyBridge() async throws {
         let shim = try Self.materializeProbeAndBridgeShim()
         defer { try? FileManager.default.removeItem(atPath: URL(fileURLWithPath: shim).deletingLastPathComponent().path) }
         let connector = try await makeConnector(searchPaths: [shim])

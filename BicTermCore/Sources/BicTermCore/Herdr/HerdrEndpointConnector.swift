@@ -90,12 +90,16 @@ public enum HerdrEndpointConnectorError: Error, Equatable, Sendable {
 /// (integration doc §6.1): SSH establish → read-only ``HerdrProbe`` → only
 /// on a compatible probe, the `remote-client-bridge` exec channel.
 ///
-/// Establish reuses the SessionStore/HerdrProbe pattern — direct
-/// connections dial through ``SSHTransport``, jump-chained connections
-/// through the jump pipeline — so hop handling (per-hop host-key
-/// verification, per-hop credentials, ≤5 hops) stays transparent to the
-/// caller: the probe and bridge exec channels ride the ONE established
-/// connection (§3.5 shared-connection shape).
+/// CONNECTION-PER-CONSUMER (CoderSSHGW fix): every channel consumer —
+/// probe, install, re-probe, bridge — establishes its OWN channel-less
+/// connection (direct via ``SSHTransport/connectExecOnly(to:)``, jump
+/// chains through the jump pipeline) and closes it when done. Gateways
+/// like CoderSSHGW permit ONE session-channel open per connection
+/// LIFETIME, and exec channels are session-type channels on the wire
+/// (RFC 4254), so a shared connection cannot carry two consumers; the
+/// old establish's unconsumed PTY session burned the one slot before the
+/// probe's exec could open. Hop handling (per-hop host-key verification,
+/// per-hop credentials, ≤5 hops) stays transparent to the caller.
 ///
 /// TOFU host-key trust (doc §4): when establish surfaces the typed
 /// `.requiresTrust` payload, the injected user-approval callback receives
@@ -110,26 +114,27 @@ public enum HerdrEndpointConnectorError: Error, Equatable, Sendable {
 /// this connector never constructs a HerdrClient. An incompatible probe is
 /// ``HerdrEndpointConnectorError/incompatibleEndpoint(result:diagnosticDetail:)``
 /// with no bridge exec (doc §11 read-only boundary).
-/// Result of ``HerdrEndpointConnector/establishProbed(_:)``: an ESTABLISHED
-/// SSH carrier whose probe passed, with the remote herdr executable the
-/// bridge command should exec. The carrier is NOT yet bound to any exec
-/// channel — the embed transport (plan herdr-embed T5) keeps it alive and
-/// opens one fresh `remote-client-bridge` exec channel per local bridge
-/// connection on it.
+/// Result of ``HerdrEndpointConnector/establishProbed(_:)``: the probe that
+/// passed, the remote herdr executable the bridge command should exec, and
+/// a factory that establishes a FRESH channel-less connection per call
+/// (same trust-retry semantics as the probe's establish). The caller owns
+/// each resolved connection's lifetime from the factory call on.
 public struct HerdrProbedCarrier: Sendable {
-    /// Established exec-capable connection (direct or jump-chained). The
-    /// caller owns its lifetime from here on.
-    public let carrier: any SSHExecCapableConnection
+    /// Establishes a FRESH channel-less exec-capable connection (direct
+    /// or jump-chained) on each call, with the same trust-retry semantics
+    /// as the probe's establish. Throws the connector's typed errors
+    /// (`.sshEstablish`, `.trustDeclined`).
+    public let carrierFactory: @Sendable () async throws(HerdrEndpointConnectorError) -> any SSHExecCapableConnection
     public let probe: HerdrProbe.Result
     /// Absolute path of the remote herdr binary the probe verified.
     public let executablePath: String
 
     init(
-        carrier: any SSHExecCapableConnection,
+        carrierFactory: @escaping @Sendable () async throws(HerdrEndpointConnectorError) -> any SSHExecCapableConnection,
         probe: HerdrProbe.Result,
         executablePath: String
     ) {
-        self.carrier = carrier
+        self.carrierFactory = carrierFactory
         self.probe = probe
         self.executablePath = executablePath
     }
@@ -139,15 +144,10 @@ public struct HerdrEndpointConnector: Sendable {
     public typealias HostKeyApproval = @Sendable (HerdrHostTrustChallenge) async -> Bool
     public typealias InstallApproval = @Sendable (HerdrInstallConsent) async -> Bool
 
-    /// Nominal PTY dimensions for the direct establish's session channel
-    /// (the established pattern; herdr never uses that shell — its probe
-    /// and bridge ride their own exec channels).
-    private static let establishCols = 80
-    private static let establishRows = 24
-
     private let hostKeyVerifier: HostKeyVerifier
     private let authenticationKeyProvider: any SSHAuthenticationKeyProvider
     private let passwordStore: any PasswordStoring
+    private let passwordPrompt: (any SSHPasswordPrompting)?
     private let hardwareKeysEnabledByDefault: @Sendable () -> Bool
     private let keyOfferResolver: KeyOfferResolver
     private let metadataProvider: any SSHKeyMetadataProviding
@@ -165,6 +165,7 @@ public struct HerdrEndpointConnector: Sendable {
         hostKeyVerifier: HostKeyVerifier,
         authenticationKeyProvider: any SSHAuthenticationKeyProvider = DefaultSSHAuthenticationKeyProvider(),
         passwordStore: any PasswordStoring = KeychainPasswordStore(),
+        passwordPrompt: (any SSHPasswordPrompting)? = nil,
         hardwareKeysEnabledByDefault: @escaping @Sendable () -> Bool = { true },
         keyOfferResolver: KeyOfferResolver = KeyOfferResolver(),
         metadataProvider: any SSHKeyMetadataProviding = DefaultSSHKeyMetadataProvider(),
@@ -177,6 +178,7 @@ public struct HerdrEndpointConnector: Sendable {
         self.hostKeyVerifier = hostKeyVerifier
         self.authenticationKeyProvider = authenticationKeyProvider
         self.passwordStore = passwordStore
+        self.passwordPrompt = passwordPrompt
         self.hardwareKeysEnabledByDefault = hardwareKeysEnabledByDefault
         self.keyOfferResolver = keyOfferResolver
         self.metadataProvider = metadataProvider
@@ -197,10 +199,12 @@ public struct HerdrEndpointConnector: Sendable {
     /// ``connect(_:)`` with the stage-B install proposal wired in: a probe
     /// that fails SOLELY because no herdr binary exists on an
     /// otherwise-supported host asks the injected approval once, and on
-    /// approval installs the pinned binary over this same connection and
-    /// re-probes before the bridge opens. Without the installer/approval
-    /// seams injected this is exactly ``connect(_:)``. `installProgress`
-    /// is forwarded verbatim to the installer's milestone stream.
+    /// approval installs the pinned binary over the installer's own fresh
+    /// per-step connections and re-probes over another before the bridge
+    /// opens. Without the
+    /// installer/approval seams injected this is exactly
+    /// ``connect(_:)``. `installProgress` is forwarded verbatim to the
+    /// installer's milestone stream.
     public func connectOfferingInstall(
         _ connection: Connection,
         installProgress: HerdrInstallProgress? = nil
@@ -216,51 +220,60 @@ public struct HerdrEndpointConnector: Sendable {
         probed: HerdrProbedCarrier,
         connection: Connection
     ) async throws(HerdrEndpointConnectorError) -> HerdrSSHTransport {
+        // BRIDGE connection: the factory's fresh channel-less establish;
+        // the bridge exec is this connection's only session channel.
+        let carrier = try await probed.carrierFactory()
         do {
             return try await HerdrSSHTransport(
-                transport: probed.carrier,
+                transport: carrier,
                 executablePath: probed.executablePath,
                 sessionName: connection.herdrSessionName
             )
         } catch let error as SSHTransportError {
-            await probed.carrier.close()
+            await carrier.close()
             throw .bridgeChannelFailed(error)
         } catch {
             // HerdrCommandBuilder.BuildError — unreachable: the session
             // name passed the same grammar check at entry.
-            await probed.carrier.close()
+            await carrier.close()
             throw .invalidSessionName(connection.herdrSessionName ?? "")
         }
     }
 
     /// Establish + probe WITHOUT opening the bridge channel (plan
-    /// herdr-embed T5): hands back the live carrier so the embed transport
-    /// can open `remote-client-bridge` exec channels on demand, one per
-    /// local bridge connection, while keeping ONE established connection
-    /// for the whole embed session (§3.5 shared-connection shape). Same
-    /// ordering invariant as ``connect(_:)`` — the probe gate runs before
-    /// any caller can open a bridge exec on the returned carrier.
+    /// herdr-embed T5): runs the read-only probe on its OWN channel-less
+    /// connection (closed before returning) and hands back the probe
+    /// result plus a ``HerdrProbedCarrier/carrierFactory`` the caller
+    /// resolves once per connection it wants — the embed transport opens
+    /// `remote-client-bridge` exec channels on the resolved connection.
+    /// Same ordering invariant as ``connect(_:)`` — the probe gate runs
+    /// before any caller can open a bridge exec on a factory connection.
     public func establishProbed(
         _ connection: Connection
     ) async throws(HerdrEndpointConnectorError) -> HerdrProbedCarrier {
-        let (carrier, probe) = try await establishAndProbe(connection)
+        let probe = try await probeOnce(connection)
         guard probe.isCompatible, let executablePath = probe.foundPath else {
-            await carrier.close()
             throw .incompatibleEndpoint(
                 result: probe,
                 diagnosticDetail: Self.diagnosticDetail(for: probe)
             )
         }
-        return HerdrProbedCarrier(carrier: carrier, probe: probe, executablePath: executablePath)
+        return HerdrProbedCarrier(
+            carrierFactory: makeCarrierFactory(for: connection),
+            probe: probe,
+            executablePath: executablePath
+        )
     }
 
     /// ``establishProbed(_:)`` with the stage-B install proposal wired in:
     /// a probe that fails SOLELY because no herdr binary exists on the
-    /// host (foundPath nil, platform otherwise supported) keeps the
-    /// carrier ALIVE, asks the injected approval once, and on approval
-    /// runs the injected installer over that SAME connection and re-probes
-    /// with the same search paths — bring-up then continues through the
-    /// normal compatibility gate. Decline aborts typed and quiet
+    /// host (foundPath nil, platform otherwise supported) asks the
+    /// injected approval once, and on approval runs the injected
+    /// installer over its own FRESH per-step connections (resolved from
+    /// the same carrier factory the bridge uses) and re-probes over
+    /// another — bring-up then continues through the normal
+    /// compatibility gate.
+    /// Decline aborts typed and quiet
     /// (``HerdrEndpointConnectorError/installDeclined``); an install
     /// failure aborts typed (``installFailed``). The trigger is STRICT:
     /// a present-but-incompatible herdr never proposes (no upgrade or
@@ -272,9 +285,13 @@ public struct HerdrEndpointConnector: Sendable {
         _ connection: Connection,
         installProgress: HerdrInstallProgress? = nil
     ) async throws(HerdrEndpointConnectorError) -> HerdrProbedCarrier {
-        let (carrier, probe) = try await establishAndProbe(connection)
+        let probe = try await probeOnce(connection)
         if probe.isCompatible, let executablePath = probe.foundPath {
-            return HerdrProbedCarrier(carrier: carrier, probe: probe, executablePath: executablePath)
+            return HerdrProbedCarrier(
+                carrierFactory: makeCarrierFactory(for: connection),
+                probe: probe,
+                executablePath: executablePath
+            )
         }
         guard let installer, let approveInstall,
               probe.foundPath == nil,
@@ -282,7 +299,6 @@ public struct HerdrEndpointConnector: Sendable {
               let platformArch = probe.platformArch,
               let target = HerdrReleasePins.target(os: platformOS, arch: platformArch)
         else {
-            await carrier.close()
             throw .incompatibleEndpoint(
                 result: probe,
                 diagnosticDetail: Self.diagnosticDetail(for: probe)
@@ -294,53 +310,55 @@ public struct HerdrEndpointConnector: Sendable {
             installDir: installDir
         )
         guard await approveInstall(consent) else {
-            await carrier.close()
             throw .installDeclined(consent)
         }
+        // INSTALL connections: the installer resolves the shared carrier
+        // factory once per exec step (prepare/upload/commit) and closes
+        // each connection itself — the connector opens no install
+        // connection of its own.
         do {
             _ = try await installer.install(
-                on: carrier,
+                using: makeCarrierFactory(for: connection),
                 probe: probe,
                 installDir: installDir,
                 progress: installProgress
             )
         } catch let error as HerdrRemoteInstallerError {
-            await carrier.close()
             throw .installFailed(error)
         }
-        let reprobe: HerdrProbe.Result
-        do {
-            reprobe = try await HerdrProbe.run(
-                on: carrier,
-                host: connection.host,
-                searchPaths: searchPaths
-            )
-        } catch let error as HerdrProbe.ProbeError {
-            await carrier.close()
-            throw .probeFailed(error)
-        } catch {
-            await carrier.close()
-            throw .probeFailed(.execChannelFailed)
-        }
+        // RE-PROBE connection: fresh establish + probe + close.
+        let reprobe = try await probeOnce(connection)
         guard reprobe.isCompatible, let executablePath = reprobe.foundPath else {
-            await carrier.close()
             throw .incompatibleEndpoint(
                 result: reprobe,
                 diagnosticDetail: Self.diagnosticDetail(for: reprobe)
             )
         }
-        return HerdrProbedCarrier(carrier: carrier, probe: reprobe, executablePath: executablePath)
+        return HerdrProbedCarrier(
+            carrierFactory: makeCarrierFactory(for: connection),
+            probe: reprobe,
+            executablePath: executablePath
+        )
     }
 
-    /// Establish + probe, leaving the carrier's fate to the caller: the
-    /// probe-error paths close the carrier here (no probe result exists
-    /// to key an install off), while a COMPLETED probe returns the live
-    /// carrier so ``establishProbed(_:)`` can close it on incompatibility
-    /// and ``establishProbedOfferingInstall(_:)`` can keep it alive
-    /// through the missing-binary install proposal.
-    private func establishAndProbe(
+    /// The ``HerdrProbedCarrier/carrierFactory`` every probed return hands
+    /// back: one construction site, so every consumer's connection gets
+    /// the same establish (trust-retry included).
+    private func makeCarrierFactory(
+        for connection: Connection
+    ) -> @Sendable () async throws(HerdrEndpointConnectorError) -> any SSHExecCapableConnection {
+        { try await establish(connection) }
+    }
+
+    /// One probe round-trip on its OWN channel-less connection: establish
+    /// (with the shared trust-retry), run the read-only ``HerdrProbe``
+    /// (its exec is the connection's only session channel), close the
+    /// connection, and return the probe result. The probe-error paths
+    /// close the connection exactly like the completed path — no probe
+    /// result exists to key an install off.
+    private func probeOnce(
         _ connection: Connection
-    ) async throws(HerdrEndpointConnectorError) -> (carrier: any SSHExecCapableConnection, probe: HerdrProbe.Result) {
+    ) async throws(HerdrEndpointConnectorError) -> HerdrProbe.Result {
         if let sessionName = connection.herdrSessionName,
            !HerdrCommandBuilder.isValidSessionName(sessionName) {
             throw .invalidSessionName(sessionName)
@@ -354,7 +372,8 @@ public struct HerdrEndpointConnector: Sendable {
                 host: connection.host,
                 searchPaths: searchPaths
             )
-            return (carrier, probe)
+            await carrier.close()
+            return probe
         } catch let error as HerdrProbe.ProbeError {
             await carrier.close()
             throw .probeFailed(error)
@@ -374,16 +393,13 @@ public struct HerdrEndpointConnector: Sendable {
                 hostKeyVerifier: hostKeyVerifier,
                 authenticationKeyProvider: authenticationKeyProvider,
                 passwordStore: passwordStore,
+                passwordPrompt: passwordPrompt,
                 hardwareKeysEnabledByDefault: hardwareKeysEnabledByDefault,
                 keyOfferResolver: keyOfferResolver,
                 metadataProvider: metadataProvider
             )
             do {
-                try await transport.connect(
-                    to: connection,
-                    cols: Self.establishCols,
-                    rows: Self.establishRows
-                )
+                try await transport.connectExecOnly(to: connection)
             } catch let error as SSHTransportError {
                 try await handleTrustDemand(
                     error,
@@ -391,11 +407,7 @@ public struct HerdrEndpointConnector: Sendable {
                     port: connection.port
                 )
                 do {
-                    try await transport.connect(
-                        to: connection,
-                        cols: Self.establishCols,
-                        rows: Self.establishRows
-                    )
+                    try await transport.connectExecOnly(to: connection)
                 } catch let error as SSHTransportError {
                     throw .sshEstablish(error)
                 } catch {
@@ -419,6 +431,7 @@ public struct HerdrEndpointConnector: Sendable {
             hostKeyVerifier: hostKeyVerifier,
             authenticationKeyProvider: authenticationKeyProvider,
             passwordStore: passwordStore,
+            passwordPrompt: passwordPrompt,
             hardwareKeysEnabledByDefault: hardwareKeysEnabledByDefault,
             keyOfferResolver: keyOfferResolver,
             metadataProvider: metadataProvider
@@ -523,7 +536,7 @@ public struct HerdrEndpointConnector: Sendable {
         let requiredGeneration = HerdrProbe.Result.requiredGeneration
         guard let path = result.foundPath else {
             return "No herdr executable was found on \(result.host). "
-                + "Install herdr 0.9 or newer on the host, or allow the pinned 0.9.0 install "
+                + "Install herdr 0.9 or newer on the host, or allow the pinned 0.9.1 install "
                 + "when BicTerm offers it during connect."
         }
         if result.platformOS == nil || result.platformArch == nil {

@@ -68,10 +68,15 @@ final class HerdrConcurrentEstablishTests: XCTestCase {
             async let probedB = connectorB.establishProbed(machineB)
 
             do {
-                let carrierA = try await probedA
-                let carrierB = try await probedB
-                await carrierA.carrier.close()
-                await carrierB.carrier.close()
+                let probedA = try await probedA
+                let probedB = try await probedB
+                // The production per-machine shape: probe connection +
+                // factory-resolved bridge connection, both under the
+                // concurrent establish.
+                let carrierA = try await probedA.carrierFactory()
+                let carrierB = try await probedB.carrierFactory()
+                await carrierA.close()
+                await carrierB.close()
             } catch {
                 let diagnostics = SSHEstablishDiagnostics.shared.snapshot()
                 XCTFail(
