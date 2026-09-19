@@ -41,7 +41,9 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 source scripts/env-local-caches.sh
 
-VT_SRC="Vendor/herdr/upstream/vendor/libghostty-vt"
+# Prefer the prepared copy: the embed patch series bumps libghostty-vt's build files to zig 0.16.0; pristine upstream pins 0.15.2 and rejects 0.16.0.
+VT_SRC=".build-artifacts/herdr-embed/vendor/libghostty-vt"
+[[ -d "$VT_SRC" ]] || VT_SRC="Vendor/herdr/upstream/vendor/libghostty-vt"
 OUT_ROOT="$ROOT/.build-artifacts/herdr-vt"
 WORK="$OUT_ROOT/work"
 ZIG_VERSION="0.16.0"
