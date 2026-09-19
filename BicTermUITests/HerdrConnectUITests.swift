@@ -116,25 +116,30 @@ final class HerdrConnectUITests: XCTestCase {
         attachScreenshot("herdr-embed-unreachable")
     }
 
-    func testProbeMissingSurfacesIncompatibleGeneration() {
+    func testProbeMissingOffersInstallAndDeclineDisconnects() {
         launch(extra: ["--uitest-herdr-live", "--uitest-herdr-probe-missing"], port: nil)
 
         connectSeededHerdrAlpha()
+        let offer = app.descendants(matching: .any)["install-prompt"]
+        XCTAssertTrue(
+            offer.waitForExistence(timeout: 30),
+            "a probe-missing endpoint must surface the install consent offer"
+        )
+        app.descendants(matching: .any)["install-cancel"].tap()
+
         let status = app.descendants(matching: .any)["herdr-embed-status"]
-        let failed = XCTNSPredicateExpectation(
-            predicate: NSPredicate(format: "label == %@", "failed"),
+        let disconnected = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "label == %@", "disconnected"),
             object: status
         )
         XCTAssertEqual(
-            XCTWaiter.wait(for: [failed], timeout: 30),
+            XCTWaiter.wait(for: [disconnected], timeout: 30),
             .completed,
-            "a probe-incompatible endpoint must land the embed run in failed state (status: \(status.label))"
+            "declining the install offer must end the embed run quietly (status: \(status.label))"
         )
-        let failedMessage = app.descendants(matching: .any)["herdr-embed-failed"]
-        XCTAssertTrue(failedMessage.waitForExistence(timeout: 5))
-        XCTAssertFalse(
-            failedMessage.label.isEmpty,
-            "the embed failure screen must carry a non-empty diagnostic"
+        XCTAssertTrue(
+            app.staticTexts["The embedded herdr client disconnected."].waitForExistence(timeout: 5),
+            "the stopped embed run must show its disconnect message"
         )
         attachScreenshot("herdr-embed-probe-missing")
     }
