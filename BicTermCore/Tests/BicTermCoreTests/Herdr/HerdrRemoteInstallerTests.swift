@@ -14,13 +14,13 @@ import XCTest
 /// found again by a probe-style candidate check. No test touches the
 /// network.
 final class HerdrRemoteInstallerTests: XCTestCase {
-    private var transport: SSHTransport?
+    private var transports: [SSHTransport] = []
 
     override func tearDown() async throws {
-        if let transport {
+        for transport in transports {
             await transport.close()
         }
-        transport = nil
+        transports.removeAll()
         try await super.tearDown()
     }
 
@@ -47,6 +47,78 @@ final class HerdrRemoteInstallerTests: XCTestCase {
         }
 
         func close() async {}
+    }
+
+    /// `SSHExecCapableConnection` double wrapping another connection:
+    /// records every exec command attempted on it and its `close()`
+    /// receipts — the per-step connection-discipline probe (one exec per
+    /// connection, closed by the installer).
+    private final class RecordingConnection: SSHExecCapableConnection, @unchecked Sendable {
+        private let underlying: any SSHExecCapableConnection
+        private let lock = NSLock()
+        private var attemptedCommands: [String] = []
+        private var closeReceipts = 0
+
+        init(underlying: any SSHExecCapableConnection) {
+            self.underlying = underlying
+        }
+
+        func openExecChannel(command: String) async throws(TransportError) -> SSHExecSession {
+            lock.withLock { attemptedCommands.append(command) }
+            return try await underlying.openExecChannel(command: command)
+        }
+
+        func close() async {
+            await underlying.close()
+            lock.withLock { closeReceipts += 1 }
+        }
+
+        var commands: [String] {
+            lock.lock()
+            defer { lock.unlock() }
+            return attemptedCommands
+        }
+
+        var closes: Int {
+            lock.lock()
+            defer { lock.unlock() }
+            return closeReceipts
+        }
+    }
+
+    /// Factory double: hands out recording-wrapped connections from the
+    /// injected per-call maker (`index` = call order) and exposes what was
+    /// handed out — proves the factory is resolved once per exec step,
+    /// each step gets a FRESH connection, and every resolved connection is
+    /// closed by the installer (success and failure paths alike).
+    private final class RecordingInstallFactory: @unchecked Sendable {
+        private let lock = NSLock()
+        private var handedOut: [RecordingConnection] = []
+        private let make: @Sendable (Int) async throws -> any SSHExecCapableConnection
+
+        init(make: @escaping @Sendable (Int) async throws -> any SSHExecCapableConnection) {
+            self.make = make
+        }
+
+        func next() async throws -> any SSHExecCapableConnection {
+            let index = lock.withLock { handedOut.count }
+            let underlying = try await make(index)
+            let recording = RecordingConnection(underlying: underlying)
+            lock.withLock { handedOut.append(recording) }
+            return recording
+        }
+
+        var calls: Int {
+            lock.lock()
+            defer { lock.unlock() }
+            return handedOut.count
+        }
+
+        var connections: [RecordingConnection] {
+            lock.lock()
+            defer { lock.unlock() }
+            return handedOut
+        }
     }
 
     /// Lock-confined progress collector (the progress callback is
@@ -136,10 +208,11 @@ final class HerdrRemoteInstallerTests: XCTestCase {
         let probe = missingHerdrProbe(rawOS: "Darwin", rawArch: "arm64")
         let wrongBytes = Data("definitely not the pinned herdr binary".utf8)
         let installer = HerdrRemoteInstaller(binaryProvider: StaticBinaryProvider(data: wrongBytes))
+        let factory = RecordingInstallFactory { _ in RefusingConnection() }
 
         do {
             _ = try await installer.install(
-                on: RefusingConnection(),
+                using: { try await factory.next() },
                 probe: probe,
                 installDir: "$HOME/.local/bin"
             )
@@ -154,6 +227,7 @@ final class HerdrRemoteInstallerTests: XCTestCase {
                 )
             )
         }
+        XCTAssertEqual(factory.calls, 0, "the checksum gate must refuse before the factory is ever resolved")
     }
 
     func testUnsupportedPlatformFailsClosedBeforeAnyRemoteExec() async throws {
@@ -161,10 +235,11 @@ final class HerdrRemoteInstallerTests: XCTestCase {
         let installer = HerdrRemoteInstaller(
             binaryProvider: StaticBinaryProvider(data: Data("x".utf8))
         )
+        let factory = RecordingInstallFactory { _ in RefusingConnection() }
 
         do {
             _ = try await installer.install(
-                on: RefusingConnection(),
+                using: { try await factory.next() },
                 probe: probe,
                 installDir: "$HOME/.local/bin"
             )
@@ -172,6 +247,7 @@ final class HerdrRemoteInstallerTests: XCTestCase {
         } catch let error as HerdrRemoteInstallerError {
             XCTAssertEqual(error, .unsupportedPlatform(os: "FreeBSD", arch: "amd64"))
         }
+        XCTAssertEqual(factory.calls, 0, "the platform gate must refuse before the factory is ever resolved")
     }
 
     func testInstallRefusesWhenProbeAlreadyFoundHerdr() async throws {
@@ -187,10 +263,11 @@ final class HerdrRemoteInstallerTests: XCTestCase {
         let installer = HerdrRemoteInstaller(
             binaryProvider: StaticBinaryProvider(data: Data("x".utf8))
         )
+        let factory = RecordingInstallFactory { _ in RefusingConnection() }
 
         do {
             _ = try await installer.install(
-                on: RefusingConnection(),
+                using: { try await factory.next() },
                 probe: probe,
                 installDir: "$HOME/.local/bin"
             )
@@ -198,6 +275,7 @@ final class HerdrRemoteInstallerTests: XCTestCase {
         } catch let error as HerdrRemoteInstallerError {
             XCTAssertEqual(error, .herdrAlreadyPresent(path: "/usr/local/bin/herdr"))
         }
+        XCTAssertEqual(factory.calls, 0, "the already-present gate must refuse before the factory is ever resolved")
     }
 
     func testInvalidInstallDirRejectedBeforeAnyFetchOrExec() async throws {
@@ -207,9 +285,10 @@ final class HerdrRemoteInstallerTests: XCTestCase {
         )
 
         for hostile in ["/opt/$(rm -rf ~)/bin", "/opt/herdr';id'", "", "/tmp/x y/bin", "/opt/$ORIGIN/bin"] {
+            let factory = RecordingInstallFactory { _ in RefusingConnection() }
             do {
                 _ = try await installer.install(
-                    on: RefusingConnection(),
+                    using: { try await factory.next() },
                     probe: probe,
                     installDir: hostile
                 )
@@ -217,7 +296,128 @@ final class HerdrRemoteInstallerTests: XCTestCase {
             } catch let error as HerdrRemoteInstallerError {
                 XCTAssertEqual(error, .invalidInstallDir(hostile), "hostile dir \(hostile) must be rejected")
             }
+            XCTAssertEqual(factory.calls, 0, "the install-dir gate must refuse before the factory is ever resolved")
         }
+    }
+
+    // MARK: - Per-step connection discipline on failure paths
+
+    /// Repo-local pinned fixture binary (the checksum gate must pass
+    /// before any exec step — the error-path tests need a real binary).
+    private static var fixtureBinaryURL: URL {
+        SSHTestFixture.repoRoot.appendingPathComponent("Fixtures/run/herdr/herdr")
+    }
+
+    /// A factory failure maps onto the failing step's typed case and
+    /// resolves NO connection (nothing to close — the connection was never
+    /// established).
+    func testFactoryFailureMapsOntoTheFailingStepsTypedCase() async throws {
+        try XCTSkipUnless(
+            FileManager.default.fileExists(atPath: Self.fixtureBinaryURL.path),
+            "pinned herdr fixture binary missing — run scripts/herdr-server-fetch.sh"
+        )
+        struct SentinelError: Error {}
+        let probe = missingHerdrProbe(rawOS: "Darwin", rawArch: "arm64")
+        let binary = try Data(contentsOf: Self.fixtureBinaryURL)
+        let installer = HerdrRemoteInstaller(binaryProvider: StaticBinaryProvider(data: binary))
+        let factory = RecordingInstallFactory { _ in throw SentinelError() }
+
+        do {
+            _ = try await installer.install(
+                using: { try await factory.next() },
+                probe: probe,
+                installDir: "$HOME/.local/bin"
+            )
+            XCTFail("expected remotePrepareFailed")
+        } catch let error as HerdrRemoteInstallerError {
+            guard case let .remotePrepareFailed(detail) = error else {
+                return XCTFail("expected remotePrepareFailed, got \(error)")
+            }
+            XCTAssertTrue(
+                detail.contains("failed to establish the install connection"),
+                "the factory failure must map onto the prepare step's case: \(detail)"
+            )
+        }
+        XCTAssertEqual(factory.calls, 0, "a throwing factory establishes nothing")
+    }
+
+    /// The prepare step's connection fails to open its exec channel: the
+    /// installer must close THAT connection and resolve no more — the
+    /// failed step is exactly one factory call.
+    func testPrepareStepFailureClosesItsConnectionAndResolvesNoMore() async throws {
+        try XCTSkipUnless(
+            FileManager.default.fileExists(atPath: Self.fixtureBinaryURL.path),
+            "pinned herdr fixture binary missing — run scripts/herdr-server-fetch.sh"
+        )
+        let probe = missingHerdrProbe(rawOS: "Darwin", rawArch: "arm64")
+        let binary = try Data(contentsOf: Self.fixtureBinaryURL)
+        let installer = HerdrRemoteInstaller(binaryProvider: StaticBinaryProvider(data: binary))
+        let factory = RecordingInstallFactory { _ in RefusingConnection() }
+
+        do {
+            _ = try await installer.install(
+                using: { try await factory.next() },
+                probe: probe,
+                installDir: "$HOME/.local/bin"
+            )
+            XCTFail("expected remotePrepareFailed")
+        } catch let error as HerdrRemoteInstallerError {
+            XCTAssertEqual(error, .remotePrepareFailed("failed to open the script exec channel"))
+        }
+        XCTAssertEqual(factory.calls, 1, "only the prepare step's connection was resolved")
+        let connections = factory.connections
+        XCTAssertEqual(connections.first?.closes, 1, "the failed step's connection must be closed by the installer")
+    }
+
+    /// The upload step's connection fails to open its exec channel after a
+    /// REAL prepare: both resolved connections must be closed by the
+    /// installer (prepare's by its own step, upload's by the failure
+    /// path), and no third connection is resolved.
+    func testUploadStepFailureClosesEveryResolvedConnection() async throws {
+        let fm = FileManager.default
+        try XCTSkipUnless(
+            fm.fileExists(atPath: Self.fixtureBinaryURL.path),
+            "pinned herdr fixture binary missing — run scripts/herdr-server-fetch.sh"
+        )
+        let sshdUp = await Self.fixtureSSHDIsReachable()
+        try XCTSkipUnless(sshdUp, "fixture sshd not up — run scripts/fixtures-up.sh")
+        let probe = try await fixtureMissingHerdrProbe()
+        try XCTSkipUnless(
+            probe.platformArch == "aarch64",
+            "needs the pinned macos-aarch64 artifact (host arch: \(probe.platformArch ?? "unknown"))"
+        )
+        let installDir = SSHTestFixture.repoRoot
+            .appendingPathComponent("Fixtures/run/herdr-upload-fail-target").path
+        try? fm.removeItem(atPath: installDir)
+        defer { try? fm.removeItem(atPath: installDir) }
+
+        let binary = try Data(contentsOf: Self.fixtureBinaryURL)
+        let installer = HerdrRemoteInstaller(binaryProvider: StaticBinaryProvider(data: binary))
+        let factory = RecordingInstallFactory { index -> any SSHExecCapableConnection in
+            switch index {
+            case 0:
+                return try await Self.makeFreshFixtureTransport()
+            default:
+                return RefusingConnection()
+            }
+        }
+
+        do {
+            _ = try await installer.install(
+                using: { try await factory.next() },
+                probe: probe,
+                installDir: installDir
+            )
+            XCTFail("expected uploadFailed")
+        } catch let error as HerdrRemoteInstallerError {
+            XCTAssertEqual(error, .uploadFailed("failed to open the upload exec channel"))
+        }
+        XCTAssertEqual(factory.calls, 2, "prepare and upload resolved; the commit step was never reached")
+        let connections = factory.connections
+        XCTAssertEqual(connections.count, 2)
+        XCTAssertEqual(connections[0].commands, ["/bin/sh -s"], "the prepare connection ran exactly its one script exec")
+        XCTAssertEqual(connections[0].closes, 1, "the prepare connection was closed by its own step")
+        XCTAssertEqual(connections[1].closes, 1, "the failed upload connection must be closed by the installer")
     }
 
     // MARK: - Pin table
@@ -288,6 +488,23 @@ final class HerdrRemoteInstallerTests: XCTestCase {
         }
     }
 
+    /// A FRESH channel-less fixture connection — the production shape the
+    /// installer's factory is expected to establish (one exec per
+    /// connection). NOT tracked for teardown: the installer closes the
+    /// per-step connections it resolves.
+    private static func makeFreshFixtureTransport() async throws -> SSHTransport {
+        let key = try await SSHTestFixture.loadFixtureEd25519Key()
+        let transport = SSHTransport(
+            hostKeyVerifier: try await SSHTestFixture.makeVerifier(),
+            authenticationKeyProvider: StaticKeyProvider(key: key),
+            metadataProvider: FixtureKeyMetadataProvider()
+        )
+        try await transport.connectExecOnly(to: SSHTestFixture.makeConnection())
+        return transport
+    }
+
+    /// One tracked fixture transport for the test's own probe/re-probe
+    /// round-trips (closed in tearDown).
     private func makeFixtureTransport() async throws -> SSHTransport {
         let key = try await SSHTestFixture.loadFixtureEd25519Key()
         let transport = SSHTransport(
@@ -296,8 +513,20 @@ final class HerdrRemoteInstallerTests: XCTestCase {
             metadataProvider: FixtureKeyMetadataProvider()
         )
         try await transport.connect(to: SSHTestFixture.makeConnection(), cols: 80, rows: 24)
-        self.transport = transport
+        transports.append(transport)
         return transport
+    }
+
+    /// The missing-binary precondition probe over a tracked transport:
+    /// search paths point nowhere on the fixture host (its exec PATH
+    /// excludes every herdr location).
+    private func fixtureMissingHerdrProbe() async throws -> HerdrProbe.Result {
+        let transport = try await makeFixtureTransport()
+        return try await HerdrProbe.run(
+            on: transport,
+            host: "fixture-install",
+            searchPaths: ["/nonexistent-bicterm-install/herdr"]
+        )
     }
 
     /// Full offline round-trip against the fixture sshd (this macOS arm64
@@ -305,11 +534,13 @@ final class HerdrRemoteInstallerTests: XCTestCase {
     /// macos-aarch64 binary through the ``HerdrBinaryProvider`` seam into a
     /// gitignored dir under `Fixtures/run/` → file present, executable,
     /// sha256 equal to the pin, and a probe-style candidate check with an
-    /// overridden search path finding a compatible herdr there.
+    /// overridden search path finding a compatible herdr there. The
+    /// install rides a recording factory — one FRESH channel-less
+    /// connection per exec step, each running exactly one exec, closed by
+    /// the installer.
     func testOfflineFixtureRoundTripInstallsPinnedBinary() async throws {
         let fm = FileManager.default
-        let binaryURL = SSHTestFixture.repoRoot
-            .appendingPathComponent("Fixtures/run/herdr/herdr")
+        let binaryURL = Self.fixtureBinaryURL
         try XCTSkipUnless(
             fm.fileExists(atPath: binaryURL.path),
             "pinned herdr fixture binary missing — run scripts/herdr-server-fetch.sh"
@@ -320,15 +551,9 @@ final class HerdrRemoteInstallerTests: XCTestCase {
             "fixture sshd not up — run scripts/fixtures-up.sh"
         )
 
-        let transport = try await makeFixtureTransport()
-
         // 1. The missing-binary case: search paths point nowhere on the
         //    fixture host (its exec PATH excludes every herdr location).
-        let probe = try await HerdrProbe.run(
-            on: transport,
-            host: "fixture-install",
-            searchPaths: ["/nonexistent-bicterm-install/herdr"]
-        )
+        let probe = try await fixtureMissingHerdrProbe()
         XCTAssertEqual(probe.platformOS, "macos", "the fixture sshd runs on the macOS host")
         XCTAssertNil(probe.foundPath)
         try XCTSkipUnless(
@@ -346,13 +571,38 @@ final class HerdrRemoteInstallerTests: XCTestCase {
 
         let binary = try Data(contentsOf: binaryURL)
         let progress = ProgressLog()
+        let factory = RecordingInstallFactory { _ in try await Self.makeFreshFixtureTransport() }
         let installer = HerdrRemoteInstaller(binaryProvider: StaticBinaryProvider(data: binary))
         let outcome = try await installer.install(
-            on: transport,
+            using: { try await factory.next() },
             probe: probe,
             installDir: installDir,
             progress: { progress.append($0) }
         )
+
+        // Connection-per-step: exactly three factory resolutions — prepare,
+        // upload, commit — each a FRESH connection running exactly its one
+        // exec, each closed by the installer.
+        XCTAssertEqual(factory.calls, 3, "the factory is resolved once per exec step")
+        let connections = factory.connections
+        XCTAssertEqual(connections.count, 3)
+        XCTAssertEqual(
+            Set(connections.map { ObjectIdentifier($0) }).count, 3,
+            "each exec step must get a FRESH connection"
+        )
+        XCTAssertEqual(connections[0].commands, ["/bin/sh -s"], "the prepare step runs exactly its script exec")
+        XCTAssertEqual(connections[1].commands.count, 1, "the upload step runs exactly one exec")
+        XCTAssertTrue(
+            connections[1].commands.first?.hasPrefix("tee '") == true,
+            "the upload step's exec is the tee stream command: \(connections[1].commands)"
+        )
+        XCTAssertEqual(connections[2].commands, ["/bin/sh -s"], "the commit step runs exactly its script exec")
+        for (step, connection) in connections.enumerated() {
+            XCTAssertEqual(
+                connection.closes, 1,
+                "step \(step + 1)'s connection must be closed exactly once by the installer"
+            )
+        }
 
         // 3. Remote-reported destination, file present, executable bit,
         //    byte-identical to the pin.
@@ -372,8 +622,9 @@ final class HerdrRemoteInstallerTests: XCTestCase {
 
         // 4. Probe-style candidate check with an overridden search path
         //    finds it and reports a compatible generation-1 herdr.
+        let reprobeTransport = try await makeFixtureTransport()
         let reprobe = try await HerdrProbe.run(
-            on: transport,
+            on: reprobeTransport,
             host: "fixture-install",
             searchPaths: [dest]
         )

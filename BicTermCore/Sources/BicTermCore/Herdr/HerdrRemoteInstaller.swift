@@ -1,6 +1,6 @@
 import Foundation
 
-/// Typed failure of one ``HerdrRemoteInstaller/install(on:probe:installDir:progress:)``
+/// Typed failure of one ``HerdrRemoteInstaller/install(using:probe:installDir:progress:)``
 /// attempt. Diagnostic payloads carry public facts only (platform names,
 /// remote paths, exit statuses) — never secret material.
 public enum HerdrRemoteInstallerError: Error, Equatable, Sendable {
@@ -33,6 +33,14 @@ public enum HerdrRemoteInstallerError: Error, Equatable, Sendable {
 /// upload/commit), delivered in order. Purely informational.
 public typealias HerdrInstallProgress = @Sendable (String) -> Void
 
+/// Establishes one FRESH exec-capable connection per install exec step.
+/// Deliberately a generic (untyped) throwing closure rather than one typed
+/// over ``HerdrRemoteInstallerError``: the caller's establish failures are
+/// not installer-domain failures, so the installer maps them onto the
+/// failing step's typed case instead of forcing the caller into this error
+/// domain.
+public typealias HerdrInstallConnectionFactory = @Sendable () async throws -> any SSHExecCapableConnection
+
 /// Result of one successful remote install.
 public struct HerdrRemoteInstallOutcome: Sendable, Equatable {
     /// Remote-reported absolute destination path of the committed binary
@@ -47,9 +55,9 @@ public struct HerdrRemoteInstallOutcome: Sendable, Equatable {
     }
 }
 
-/// Installs the pinned herdr release binary on a remote host over an
-/// ESTABLISHED exec-capable SSH connection, mirroring upstream herdr's own
-/// desktop install mechanism (remote/attach.rs `install_herdr`) exactly:
+/// Installs the pinned herdr release binary on a remote host, mirroring
+/// upstream herdr's own desktop install mechanism (remote/attach.rs
+/// `install_herdr`) exactly:
 ///
 /// 1. **prepare** — a `/bin/sh -s` script (upstream's `sh_output` posture:
 ///    script on the channel's stdin) that resolves `dest` under the install
@@ -61,6 +69,12 @@ public struct HerdrRemoteInstallOutcome: Sendable, Equatable {
 /// 3. **commit** — a `/bin/sh -s` script that `chmod 755`s the tmp file
 ///    and `mv`s it into place (upstream's
 ///    `remote_install_commit_script`).
+///
+/// CONNECTION-PER-STEP: each exec step resolves its OWN connection from
+/// the injected ``HerdrInstallConnectionFactory`` and the installer closes
+/// it when the step ends (success or failure) — gateways that permit one
+/// session-channel open per connection lifetime see exactly one exec per
+/// connection.
 ///
 /// Scope (stage A): the MISSING-binary case only — the caller passes a
 /// ``HerdrProbe.Result`` whose `foundPath` is nil; a probe that found any
@@ -98,13 +112,17 @@ public struct HerdrRemoteInstaller: Sendable {
         self.binaryProvider = binaryProvider
     }
 
-    /// Installs the pinned herdr release binary on the remote host behind
-    /// `connection`, keyed off `probe`'s normalized platform.
+    /// Installs the pinned herdr release binary on the remote host, keyed
+    /// off `probe`'s normalized platform. Each exec step (prepare, upload,
+    /// commit) resolves its OWN fresh connection from `factory` and the
+    /// installer closes it when the step ends — on every success and
+    /// failure path, no connection leaks.
     ///
     /// - Parameters:
-    ///   - connection: an ESTABLISHED exec-capable connection (direct or
-    ///     jump-chained). The caller owns its lifetime; this installer only
-    ///     opens and closes its own exec channels on it.
+    ///   - factory: establishes a FRESH exec-capable connection (direct or
+    ///     jump-chained) per call. Resolved once per exec step; the
+    ///     installer owns and closes each resolved connection. A thrown
+    ///     error maps onto the failing step's typed case.
     ///   - probe: the preflight probe result for the same host. Must be a
     ///     missing-binary result (`foundPath == nil`).
     ///   - installDir: directory the `herdr` binary is installed into
@@ -116,7 +134,7 @@ public struct HerdrRemoteInstaller: Sendable {
     /// - Returns: the remote-reported destination path and the pinned
     ///   target that was installed.
     public func install(
-        on connection: any SSHExecCapableConnection,
+        using factory: HerdrInstallConnectionFactory,
         probe: HerdrProbe.Result,
         installDir: String = HerdrRemoteInstaller.defaultInstallDir,
         progress: HerdrInstallProgress? = nil
@@ -149,7 +167,7 @@ public struct HerdrRemoteInstaller: Sendable {
         progress?("preparing the remote install directory")
         let prepare = try await Self.runScript(
             Self.prepareScript(installDir: installDir),
-            on: connection,
+            using: factory,
             failure: { .remotePrepareFailed($0) }
         )
         guard case .exited(status: 0) = prepare.termination else {
@@ -166,12 +184,12 @@ public struct HerdrRemoteInstaller: Sendable {
         }
 
         progress?("uploading the binary (\(binary.count) bytes)")
-        try await Self.uploadBinary(binary, toTmpPath: paths.tmpPath, on: connection)
+        try await Self.uploadBinary(binary, toTmpPath: paths.tmpPath, using: factory)
 
         progress?("committing the install")
         let commit = try await Self.runScript(
             Self.commitScript(tmpPath: paths.tmpPath, destPath: paths.destPath),
-            on: connection,
+            using: factory,
             failure: { .commitFailed($0) }
         )
         guard case .exited(status: 0) = commit.termination else {
@@ -257,20 +275,30 @@ public struct HerdrRemoteInstaller: Sendable {
         let termination: SSHExecTermination
     }
 
-    /// Runs one `/bin/sh -s` script over a fresh exec channel — upstream's
-    /// `sh_output` posture: the script arrives on the channel's stdin,
-    /// SSH EOF closes it, stdout/stderr are read bounded, and the exit
-    /// status comes from ``SSHExecSession/termination()``. Channel-open and
-    /// stdin failures map onto the caller's typed case through `failure`.
+    /// Runs one `/bin/sh -s` script over a fresh exec channel on a FRESH
+    /// factory-resolved connection — upstream's `sh_output` posture: the
+    /// script arrives on the channel's stdin, SSH EOF closes it,
+    /// stdout/stderr are read bounded, and the exit status comes from
+    /// ``SSHExecSession/termination()``. The connection is closed when the
+    /// step ends, on every success and failure path. Factory and
+    /// channel-open and stdin failures map onto the caller's typed case
+    /// through `failure`.
     private static func runScript(
         _ script: String,
-        on connection: any SSHExecCapableConnection,
+        using factory: HerdrInstallConnectionFactory,
         failure: @Sendable (String) -> HerdrRemoteInstallerError
     ) async throws(HerdrRemoteInstallerError) -> ScriptOutcome {
+        let connection: any SSHExecCapableConnection
+        do {
+            connection = try await factory()
+        } catch {
+            throw failure("failed to establish the install connection: \(error)")
+        }
         let session: SSHExecSession
         do {
             session = try await connection.openExecChannel(command: "/bin/sh -s")
         } catch {
+            await connection.close()
             throw failure("failed to open the script exec channel")
         }
         do {
@@ -285,30 +313,42 @@ public struct HerdrRemoteInstaller: Sendable {
             let termination = await session.termination()
             let stderrData = await stderr
             await session.close()
+            await connection.close()
             return ScriptOutcome(stdout: stdout, stderr: stderrData, termination: termination)
         } catch let mapped as HerdrRemoteInstallerError {
             await session.close()
+            await connection.close()
             throw mapped
         } catch {
             await session.close()
+            await connection.close()
             throw failure("unexpected non-typed error: \(error)")
         }
     }
 
-    /// Streams `binary` into `tee '<tmp>'` over a fresh exec channel —
-    /// upstream's upload step: chunked writes paced by the session's
-    /// flow-control gate, SSH EOF to terminate `tee`, stderr drained
-    /// concurrently (an exec channel whose stderr nobody reads eventually
-    /// stalls — see ``SSHExecSession``).
+    /// Streams `binary` into `tee '<tmp>'` over a fresh exec channel on a
+    /// FRESH factory-resolved connection — upstream's upload step: chunked
+    /// writes paced by the session's flow-control gate, SSH EOF to
+    /// terminate `tee`, stderr drained concurrently (an exec channel whose
+    /// stderr nobody reads eventually stalls — see ``SSHExecSession``). The
+    /// connection is closed when the step ends, on every success and
+    /// failure path.
     private static func uploadBinary(
         _ binary: Data,
         toTmpPath tmpPath: String,
-        on connection: any SSHExecCapableConnection
+        using factory: HerdrInstallConnectionFactory
     ) async throws(HerdrRemoteInstallerError) {
+        let connection: any SSHExecCapableConnection
+        do {
+            connection = try await factory()
+        } catch {
+            throw .uploadFailed("failed to establish the install connection: \(error)")
+        }
         let session: SSHExecSession
         do {
             session = try await connection.openExecChannel(command: streamCommand(tmpPath: tmpPath))
         } catch {
+            await connection.close()
             throw .uploadFailed("failed to open the upload exec channel")
         }
         do {
@@ -327,6 +367,7 @@ public struct HerdrRemoteInstaller: Sendable {
             let termination = await session.termination()
             let stderrData = await stderr
             await session.close()
+            await connection.close()
             guard case .exited(status: 0) = termination else {
                 throw HerdrRemoteInstallerError.uploadFailed(
                     Self.failureDetail(
@@ -338,9 +379,11 @@ public struct HerdrRemoteInstaller: Sendable {
             }
         } catch let mapped as HerdrRemoteInstallerError {
             await session.close()
+            await connection.close()
             throw mapped
         } catch {
             await session.close()
+            await connection.close()
             throw HerdrRemoteInstallerError.uploadFailed("unexpected non-typed error: \(error)")
         }
     }

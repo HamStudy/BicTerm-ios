@@ -192,6 +192,7 @@ final class HerdrEndpointConnectorInstallTests: XCTestCase {
             installDir: "/opt/bicterm-install-test"
         )
 
+        let logOffset = fixtureLogSize("hop1.log")
         do {
             _ = try await connector.establishProbedOfferingInstall(SSHTestFixture.makeConnection())
             XCTFail("a declined install must fail the establish")
@@ -209,6 +210,15 @@ final class HerdrEndpointConnectorInstallTests: XCTestCase {
         XCTAssertTrue(
             provider.requestedTargets.isEmpty,
             "a declined install never fetches the binary"
+        )
+        // Connection-per-consumer: the declined flow used exactly ONE
+        // connection (the probe's); no install, re-probe, or bridge
+        // connection may follow a decline.
+        XCTAssertEqual(
+            fixtureLogAppendage("hop1.log", from: logOffset)
+                .components(separatedBy: "Accepted publickey").count - 1,
+            1,
+            "a declined install offer is exactly one connection"
         )
     }
 
@@ -375,7 +385,18 @@ final class HerdrEndpointConnectorInstallTests: XCTestCase {
             SSHTestFixture.makeConnection(),
             installProgress: { progress.append($0) }
         )
-        await probed.carrier.close()
+        // Connection-per-consumer: the full consented install flow used
+        // exactly FIVE connections before the bridge — probe(1), the
+        // installer's three per-step connections (prepare/upload/
+        // commit), and the re-probe(1).
+        XCTAssertEqual(
+            fixtureLogAppendage("hop1.log", from: logOffset)
+                .components(separatedBy: "Accepted publickey").count - 1,
+            5,
+            "probe, three install-step connections, and the re-probe — one per consumer"
+        )
+        let carrier = try await probed.carrierFactory()
+        await carrier.close()
 
         // The consent named the host, the pinned macos-aarch64 target,
         // and the overridden install dir.
@@ -410,5 +431,12 @@ final class HerdrEndpointConnectorInstallTests: XCTestCase {
             "the probe and the re-probe both ran on the sshd"
         )
         XCTAssertTrue(appendage.contains("tee "), "the binary upload ran on the sshd")
+        // Plus the bridge-factory connection resolved above: 5 + 1 = 6
+        // authentications in total.
+        XCTAssertEqual(
+            appendage.components(separatedBy: "Accepted publickey").count - 1,
+            6,
+            "probe, three install steps, re-probe, and bridge-factory connections — one per consumer"
+        )
     }
 }
