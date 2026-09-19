@@ -3,9 +3,11 @@ import NIOCore
 import NIOSSH
 
 /// An established SSH connection that opens non-PTY exec channels.
-/// ``SSHTransport`` (direct) and the jump-chain carrier conform, so herdr's
-/// probe and bridge ride ONE established connection regardless of hops
-/// (integration doc §3.5 shared-connection shape).
+/// ``SSHTransport`` (direct) and the jump-chain carrier conform, so herdr
+/// consumers get exec channels regardless of hops. Each consumer (probe,
+/// bridge, installer step) establishes its own connection — gateways that
+/// permit one session channel per connection lifetime make a shared
+/// connection unusable (see ``SSHTransport/connectExecOnly(to:)``).
 public protocol SSHExecCapableConnection: Sendable {
     /// Opens a NEW non-PTY exec session channel on the established
     /// connection (same posture as ``SSHTransport/openExecChannel(command:)``).
@@ -22,10 +24,12 @@ extension SSHTransport: SSHExecCapableConnection {}
 extension SSHTransport {
     /// Opens a NEW session channel on the live connection and runs
     /// `command` via `SSHChannelRequestEvent.ExecRequest` — no PTY, no
-    /// shell request, no agent forwarding. The interactive shell session
-    /// (if one is established) is untouched: SSH multiplexes channels, the
-    /// shape the herdr integration doc (§3.5) prescribes for shared
-    /// connections.
+    /// shell request, no agent forwarding. Exec channels are
+    /// `session`-type channels on the wire (RFC 4254), so on a connection
+    /// established via ``SSHTransport/connectExecOnly(to:)`` this open is
+    /// the connection's FIRST session channel. The interactive shell
+    /// session (if one is established) is untouched: SSH multiplexes
+    /// channels.
     ///
     /// The returned session owns its channel's lifecycle; closing it does
     /// not affect the connection or any sibling session.

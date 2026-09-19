@@ -5,11 +5,15 @@ import NIOSSH
 
 /// Key- or password-authenticated SSH terminal transport over SwiftNIO SSH.
 ///
-/// Lifecycle: one `connect` per session — it performs TCP connect, host-key
-/// TOFU verification (via T4's `HostKeyVerifier`), key-pool/password auth, session
-/// channel open, `pty-req` (xterm-256color) and `shell`
-/// (both with reply tracking). `output` is a FRESH stream per connection;
-/// the previous one is finished on reconnect or `close`.
+/// Lifecycle: one establish per connection — TCP connect, host-key TOFU
+/// verification (via T4's `HostKeyVerifier`), key-pool/password auth.
+/// `connect(to:cols:rows:)` continues into the interactive session:
+/// session channel open, `pty-req` (xterm-256color) and `shell`
+/// (both with reply tracking). `connectExecOnly(to:)` stops after
+/// authentication — no channel — for consumers that open their own
+/// channels on fresh connections (herdr's connection-per-consumer shape).
+/// `output` is a FRESH stream per connection; the previous one is
+/// finished on reconnect or `close`.
 ///
 /// Unix-domain-socket dialing (fixture conformance) lives in
 /// SSHTransport+UDS.swift and shares the session-establish tail through
@@ -104,6 +108,38 @@ public actor SSHTransport {
         }
     }
 
+    /// Channel-less establish: TCP dial + SSH handshake + authentication,
+    /// stopping BEFORE any session channel is opened. Resolves the same
+    /// auth delegates and host-key verification as ``connect(to:cols:rows:)``
+    /// and surfaces the same typed errors — including `.requiresTrust`
+    /// (TOFU), which arises during the handshake, before any channel.
+    ///
+    /// For endpoints that permit a bounded number of `session`-type
+    /// channel opens per connection LIFETIME (CoderSSHGW permits exactly
+    /// one): exec channels are `session`-type channels on the wire
+    /// (RFC 4254), so a terminal establish would burn the slot. Consumers
+    /// (herdr probe, bridge, installer steps) establish here and each
+    /// rides its own fresh connection; the first `openExecChannel` is
+    /// the connection's first session-channel open.
+    public func connectExecOnly(to connection: Connection) async throws(SSHTransportError) {
+        await tearDown()
+        let userAuth = try await userAuthDelegate(for: connection)
+        let serverAuth = VerifyingHostKeyDelegate(
+            host: connection.host,
+            port: connection.port,
+            verifier: hostKeyVerifier
+        )
+        try await openAuthenticatedConnection(
+            userAuth: userAuth,
+            serverAuth: serverAuth
+        ) { bootstrap in
+            try await bootstrap
+                .channelOption(ChannelOptions.socket(SocketOptionLevel(IPPROTO_TCP), TCP_NODELAY), value: 1)
+                .connect(host: connection.host, port: connection.port)
+                .get()
+        }
+    }
+
     /// Resolve the current availability pool for each attempt, including UDS.
     func userAuthDelegate(
         for connection: Connection
@@ -132,23 +168,25 @@ public actor SSHTransport {
         let serverAuth: any NIOSSHClientServerAuthenticationDelegate
     }
 
-    /// Dial → SSH handshake → session channel → pty-req → shell. Entry points
-    /// have already validated dimensions, torn down prior state, and resolved
-    /// auth; the `dial` closure owns socket creation (TCP with TCP_NODELAY,
-    /// or UDS) and its errors collapse to the typed `.unreachable` after the
-    /// group is shut down. Everything downstream of the dial — recorder
-    /// wiring, channel-open, agent-forward request, pty/shell replies — is
-    /// shared by every entry point so the paths cannot drift.
-    func openSessionAndActivate(
-        _ setup: SessionSetup,
+    /// Dial → SSH handshake → authenticated connection, NO channel. The
+    /// shared establish core: entry points have already torn down prior
+    /// state and resolved auth; the `dial` closure owns socket creation
+    /// (TCP with TCP_NODELAY, or UDS) and its errors collapse to the
+    /// typed `.unreachable` after the group is shut down. Everything
+    /// downstream of the dial — recorder wiring, host-key verification,
+    /// userauth — is shared by every entry point so the paths cannot
+    /// drift. Returns the connection channel once userauth succeeded
+    /// (``HandshakeCompletionObserver``); opening any channel is the
+    /// caller's job.
+    @discardableResult
+    func openAuthenticatedConnection(
+        userAuth: any NIOSSHClientUserAuthenticationDelegate,
+        serverAuth: any NIOSSHClientServerAuthenticationDelegate,
         dial: (ClientBootstrap) async throws -> any Channel
-    ) async throws(SSHTransportError) {
-        let cols = setup.cols
-        let rows = setup.rows
-        let userAuth = setup.userAuth
-        let serverAuth = setup.serverAuth
+    ) async throws(SSHTransportError) -> any Channel {
         let group = MultiThreadedEventLoopGroup(numberOfThreads: 1)
         let recorder = TransportErrorRecorder()
+        let handshakeObserver = HandshakeCompletionObserver()
         let agentInitializer = agentChannelInitializer
 
         let bootstrap = ClientBootstrap(group: group)
@@ -170,9 +208,10 @@ public actor SSHTransport {
                             )
                         }
                     ))
-                    if let cascade = setup.userAuth as? CascadeUserAuthenticationDelegate {
+                    if let cascade = userAuth as? CascadeUserAuthenticationDelegate {
                         try channel.pipeline.syncOperations.addHandler(cascade)
                     }
+                    try channel.pipeline.syncOperations.addHandler(handshakeObserver)
                     try channel.pipeline.syncOperations.addHandler(recorder)
                 }
             }
@@ -188,6 +227,54 @@ public actor SSHTransport {
         self.group = group
         self.connectionChannel = channel
         self.errorRecorder = recorder
+
+        do {
+            try await handshakeObserver.awaitCompletion()
+        } catch {
+            let recorded = await recorder.recordedError()
+            await tearDown()
+            if let typed = recorded as? SSHTransportError {
+                throw typed
+            }
+            // The typed contract cannot carry the real cause (Secure
+            // Enclave signing, Keychain, channel death) — capture it for
+            // the device diagnostic before the `.channelDenied` collapse.
+            SSHEstablishDiagnostics.shared.record(
+                "ssh handshake failed, connection error",
+                error: error
+            )
+            if let recorded {
+                SSHEstablishDiagnostics.shared.record(
+                    "ssh handshake failed, pipeline-recorded error",
+                    error: recorded
+                )
+            } else {
+                SSHEstablishDiagnostics.shared.record(
+                    "ssh handshake failed with no pipeline-recorded error"
+                )
+            }
+            throw .channelDenied
+        }
+        return channel
+    }
+
+    /// Session channel → pty-req → shell on an authenticated connection.
+    /// Entry points have already validated dimensions and resolved auth;
+    /// dialing and the authenticated handshake are shared via
+    /// `openAuthenticatedConnection`, so handshake, channel-open, PTY and
+    /// shell semantics cannot drift between entry points.
+    func openSessionAndActivate(
+        _ setup: SessionSetup,
+        dial: (ClientBootstrap) async throws -> any Channel
+    ) async throws(SSHTransportError) {
+        let cols = setup.cols
+        let rows = setup.rows
+        let agentInitializer = agentChannelInitializer
+        let channel = try await openAuthenticatedConnection(
+            userAuth: setup.userAuth,
+            serverAuth: setup.serverAuth,
+            dial: dial
+        )
 
         let (stream, continuation) = AsyncStream.makeStream(
             of: Data.self,
@@ -222,7 +309,7 @@ public actor SSHTransport {
                 }
             }
         } catch {
-            let recorded = await recorder.recordedError()
+            let recorded = await errorRecorder?.recordedError()
             await tearDown()
             if let typed = recorded as? SSHTransportError {
                 throw typed
@@ -392,5 +479,71 @@ final class InboundDropSignal: @unchecked Sendable {
         let current = observer
         lock.unlock()
         current?()
+    }
+}
+
+/// Connection-pipeline observer for the channel-less establish wait:
+/// succeeds once userauth completes (`UserAuthSuccessEvent` — the
+/// connection is active and channels may open), fails with the pipeline
+/// error (or `ioOnClosedChannel` when the connection dies silently
+/// pre-auth). Installed BEFORE ``TransportErrorRecorder`` so errors still
+/// reach it; every callback passes events onward — the observer never
+/// swallows. EventLoop-confined like the recorder.
+final class HandshakeCompletionObserver: ChannelInboundHandler, @unchecked Sendable {
+    // @unchecked Sendable: EventLoop-confined state (`promise` is written
+    // in handlerAdded and read by `awaitCompletion` on that same loop).
+    typealias InboundIn = Any
+
+    private var eventLoop: (any EventLoop)?
+    private var promise: EventLoopPromise<Void>?
+    private var finished = false
+
+    func handlerAdded(context: ChannelHandlerContext) {
+        eventLoop = context.eventLoop
+        promise = context.eventLoop.makePromise(of: Void.self)
+    }
+
+    /// Removal without prior completion (dial failure: never-active channel,
+    /// no inactive/error event) must not leak the promise.
+    func handlerRemoved(context: ChannelHandlerContext) {
+        if !finished {
+            finished = true
+            promise?.fail(ChannelError.ioOnClosedChannel)
+        }
+    }
+
+    func userInboundEventTriggered(context: ChannelHandlerContext, event: Any) {
+        if event is UserAuthSuccessEvent, !finished {
+            finished = true
+            promise?.succeed(())
+        }
+        context.fireUserInboundEventTriggered(event)
+    }
+
+    func errorCaught(context: ChannelHandlerContext, error: Error) {
+        if !finished {
+            finished = true
+            promise?.fail(error)
+        }
+        context.fireErrorCaught(error)
+    }
+
+    func channelInactive(context: ChannelHandlerContext) {
+        if !finished {
+            finished = true
+            promise?.fail(ChannelError.ioOnClosedChannel)
+        }
+        context.fireChannelInactive()
+    }
+
+    /// Suspends until userauth succeeds. Hops onto the connection's
+    /// EventLoop to read the handler-added promise (the recorder's
+    /// `recordedError()` idiom).
+    func awaitCompletion() async throws {
+        guard let eventLoop else { throw SSHTransportError.channelDenied }
+        try await eventLoop.flatSubmit {
+            self.promise?.futureResult
+                ?? eventLoop.makeFailedFuture(SSHTransportError.channelDenied)
+        }.get()
     }
 }
