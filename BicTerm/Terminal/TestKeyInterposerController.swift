@@ -108,7 +108,6 @@ final class TestKeyInterposerController: UIViewController {
     /// SSH transport needs a moment to deliver the first paint so the
     /// foreground predicate reads `window.isKeyWindow == true`.
     private func fireOsc52Trigger(container: TerminalContainerView) {
-        NSLog("TestKeyInterposerController: firing --uitest-osc52-trigger")
         DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(800)) {
             let payload = "aGVsbG8gZnJvbSBoZXJkciE="  // "hello from herdr!"
             let bytes: [UInt8] = Array("\u{1B}]52;c;\(payload)\u{07}".utf8)

@@ -382,7 +382,6 @@ final class TerminalViewCache {
         guard ProcessInfo.processInfo.arguments.contains("--uitest-osc52-trigger") else {
             return
         }
-        NSLog("TerminalViewCache: firing --uitest-osc52-trigger on \"\(connectionName)\"")
         // Fire immediately so the toast appears within the screenshot
         // burst window; the foreground predicate is evaluated at fire
         // time and the key window settles before the view appears.
