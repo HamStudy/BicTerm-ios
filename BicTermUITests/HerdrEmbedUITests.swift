@@ -189,6 +189,81 @@ final class HerdrEmbedUITests: XCTestCase {
         add(attachment)
     }
 
+    /// Mouse-click regression: the embedded client requests mouse capture at
+    /// startup (probe-verified `?1000h ?1002h ?1003h ?1006h` → SwiftTerm
+    /// `anyEvent`), so a tap on the TUI surface must encode SGR
+    /// press+release reports and deliver them to the client — the io strip's
+    /// write counter must advance by at least one SGR report (≥10 bytes).
+    /// The tap targets the machines sidebar (workspace rows), where a
+    /// delivered click also selects the row client-side.
+    func testMouseClickWritesMouseReportBytes() throws {
+        try XCTSkipUnless(fixtureIsUp, fixtureSkipMessage)
+        let app = XCUIApplication()
+        app.launchArguments = ["--uitest-herdr-embed"]
+        app.launchEnvironment["HERDR_EMBED_SOCKET_PATH"] = fixtureSocket
+        app.launch()
+
+        let status = app.descendants(matching: .any)["herdr-embed-status"]
+        let running = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "label == %@", "embedded client running"),
+            object: status
+        )
+        XCTAssertEqual(
+            XCTWaiter.wait(for: [running], timeout: 20),
+            .completed,
+            "embedded client reached running (status: \(status.label))"
+        )
+
+        let surface = app.descendants(matching: .any)["herdr-embed-tui"]
+        XCTAssertTrue(surface.waitForExistence(timeout: 10), "SwiftTerm surface exists")
+
+        // Startup writes (capability answers) quiesce before the baseline.
+        Thread.sleep(forTimeInterval: 3)
+        let before = ioWriteCount(app)
+
+        // Machines sidebar row ("beta"), left ~11% of the surface. The click
+        // must deliver a press AND a release — the client completes chrome
+        // clicks on the release (MouseEventKind::Up), so press-only delivery
+        // (the recognizer-teardown regression) deadens every click. One tap
+        // is one 10-byte press plus one 10-byte release.
+        let row = surface.coordinate(withNormalizedOffset: CGVector(dx: 0.11, dy: 0.096))
+        row.tap()
+        Thread.sleep(forTimeInterval: 2)
+        let afterTap = ioWriteCount(app)
+        XCTAssertGreaterThanOrEqual(
+            afterTap - before,
+            20,
+            "a tap must deliver SGR press+release bytes to the embedded client (io writes \(before) → \(afterTap))"
+        )
+
+        // A held press exercises the .ended release transition separately
+        // from the tap path; the drag covers began/changed/ended.
+        row.press(forDuration: 0.5)
+        Thread.sleep(forTimeInterval: 1)
+        let dragEnd = surface.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.3))
+        row.press(forDuration: 0.1, thenDragTo: dragEnd)
+        Thread.sleep(forTimeInterval: 1)
+
+        // End-to-end client proof: the sidebar's "menu" launcher (right edge
+        // of the machines footer row) opens the client-local global menu
+        // overlay on mouse-down, so the surface pixels must change.
+        // Workspace-row activation routes through the fixture server's
+        // WorkspaceFocus method and is not a deterministic observable here.
+        let surfaceBefore = surface.screenshot().pngRepresentation
+        let menu = surface.coordinate(withNormalizedOffset: CGVector(dx: 0.176, dy: 0.50))
+        menu.tap()
+        Thread.sleep(forTimeInterval: 1)
+        let postClick = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        postClick.lifetime = .keepAlways
+        postClick.name = "herdr-after-menu-click"
+        add(postClick)
+        XCTAssertNotEqual(
+            surface.screenshot().pngRepresentation,
+            surfaceBefore,
+            "tapping the menu launcher must open the client-side global menu overlay"
+        )
+    }
+
     /// The DEBUG io strip reads `embed io ↑<written> ↓<read>`; the write
     /// count strictly increases after a keystroke, so parse it out.
     private func ioWriteCount(_ app: XCUIApplication) -> Int {

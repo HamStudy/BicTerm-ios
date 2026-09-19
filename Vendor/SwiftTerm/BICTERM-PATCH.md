@@ -193,6 +193,12 @@ including SGR 1006, legacy coordinates, modifier bits, and wheel buttons 64/65.
   end/cancellation. Give it precedence over UIScrollView panning. Mode/Shift
   checks happen when recognition begins, so releasing Shift mid-gesture cannot
   turn a local drag into remote input or lose an already-required release.
+- Install the recognizer once in `setupGestures` and keep it installed across
+  mouse-mode changes; admission stays gated per gesture by
+  `gestureRecognizerShouldBegin`. Tearing it down on a transient `?1000l`
+  mid-gesture silently drops the pending release — the embedded herdr client
+  re-emits disable+enable bursts in the same frame that answers a press, and
+  every ripped-out recognizer took its in-flight touch's release with it.
 - `mouseReportHit` uses bounded viewport-relative physical cells, rather than
   BiDi logical selection columns or buffer-absolute rows. Pixel coordinates are
   viewport-relative and one-based. Local selection retains buffer coordinates.

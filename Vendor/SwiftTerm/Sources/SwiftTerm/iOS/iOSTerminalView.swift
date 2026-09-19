@@ -1353,14 +1353,6 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
         panMouseGesture = gesture
     }
     
-    func disableMousePanGesture () {
-        guard let gesture = panMouseGesture else {
-            return
-        }
-        removeGestureRecognizer(gesture)
-        panMouseGesture = nil
-    }
-    
     var panSelectionGesture: UIPanGestureRecognizer?
     func enableSelectionPanGesture () {
         guard panSelectionGesture == nil else {
@@ -1400,6 +1392,10 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
 
         singleTap.require(toFail: doubleTap)
         doubleTap.require(toFail: tripleTap)
+
+        // BICTERM-PATCH hunk 7: install the remote press recognizer once and
+        // keep it installed across mouse-mode changes — see mouseModeChanged.
+        enableMousePanGesture()
     }
 
     func setupLinkReportingInteractions ()
@@ -3530,10 +3526,16 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
     }
     
     open func mouseModeChanged(source: Terminal) {
+        // BICTERM-PATCH hunk 7: never tear the recognizer down on a mode
+        // change. An application can re-emit ?1000l/?1000h bursts at any
+        // time — the embedded herdr client does so in the very frame that
+        // answers a press — and removing an in-flight recognizer silently
+        // drops the pending release. `gestureRecognizerShouldBegin` already
+        // gates admission on the current mode, so the permanently installed
+        // recognizer is inert while reporting is off. The enable call stays
+        // as an idempotent self-heal for views configured before setup ran.
         if source.mouseMode != .off {
             enableMousePanGesture()
-        } else {
-            disableMousePanGesture()
         }
     }
     
