@@ -11,13 +11,21 @@ import UIKit
 /// tests use this seam until the shell gains a NavigationStack.
 struct UITestKeyManagementOverlay: ViewModifier {
     @State private var isPresented = false
+    /// iOS unloads the presenting view under a fullScreenCover and refires
+    /// `onAppear` when that cover dismisses: without this latch, dismissing
+    /// the keys entry (keys-done) immediately RE-presented it over whatever
+    /// the test opened next, swallowing the next tap (the covered connection
+    /// list stays AX-visible but unhittable).
+    @MainActor private static var didAutoPresent = false
 
     func body(content: Content) -> some View {
         content.fullScreenCover(isPresented: $isPresented) {
             KeyManagementView()
         }
         .onAppear {
-            if UITestArguments.isKeysEntryActive { isPresented = true }
+            guard UITestArguments.isKeysEntryActive, !Self.didAutoPresent else { return }
+            Self.didAutoPresent = true
+            isPresented = true
         }
     }
 }
