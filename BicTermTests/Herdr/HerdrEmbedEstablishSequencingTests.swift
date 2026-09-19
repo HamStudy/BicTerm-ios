@@ -87,7 +87,7 @@ final class HerdrEmbedEstablishSequencingTests: XCTestCase {
             await recorder.recordEnd(link.machine.label)
             return HerdrEmbedTransportCoordinator.Established(
                 link: link,
-                carrier: NoopCarrier(),
+                carrierFactory: { NoopCarrier() },
                 executablePath: "/usr/bin/herdr"
             )
         }

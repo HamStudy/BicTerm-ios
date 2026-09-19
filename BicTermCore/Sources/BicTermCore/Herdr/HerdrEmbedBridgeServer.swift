@@ -43,11 +43,22 @@ public enum HerdrEmbedBridgeEvent: Sendable, Equatable {
 /// herdr-embed T5): binds ONE unix-domain-socket listener at
 /// `{HERDR_EMBED_TRANSPORT_DIR}/{profile id}.sock` and relays every
 /// accepted connection to a FRESH `remote-client-bridge` exec channel
-/// opened on the established carrier — the byte path
-/// ``HerdrSSHTransport`` gives the native workspace, but per-connection on
-/// ONE long-lived SSH connection, so the embedded client's supervisor
-/// reconnects (new local connect → new exec channel) without re-running
-/// the TOFU/auth establish.
+/// on a FRESH channel-less SSH connection resolved from the injected
+/// factory — the per-relay connection shape that survives strict
+/// gateways.
+///
+/// **Why per-relay connections** (the design gap the Oracle review
+/// flagged, the unit-5 fix): CoderSSHGW permits exactly ONE session
+/// channel open per connection LIFETIME (exec channels are
+/// session-type on the wire, RFC 4254). Today's prior shape — one
+/// long-lived carrier with N exec channels opened across its life —
+/// means the embedded client's FIRST supervisor reconnect (a new local
+/// dial → a second exec on the same carrier) is refused on such
+/// gateways. Each dial here resolves the factory into a brand-new
+/// connection, opens the bridge exec on THAT connection as its only
+/// session channel, and closes the connection at relay end. The
+/// re-auth cost per redial is deliberate; it is the only shape that
+/// works on CoderSSHGW-class gateways.
 ///
 /// Relay shape mirrors `Fixtures/bin/uds-forward.py` (the fixture
 /// precedent) natively: full-duplex, half-close on EOF, both directions
@@ -70,13 +81,23 @@ public enum HerdrEmbedBridgeEvent: Sendable, Equatable {
 /// then resolve the same relative path against that cwd.
 public actor HerdrEmbedBridgeServer {
     private let socketPath: String
-    private let carrier: any SSHExecCapableConnection
+    /// Resolved PER RELAY (not once at start): each accepted local
+    /// connection calls this factory once, opens the bridge exec on the
+    /// resolved connection, and closes the connection at relay end.
+    /// Reuses ``HerdrInstallConnectionFactory`` (same typealias shape —
+    /// `@Sendable () async throws -> any SSHExecCapableConnection`) so
+    /// every per-step exec consumer (installer + bridge) shares one
+    /// generic-untyped-throws factory type; the connector's typed
+    /// `HerdrEndpointConnectorError` flows into a `carrierLost` event
+    /// instead of being force-mapped at this seam.
+    private let connectionFactory: HerdrInstallConnectionFactory
     private let command: String
     private let commandIsInvalid: Bool
 
     private let group = MultiThreadedEventLoopGroup(numberOfThreads: 1)
     private var listener: NIOAsyncChannel<NIOAsyncChannel<ByteBuffer, ByteBuffer>, Never>?
     private var acceptTask: Task<Void, Never>?
+    private var liveRelayTasks: [ObjectIdentifier: Task<Void, Never>] = [:]
     private var liveRelayChannels: [ObjectIdentifier: NIOAsyncChannel<ByteBuffer, ByteBuffer>] = [:]
     private var didStop = false
 
@@ -90,12 +111,12 @@ public actor HerdrEmbedBridgeServer {
 
     public init(
         socketPath: String,
-        carrier: any SSHExecCapableConnection,
+        connectionFactory: @escaping HerdrInstallConnectionFactory,
         executablePath: String,
         sessionName: String? = nil
     ) {
         self.socketPath = socketPath
-        self.carrier = carrier
+        self.connectionFactory = connectionFactory
         // BuildError is unreachable for a probe-verified path plus a
         // grammar-checked session name; keep the failure observable
         // instead of trapping in an actor init.
@@ -160,10 +181,11 @@ public actor HerdrEmbedBridgeServer {
         }
     }
 
-    /// Idempotent teardown with receipts: stops accepting, closes every
-    /// live relay's local channel (so inbound iterators wake from a real
-    /// EOF instead of dangling), closes the carrier, and unlinks the
-    /// socket path when it still exists.
+    /// Idempotent teardown with receipts: stops accepting, cancels and
+    /// closes every live relay's local channel (so inbound iterators wake
+    /// from a real EOF instead of dangling), and unlinks the socket path
+    /// when it still exists. The per-relay SSH connections are owned by
+    /// their own relay tasks (and torn down on every relay exit arm).
     public func stop() async {
         guard !didStop else { return }
         didStop = true
@@ -175,12 +197,15 @@ public actor HerdrEmbedBridgeServer {
             self.listener = nil
         }
         let liveRelays = Array(liveRelayChannels.values)
+        let liveTasks = Array(liveRelayTasks.values)
         liveRelayChannels.removeAll()
+        liveRelayTasks.removeAll()
         for relay in liveRelays {
             relay.channel.close(promise: nil)
         }
-
-        await carrier.close()
+        for task in liveTasks {
+            task.cancel()
+        }
 
         let unlinked = Self.unlinkIfPresent(socketPath)
         onEvent(.stopped(unlinked: unlinked, relaysTornDown: liveRelays.count))
@@ -209,27 +234,66 @@ public actor HerdrEmbedBridgeServer {
     // MARK: - Relay
 
     private func startRelay(_ child: NIOAsyncChannel<ByteBuffer, ByteBuffer>) {
-        liveRelayChannels[ObjectIdentifier(child.channel)] = child
-        Task { [weak self] in
-            await self?.runRelay(child)
+        let identifier = ObjectIdentifier(child.channel)
+        liveRelayChannels[identifier] = child
+        // The relay task body returns Void (the Optional Void from
+        // `self?.runRelay(...)` is just the weak-self chain — when the
+        // actor is gone the task is a no-op). Coerce to Task<Void, Never>
+        // so `liveRelayTasks` matches its declared type.
+        let task = Task<Void, Never> { [weak self] in
+            _ = await self?.runRelay(child, identifier: identifier)
         }
+        liveRelayTasks[identifier] = task
     }
 
-    private func runRelay(_ child: NIOAsyncChannel<ByteBuffer, ByteBuffer>) async {
+    private func runRelay(
+        _ child: NIOAsyncChannel<ByteBuffer, ByteBuffer>,
+        identifier: ObjectIdentifier
+    ) async {
+        defer {
+            // The relay owns its SSH connection; close on EVERY exit
+            // path (EOF, error, cancel, stop()) — the prior design
+            // pattern, now applied to the connection held inside this
+            // scope rather than to a long-lived carrier field.
+            child.channel.close(promise: nil)
+            Task { await self.endRelay(child, identifier: identifier) }
+        }
+
+        // Resolve the per-relay factory into a FRESH channel-less
+        // connection. A factory throw fails THIS relay only — the
+        // listener survives and a subsequent dial retries fresh (the
+        // the client's supervisor redial drives recovery; the listener
+        // is never stopped by one bad dial).
+        let carrier: any SSHExecCapableConnection
+        do {
+            carrier = try await connectionFactory()
+        } catch {
+            discardUnrelayedChild(child)
+            if !didStop {
+                onEvent(.carrierLost(reason: "factory refused a relay: \(error)"))
+            }
+            return
+        }
+
         let session: SSHExecSession
         do {
             session = try await carrier.openExecChannel(command: command)
         } catch {
+            // Owner-close: the relay connection is no longer usable,
+            // close it regardless of why the exec open failed.
+            await carrier.close()
             discardUnrelayedChild(child)
             if !didStop {
                 onEvent(.carrierLost(reason: "\(error)"))
             }
             return
         }
-        // stop() may have run while the exec channel was opening; nothing
-        // else would tear this fresh session down.
+        // stop() may have run while the exec channel was opening;
+        // nothing else would tear this fresh session + its connection
+        // down — close both here.
         if didStop {
             await session.close()
+            await carrier.close()
             discardUnrelayedChild(child)
             return
         }
@@ -311,12 +375,20 @@ public actor HerdrEmbedBridgeServer {
         }
 
         await session.close()
+        // Per-relay ownership-close: every exit arm (clean EOF, relay
+        // cancellation, exec failure) tears down the relay's SSH
+        // connection — the next dial resolves a fresh one from the
+        // factory.
+        await carrier.close()
         onEvent(.relayEnded(clean: clean, bytesUp: totals.up, bytesDown: totals.down))
-        endRelay(child)
     }
 
-    private func endRelay(_ child: NIOAsyncChannel<ByteBuffer, ByteBuffer>) {
-        liveRelayChannels.removeValue(forKey: ObjectIdentifier(child.channel))
+    private func endRelay(
+        _ child: NIOAsyncChannel<ByteBuffer, ByteBuffer>,
+        identifier: ObjectIdentifier
+    ) {
+        liveRelayChannels.removeValue(forKey: identifier)
+        liveRelayTasks.removeValue(forKey: identifier)
     }
 
     /// Drops an accepted child that never entered a relay (exec open
@@ -327,7 +399,6 @@ public actor HerdrEmbedBridgeServer {
     private func discardUnrelayedChild(_ child: NIOAsyncChannel<ByteBuffer, ByteBuffer>) {
         child.outbound.finish()
         child.channel.close(promise: nil)
-        endRelay(child)
     }
 
     // MARK: - Socket path hygiene (uds-forward.py contract)

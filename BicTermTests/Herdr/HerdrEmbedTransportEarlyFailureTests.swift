@@ -3,20 +3,29 @@ import XCTest
 
 @testable import BicTerm
 
-/// P1 regression (final-review blocker): carriers established by
-/// `establishAll()` leaked when `prepare()` failed BEFORE bridge startup —
-/// at `pinCWD()` or at the transport-directory mkdir. Neither `servers` nor
-/// `carriers` is populated at that point, so the runtime's
-/// `teardownTransport` cannot recover them; `prepare()` itself must close
-/// them through `unwindBringUp(established:started:)` and leave the cwd
-/// ownership correct (a failed pin never moved it; a failed mkdir
-/// releases the pin the bring-up just took).
+/// P1 regression (final-review blocker, pre-per-relay): carriers
+/// established by `establishAll()` leaked when `prepare()` failed BEFORE
+/// bridge startup — at `pinCWD()` or at the transport-directory mkdir.
+/// Neither `servers` nor `carriers` was populated at that point, so the
+/// runtime's `teardownTransport` could not recover them; `prepare()`
+/// itself had to close them through `unwindBringUp(established:started:)`
+/// and leave the cwd ownership correct (a failed pin never moved it; a
+/// failed mkdir releases the pin the bring-up just took).
 ///
-/// Deterministic by construction — no SSH, no fixtures: the establish seam
-/// injects carriers with observable `close()` receipts, and the
-/// home-directory seam points the pin + mkdir at a controlled directory
-/// (nonexistent → pin failure; transport-directory name occupied by a
-/// regular file → mkdir failure).
+/// Unit-5 truth (per-relay factory): `establishAll` returns an
+/// ``Established`` holding a `carrierFactory` CLOSURE — no SSH connection
+/// is ever established before the bridge server starts. So a failed pin
+/// or mkdir now means: the closures are simply dropped, no connection
+/// was ever resolved, nothing to leak. The proof is `closeCount == 0` per
+/// carrier (the test's `CloseCountingCarrier` is held inside the factory
+/// closure but never used; `assertEarlyFailure` proves it stays unused).
+/// cwd-ownership semantics are unchanged.
+///
+/// Deterministic by construction — no SSH, no fixtures: the establish
+/// seam injects factories wrapping carriers with observable `close()`
+/// receipts, and the home-directory seam points the pin + mkdir at a
+/// controlled directory (nonexistent → pin failure; transport-directory
+/// name occupied by a regular file → mkdir failure).
 @MainActor
 final class HerdrEmbedTransportEarlyFailureTests: XCTestCase {
     /// Repository root via this file's path — the app-hosted test
@@ -150,7 +159,7 @@ final class HerdrEmbedTransportEarlyFailureTests: XCTestCase {
             }
             return HerdrEmbedTransportCoordinator.Established(
                 link: link,
-                carrier: carrier,
+                carrierFactory: { carrier },
                 executablePath: "/usr/bin/herdr"
             )
         }
@@ -184,8 +193,8 @@ final class HerdrEmbedTransportEarlyFailureTests: XCTestCase {
         for (index, carrier) in carriers.enumerated() {
             let closeCount = await carrier.closeCount
             XCTAssertEqual(
-                closeCount, 1,
-                "established carrier \(index) closed exactly once by the unwind",
+                closeCount, 0,
+                "per-relay factory for machine \(index) was never resolved — no connection to leak",
                 line: line
             )
         }

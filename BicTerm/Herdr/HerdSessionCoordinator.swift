@@ -142,6 +142,10 @@ final class HerdSessionCoordinator {
             }
             #endif
 
+            // One connector closure per open: the live closure's caches
+            // (key resolution, password prompts) are shared by every
+            // machine's initial connect and all of their redials.
+            let machineConnect = connectMachine
             let machineTasks = resolvable.map { item in
                 Task { @MainActor in
                     await self.connectOne(
@@ -152,7 +156,8 @@ final class HerdSessionCoordinator {
                         ),
                         herdID: herd.id,
                         model: model,
-                        hostKeyVerifier: hostKeyVerifier
+                        hostKeyVerifier: hostKeyVerifier,
+                        machineConnect: machineConnect
                     )
                 }
             }
@@ -170,7 +175,8 @@ final class HerdSessionCoordinator {
         endpointID: HerdrEndpointID,
         herdID: UUID,
         model: HerdrSessionModel,
-        hostKeyVerifier: HostKeyVerifier?
+        hostKeyVerifier: HostKeyVerifier?,
+        machineConnect: @escaping MachineConnect
     ) async {
         #if DEBUG
         debugConnectAttempts += 1
@@ -179,13 +185,12 @@ final class HerdSessionCoordinator {
             let endpointConnection = try Self.connection(
                 connection, sessionName: machine.sessionName
             )
-            let transport = try await connectMachine(endpointConnection, hostKeyVerifier)
+            let transport = try await machineConnect(endpointConnection, hostKeyVerifier)
             // Per-endpoint runtime with its own budgets (the model's T19
             // machinery): connect() hands this endpoint its own client,
             // watchdog, and reconnect bookkeeping. The live source keeps
             // foreground/transport-loss recovery working per machine (T10)
             // — auth failures map to the typed no-retry authLost path.
-            let machineConnect = connectMachine
             let verifier = hostKeyVerifier
             model.connect(
                 endpoint: endpointID,
@@ -359,6 +364,11 @@ final class HerdSessionCoordinator {
         let searchPaths = liveSearchPaths()
         let hardwareKeysEnabledByDefault = AppServices.shared.keyAvailabilityPreferences.hardwareKeysEnabledByDefault
         let installer = AppServices.shared.herdrRemoteInstaller
+        // Per-open caches (one liveConnector resolution per herd open):
+        // every machine's connects and redials share one biometric key
+        // resolution and one password prompt per destination tag.
+        let keyResolution = KeyResolutionCache()
+        let passwordPrompts = PasswordPromptCache()
         return { connection, hostKeyVerifier in
             let verifier: HostKeyVerifier
             #if DEBUG
@@ -382,6 +392,8 @@ final class HerdSessionCoordinator {
             #endif
             let connector = HerdrEndpointConnector(
                 hostKeyVerifier: verifier,
+                authenticationKeyProvider: keyResolution.wrapping(DefaultSSHAuthenticationKeyProvider()),
+                passwordPrompt: passwordPrompts.wrapping(nil),
                 hardwareKeysEnabledByDefault: hardwareKeysEnabledByDefault,
                 searchPaths: searchPaths,
                 approveHostKey: approve,

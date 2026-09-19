@@ -285,7 +285,7 @@ final class HerdrEmbedHardeningTests: XCTestCase {
         )
     }
 
-    func testSeveredCarrierSurfacesTypedExitAndReopenReconnects() async throws {
+    func testSeveredBridgeSurfacesTypedExitAndReopenReconnects() async throws {
         try requireFixtures(serverPort: 12222)
         let connection = try makeDirectConnection(label: "sever")
         let cwdBeforeStart = FileManager.default.currentDirectoryPath
@@ -295,12 +295,25 @@ final class HerdrEmbedHardeningTests: XCTestCase {
         await coordinator.severMachineTransport(profileID: HerdrEmbedMachine.profileID(for: connection.id))
 
         // Mode A is remote mode: the severed machine was the client's
-        // only (Local) endpoint, so the client exits — with the typed
-        // loss detail surfaced, never a silent EOF.
+        // only (Local) endpoint, so the client exits. Under the
+        // per-relay bridge contract, stopping the bridge closes the
+        // relay's client socket; the rebuilt 0.9.1-stack client then
+        // sets exit_failed on the connection loss, so the exit
+        // surfaces as a typed detail naming the lost connection —
+        // richer than the stale build's silent EOF drain.
         await waitFor(
-            runtime.phase.stoppedExitDetail?.contains("lost connection to server") == true,
-            "the client exited with the connection-lost detail when its only endpoint was severed",
+            phaseIsStopped(runtime),
+            "the client exited when its only endpoint was severed; actual phase: \(runtime.phase)",
             timeout: 15
+        )
+        let severedExitDetail = runtime.phase.stoppedExitDetail
+        XCTAssertNotNil(
+            severedExitDetail,
+            "a severed bridge exits with the client's typed connection-loss detail, not a silent drain; actual phase: \(runtime.phase)"
+        )
+        XCTAssertTrue(
+            severedExitDetail?.contains("lost connection to server") == true,
+            "the typed exit names the lost connection; actual detail: \(severedExitDetail ?? "nil")"
         )
 
         // Churn stays bounded trivially: nothing redials a dead carrier
@@ -360,17 +373,29 @@ final class HerdrEmbedHardeningTests: XCTestCase {
         XCTAssertEqual(kill(serverPID, SIGTERM), 0, "fixture server killed from its pidfile")
 
         await waitFor(
-            coordinator.eventLines.contains { $0.contains("relay ended") },
-            "the machine's relay ended when its server died",
+            coordinator.eventLines.contains { $0.contains("bridge stopped") },
+            "the machine's bridge stopped when its server died; relay lines: \(coordinator.eventLines.filter { $0.contains("relay") })",
             timeout: 15
         )
         // Mode A is remote mode: the machine IS the client's Local
-        // endpoint, so its server's death ends the client — surfaced as a
-        // typed exit detail, never the silent EOF of the pty era.
+        // endpoint, so its server's death ends the client. Under the
+        // per-relay bridge contract the teardown closes the relay socket;
+        // the rebuilt 0.9.1-stack client sets exit_failed on the lost
+        // server, so the exit surfaces as a typed "server shut down"
+        // detail (same contract as the severed-bridge test).
         await waitFor(
-            runtime.phase.stoppedExitDetail?.contains("server shut down") == true,
-            "the client exited with the server-death detail once its only endpoint died",
+            phaseIsStopped(runtime),
+            "the client exited once its only endpoint died; actual phase: \(runtime.phase)",
             timeout: 15
+        )
+        let serverDeathExitDetail = runtime.phase.stoppedExitDetail
+        XCTAssertNotNil(
+            serverDeathExitDetail,
+            "server death exits with the client's typed server-shutdown detail, not a silent drain; actual phase: \(runtime.phase)"
+        )
+        XCTAssertTrue(
+            serverDeathExitDetail?.contains("server shut down") == true,
+            "the typed exit names the server shutdown; actual detail: \(serverDeathExitDetail ?? "nil")"
         )
 
         let endsBefore = coordinator.eventLines.filter { $0.contains("relay ended") }.count
@@ -416,16 +441,27 @@ final class HerdrEmbedHardeningTests: XCTestCase {
             .joined(separator: "\n") + "\n"
         try revoked.write(to: authorizedKeys, atomically: true, encoding: .utf8)
 
-        // Mode A is remote mode: severing the only (Local) endpoint kills
-        // the client with the typed loss detail — that exit, not the
-        // bridge's "relay ended" line, is the deterministic contract (the
-        // pump's up-direction can outlive the teardown, so the line is
-        // not guaranteed to appear).
+        // Mode A is remote mode: severing the only (Local) endpoint
+        // exits the client with a typed detail under the per-relay
+        // bridge contract (see the severed-bridge test; the rebuilt
+        // 0.9.1-stack client sets exit_failed on connection loss).
+        // That exit, not the bridge's "relay ended" line, is the
+        // deterministic contract (the pump's up-direction can outlive
+        // the teardown, so the line is not guaranteed to appear).
         await coordinator.severMachineTransport(profileID: HerdrEmbedMachine.profileID(for: connection.id))
         await waitFor(
-            runtime.phase.stoppedExitDetail?.contains("lost connection to server") == true,
-            "the client exited with the connection-lost detail when its only endpoint was severed",
+            phaseIsStopped(runtime),
+            "the client exited when its only endpoint was severed; actual phase: \(runtime.phase)",
             timeout: 30
+        )
+        let revokedExitDetail = runtime.phase.stoppedExitDetail
+        XCTAssertNotNil(
+            revokedExitDetail,
+            "a severed bridge exits with the client's typed connection-loss detail, not a silent drain; actual phase: \(runtime.phase)"
+        )
+        XCTAssertTrue(
+            revokedExitDetail?.contains("lost connection to server") == true,
+            "the typed exit names the lost connection; actual detail: \(revokedExitDetail ?? "nil")"
         )
         await runtime.requestStop()
 

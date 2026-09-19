@@ -126,7 +126,7 @@ final class HerdrEmbedStartFailureTeardownTests: XCTestCase {
         coordinator.establishForTesting = { link in
             HerdrEmbedTransportCoordinator.Established(
                 link: link,
-                carrier: NoopCarrier(),
+                carrierFactory: { NoopCarrier() },
                 executablePath: "/usr/bin/herdr"
             )
         }

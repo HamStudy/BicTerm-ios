@@ -291,7 +291,11 @@ final class HerdrEmbedTransportCoordinator {
     private let searchPaths: [String]
 
     private var servers: [HerdrEmbedBridgeServer] = []
-    private var carriers: [String: any SSHExecCapableConnection] = [:]
+    /// Profile-id → bridge-server index in ``servers`` (the durable handle
+    /// on each machine's transport, now that there is no held carrier to
+    /// key a dict by). `servers[index]` may be `nil` for a machine that
+    /// was severed or whose bridge never started.
+    private var serverByProfileID: [String: Int] = [:]
     /// Per-bring-up namespace under the transport base directory: this
     /// run's bridge sockets live at
     /// `tmp/herdr-embed-transport/<token>/<profile id>.sock`. The token
@@ -319,6 +323,10 @@ final class HerdrEmbedTransportCoordinator {
     /// alternating). One resolution per key also means ONE biometric
     /// prompt per herd open instead of one per machine.
     private let keyResolution = KeyResolutionCache()
+    /// One interactive password prompt per destination tag per bring-up,
+    /// no matter how many carrier connects ask. Herdr paths inject no
+    /// prompt source today, so this stays a nil passthrough until one is.
+    private let passwordPrompts = PasswordPromptCache()
     /// Per-machine establish tasks of the in-flight prepare() — cancelled
     /// when the bring-up is cancelled so their awaits unwind.
     private var establishTasks: [Task<Result<Established, HerdrEmbedTransportFailure>, Never>] = []
@@ -499,6 +507,7 @@ final class HerdrEmbedTransportCoordinator {
         return HerdrEndpointConnector(
             hostKeyVerifier: verifier,
             authenticationKeyProvider: keyProvider,
+            passwordPrompt: passwordPrompts.wrapping(nil),
             metadataProvider: providedMetadataProvider ?? DefaultSSHKeyMetadataProvider(),
             searchPaths: resolvedPaths,
             approveHostKey: { [weak self] challenge in
@@ -523,10 +532,13 @@ final class HerdrEmbedTransportCoordinator {
     /// Cancellation-aware (the F2 close-during-bringup fix): when the
     /// bring-up task is cancelled, the pending TOFU continuations are
     /// resumed declined, the establish tasks cancelled, and every
-    /// post-suspension resume unwinds — closing the bridge channels and
-    /// UDS listeners it had started, the established carriers, and the
-    /// pinned cwd — then throws `.cancelled`. No coordinator state (or
-    /// continuation) outlives the cancelled bring-up.
+    /// post-suspension resume unwinds — stopping any bridge it had
+    /// started (which closes the listener + in-flight relays and unlinks
+    /// the UDS socket) and releasing the pinned cwd — then throws
+    /// `.cancelled`. With per-relay connections, established-but-
+    /// unbridged factories carry no live connection to close (nothing
+    /// was auth'd). No coordinator state (or continuation) outlives the
+    /// cancelled bring-up.
     func prepare() async throws(HerdrEmbedTransportFailure) -> String {
         prepareCancelled = false
         let (established, establishFailure) = await withTaskCancellationHandler {
@@ -550,11 +562,9 @@ final class HerdrEmbedTransportCoordinator {
         do {
             try pinCWD()
         } catch {
-            // The established carriers are still unbridged and neither
-            // `servers` nor `carriers` knows them — runtime teardown
-            // cannot recover them, so this unwind is their only closer.
-            // The pin never happened, so its release inside the unwind
-            // is a no-op.
+            // No live connection to close (per-relay factories never
+            // resolved to anything). The pin never happened, so its
+            // release inside the unwind is a no-op.
             await unwindBringUp(established: established, started: [])
             throw error
         }
@@ -570,10 +580,8 @@ final class HerdrEmbedTransportCoordinator {
             )
         } catch {
             // Never let a directory-creation failure fall through to the
-            // binds — it would surface as a misleading bind ENOENT. The
-            // established carriers are still unbridged (runtime teardown
-            // cannot recover them): the unwind closes them and releases
-            // the pin this bring-up just took.
+            // binds — it would surface as a misleading bind ENOENT.
+            // Per-relay factories carry no live connection to close.
             await unwindBringUp(established: established, started: [])
             throw .bridge(.bindFailed(
                 path: transportDirectoryURL.path,
@@ -588,9 +596,15 @@ final class HerdrEmbedTransportCoordinator {
                 await unwindBringUp(established: established, started: started)
                 throw .cancelled
             }
+            // Per-relay factory: each accepted local connection resolves a
+            // FRESH channel-less SSH connection (CoderSSHGW one-session-per-
+            // connection-lifetime — the bridge exec is each connection's
+            // only session channel). The factory is only resolved after the
+            // probe gate has run (establishProbedOfferingInstall has
+            // returned) — preserves the establish sequencing invariant.
             let bridge = HerdrEmbedBridgeServer(
                 socketPath: socketPath(for: item.link.machine),
-                carrier: item.carrier,
+                connectionFactory: item.carrierFactory,
                 executablePath: item.executablePath,
                 sessionName: item.link.bridgeSessionName
             )
@@ -603,13 +617,14 @@ final class HerdrEmbedTransportCoordinator {
             do {
                 try await bridge.start()
                 started.append((item.link, bridge))
-                carriers[item.link.machine.profileID] = item.carrier
+                // NO held carrier: with per-relay connections, "carrier
+                // lost" becomes per-relay failure and the bridge keeps
+                // listening. The client's supervisor redial drives
+                // reconnect (now actually working on strict gateways).
             } catch let error as HerdrEmbedBridgeError {
-                await item.carrier.close()
                 if bridgeFailure == nil { bridgeFailure = .bridge(error) }
                 failureLines.append("\(item.link.machine.label): bridge bind failed — \(error)")
             } catch {
-                await item.carrier.close()
                 if bridgeFailure == nil {
                     bridgeFailure = .bridge(.bindFailed(
                         path: socketPath(for: item.link.machine),
@@ -633,6 +648,9 @@ final class HerdrEmbedTransportCoordinator {
             throw .cancelled
         }
         servers = started.map(\.bridge)
+        for (offset, item) in started.enumerated() {
+            serverByProfileID[item.link.machine.profileID] = offset
+        }
 
         let support = URL.applicationSupportDirectory
             .appendingPathComponent("herdr-embed", isDirectory: true)
@@ -660,7 +678,7 @@ final class HerdrEmbedTransportCoordinator {
                 await bridge.stop()
             }
             servers.removeAll()
-            carriers.removeAll()
+            serverByProfileID.removeAll()
             restoreCWD()
             throw .bridge(.bindFailed(
                 path: "client catalog",
@@ -678,23 +696,33 @@ final class HerdrEmbedTransportCoordinator {
         return socketPath(for: started[0].link.machine)
     }
 
-    /// Server-death analog for one machine (E2E seam + debugging): closes
-    /// the machine's SSH carrier — the bridge stays listening, its relays
-    /// cascade, and the client renders the machine's own unhealthy state
-    /// while the other machines keep flowing.
+    /// Server-death analog for one machine (E2E seam + debugging): stops
+    /// the machine's bridge server, which closes its listener AND every
+    /// in-flight relay's local channel. Per-relay SSH connections are
+    /// torn down by their relay tasks on every exit arm; the bridge
+    /// server is now the durable handle on the machine's transport
+    /// (no held carrier exists to close).
     func severMachineTransport(profileID: String) async {
-        guard let carrier = carriers.removeValue(forKey: profileID) else { return }
+        guard let index = serverByProfileID[profileID] else { return }
+        guard index < servers.count else { return }
+        let bridge = servers[index]
+        // Replace with a sentinel placeholder (the typed `HerdrEmbedBridgeServer`
+        // is non-optional so we mark the slot as gone via the dict; the
+        // compact-on-teardown ordering keeps `servers` index-aligned with
+        // the original catalog order). Keeping the index stable avoids
+        // re-mapping the herd while it's running.
+        serverByProfileID.removeValue(forKey: profileID)
         eventLines.append("sever requested for \(profileID)")
-        await carrier.close()
+        await bridge.stop()
     }
 
-    /// Idempotent: stops every bridge (which closes the carriers and
-    /// unlinks the sockets), removes this bring-up's token directory, and
-    /// restores the process cwd.
+    /// Idempotent: stops every bridge (closes their listeners + in-flight
+    /// relays and unlinks the sockets), removes this bring-up's token
+    /// directory, and restores the process cwd.
     func teardown() async {
         let bridges = servers
         servers.removeAll()
-        carriers.removeAll()
+        serverByProfileID.removeAll()
         seededStateHome = nil
         for bridge in bridges {
             await bridge.stop()
@@ -788,13 +816,16 @@ final class HerdrEmbedTransportCoordinator {
 
     // MARK: - Establish
 
-    /// One machine's established carrier: the probed SSH connection plus
+    /// One machine's probed result, ready for the bridge: the per-relay
+    /// connection factory (each accepted local dial resolves it into a
+    /// FRESH channel-less connection — CoderSSHGW gateway lifetime) plus
     /// the remote herdr executable the bridge command should exec.
-    /// `prepare()` owns these from `establishAll()` until each is either
-    /// handed to a started bridge or closed by an unwind.
+    /// `prepare()` owns these from `establishAll()` until each is handed
+    /// to a started bridge (the factory is captured by the bridge; no
+    /// connection is ever resolved here, so nothing needs unwinding).
     struct Established {
         let link: HerdrEmbedMachineLink
-        let carrier: any SSHExecCapableConnection
+        let carrierFactory: @Sendable () async throws -> any SSHExecCapableConnection
         let executablePath: String
     }
 
@@ -882,23 +913,22 @@ final class HerdrEmbedTransportCoordinator {
 
     /// Unwinds a prepare() that cannot proceed — cancelled, or failed
     /// before bridge startup (cwd pin, transport-directory creation):
-    /// stops the bridges it started (each stop closes its carrier and
-    /// unlinks the UDS listener), closes the carriers of
-    /// established-but-unbridged machines, removes this bring-up's token
-    /// directory, and restores the pinned cwd.
+    /// stops the bridges it started (each stop closes its listener +
+    /// in-flight relays and unlinks the UDS socket). With per-relay
+    /// connections, established-but-unbridged machines have NO held
+    /// carrier to close — the factory was never resolved (nothing was
+    /// connected, nothing was auth'd). The bridges' own `stop()` covers
+    /// its in-flight relays; unbridged factories carry no connection.
     private func unwindBringUp(
         established: [Established],
         started: [(link: HerdrEmbedMachineLink, bridge: HerdrEmbedBridgeServer)]
     ) async {
-        let bridged = Set(started.map { $0.link.machine.profileID })
-        for item in established where !bridged.contains(item.link.machine.profileID) {
-            await item.carrier.close()
-        }
         for (_, bridge) in started {
             await bridge.stop()
         }
+        _ = established // factories are unstarted — nothing to close
         servers.removeAll()
-        carriers.removeAll()
+        serverByProfileID.removeAll()
         removeTransportDirectory()
         restoreCWD()
     }
@@ -939,9 +969,14 @@ final class HerdrEmbedTransportCoordinator {
                     }
                 }
             )
+            // Pass the FACTORY through to the bridge server — each relay
+            // resolves a FRESH channel-less connection on demand. This is
+            // the unit-5 per-relay design (CoderSSHGW one-session-per-
+            // connection-lifetime): holding a single connection across N
+            // relays would exhaust its budget after the first exec closed.
             return .success(Established(
                 link: link,
-                carrier: probed.carrier,
+                carrierFactory: probed.carrierFactory,
                 executablePath: probed.executablePath
             ))
         } catch let error as HerdrEndpointConnectorError {
@@ -1039,7 +1074,7 @@ private final class EventSink: @unchecked Sendable {
 /// one instance across this bring-up's connections is the same exposure
 /// class, and it is what turns N concurrent biometric evaluations (one
 /// per machine) into ONE.
-private actor KeyResolutionCache {
+actor KeyResolutionCache {
     private var resolved: [String: NIOSSHPrivateKey] = [:]
     private var inFlight: [String: Task<NIOSSHPrivateKey, any Error>] = [:]
 

@@ -48,11 +48,13 @@ public final class HerdrSSHTransport: HerdrByteTransport, @unchecked Sendable {
 
     /// Builds herdr's fixed bridge command and opens the exec channel on
     /// an ESTABLISHED exec-capable SSH connection (direct or jump-chained;
-    /// doc §3.5 shared-connection shape — the connection's own shell
-    /// session, if any, is untouched). TAKES OWNERSHIP of `transport`:
-    /// ``close()`` tears the connection down after the session.
-    /// Throws ``HerdrCommandBuilder/BuildError`` for hostile inputs and
-    /// ``TransportError`` for connection-level refusals.
+    /// connection-per-consumer shape — the connector hands this transport
+    /// a FRESH channel-less connection, so the bridge exec is typically
+    /// that connection's only session channel; CoderSSHGW-style gateways
+    /// permit exactly one per connection lifetime). TAKES OWNERSHIP of
+    /// `transport`: ``close()`` tears the connection down after the
+    /// session. Throws ``HerdrCommandBuilder/BuildError`` for hostile
+    /// inputs and ``TransportError`` for connection-level refusals.
     public init(
         transport: any SSHExecCapableConnection,
         executablePath: String,

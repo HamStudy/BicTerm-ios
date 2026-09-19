@@ -1,4 +1,6 @@
+import CryptoKit
 import Foundation
+import NIOSSH
 import XCTest
 @testable import BicTermCore
 
@@ -134,48 +136,238 @@ final class HerdrEmbedBridgeServerTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: stale))
     }
 
-    /// T6 regression (sever-one-machine): after the SSH carrier dies, the
-    /// client's supervisor redials the still-listening bridge socket; the
-    /// freshly accepted child's exec open fails and the child must be
-    /// discarded WITHOUT NIOAsyncWriter's deinit trap — dropping an
-    /// unrelayed child without `finish()` precondition-fails and kills the
-    /// whole process (the embedded-client crash this test pins).
-    func testRedialAgainstDeadCarrierDiscardsChildWithoutTrapping() async throws {
+    /// Per-relay proof against the CoderSSHGW emulation fixture
+    /// (``LoopbackPasswordSSHServer(.lifetimeTotal(1))``: ONE session
+    /// channel open per connection LIFETIME, the strict-gateway shape).
+    /// Two sequential local dials → two relays → TWO SSH connections
+    /// (NOT one carried-over connection with a second exec) → two exec
+    /// channels, each as the only session channel on its connection.
+    /// This is the regression that proves the unit-5 design fix: the
+    /// prior "one long-lived carrier with N exec channels over its
+    /// life" shape would be refused on the second dial (budget
+    /// exhausted on the carrier's second session channel open).
+    func testTwoSequentialDialsAgainstLifetimeBudgetOneEachResolveAFreshConnection() async throws {
+        let (key, acceptedBlob) = try Self.makeClientKeyStatic()
+        let server = LoopbackPasswordSSHServer(
+            username: Self.lifetimeUsername,
+            password: "unused-password",
+            keyAuthentication: .acceptedPublicKeys([acceptedBlob]),
+            sessionChannelPolicy: .lifetimeTotal(1)
+        )
+        let port = try await server.start(port: 0)
+        addTeardownBlock { await server.stop() }
+        // The canned exec reply — the same shape every relay drains.
+        server.execResponse = "hello-from-lifetime-1\n"
+
+        let socketPath = try Self.bridgeSocketPath(profile: "cgwtwodials0000000000000000000")
+        let log = eventLog!
+        let bridge = HerdrEmbedBridgeServer(
+            socketPath: socketPath,
+            connectionFactory: { try await Self.makeExecOnlyLoopbackConnection(
+                port: port,
+                key: key,
+                server: server
+            )},
+            executablePath: "/usr/bin/herdr",
+            sessionName: nil
+        )
+        await bridge.setOnEvent { log.record($0) }
+        try await bridge.start()
+        addTeardownBlock { await bridge.stop() }
+
+        // FIRST DIAL: relay round-trips the canned exec reply, the
+        // bridge's exec-open is this connection's ONLY session channel
+        // (budget slot #1), the connection closes at relay end.
+        let firstClient = try UnixStreamClient.connect(path: socketPath)
+        try firstClient.writeAll(Data("ping\n".utf8))
+        let firstBytes: Data
+        do {
+            firstBytes = try await firstClient.readUntil(
+                needle: "hello-from-lifetime-1",
+                timeout: .seconds(10)
+            )
+        } catch {
+            // If the read fails because the bridge closed, surface the
+            // typed factory / exec-open failure (the most likely cause
+            // under a tight lifetime budget) so the assertion message
+            // names the actual reason — the raw "bridge closed after 0
+            // bytes" alone leaves the failure mode ambiguous.
+            if let lost = await log.waitForCarrierLost(timeout: .milliseconds(50)) {
+                XCTFail("first dial saw bridge close; carrierLost: \(lost)")
+            }
+            throw error
+        }
+        XCTAssertTrue(
+            firstBytes.contains(Data("hello-from-lifetime-1".utf8)),
+            "first relay saw the canned reply"
+        )
+        firstClient.close()
+        let firstRelayEnd = await log.firstRelayEnd(timeout: .seconds(10))
+        XCTAssertNotNil(firstRelayEnd, "first relay ended with a typed receipt")
+
+        // Wait for the first connection to be torn down — the bridge's
+        // exec-session close + per-relay connection close cascade
+        // before the second dial, otherwise the server's
+        // authenticatedConnectionCount would still be 1 mid-flight.
+        try await Self.waitForConnectionCount(server: server, expected: 1, timeout: .seconds(5))
+
+        // SECOND DIAL: the factory resolves a SECOND connection; the
+        // bridge exec opens as that connection's only session channel
+        // (budget slot #1 of the new connection); the canned reply
+        // round-trips.
+        let secondClient = try UnixStreamClient.connect(path: socketPath)
+        defer { secondClient.close() }
+        try secondClient.writeAll(Data("ping\n".utf8))
+        let secondBytes = try await secondClient.readUntil(needle: "hello-from-lifetime-1", timeout: .seconds(10))
+        XCTAssertTrue(
+            secondBytes.contains(Data("hello-from-lifetime-1".utf8)),
+            "second relay saw the canned reply on a fresh connection"
+        )
+        secondClient.close()
+
+        // The load-bearing assertion (per-relay design proof): each dial
+        // resolved a DISTINCT connection — two SSH connections, two exec
+        // channels, each as its connection's ONLY session channel under
+        // a `.lifetimeTotal(1)` budget. A regression to the prior
+        // "one carrier with N exec channels" shape would re-use the
+        // first connection's session channel and the SECOND exec open
+        // would be refused as `NIOSSHError.channelSetupRejected`.
+        try await Self.waitForConnectionCount(server: server, expected: 2, timeout: .seconds(5))
+        XCTAssertEqual(
+            server.authenticatedConnectionCount, 2,
+            "two dials resolved two distinct connections — the per-relay design"
+        )
+
+        // Each successful relay also produces a `.relayEnded` receipt —
+        // waited (the relay tail races an immediate assertion; the
+        // cleanup awaits session/carrier close AFTER the local channel
+        // close).
+        let relayEndCount = await log.waitForRelayEndCount(2, timeout: .seconds(5))
+        XCTAssertEqual(
+            relayEndCount, 2,
+            "two relayEnded receipts, one per dial"
+        )
+    }
+
+    /// T6 regression (the prior shape): with per-relay connections, a
+    /// stale held carrier close no longer applies — the bridge server
+    /// owns no carrier. The redial scenario still applies, but the
+    /// proof now lives in the two-dials tests above (each dial
+    /// resolves a FRESH factory into a brand-new connection; the first
+    /// connection is independent of the second).
+    func testPerRelayFactoryResolvesFreshConnectionForEachAcceptedDial() async throws {
         try Self.requireFixture(serverPort: 12222)
         let probed = try await establishProbed(connection: try SSHTestFixture.makeConnection())
-        let socketPath = try Self.bridgeSocketPath(profile: "redialdead0000000000000000000")
+        let socketPath = try Self.bridgeSocketPath(profile: "twodialstest00000000000000000000")
 
         let server = await makeServer(probed: probed, socketPath: socketPath)
         try await server.start()
 
-        let live = try UnixStreamClient.connect(path: socketPath)
-        try live.writeAll(Self.helloFrame)
-        _ = try await live.readFirstFrame(
+        // First dial: the bridge resolves the factory, opens the bridge
+        // exec on the fresh connection, relays the hello+welcome, the
+        // client closes, the relay ends and the connection is torn down.
+        let firstClient = try UnixStreamClient.connect(path: socketPath)
+        try firstClient.writeAll(Self.helloFrame)
+        _ = try await firstClient.readFirstFrame(
             containing: "endpoint.welcome.v1",
             timeout: .seconds(10)
         )
-        live.close()
+        firstClient.close()
+        let firstRelayEnd = await eventLog.firstRelayEnd(timeout: .seconds(10))
+        let first = try XCTUnwrap(firstRelayEnd, "first relay end receipt")
+        XCTAssertGreaterThan(first.bytesUp, 0)
+        XCTAssertGreaterThan(first.bytesDown, 0)
 
-        await probed.carrier.close()
+        // Second dial AFTER the first fully ended: the factory is
+        // resolved AGAIN into a fresh connection; the bridge exec
+        // opens as that connection's only session channel; the welcome
+        // frame round-trips on the new connection.
+        let secondClient = try UnixStreamClient.connect(path: socketPath)
+        defer { secondClient.close() }
+        try secondClient.writeAll(Self.helloFrame)
+        _ = try await secondClient.readFirstFrame(
+            containing: "endpoint.welcome.v1",
+            timeout: .seconds(10)
+        )
+        secondClient.close()
 
-        let redial = try UnixStreamClient.connect(path: socketPath)
-        defer { redial.close() }
-        try redial.writeAll(Self.helloFrame)
-
-        let lostEvent = await eventLog.firstCarrierLost(timeout: .seconds(10))
-        XCTAssertNotNil(
-            lostEvent,
-            "the dead carrier surfaced as a typed carrierLost event, not a trap"
+        // Two relayEnd events: one per dial. The factory was resolved
+        // exactly twice (one per relay); each fresh connection carried
+        // one exec open and one close. Waited (the relay tail races the
+        // assertion — the cleanup awaits session/carrier close AFTER
+        // the local channel close).
+        let relayEndCount = await eventLog.waitForRelayEndCount(2, timeout: .seconds(5))
+        XCTAssertEqual(
+            relayEndCount, 2,
+            "two sequential dials produced two relayEnded receipts"
         )
 
         await server.stop()
         let stoppedEvent = await eventLog.firstStopped()
-        let stopped = try XCTUnwrap(stoppedEvent, "stop receipt arrived after the redial cycle")
-        XCTAssertTrue(stopped.isStopped, "stop receipt arrived (got \(stopped))")
-        XCTAssertFalse(
-            FileManager.default.fileExists(atPath: socketPath),
-            "no leaked socket file after the redial cycle"
+        let stopped = try XCTUnwrap(stoppedEvent, "stop receipt arrived after both dials")
+        XCTAssertTrue(stopped.isStopped)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: socketPath))
+    }
+
+    /// Listener robustness: one dial whose factory throws must fail the
+    /// relay (typed carrierLost event) WITHOUT stopping the listener —
+    /// a subsequent successful dial still works. The client's supervisor
+    /// redial is the recovery mechanism; the listener never crashes on
+    /// a bad factory call.
+    func testFactoryFailureOnOneDialFailsThatRelayOnlyAndListenerSurvives() async throws {
+        try Self.requireFixture(serverPort: 12222)
+        let probed = try await establishProbed(connection: try SSHTestFixture.makeConnection())
+        let socketPath = try Self.bridgeSocketPath(profile: "factoryfail00000000000000000000")
+
+        let factoryFailures = AtomicCounter()
+        let flaky = FlakyCarrierFactory(
+            underlying: probed.carrierFactory,
+            failFirstN: 1,
+            onFail: { await factoryFailures.increment() }
         )
+
+        let server = HerdrEmbedBridgeServer(
+            socketPath: socketPath,
+            connectionFactory: flaky.call,
+            executablePath: probed.executablePath,
+            sessionName: nil
+        )
+        let log = eventLog!
+        await server.setOnEvent { log.record($0) }
+        try await server.start()
+
+        // First dial: factory throws (failFirstN=1). The relay fails
+        // typed, the listener survives, the local child is discarded.
+        let failingClient = try UnixStreamClient.connect(path: socketPath)
+        defer { failingClient.close() }
+        let lost = await eventLog.firstCarrierLost(timeout: .seconds(5))
+        XCTAssertNotNil(
+            lost,
+            "a factory-throwing dial surfaced as a typed carrierLost event"
+        )
+        let count = await factoryFailures.value
+        XCTAssertEqual(count, 1, "the factory was called once and refused")
+
+        // Subsequent dial: factory succeeds (NoopCounter drains); the
+        // bridge relay round-trips the hello+welcome as normal.
+        let goodClient = try UnixStreamClient.connect(path: socketPath)
+        defer { goodClient.close() }
+        try goodClient.writeAll(Self.helloFrame)
+        _ = try await goodClient.readFirstFrame(
+            containing: "endpoint.welcome.v1",
+            timeout: .seconds(10)
+        )
+        goodClient.close()
+        let firstRelayEnd = await eventLog.firstRelayEnd(timeout: .seconds(10))
+        XCTAssertNotNil(
+            firstRelayEnd,
+            "the post-failure dial's relay round-tripped and ended"
+        )
+
+        await server.stop()
+        let stoppedEvent = await eventLog.firstStopped()
+        let stopped = try XCTUnwrap(stoppedEvent, "stop receipt arrived")
+        XCTAssertTrue(stopped.isStopped)
     }
 
     /// Split out of the test body: an inline `do/catch` around the typed
@@ -187,7 +379,7 @@ final class HerdrEmbedBridgeServerTests: XCTestCase {
     ) async -> Bool {
         let contender = HerdrEmbedBridgeServer(
             socketPath: path,
-            carrier: probed.carrier,
+            connectionFactory: probed.carrierFactory,
             executablePath: probed.executablePath,
             sessionName: nil
         )
@@ -223,6 +415,9 @@ final class HerdrEmbedBridgeServerTests: XCTestCase {
         )
     }
 
+    /// Establishes + probes, returns the ``HerdrProbedCarrier``; the
+    /// tests resolve the factory per-relay (each dial gets a fresh
+    /// channel-less connection — the unit-5 per-relay design).
     private func establishProbed(
         connection: Connection
     ) async throws -> HerdrProbedCarrier {
@@ -261,7 +456,7 @@ final class HerdrEmbedBridgeServerTests: XCTestCase {
     ) async -> HerdrEmbedBridgeServer {
         let server = HerdrEmbedBridgeServer(
             socketPath: socketPath,
-            carrier: probed.carrier,
+            connectionFactory: probed.carrierFactory,
             executablePath: probed.executablePath,
             sessionName: nil
         )
@@ -323,6 +518,51 @@ private final class EventLog: @unchecked Sendable {
         )
         guard case let .relayEnded(clean, bytesUp, bytesDown) = match else { return nil }
         return (clean, bytesUp, bytesDown)
+    }
+
+    /// Waits for the count of `.relayEnded` events to reach `expected`.
+    /// The relay tasks' cleanup (await session.close / carrier.close)
+    /// continues asynchronously after the local channel close — without
+    /// a wait, an immediately-following assertion races the tail and
+    /// reads a stale count. Polled on the same locked snapshot as
+    /// `allEvents`.
+    func waitForRelayEndCount(
+        _ expected: Int,
+        timeout: Duration
+    ) async -> Int {
+        let deadline = ContinuousClock().now + timeout
+        while ContinuousClock().now < deadline {
+            let count = lock.withLock {
+                events.filter {
+                    if case .relayEnded = $0 { return true } else { return false }
+                }.count
+            }
+            if count >= expected { return count }
+            try? await Task.sleep(for: .milliseconds(50))
+        }
+        return lock.withLock {
+            events.filter {
+                if case .relayEnded = $0 { return true } else { return false }
+            }.count
+        }
+    }
+
+    /// Short-timeout poll for the first `.carrierLost` event — used by
+    /// tests that need to assert the bridge factory DID NOT throw on a
+    /// healthy path. Returns the reason if a carrierLost fires within
+    /// the timeout, nil otherwise.
+    func waitForCarrierLost(timeout: Duration) async -> String? {
+        let deadline = ContinuousClock().now + timeout
+        while ContinuousClock().now < deadline {
+            if let found = lock.withLock({ events.first(where: {
+                if case .carrierLost = $0 { return true } else { return false } }
+            ) }) {
+                guard case let .carrierLost(reason) = found else { return nil }
+                return reason
+            }
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+        return nil
     }
 
     private func firstMatch(
@@ -442,4 +682,200 @@ private final class UnixStreamClient {
     func close() {
         Darwin.close(fd)
     }
+
+    /// Reads raw bytes until `needle` appears in the buffer or the timeout
+    /// elapses. The loopback server's exec reply is NOT length-framed
+    /// (the herdr fixture's welcome IS, but for the lifetime-budget relay
+    /// proof we drive the bridge against the loopback server and want
+    /// the raw canned reply without framing) — so this helper exists in
+    /// addition to `readFirstFrame`.
+    func readUntil(needle: String, timeout: Duration) async throws -> Data {
+        let deadline = ContinuousClock().now + timeout
+        var buffer = Data()
+        while ContinuousClock().now < deadline {
+            var chunk = [UInt8](repeating: 0, count: 65536)
+            let read = chunk.withUnsafeMutableBytes { raw in
+                Darwin.read(fd, raw.baseAddress, raw.count)
+            }
+            if read > 0 {
+                buffer.append(contentsOf: chunk[0..<read])
+            }
+            if buffer.range(of: Data(needle.utf8)) != nil {
+                return buffer
+            }
+            if read == 0 {
+                throw NSError(
+                    domain: "UnixStreamClient",
+                    code: 7,
+                    userInfo: [NSLocalizedDescriptionKey: "bridge closed after \(buffer.count) bytes"]
+                )
+            }
+            try Task.checkCancellation()
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        throw NSError(
+            domain: "UnixStreamClient",
+            code: 8,
+            userInfo: [NSLocalizedDescriptionKey: "timed out after \(buffer.count) bytes"]
+        )
+    }
+}
+
+// MARK: - Lifetime-budget helpers
+
+extension HerdrEmbedBridgeServerTests {
+    fileprivate static let lifetimeUsername = "lifetime-bridge-user"
+
+    /// Fresh software ed25519 key plus the blob the loopback server must
+    /// accept for it (matches the connector lifetime-budget suite's
+    /// `makeClientKey` shape). STATIC so the test can call it from
+    /// inside `@Sendable` closures without capturing `self`.
+    fileprivate static func makeClientKeyStatic() throws -> (key: NIOSSHPrivateKey, acceptedBlob: Data) {
+        let key = NIOSSHPrivateKey(ed25519Key: Curve25519.Signing.PrivateKey())
+        let components = String(openSSHPublicKey: key.publicKey)
+            .split(separator: " ", maxSplits: 1)
+        guard components.count == 2,
+              let blob = Data(base64Encoded: String(components[1])) else {
+            throw NSError(domain: "HerdrEmbedBridgeServerTests", code: 1)
+        }
+        return (key, blob)
+    }
+
+    /// Bridges connect through a factory that does a fresh
+    /// ``SSHTransport/connectExecOnly(to:)`` per call (no probe — the
+    /// test wires directly to the loopback server, so each relay's
+    /// connection is provably the only thing touching the budget).
+    /// STATIC + takes `server` explicitly so the closure capturing it
+    /// satisfies `@Sendable` (XCTestCase is not Sendable).
+    fileprivate static func makeExecOnlyLoopbackConnection(
+        port: Int,
+        key: NIOSSHPrivateKey,
+        server: LoopbackPasswordSSHServer
+    ) async throws -> any SSHExecCapableConnection {
+        let verifier = try await pretrustingVerifierForLoopback(server: server, port: port)
+        let transport = SSHTransport(
+            hostKeyVerifier: verifier,
+            authenticationKeyProvider: StaticKeyProvider(key: key),
+            passwordStore: InMemoryPasswordStore([:]),
+            // The default `DefaultSSHKeyMetadataProvider` returns no
+            // metadata in tests (no Keychain-backed defaults); without
+            // explicit metadata the `KeyOfferResolver` filter empties
+            // the offer list and the cascade offers nothing — server
+            // rejects → `.authenticationFailed`. Inject the fixture
+            // provider so "fixture-ed25519" is offered.
+            metadataProvider: FixtureKeyMetadataProvider()
+        )
+        let connection = try Connection(
+            name: "lifetime-bridge", type: .ssh,
+            host: "127.0.0.1", port: port,
+            username: lifetimeUsername,
+            customKeys: ["fixture-ed25519"]
+        )
+        try await transport.connectExecOnly(to: connection)
+        return transport
+    }
+
+    fileprivate static func pretrustingVerifierForLoopback(
+        server: LoopbackPasswordSSHServer,
+        port: Int
+    ) async throws -> HostKeyVerifier {
+        let verifier = HostKeyVerifier(store: EphemeralHostKeyStore())
+        // The server's host key is a stable property of the instance
+        // (set at init or via the explicit `hostKey` arg) — `hostKeyOpenSSH`
+        // is the `algorithm base64-blob` authorized_keys format.
+        let components = server.hostKeyOpenSSH.split(separator: " ", maxSplits: 1)
+        let blob = try XCTUnwrap(Data(base64Encoded: String(components[1])))
+        try await verifier.trust(
+            host: "127.0.0.1",
+            port: port,
+            key: blob,
+            algorithm: String(components[0])
+        )
+        return verifier
+    }
+
+    /// Polls `authenticatedConnectionCount` until it reaches `expected`
+    /// or the timeout elapses — the first dial must tear its connection
+    /// down before `authenticatedConnectionCount` advances to the second,
+    /// otherwise the lifetime-budget assertion (== 2 across two dials)
+    /// would conflate "two connections alive" with "two connections
+    /// total".
+    fileprivate static func waitForConnectionCount(
+        server: LoopbackPasswordSSHServer,
+        expected: Int,
+        timeout: Duration
+    ) async throws {
+        let deadline = ContinuousClock().now + timeout
+        while ContinuousClock().now < deadline {
+            if server.authenticatedConnectionCount == expected { return }
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        let count = server.authenticatedConnectionCount
+        XCTAssertEqual(
+            count, expected,
+            "waiting for authenticatedConnectionCount == \(expected) (got \(count))"
+        )
+    }
+}
+
+/// Reads the loopback server's `hostKeyOpenSSH` via a probe connection —
+/// the standard pattern across the connector lifetime-budget tests. The
+/// probe is a throwaway exec-only SSHTransport that opens no session
+/// channel (it just walks the handshake so the server publishes its key).
+// (ServerKeyProbe removed: the loopback server's host key is a stable
+// property of the instance — `hostKeyOpenSSH` reads from the constructed
+// `hostKey`, no probe connection needed. The test passes the server into
+// `pretrustingVerifierForLoopback(server:port:)` instead.)
+
+// MARK: - Factory-failure helpers
+
+/// Factory wrapper that throws for the first N calls, then delegates to
+/// the underlying factory. Drives the listener-robustness test: one
+/// bad dial must not stop the listener; the next dial still resolves.
+/// CLASS (not struct) so the captured `self` survives the @Sendable
+/// closure's value-capture (struct mutations would fail strict
+/// concurrency: `self` is immutable inside an async method on a struct
+/// captured by another closure).
+private final class FlakyCarrierFactory: @unchecked Sendable {
+    private let underlying: @Sendable () async throws -> any SSHExecCapableConnection
+    private let failFirstN: Int
+    private let onFail: @Sendable () async -> Void
+    private let lock = NSLock()
+    private var calls = 0
+
+    init(
+        underlying: @escaping @Sendable () async throws -> any SSHExecCapableConnection,
+        failFirstN: Int,
+        onFail: @escaping @Sendable () async -> Void
+    ) {
+        self.underlying = underlying
+        self.failFirstN = max(0, failFirstN)
+        self.onFail = onFail
+    }
+
+    func call() async throws -> any SSHExecCapableConnection {
+        let callIndex: Int = lock.withLock {
+            let current = calls
+            calls += 1
+            return current
+        }
+        if callIndex < failFirstN {
+            await onFail()
+            throw NSError(
+                domain: "FlakyCarrierFactory",
+                code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "flaky factory refused dial #\(callIndex)"]
+            )
+        }
+        return try await underlying()
+    }
+}
+
+/// Lock-confined counter — the bridge server's factory calls are
+/// concurrent across relays (not strictly, here, but a counter is the
+/// simplest deterministic witness for "the factory was called exactly
+/// once before the failure dial").
+private actor AtomicCounter {
+    private(set) var value: Int = 0
+    func increment() { value += 1 }
 }

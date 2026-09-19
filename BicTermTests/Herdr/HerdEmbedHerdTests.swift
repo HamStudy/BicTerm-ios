@@ -12,9 +12,9 @@ import XCTest
 /// machine catalog (one bridge socket per machine — direct 12222 and
 /// jump-chained 12222 → 12223), the client's own sidebar lists every
 /// machine, machine selection rides a real SGR mouse click through the
-/// SwiftTerm input path, severing one machine's carrier leaves the other
-/// flowing, and opening a second herd closes the first cleanly with fully
-/// isolated sockets and catalog.
+/// SwiftTerm input path, severing one machine stops its bridge and
+/// leaves the other flowing, and opening a second herd closes the first
+/// cleanly with fully isolated sockets and catalog.
 @MainActor
 final class HerdrEmbedHerdTests: XCTestCase {
     private var window: UIWindow?
@@ -481,6 +481,12 @@ final class HerdrEmbedHerdTests: XCTestCase {
         )
     }
 
+    /// Per-relay bridge contract, mirrored from
+    /// ``HerdrEmbedHardeningTests/testSeveredBridgeSurfacesTypedExitAndReopenReconnects``:
+    /// severing stops the machine's bridge; no `carrier lost` fires on a
+    /// per-relay bridge (there is no held carrier to lose). The
+    /// observable is the bridge-stop event, and the other machine keeps
+    /// flowing — the load-bearing half of this test.
     func testSeveringOneMachineLeavesTheOtherFlowing() async throws {
         try requireBothFixtures()
         let cwdBeforeStart = FileManager.default.currentDirectoryPath
@@ -495,9 +501,9 @@ final class HerdrEmbedHerdTests: XCTestCase {
 
         await waitFor(
             coordinator.eventLines.contains {
-                $0.hasPrefix("alpha: bridge carrier lost")
+                $0.hasPrefix("alpha: bridge stopped")
             },
-            "severing machine alpha surfaced through its bridge",
+            "severing machine alpha stopped its bridge; alpha lines: \(coordinator.eventLines.filter { $0.hasPrefix("alpha") })",
             timeout: 15
         )
         XCTAssertEqual(
@@ -510,8 +516,8 @@ final class HerdrEmbedHerdTests: XCTestCase {
             timeout: 15
         )
         XCTAssertFalse(
-            coordinator.eventLines.contains { $0.hasPrefix("beta: bridge carrier lost") },
-            "machine beta's transport was never touched"
+            coordinator.eventLines.contains { $0.hasPrefix("beta: bridge stopped") },
+            "machine beta's bridge was never touched"
         )
 
         let writtenBefore = runtime.bytesWritten

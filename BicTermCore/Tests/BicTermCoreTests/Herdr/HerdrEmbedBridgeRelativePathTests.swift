@@ -50,7 +50,7 @@ final class HerdrEmbedBridgeRelativePathTests: XCTestCase {
 
         let server = HerdrEmbedBridgeServer(
             socketPath: Self.socketPath,
-            carrier: StubExecCarrier(),
+            connectionFactory: { StubExecCarrier() },
             executablePath: "/usr/bin/true",
             sessionName: nil
         )
@@ -89,7 +89,7 @@ final class HerdrEmbedBridgeRelativePathTests: XCTestCase {
         let socketPath = "tmp/herdr-embed-transport/relbindok0000000000000000000.sock"
         let server = HerdrEmbedBridgeServer(
             socketPath: socketPath,
-            carrier: StubExecCarrier(),
+            connectionFactory: { StubExecCarrier() },
             executablePath: "/usr/bin/true",
             sessionName: nil
         )
@@ -164,7 +164,7 @@ final class HerdrEmbedBridgeRelativePathTests: XCTestCase {
 
         let server = HerdrEmbedBridgeServer(
             socketPath: socketPath,
-            carrier: StubExecCarrier(),
+            connectionFactory: { StubExecCarrier() },
             executablePath: "/usr/bin/true",
             sessionName: nil
         )
@@ -264,7 +264,7 @@ final class HerdrEmbedBridgeRelativePathTests: XCTestCase {
     private static func startRefusal(at path: String) async -> HerdrEmbedBridgeError? {
         let contender = HerdrEmbedBridgeServer(
             socketPath: path,
-            carrier: StubExecCarrier(),
+            connectionFactory: { StubExecCarrier() },
             executablePath: "/usr/bin/true",
             sessionName: nil
         )

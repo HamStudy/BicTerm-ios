@@ -130,7 +130,17 @@ final class HerdrEmbedTransportBringUpTests: XCTestCase {
             // same dial the embedded client performs. The stub carrier
             // refuses the exec open (typed carrierLost), but the
             // bind/listen/accept contract is what "starting herdr" needs.
+            // We hold the socket open long enough for the bridge's
+            // acceptTask to iterate (yielding the child), which kicks off
+            // the relay (factory resolves → exec-open throws → owner-close
+            // → relayEnded). A bare connect-then-close is too short for
+            // the relay to fire before `coordinator.teardown()` cancels
+            // the acceptTask — the per-relay factory is only resolved
+            // when a child is actually processed.
             let fd = try Self.connectSocket(path: relativeSocket)
+            // Hold the dial long enough for the bridge's acceptTask to
+            // iterate (yielding the child, kicking off the relay).
+            try await Task.sleep(nanoseconds: 200_000_000)
             Darwin.close(fd)
         }
 
@@ -163,6 +173,15 @@ final class HerdrEmbedTransportBringUpTests: XCTestCase {
                 "teardown unlinked \(socket.lastPathComponent)"
             )
         }
+        // Per-relay truth (unit-5): each dial that reached the bridge
+        // listener resolved the factory into a fresh carrier. The test
+        // did `connect(2)` + close for each machine; the NoopCarrier
+        // makes the exec-open throw, so the relay's owner-close path
+        // fires once per relay — `closeCount == 1` is the proof the
+        // relay executed end-to-end on a fresh carrier. (With a
+        // NoopCarrier the relay exits the `exec-open` failure path,
+        // emitting `carrierLost` rather than `relayEnded`; either is a
+        // proof the relay ran — closeCount is the durable signal.)
         for (index, carrier) in carriers.enumerated() {
             let closeCount = await carrier.closeCount
             XCTAssertEqual(
@@ -222,7 +241,7 @@ final class HerdrEmbedTransportBringUpTests: XCTestCase {
         coordinator.establishForTesting = { link in
             HerdrEmbedTransportCoordinator.Established(
                 link: link,
-                carrier: carrier,
+                carrierFactory: { carrier },
                 executablePath: "/usr/bin/herdr"
             )
         }
@@ -256,8 +275,12 @@ final class HerdrEmbedTransportBringUpTests: XCTestCase {
         )
 
         await coordinator.teardown()
+        // No dial happened (this test only checks bind + catalog seed +
+        // teardown), so the per-relay factory was never resolved and the
+        // carrier was never closed — proving that "no held carrier"
+        // means there is literally nothing to leak on teardown.
         let closeCount = await carrier.closeCount
-        XCTAssertEqual(closeCount, 1)
+        XCTAssertEqual(closeCount, 0, "no dial → factory never resolved → no carrier to close")
         XCTAssertEqual(FileManager.default.currentDirectoryPath, cwdBefore)
     }
 
@@ -284,6 +307,12 @@ final class HerdrEmbedTransportBringUpTests: XCTestCase {
             "bridge socket bound under the real app home's tmp/ at \(socket.path)"
         )
         let fd = try Self.connectSocket(path: relativeSocket)
+        // Hold the dial long enough for the bridge's acceptTask to
+        // iterate (yielding the child, kicking off the relay). Same
+        // rationale as the multi-machine variant — without it the
+        // relay may be cancelled by teardown before the factory
+        // resolves.
+        try await Task.sleep(nanoseconds: 200_000_000)
         Darwin.close(fd)
 
         await coordinator.teardown()
@@ -291,8 +320,11 @@ final class HerdrEmbedTransportBringUpTests: XCTestCase {
             FileManager.default.fileExists(atPath: socket.path),
             "teardown unlinked the real-home socket"
         )
+        // The brief connect-then-close dial triggers one relay attempt,
+        // which resolves the factory once and (because NoopCarrier
+        // throws on exec-open) closes that fresh carrier once.
         let closeCount = await carriers[0].closeCount
-        XCTAssertEqual(closeCount, 1, "carrier closed exactly once")
+        XCTAssertEqual(closeCount, 1, "one dial → one relay → one fresh carrier close")
         XCTAssertEqual(FileManager.default.currentDirectoryPath, cwdBefore)
     }
 
@@ -339,7 +371,7 @@ final class HerdrEmbedTransportBringUpTests: XCTestCase {
             }
             return HerdrEmbedTransportCoordinator.Established(
                 link: link,
-                carrier: carrier,
+                carrierFactory: { carrier },
                 executablePath: "/usr/bin/herdr"
             )
         }
