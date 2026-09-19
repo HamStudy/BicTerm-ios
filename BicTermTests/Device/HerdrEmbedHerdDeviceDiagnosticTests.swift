@@ -87,13 +87,6 @@ final class HerdrEmbedHerdDeviceDiagnosticTests: XCTestCase {
         let verifier = HostKeyVerifier(
             store: await SessionStore.defaultHostKeyStoreForLiveUse()
         )
-        let coordinator = HerdrEmbedTransportCoordinator(
-            machines: links,
-            preferredSelection: nil,
-            hostKeyVerifier: verifier,
-            searchPaths: HerdrProbe.defaultSearchPaths
-        )
-
         // Fresh capture: every establish-path swallow point (SSHTransport's
         // channel-open collapse, the auth cascade's key/password resolution
         // failures, the connector's catch-alls) records the FULL underlying
@@ -101,20 +94,29 @@ final class HerdrEmbedHerdDeviceDiagnosticTests: XCTestCase {
         // show is otherwise a dead end.
         SSHEstablishDiagnostics.shared.removeAll()
 
-        do {
-            _ = try await coordinator.prepare()
-            lines.append("prepare: COMPLETED")
-        } catch {
-            lines.append("prepare: FAILED \(error)")
-        }
-        lines.append("eventLines:")
-        lines.append(contentsOf: coordinator.eventLines)
-        let diagnostics = SSHEstablishDiagnostics.shared.snapshot()
-        lines.append("establishDiagnostics: \(diagnostics.count) captured")
-        lines.append(contentsOf: diagnostics)
-        record("prepare", "event lines captured (see herd-diagnostic.txt)")
+        for link in links {
+            let coordinator = HerdrEmbedTransportCoordinator(
+                machines: [link],
+                preferredSelection: nil,
+                hostKeyVerifier: verifier,
+                searchPaths: HerdrProbe.defaultSearchPaths
+            )
+            lines.append("== machine \(link.machine.label) -> \(link.machine.target) ==")
+            let beforeCount = SSHEstablishDiagnostics.shared.snapshot().count
+            do {
+                _ = try await coordinator.prepare()
+            } catch {
+                lines.append("prepare: FAILED \(error)")
+            }
+            lines.append("eventLines:")
+            lines.append(contentsOf: coordinator.eventLines)
+            let diagnostics = SSHEstablishDiagnostics.shared.snapshot().dropFirst(beforeCount)
+            lines.append("establishDiagnostics: \(diagnostics.count) captured")
+            lines.append(contentsOf: diagnostics)
+            record("prepare", "event lines captured (see herd-diagnostic.txt)")
 
-        await coordinator.teardown()
+            await coordinator.teardown()
+        }
         record("teardown", "completed")
     }
 
