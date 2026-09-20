@@ -110,7 +110,23 @@ final class SettingsUITests: XCTestCase {
         launch()
         openFontSizeDetail()
 
-        slider.adjust(toNormalizedSliderPosition: 1.0)
+        // adjust(toNormalizedSliderPosition: 1.0) synthesizes a press at the
+        // slider frame's right edge; under load the delivered touch can land
+        // one 0.5pt step short of the track end (31.5 instead of 32). Move
+        // the thumb mid-track first (engagement is reliable, precision here
+        // is irrelevant), then grab it and drag past the right edge: SwiftUI
+        // clamps the value at the maximum, so the landing value is exactly
+        // 32 pt regardless of event timing. The destination is clamped to
+        // the screen bounds so the coordinate stays synthesizable.
+        slider.adjust(toNormalizedSliderPosition: 0.5)
+        let screen = XCUIApplication(bundleIdentifier: "com.apple.springboard").frame
+        let sliderFrame = slider.frame
+        let start = slider.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        let end = slider.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(
+            dx: min(sliderFrame.maxX + 150, screen.width - 2) - sliderFrame.minX,
+            dy: sliderFrame.height / 2
+        ))
+        start.press(forDuration: 0.1, thenDragTo: end)
         XCTAssertEqual(valueLabel.label, "32 pt", "slider at maximum must read 32 pt")
         XCTAssertTrue(resetButton.isEnabled, "Reset must enable once the size differs from default")
 
