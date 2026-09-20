@@ -986,19 +986,45 @@ final class ConnectionEditorUITests: XCTestCase {
         scrollToHittable(edit)
         edit.tap()
         XCTAssertTrue(app.textFields["hop-field-host"].waitForExistence(timeout: 10))
+        // The push must finish before the hop editor can receive taps:
+        // mid-slide the destination's controls sit off-window and a tap
+        // synthesized at a stale frame is swallowed. Gate on the editor's
+        // own toolbar being interactive (same pattern as saveHop).
+        let hopReady = NSPredicate(format: "hittable == true")
+        expectation(for: hopReady, evaluatedWith: app.buttons["cancel-hop"])
+        waitForExpectations(timeout: 10)
     }
 
     private func saveHop() {
         let save = app.buttons["save-hop"]
         XCTAssertTrue(save.waitForExistence(timeout: 5))
+        awaitHopEditorInteractive()
         save.tap()
         let popped = NSPredicate(format: "exists == false")
         expectation(for: popped, evaluatedWith: app.textFields["hop-field-host"])
         waitForExpectations(timeout: 10)
+        // The hop editor is pushed, not sheeted: saving pops it back onto the
+        // connection editor. A tap issued while the pop transition is still
+        // unwinding lands on the sliding-away view and is swallowed; gate on
+        // the editor's chrome being interactive again before the next hop.
         let editorReady = NSPredicate(format: "hittable == true")
         expectation(for: editorReady, evaluatedWith: app.buttons["cancel-editor"])
         waitForExpectations(timeout: 10)
         Thread.sleep(forTimeInterval: 0.4)
+    }
+
+    /// "The hop editor can receive a tap": any pushed key picker has
+    /// finished popping back (its toolbar left the hierarchy) and the hop
+    /// editor's own Save is hittable again. Both predicates hold instantly
+    /// when no picker transition is in flight, so it is safe to gate every
+    /// save-hop tap, not just the ones that follow customize-done.
+    private func awaitHopEditorInteractive() {
+        let pickerGone = NSPredicate(format: "exists == false")
+        expectation(for: pickerGone, evaluatedWith: app.buttons["customize-done"])
+        waitForExpectations(timeout: 10)
+        let saveReady = NSPredicate(format: "hittable == true")
+        expectation(for: saveReady, evaluatedWith: app.buttons["save-hop"])
+        waitForExpectations(timeout: 10)
     }
 
     private func assertHopCredential(_ index: Int, equals expected: String) {
@@ -1075,14 +1101,39 @@ final class ConnectionEditorUITests: XCTestCase {
         XCTAssertTrue(app.buttons["cancel-editor"].waitForExistence(timeout: 10))
     }
 
+    /// Types `text` into `field`. A replacement (`clearing`) is only done
+    /// once the field verifiably shows the typed text: under simulator load
+    /// the edit menu often never appears within its wait, the clear is
+    /// silently skipped, and the typed text appends to the old value — the
+    /// corrupted port then disables `save-hop` (its tap becomes a no-op and
+    /// the `exists == 0` wait for the hop editor times out) and a corrupted
+    /// host suppresses the cycle warning. Retry the whole sequence instead
+    /// of letting the corruption leak into later assertions.
     private func typeInto(_ field: XCUIElement, _ text: String, clearing existing: String? = nil) {
-        field.tap()
-        awaitKeyboardFocus(on: field)
-        if existing != nil {
-            selectAllForReplacement(of: field)
+        for _ in 1...3 {
+            field.tap()
+            awaitKeyboardFocus(on: field)
+            if existing != nil {
+                selectAllForReplacement(of: field)
+            }
+            app.typeText(text)
+            if existing == nil || fieldShowsValue(field, text) {
+                dismissKeyboard()
+                return
+            }
         }
-        app.typeText(text)
         dismissKeyboard()
+        XCTFail("typing '\(text)' never replaced the field value; last read: \(field.value as? String ?? "nil")")
+    }
+
+    /// The AX value can lag the keystrokes by a snapshot; poll briefly.
+    private func fieldShowsValue(_ field: XCUIElement, _ text: String, timeout: TimeInterval = 2) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if (field.value as? String) == text { return true }
+            Thread.sleep(forTimeInterval: 0.1)
+        }
+        return (field.value as? String) == text
     }
 
     /// isHittable flaps during keyboard/Form relayout; the stable, meaningful
@@ -1096,6 +1147,9 @@ final class ConnectionEditorUITests: XCTestCase {
     /// Caret/alignment-agnostic clear: select all content through the edit
     /// menu; the following app-level typeText then replaces the selection
     /// wholesale regardless of caret position or deleted-keystroke delivery.
+    /// When the menu never appears (common under simulator load) this
+    /// returns WITHOUT clearing — the caller's value verification catches
+    /// the resulting corruption and retries.
     private func selectAllForReplacement(of field: XCUIElement) {
         field.press(forDuration: 1.1)
         let selectAll = app.menuItems["Select All"]
@@ -1108,6 +1162,19 @@ final class ConnectionEditorUITests: XCTestCase {
         // An absent keyboard must turn this into a no-op: the drag fallback is
         // itself a focus-disturbing full-form gesture.
         guard app.keyboards.count > 0 else { return }
+        performKeyboardDismiss()
+        // Dismissal is animated: until the keyboard leaves the hierarchy the
+        // form is still relayouting, and taps, scrolls, and isHittable checks
+        // issued in that window race the relayout (observed: cycle-warning
+        // isHittable flapped right after typing). Gate on the keyboard being
+        // really gone before handing control back.
+        let deadline = Date().addingTimeInterval(3)
+        while app.keyboards.count > 0 && Date() < deadline {
+            Thread.sleep(forTimeInterval: 0.1)
+        }
+    }
+
+    private func performKeyboardDismiss() {
         let toolbarDone = app.toolbars.buttons["Done"]
         let plainDone = app.buttons["Done"]
         if toolbarDone.waitForExistence(timeout: 2) {
@@ -1242,21 +1309,9 @@ final class ConnectionEditorUITests: XCTestCase {
         selectOnlyKey(key)
         app.buttons["customize-done"].tap()
 
-        let save = app.buttons["save-hop"]
-        XCTAssertTrue(save.waitForExistence(timeout: 5))
-        save.tap()
-        let popped = NSPredicate(format: "exists == false")
-        expectation(for: popped, evaluatedWith: hostField)
-        waitForExpectations(timeout: 10)
-
-        // The hop editor is pushed, not sheeted: saving pops it back onto the
-        // connection editor. A tap issued while the pop transition is still
-        // unwinding lands on the sliding-away view and is swallowed; gate on
-        // the editor's chrome being interactive again before the next hop.
-        let editorReady = NSPredicate(format: "hittable == true")
-        expectation(for: editorReady, evaluatedWith: app.buttons["cancel-editor"])
-        waitForExpectations(timeout: 10)
-        Thread.sleep(forTimeInterval: 0.4)
+        // customize-done pops the picker back onto the hop editor; saveHop
+        // gates on that pop finishing before it taps save-hop.
+        saveHop()
     }
 
     private func swipeRow(named identifier: String) {
