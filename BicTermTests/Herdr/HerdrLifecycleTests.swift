@@ -61,23 +61,34 @@ final class HerdrLifecycleTests: XCTestCase {
         HerdrSessionModel(handshakeTimeout: handshakeTimeout, reconnectBackoff: backoff)
     }
 
-    /// Connects through the full presentation fence and waits for online.
+    /// Connects through the full presentation fence and waits for it to
+    /// settle: Online arrives with the welcome and the surface at the
+    /// first activation completion, but the FFI input lane unfreezes only
+    /// at the fence's terminal presentation-ready control — input sent
+    /// before that comes back `.frozen`.
     private func connectThroughFence(
         _ model: HerdrSessionModel,
         endpoint: HerdrEndpointID,
         source: HerdrReconnectSource? = nil
     ) async throws -> HerdrReplayTransport {
+        let transport: HerdrReplayTransport
         if let source,
             let fromSource = try? await source.makeTransport() as? HerdrReplayTransport {
             model.connect(endpoint: endpoint, transport: fromSource, reconnectSource: source)
-            let online = await waitUntil { model.endpoints[endpoint]?.phase == .online }
-            XCTAssertTrue(online, "the fence must complete before lifecycle assertions")
-            return fromSource
+            transport = fromSource
+        } else {
+            transport = HerdrReplayTransport(script: try fenceScript())
+            model.connect(endpoint: endpoint, transport: transport)
         }
-        let transport = HerdrReplayTransport(script: try fenceScript())
-        model.connect(endpoint: endpoint, transport: transport)
         let online = await waitUntil { model.endpoints[endpoint]?.phase == .online }
         XCTAssertTrue(online, "the fence must complete before lifecycle assertions")
+        // While Online the pump applies every scripted chunk, so the
+        // applied-chunk count reaching the script length is the
+        // deterministic presentation-ready (input-unfrozen) signal.
+        let fenceApplied = await waitUntil(timeout: 8) {
+            model.debugAppliedChunks >= transport.scriptChunkCount
+        }
+        XCTAssertTrue(fenceApplied, "the fence's ready control must apply before input assertions")
         return transport
     }
 
