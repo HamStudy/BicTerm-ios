@@ -27,7 +27,14 @@ final class FreeformResizeUITests: XCTestCase {
         add(attachment)
     }
 
-    func testCornerDragResizesWindowToNonPresetSize() {
+    /// iPhone windows are always full-screen: there is no corner grip and no
+    /// preset snapping, and the guarded `~ipad` orientation declarations do
+    /// not apply, so the drag/assert cycle has no meaning there.
+    func testCornerDragResizesWindowToNonPresetSize() throws {
+        try XCTSkipUnless(
+            UIDevice.current.userInterfaceIdiom == .pad,
+            "freeform window resizing is an iPadOS 26 capability; iPhone windows are full-screen"
+        )
         app.launch()
         sleep(2)
 

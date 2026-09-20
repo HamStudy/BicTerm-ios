@@ -314,14 +314,25 @@ final class HerdrConnectionUITests: XCTestCase {
     /// `.textContentType(.oneTimeCode)`, but iOS 26.5's AutoFill still
     /// presents its "Save Password?" sheet once the simulator's password
     /// subsystem is active — dismiss it so the flow under test continues.
+    ///
+    /// The alert's AX tree exposes "Not Now" before the alert accepts
+    /// touches, so a tap synthesized in that window is silently swallowed
+    /// (observed on iPhone: solo and full-suite runs). Verify the dismissal
+    /// outcome and re-tap instead of trusting the first tap.
     private func dismissSystemSavePromptIfPresent() {
         let notNow = app.buttons["Not Now"]
-        if notNow.waitForExistence(timeout: 3) {
-            notNow.tap()
-            let dismissed = NSPredicate(format: "exists == false")
-            expectation(for: dismissed, evaluatedWith: notNow)
-            waitForExpectations(timeout: 3)
+        guard notNow.waitForExistence(timeout: 3) else { return }
+        let dismissed = NSPredicate(format: "exists == false")
+        for _ in 0..<4 {
+            notNow.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+            if XCTWaiter.wait(
+                for: [XCTNSPredicateExpectation(predicate: dismissed, object: notNow)],
+                timeout: 2
+            ) == .completed {
+                return
+            }
         }
+        XCTFail("the system Save Password alert did not dismiss after repeated Not Now taps")
     }
 
     private func selectAuthenticationKey(_ label: String) {

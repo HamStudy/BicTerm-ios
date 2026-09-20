@@ -221,10 +221,12 @@ final class HerdrEmbedUITests: XCTestCase {
         Thread.sleep(forTimeInterval: 3)
         let before = ioWriteCount(app)
 
-        // Machines sidebar row ("beta"), left ~11% of the surface. The click
-        // must deliver a press AND a release — the client completes chrome
-        // clicks on the release (MouseEventKind::Up), so press-only delivery
-        // (the recognizer-teardown regression) deadens every click. One tap
+        // Machines sidebar row ("beta") on iPad, the prompt row on iPhone's
+        // mobile layout — the byte-delivery assertion below is
+        // position-independent. The click must deliver a press AND a
+        // release — the client completes chrome clicks on the release
+        // (MouseEventKind::Up), so press-only delivery (the
+        // recognizer-teardown regression) deadens every click. One tap
         // is one 10-byte press plus one 10-byte release.
         let row = surface.coordinate(withNormalizedOffset: CGVector(dx: 0.11, dy: 0.096))
         row.tap()
@@ -244,14 +246,17 @@ final class HerdrEmbedUITests: XCTestCase {
         row.press(forDuration: 0.1, thenDragTo: dragEnd)
         Thread.sleep(forTimeInterval: 1)
 
-        // End-to-end client proof: the sidebar's "menu" launcher (right edge
-        // of the machines footer row) opens the client-local global menu
-        // overlay on mouse-down, so the surface pixels must change.
-        // Workspace-row activation routes through the fixture server's
-        // WorkspaceFocus method and is not a deterministic observable here.
+        // End-to-end client proof: a chrome launcher must open a client-local
+        // overlay. The herdr client renders its mobile layout below 96 cols
+        // (iPhone): no machines sidebar or menu launcher exists, and the
+        // desktop launcher coordinates land in the shell pane. The mobile
+        // layout's equivalent is the header's "switch" button (top-right,
+        // 10 cols × 2 rows): a press opens the workspace switcher overlay.
         let surfaceBefore = surface.screenshot().pngRepresentation
-        let menu = surface.coordinate(withNormalizedOffset: CGVector(dx: 0.176, dy: 0.50))
-        menu.tap()
+        let launcherOffset = UIDevice.current.userInterfaceIdiom == .phone
+            ? CGVector(dx: 0.9, dy: 0.03)
+            : CGVector(dx: 0.176, dy: 0.50)
+        surface.coordinate(withNormalizedOffset: launcherOffset).tap()
         Thread.sleep(forTimeInterval: 1)
         let postClick = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         postClick.lifetime = .keepAlways
@@ -260,7 +265,7 @@ final class HerdrEmbedUITests: XCTestCase {
         XCTAssertNotEqual(
             surface.screenshot().pngRepresentation,
             surfaceBefore,
-            "tapping the menu launcher must open the client-side global menu overlay"
+            "tapping the chrome launcher must open the client-local overlay"
         )
     }
 
