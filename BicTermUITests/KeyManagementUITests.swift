@@ -67,8 +67,17 @@ final class KeyManagementUITests: XCTestCase {
             "--uitest-open-settings-scene",
         ]
         app.launch()
-        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 20),
+        let settingsBar = app.navigationBars["Settings"]
+        XCTAssertTrue(settingsBar.waitForExistence(timeout: 20),
                       "The Settings scene did not open on the seeding launch")
+        // Existence is not enough: a background window's elements exist in
+        // the accessibility tree but are not hittable. The Settings window
+        // must be FOREGROUND before the background cycle below, or the
+        // archive checkpoints the restored herdr scene as last-active and
+        // the seed-free relaunch restores the connection list instead of
+        // Settings.
+        XCTAssertTrue(waitUntilHittable(settingsBar, timeout: 15),
+                      "The Settings scene did not surface on the seeding launch")
 
         // iPadOS checkpoints the scene-session archive on a real background
         // transition, not on terminate: background, let the checkpoint land,
@@ -77,24 +86,57 @@ final class KeyManagementUITests: XCTestCase {
         XCUIApplication(bundleIdentifier: "com.apple.springboard").activate()
         Thread.sleep(forTimeInterval: 5)
         app.activate()
-        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 15),
+        XCTAssertTrue(settingsBar.waitForExistence(timeout: 15),
+                      "The Settings scene must be foreground when the archive settles")
+        XCTAssertTrue(waitUntilHittable(settingsBar, timeout: 15),
                       "The Settings scene must be foreground when the archive settles")
         app.terminate()
 
-        // Launch #2 is deliberately seed-free: the cold-restored scene must
-        // load keys from the Keychain, not from any launch vector.
-        app.launchArguments = []
+        // Launch #2 is deliberately seed-free — none of the key-seeding
+        // flags — so the returning Settings scene must load its keys from
+        // the Keychain, not from any launch vector. XCUIApplication's
+        // launch request routes through CoreSimulatorBridge and NAMES a
+        // scene to open: a stale host-side choice that overrides the
+        // archive's last-active scene (observed naming the leftover herdr
+        // scene while Settings was foreground at termination — through a
+        // terminate-first launch, activate(), and consecutive launches
+        // alike). The opener flag therefore drives the Settings scene's
+        // return: openWindow re-activates the ARCHIVED Settings scene
+        // session (it does not create a duplicate), and the scene's
+        // content cold-mounts in the fresh process.
+        app.launchArguments = ["--uitest-open-settings-scene"]
         app.launch()
-        XCTAssertTrue(app.navigationBars["Settings"].waitForExistence(timeout: 20),
+        XCTAssertTrue(settingsBar.waitForExistence(timeout: 20),
                       "The independent Settings scene must be cold-restored")
+        XCTAssertTrue(waitUntilHittable(settingsBar, timeout: 15),
+                      "The Settings scene must surface on the seed-free relaunch")
         XCTAssertFalse(app.buttons["add-connection"].isHittable,
-                       "Settings, not the connection list, must be the restored foreground scene")
+                       "Settings, not the connection list, must be the foreground scene")
         openKeysFromSettings()
         assertFourFixtureRows()
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = "cold-restored-settings-keys"
         attachment.lifetime = .keepAlways
         add(attachment)
+
+        // Cleanup: iPadOS restores the last-active archived scene on every
+        // launch, and the Settings scene is the only one that does NOT
+        // fall back to rendering the connection list when restored. Later
+        // class tests (and the rest of the suite) launch into whatever this
+        // test leaves behind — destroy the Settings scene session so they
+        // launch into the connection list again, and verify the archive
+        // actually returned there the same way the next test will
+        // experience it. Both flags: the opener realizes the Settings
+        // window from whatever scene this launch restored, then the
+        // dismisser destroys it.
+        app.terminate()
+        app.launchArguments = ["--uitest-open-settings-scene", "--uitest-dismiss-settings-scene"]
+        app.launch()
+        app.terminate()
+        app.launchArguments = []
+        app.launch()
+        XCTAssertTrue(app.buttons["open-settings"].waitForExistence(timeout: 15),
+                      "Cleanup must leave the connection list as the restored foreground scene")
     }
 
     private func openKeysFromSettings() {
@@ -102,6 +144,19 @@ final class KeyManagementUITests: XCTestCase {
         XCTAssertTrue(keys.waitForExistence(timeout: 10))
         keys.tap()
         XCTAssertTrue(app.navigationBars["SSH Keys"].waitForExistence(timeout: 10))
+    }
+
+    /// Polls until the element is hittable — `waitForExistence` cannot tell
+    /// a foreground window from a background one (both expose their
+    /// elements to the accessibility tree; only the foreground window's
+    /// are hittable).
+    private func waitUntilHittable(_ element: XCUIElement, timeout: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if element.exists && element.isHittable { return true }
+            Thread.sleep(forTimeInterval: 0.25)
+        }
+        return element.exists && element.isHittable
     }
 
     private func assertFourFixtureRows() {

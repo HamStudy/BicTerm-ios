@@ -202,6 +202,14 @@ private struct ConnectionsBootstrapGate<Content: View>: View {
             }
         }
         .environment(model)
+        #if DEBUG
+        // Every scene's content flows through this gate, so the Settings
+        // opener mounts in whichever scene iPadOS actually restores — a
+        // full UI-suite run leaves the last-active archived scene as a
+        // herdr/terminal window, and the main WindowGroup scene may never
+        // be realized on launch (see UITestSettingsSceneOpener).
+        .modifier(UITestSettingsSceneOpener())
+        #endif
         .task {
             await model.bootstrap()
             ready = true
@@ -234,7 +242,6 @@ struct BicTermApp: App {
                 } else {
                     ConnectionListContainer(store: sessionStore, herdConnect: herdConnect)
                         .terminalStyle()
-                        .modifier(UITestSettingsSceneOpener())
                 }
                 #else
                 ConnectionListContainer(store: sessionStore, herdConnect: herdConnect)
@@ -338,6 +345,9 @@ struct BicTermApp: App {
                 #endif
             }
             .appAppearance(sessionStore.theme)
+            #if DEBUG
+            .modifier(UITestSettingsSceneDismisser())
+            #endif
             .environment(sessionStore.terminalMargin)
             .environment(AppServices.shared.keyStore)
             .environment(AppServices.shared.keyAvailabilityPreferences)

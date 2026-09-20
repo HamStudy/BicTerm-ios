@@ -169,24 +169,109 @@ enum SessionUITestDriver {
     }
 }
 
+/// Per-process state shared by the Settings-scene UI-test seams below: the
+/// opener and the dismisser coordinate through it so a cleanup launch
+/// (both flags) never re-opens a window the dismisser already destroyed,
+/// regardless of which scene iPadOS restored as foreground.
+@MainActor
+enum UITestSettingsSceneSeamState {
+    static var didOpen = false
+    static var didDismiss = false
+}
+
 /// Opens the independent Settings window once at bootstrap when UI tests
 /// launch with `--uitest-open-settings-scene`. The only user path to that
 /// window (session menu → Settings…) requires a live session; cold-restore
 /// tests must archive the Settings scene WITHOUT any SSH fixture, so they
 /// open it through this seam, then background + terminate to force an
 /// iPadOS scene-archive checkpoint before the seed-free relaunch.
+///
+/// Mounted on `ConnectionsBootstrapGate` — every scene's content flows
+/// through it — because iPadOS restores the LAST-ACTIVE archived scene on
+/// launch, and under a full UI-suite run that scene is usually a leftover
+/// herdr/terminal window rendering the connection-list fallback; the main
+/// WindowGroup scene may never be realized at all. A seam attached only to
+/// the main scene silently no-ops in that state (the Settings window never
+/// opened and the test timed out waiting for it). Firing from the first
+/// `.active` scene-phase transition — with the `.task` replay for a cold
+/// launch that is already active when this modifier subscribes, mirroring
+/// `ConnectionListContainer.openHerdrFixtureReplayOnce` — also avoids
+/// issuing openWindow during scene startup, which can create windows that
+/// never surface on iPad. The per-process latch keeps the once-per-launch
+/// contract across the multiple scene mounts and the scene-phase
+/// transitions that re-fire on every foregrounding.
 struct UITestSettingsSceneOpener: ViewModifier {
     @Environment(\.openWindow) private var openWindow
     @Environment(\.supportsMultipleWindows) private var supportsMultipleWindows
+    @Environment(\.scenePhase) private var scenePhase
 
     func body(content: Content) -> some View {
         content
-            .onAppear {
-                guard supportsMultipleWindows,
-                      ProcessInfo.processInfo.arguments.contains("--uitest-open-settings-scene")
-                else { return }
-                openWindow(id: "settings", value: SettingsWindowValue.main)
+            .task {
+                if scenePhase == .active {
+                    openSettingsSceneOnce()
+                }
             }
+            .onChange(of: scenePhase, initial: true) { _, phase in
+                if phase == .active {
+                    openSettingsSceneOnce()
+                }
+            }
+    }
+
+    private func openSettingsSceneOnce() {
+        guard supportsMultipleWindows,
+              ProcessInfo.processInfo.arguments.contains("--uitest-open-settings-scene"),
+              !UITestSettingsSceneSeamState.didOpen,
+              !UITestSettingsSceneSeamState.didDismiss
+        else { return }
+        UITestSettingsSceneSeamState.didOpen = true
+        openWindow(id: "settings", value: SettingsWindowValue.main)
+    }
+}
+
+/// Dismisses the independent Settings window when UI tests launch with
+/// `--uitest-dismiss-settings-scene`. Cleanup seam for the cold-restore
+/// test: the Settings scene is the ONLY scene whose restored content is
+/// not the connection list (restored herdr/terminal windows fall back to
+/// it once their session is gone), and iPadOS keeps restoring the
+/// last-active scene — so a test that terminates with the Settings window
+/// foreground leaves every later launch showing Settings instead of the
+/// connection list, breaking tests that navigate from the list.
+/// Dismissing the window destroys its scene session, returning the
+/// archive to a connection-list-restoring state.
+///
+/// Mounted on the Settings WindowGroup content (it dismisses the window
+/// containing it). A cleanup launch passes BOTH flags: the opener
+/// realizes/activates the Settings window from whatever scene iPadOS
+/// restored, and this dismisser then destroys it — the shared
+/// `UITestSettingsSceneSeamState` latch makes the two fire-safe in either
+/// order (the opener never re-opens a window the dismisser already
+/// destroyed).
+struct UITestSettingsSceneDismisser: ViewModifier {
+    @Environment(\.dismissWindow) private var dismissWindow
+    @Environment(\.scenePhase) private var scenePhase
+
+    func body(content: Content) -> some View {
+        content
+            .task {
+                if scenePhase == .active {
+                    dismissSettingsSceneOnce()
+                }
+            }
+            .onChange(of: scenePhase, initial: true) { _, phase in
+                if phase == .active {
+                    dismissSettingsSceneOnce()
+                }
+            }
+    }
+
+    private func dismissSettingsSceneOnce() {
+        guard ProcessInfo.processInfo.arguments.contains("--uitest-dismiss-settings-scene"),
+              !UITestSettingsSceneSeamState.didDismiss
+        else { return }
+        UITestSettingsSceneSeamState.didDismiss = true
+        dismissWindow()
     }
 }
 
