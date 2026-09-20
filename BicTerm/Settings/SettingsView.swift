@@ -95,6 +95,7 @@ Toggle(isOn: Binding(
                 }
                 .font(typography.body)
                 .foregroundStyle(colors.foreground)
+                .tint(colors.accent)
                 .listRowBackground(colors.background)
                 .accessibilityIdentifier("settings-osc52-writes")
 

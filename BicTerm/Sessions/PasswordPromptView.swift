@@ -25,6 +25,7 @@ struct PasswordPromptView: View {
                         .accessibilityIdentifier("password-prompt-field")
                     if request.saveTag != nil {
                         Toggle("Save password in Keychain", isOn: $remember)
+                            .tint(colors.accent)
                             .accessibilityIdentifier("password-prompt-save")
                     }
                 } header: {

@@ -38,6 +38,7 @@ struct GenerateKeySheet: View {
                 Section {
                     Toggle("Require Biometrics", isOn: $requiresBiometry)
                         .font(typography.body)
+                        .tint(colors.accent)
                         .accessibilityIdentifier("generate-biometrics")
                 } footer: {
                     Text("Deleting or using this key will require Face ID or Touch ID.")

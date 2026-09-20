@@ -133,6 +133,7 @@ private struct KeyToggleRow: View {
                 .frame(minWidth: 44, minHeight: 44)
                 .contentShape(Rectangle())
                 .accessibilityLabel("Enable \(item.metadata.label)")
+                .tint(colors.accent)
                 .accessibilityIdentifier("key-enabled-toggle-\(item.metadata.reference)")
             }
             if let errorMessage {

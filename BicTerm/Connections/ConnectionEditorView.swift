@@ -267,6 +267,7 @@ struct ConnectionEditorView: View {
     private var authenticationSection: some View {
         Section("Keys") {
             Toggle("Offer Keys", isOn: $draft.offersKeys)
+                .tint(colors.accent)
                 .accessibilityIdentifier("offer-keys-toggle")
             keyPickerRow
                 .disabled(!draft.offersKeys)

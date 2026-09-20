@@ -111,6 +111,7 @@ struct HopEditorView: View {
             }
             Section("Keys") {
                 Toggle("Offer Keys", isOn: $draft.offersKeys)
+                    .tint(colors.accent)
                     .accessibilityIdentifier("hop-offer-keys-toggle")
                 NavigationLink("Customize") {
                     KeyPickerView(customKeys: $draft.customKeys)
