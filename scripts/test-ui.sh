@@ -19,6 +19,9 @@
 #   EVIDENCE_LOG    Replaces the tee'd log path (default: task-1-uitest.log).
 #     EVIDENCE_LOG=.sisyphus/evidence/my-custom.log
 #
+# The script refuses to start while another xcodebuild is already running
+# against the same -destination simulator (see the collision guard below).
+#
 # Smoke-run example with all overrides:
 #   DERIVED_DATA=/tmp/BicTerm-DD-override-test \
 #     ONLY_TESTING=BicTermUITests/SmokeTests \
@@ -39,6 +42,47 @@ mkdir -p "$REPO_ROOT/.sisyphus/evidence"
 
 # Apply env overrides; defaults preserved when vars are unset/empty.
 DEST="${DEST_OVERRIDE:-${DEST_DEFAULT}}"
+
+# ---------------------------------------------------------------------------
+# Destination-collision guard.
+#
+# Two xcodebuild test runs against the same simulator kill each other's
+# UI-test runners: each session restarts by force-quitting whatever
+# xctrunner is on the device, so the sessions loop until the simulator's
+# backboardd dies (the 2026-09-20 iPhone rerun3 "Restarting after
+# unexpected exit" storm — 36 restarts, Mach error -308 abort). One suite
+# per simulator, always.
+#
+# Prints the colliding command line and returns 0 when another xcodebuild
+# already targets the same destination.
+dest_collision() {
+    local dest="$1" line pat rest
+    pat="-destination ${dest}"
+    while IFS= read -r line; do
+        [[ "${line%% *}" == *xcodebuild ]] || continue
+        [[ "$line" == *"$pat"* ]] || continue
+        rest="${line#*"$pat"}"
+        # Only a whole -destination argument counts: the destination must
+        # be followed by the next flag (" -") or end of line, so
+        # "iPhone 17 Pro" never matches a "iPhone 17 Pro Max" run.
+        if [[ -z "$rest" || "$rest" == " -"* ]]; then
+            printf '%s\n' "$line"
+            return 0
+        fi
+    done < <(ps -axo command=)
+    return 1
+}
+
+colliding="$(dest_collision "$DEST")"
+if [[ -n "$colliding" ]]; then
+    echo "ERROR: another xcodebuild is already running against destination '$DEST':" >&2
+    printf '  %s\n' "$colliding" >&2
+    echo "Refusing to start a second suite on the same simulator — concurrent" >&2
+    echo "suites force-quit each other's test runners (rerun3 crash storm)." >&2
+    echo "Wait for it to finish, or stop it, then re-run." >&2
+    exit 1
+fi
+
 # If EVIDENCE_LOG is set and relative, anchor it to REPO_ROOT.
 if [[ -n "${EVIDENCE_LOG:-}" ]]; then
     case "$EVIDENCE_LOG" in
