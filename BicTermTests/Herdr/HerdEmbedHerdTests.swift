@@ -673,7 +673,6 @@ final class HerdrEmbedHerdTests: XCTestCase {
         func reseedLineCount() -> Int {
             coordinator.eventLines.filter { $0.contains("catalog re-seeded") }.count
         }
-        let selectionBefore = try Data(contentsOf: selectionFile())
 
         // Reload event 1: identical membership — the rewrite is still the
         // client's "retry now" signal (patch 0008 fires on mtime alone).
@@ -699,9 +698,17 @@ final class HerdrEmbedHerdTests: XCTestCase {
             "a machine removed from the herd retires from the live catalog"
         )
 
+        // The selection file is client-OWNED: the live client rewrites it
+        // itself (its own serde formatting) whenever it persists the
+        // activated machine, including the auto-activation that fires when
+        // the selected machine's first snapshot arrives. Byte-identity
+        // therefore races the client's own persist timing (it passed solo
+        // only because that write usually lands before the baseline
+        // capture). The reseed contract is semantic: the user's selection
+        // survives every reload — the host never yanks it mid-run.
         XCTAssertEqual(
-            try Data(contentsOf: selectionFile()), selectionBefore,
-            "the client-owned selection file is never rewritten mid-run"
+            try selectionFileSelectedProfile(), alpha.machine.profileID,
+            "the client-owned selection survives every mid-run reload"
         )
 
         try await teardownHerd(
@@ -776,6 +783,16 @@ final class HerdrEmbedHerdTests: XCTestCase {
     private func selectionFile() -> URL {
         URL.applicationSupportDirectory
             .appendingPathComponent("herdr-embed/state-home/herdr/client/endpoint-selection.json")
+    }
+
+    /// The selection file's `selected_profile`, read semantically: the
+    /// file's owner (the live client) persists it in its own formatting,
+    /// so only the decoded value is stable across client rewrites.
+    private func selectionFileSelectedProfile() throws -> String? {
+        let object = try JSONSerialization.jsonObject(
+            with: Data(contentsOf: selectionFile())
+        ) as? [String: Any]
+        return object?["selected_profile"] as? String
     }
 
     // MARK: - Herd bring-up plumbing
