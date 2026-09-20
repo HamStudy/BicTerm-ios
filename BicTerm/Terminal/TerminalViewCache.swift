@@ -375,6 +375,14 @@ final class TerminalViewCache {
     /// exercising the production `oscClipboardWriteRequest` →
     /// `Osc52Router` → toast path end-to-end without needing raw HID
     /// injection through the simulator.
+    ///
+    /// Waits for `view.window?.isKeyWindow == true` before feeding —
+    /// the same predicate the policy's foreground gate reads. A freshly
+    /// opened iPad window scene can attach its terminal surface before
+    /// SwiftUI installs the representable into the window hierarchy, so
+    /// firing at a fixed runloop tick races key-window promotion and
+    /// the write is silently denied (no toast). Bounded (5 s) so a
+    /// window that never keys still feeds and surfaces a real defect.
     private static func maybeFireUITestOsc52Trigger(
         on surface: TerminalSurface,
         connectionName: String
@@ -382,13 +390,28 @@ final class TerminalViewCache {
         guard ProcessInfo.processInfo.arguments.contains("--uitest-osc52-trigger") else {
             return
         }
-        // Fire immediately so the toast appears within the screenshot
-        // burst window; the foreground predicate is evaluated at fire
-        // time and the key window settles before the view appears.
         DispatchQueue.main.async {
-            let payload = "aGVsbG8gZnJvbSBoZXJkciE="  // "hello from herdr!"
-            let bytes: [UInt8] = Array("\u{1B}]52;c;\(payload)\u{07}".utf8)
-            surface.view.feed(byteArray: bytes[...])
+            let view = surface.view
+            let deadline = Date().addingTimeInterval(5.0)
+            func feed() {
+                let payload = "aGVsbG8gZnJvbSBoZXJkciE="  // "hello from herdr!"
+                let bytes: [UInt8] = Array("\u{1B}]52;c;\(payload)\u{07}".utf8)
+                view.feed(byteArray: bytes[...])
+            }
+            if view.window?.isKeyWindow == true {
+                feed()
+                return
+            }
+            func poll() {
+                if view.window?.isKeyWindow == true {
+                    feed()
+                } else if Date() >= deadline {
+                    feed()
+                } else {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(50), execute: poll)
+                }
+            }
+            poll()
         }
     }
     #endif
