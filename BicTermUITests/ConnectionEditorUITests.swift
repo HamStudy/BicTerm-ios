@@ -1031,7 +1031,15 @@ final class ConnectionEditorUITests: XCTestCase {
         let credential = app.staticTexts["hop-\(index)-credential"]
         // The row sits just above the fold right after saving a hop, but
         // far below it when the editor reopens — reveal from both sides.
-        scrollToHittable(credential, swipingUp: false)
+        // The downward pass is gated on the row being realized ABOVE the
+        // window: a blind swipe-down on a freshly reopened editor sheet
+        // whose form is still at its scroll origin triggers the sheet's
+        // drag-to-dismiss and closes the editor (2026-09-20 rerun4 flake),
+        // and a row far below the fold is not realized at all, so the
+        // downward pass could never reveal it anyway.
+        if credential.exists, credential.frame.minY < app.windows.firstMatch.frame.minY {
+            scrollToHittable(credential, swipingUp: false)
+        }
         scrollToHittable(credential)
         XCTAssertEqual(credential.label, expected)
     }
