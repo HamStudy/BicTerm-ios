@@ -278,10 +278,10 @@ struct ConnectionListContainer: View {
     /// separate windows. iPhone keeps its connection-list cover.
     private func present(_ descriptor: SessionStore.SessionDescriptor) {
         if supportsMultipleWindows {
-            let windowValue = store.hostingWindowValue(for: descriptor.id)
-                ?? store.requestDeadWindowAttachment(for: descriptor.id)
-                ?? descriptor.id
-            openWindow(id: "terminal", value: SessionID(value: windowValue))
+            openWindow(
+                id: "terminal",
+                value: SessionID(value: store.presentationWindowValue(forSession: descriptor.id))
+            )
         } else {
             coverDescriptor = descriptor
         }

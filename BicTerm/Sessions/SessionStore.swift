@@ -152,6 +152,16 @@ final class SessionStore {
         pendingWindowAttachments.removeValue(forKey: windowValue)
     }
 
+    /// Window value for presenting a session on iPad: the window already
+    /// showing it, else a dead retryable window it can take over, else the
+    /// session's own ID (a fresh window). The single resolution shared by
+    /// every presentation call site.
+    func presentationWindowValue(forSession sessionID: UUID) -> UUID {
+        hostingWindowValue(for: sessionID)
+            ?? requestDeadWindowAttachment(for: sessionID)
+            ?? sessionID
+    }
+
     /// Production wiring: real SSH factory (agent-forwarding enabled) and
     /// the SwiftData session-snapshot store. Tests inject a fake transport
     /// factory and an in-memory snapshot store instead.

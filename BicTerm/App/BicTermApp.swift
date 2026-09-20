@@ -190,6 +190,7 @@ private struct TerminalWindowRoot: View {
 /// No scene content can observe a partially bootstrapped connection/key pool.
 private struct ConnectionsBootstrapGate<Content: View>: View {
     let model: ConnectionsModel
+    let sessionStore: SessionStore
     @ViewBuilder let content: () -> Content
     @State private var ready = false
 
@@ -209,6 +210,7 @@ private struct ConnectionsBootstrapGate<Content: View>: View {
         // herdr/terminal window, and the main WindowGroup scene may never
         // be realized on launch (see UITestSettingsSceneOpener).
         .modifier(UITestSettingsSceneOpener())
+        .modifier(UITestSessionDriverSeam(store: sessionStore))
         #endif
         .task {
             await model.bootstrap()
@@ -216,6 +218,71 @@ private struct ConnectionsBootstrapGate<Content: View>: View {
         }
     }
 }
+
+#if DEBUG
+/// Runs the session-scene UI-test driver from whichever scene iPadOS
+/// actually restores on launch. The driver's original mount —
+/// `ConnectionListContainer`'s `.task` — only fires when a scene whose
+/// content includes the connection list realizes (the main window, or a
+/// restored terminal/herdr window's connection-list fallback). iPadOS
+/// can instead restore the independent Settings window as the ONLY
+/// realized scene — observed in a full iPad suite run right after a test
+/// left the Settings window foreground: that launch showed SettingsView
+/// alone, the driver never ran, no session opened, and every
+/// session-scene wait in the next two tests timed out. Mounted on
+/// `ConnectionsBootstrapGate` (every scene's content flows through it)
+/// and firing from the first `.active` scene-phase transition — with the
+/// `.task` replay for a cold launch that is already active when this
+/// modifier subscribes, mirroring `UITestSettingsSceneOpener` — so
+/// `openWindow` is never issued during scene startup (windows created
+/// then never surface on iPad). The driver's own per-process latch makes
+/// the multiple scene mounts and this seam racing the container's
+/// `.task` mount harmless: exactly one `run` per launch.
+///
+/// iPad only (`supportsMultipleWindows`): on iPhone the single main
+/// scene always realizes, and `ConnectionListContainer`'s cover-based
+/// presentation path owns the driver.
+private struct UITestSessionDriverSeam: ViewModifier {
+    @Environment(\.openWindow) private var openWindow
+    @Environment(\.supportsMultipleWindows) private var supportsMultipleWindows
+    @Environment(\.scenePhase) private var scenePhase
+
+    let store: SessionStore
+
+    func body(content: Content) -> some View {
+        content
+            .task {
+                if scenePhase == .active {
+                    runDriverFromThisScene()
+                }
+            }
+            .onChange(of: scenePhase, initial: true) { _, phase in
+                if phase == .active {
+                    runDriverFromThisScene()
+                }
+            }
+    }
+
+    @MainActor
+    private func runDriverFromThisScene() {
+        guard supportsMultipleWindows else { return }
+        Task { @MainActor in
+            await SessionUITestDriver.run(store: store, present: present)
+        }
+    }
+
+    /// Same window resolution as `ConnectionListContainer.present`'s
+    /// iPad branch — the session lands in the same window either mount
+    /// would have chosen.
+    @MainActor
+    private func present(_ descriptor: SessionStore.SessionDescriptor) {
+        openWindow(
+            id: "terminal",
+            value: SessionID(value: store.presentationWindowValue(forSession: descriptor.id))
+        )
+    }
+}
+#endif
 
 @main
 struct BicTermApp: App {
@@ -240,7 +307,7 @@ struct BicTermApp: App {
 
     var body: some Scene {
         WindowGroup("BicTerm") {
-            ConnectionsBootstrapGate(model: connectionsModel) {
+            ConnectionsBootstrapGate(model: connectionsModel, sessionStore: sessionStore) {
                 #if DEBUG
                 if ProcessInfo.processInfo.arguments.contains("-uitest-terminal-preview") {
                     TerminalPreviewScreen()
@@ -260,7 +327,7 @@ struct BicTermApp: App {
         }
 
         WindowGroup("Terminal", id: "terminal", for: SessionID.self) { $sessionID in
-            ConnectionsBootstrapGate(model: connectionsModel) {
+            ConnectionsBootstrapGate(model: connectionsModel, sessionStore: sessionStore) {
                 #if DEBUG
                 if ProcessInfo.processInfo.arguments.contains("-uitest-terminal-preview") {
                     TerminalPreviewScreen()
@@ -286,7 +353,7 @@ struct BicTermApp: App {
         }
 
         WindowGroup("Herdr Workspace", id: "herdr", for: SessionID.self) { $sessionID in
-            ConnectionsBootstrapGate(model: connectionsModel) {
+            ConnectionsBootstrapGate(model: connectionsModel, sessionStore: sessionStore) {
                 #if DEBUG
                 // iPadOS persists scene sessions across launches and hard
                 // shutdowns: a stale herdr scene restored during a
@@ -320,7 +387,7 @@ struct BicTermApp: App {
         }
 
         WindowGroup("Settings", id: "settings", for: SettingsWindowValue.self) { _ in
-            ConnectionsBootstrapGate(model: connectionsModel) {
+            ConnectionsBootstrapGate(model: connectionsModel, sessionStore: sessionStore) {
                 #if DEBUG
                 // Same restoration hazard as the herdr scene above: a stale
                 // Settings window restored under `-uitest-terminal-preview`
