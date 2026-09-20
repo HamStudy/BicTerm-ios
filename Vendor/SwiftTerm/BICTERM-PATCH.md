@@ -389,3 +389,41 @@ Reapply hunk 11 with hunks 1-10. The hunk touches `Terminal.swift`,
 `Apple/TerminalViewDelegate.swift`, `iOS/iOSTerminalView.swift`,
 `iOS/SwiftUITerminalView.swift`, `Mac/MacTerminalView.swift`, and
 `Mac/MacLocalTerminalView.swift`.
+
+### Hunk 12 — hardware-keyboard word movement and line jumps (`iOS/iOSTerminalView.swift`)
+
+BicTerm sets `optionAsMetaKey = true` on every terminal surface, which
+routes option+arrows through the kitty-encoder legacy fallback
+(`CSI 1;3D` / `CSI 1;3C`) — xterm modified arrows that stock bash/zsh
+readline does not bind, so option+left/right did nothing in shells (the
+upstream `emacsBack`/`emacsForward` mapping in the legacy switch is
+shadowed and only runs with `optionAsMetaKey == false`). Command-modified
+keys were swallowed outright before encoding (`continue` under the
+link-hover chord guard), so cmd+left/right sent zero bytes and
+`super.pressesBegan` on the UIScrollView base does nothing.
+
+The hunk inserts a mapping in `pressesBegan` ahead of both branches,
+scoped to `kittyFlags.isEmpty` and modifier-pure chords (no shift,
+no control, command-xor-option only):
+
+- option+left  → `ESC b`  (`EscapeSequences.emacsBack`)
+- option+right → `ESC f`  (`EscapeSequences.emacsForward`)
+- command+left  → Home (`ESC [ H` / `ESC O H` per `applicationCursor`)
+- command+right → End  (`ESC [ F` / `ESC O F` per `applicationCursor`)
+
+Sent data uses the standard tail pattern (`didHandleEvent = true`,
+0.4 s/0.1 s `keyRepeat` Timer) so hold-to-repeat matches every other
+hardware key. Remotes that negotiate the kitty keyboard protocol (the
+embedded herdr TUI does, via `CSI > 1 u`) are untouched: they keep
+receiving CSI-u events with the alt/super modifiers, which herdr's own
+input layer parses (`src/input/parse.rs` normalizes both `ESC ESC [D`
+and `CSI 1;3D` alt-arrow forms).
+
+Acceptance: `BicTermUITests/TerminalUITests.swift`
+`testHardwareKeyboardControlAndMetaKeys` gains `opt+left`, `opt+right`,
+`cmd+left`, `cmd+right` injector tokens and asserts the exact
+`cat -v`-rendered bytes (`^[b`/`^[f`/`^[[H`/`^[[F`, counted against the
+bare Home/End/meta+b deliveries).
+
+Reapply hunk 12 with hunks 1-11. The hunk touches only
+`Sources/SwiftTerm/iOS/iOSTerminalView.swift` (`pressesBegan`).

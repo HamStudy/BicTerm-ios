@@ -17,13 +17,14 @@ import UIKit
 /// SSH transport exactly like a physical keyboard. No byte is hand-crafted.
 ///
 /// Spec grammar: comma-separated tokens. `ctrl+<letter>`, `meta+<letter>`,
-/// and bare key names (`esc`, `tab`, `arrows`, `home`, `end`, `pageup`,
-/// `pagedown`). `await:decckm` suspends injection until the remote has set
+/// `opt+left`/`opt+right`/`cmd+left`/`cmd+right`, and bare key names (`esc`,
+/// `tab`, `arrows`, `home`, `end`, `pageup`, `pagedown`). `await:decckm` suspends injection until the remote has set
 /// application-cursor mode (DECCKM, ESC[?1h), required by SwiftTerm semantics:
 /// unmodified PageUp/PageDown are local scrollback while
 /// `terminal.applicationCursor == false`.
     /// spec grammar — comma tokens: `ctrl+<letter>`, `meta+<letter>`, bare names
     /// (`esc`, `tab`, arrows, `home`, `end`, `pageup`, `pagedown`),
+    /// `opt+left`/`opt+right`/`cmd+left`/`cmd+right` (modifier-pure arrows),
     /// `nav+<arrow>` (ctrl+shift pane navigation), `text:<string>` (one
     /// `insertText` commit per grapheme into the herdr input field — XCUI
     /// `typeText` no-ops against the replay scene even with the field as
@@ -212,6 +213,14 @@ import UIKit
                 steps.append(.key(SyntheticKeystroke(code: .keyboardLeftArrow, modifiers: [], characters: "", charactersIgnoringModifiers: "")))
             case "right":
                 steps.append(.key(SyntheticKeystroke(code: .keyboardRightArrow, modifiers: [], characters: "", charactersIgnoringModifiers: "")))
+            case "opt+left":
+                steps.append(.key(SyntheticKeystroke(code: .keyboardLeftArrow, modifiers: [.alternate], characters: "", charactersIgnoringModifiers: "")))
+            case "opt+right":
+                steps.append(.key(SyntheticKeystroke(code: .keyboardRightArrow, modifiers: [.alternate], characters: "", charactersIgnoringModifiers: "")))
+            case "cmd+left":
+                steps.append(.key(SyntheticKeystroke(code: .keyboardLeftArrow, modifiers: [.command], characters: "", charactersIgnoringModifiers: "")))
+            case "cmd+right":
+                steps.append(.key(SyntheticKeystroke(code: .keyboardRightArrow, modifiers: [.command], characters: "", charactersIgnoringModifiers: "")))
             case "await:decckm":
                 steps.append(.awaitTail(decckmSetMarker))
             default:

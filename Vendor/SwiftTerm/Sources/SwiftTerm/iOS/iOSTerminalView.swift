@@ -3034,6 +3034,46 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
                 commandActive = true
             }
             uitiLog("pressesBegan keyCode:\(key.keyCode) chars:\(key.characters.debugDescription) ignoring:\(key.charactersIgnoringModifiers.debugDescription) modifiers:\(key.modifierFlags)")
+            // BICTERM-PATCH hunk 12: macOS-terminal-parity word movement and
+            // line jumps when the remote has NOT negotiated the kitty keyboard
+            // protocol. Option+left/right send the emacs word-move bytes the
+            // legacy switch below already maps (ESC b / ESC f) instead of the
+            // CSI 1;3D/C modified arrows the kitty legacy fallback would
+            // emit (stock bash/zsh bind neither), and command+left/right send
+            // Home/End instead of being swallowed as the link-hover chord.
+            if kittyFlags.isEmpty,
+               !key.modifierFlags.contains(.shift),
+               !key.modifierFlags.contains(.control) {
+                let modifierFlags = key.modifierFlags
+                let commandOnly = modifierFlags.contains(.command) && !modifierFlags.contains(.alternate)
+                let optionOnly = modifierFlags.contains(.alternate) && !modifierFlags.contains(.command)
+                let sequence: [UInt8]
+                switch key.keyCode {
+                case .keyboardLeftArrow where commandOnly:
+                    sequence = terminal.applicationCursor ? EscapeSequences.moveHomeApp : EscapeSequences.moveHomeNormal
+                case .keyboardRightArrow where commandOnly:
+                    sequence = terminal.applicationCursor ? EscapeSequences.moveEndApp : EscapeSequences.moveEndNormal
+                case .keyboardLeftArrow where optionOnly:
+                    sequence = EscapeSequences.emacsBack
+                case .keyboardRightArrow where optionOnly:
+                    sequence = EscapeSequences.emacsForward
+                default:
+                    sequence = []
+                }
+                if !sequence.isEmpty {
+                    let sendableData = SendData.bytes(sequence)
+                    didHandleEvent = true
+                    keyRepeat?.invalidate()
+                    keyRepeat = Timer(fire: Date(timeInterval: 0.4, since: Date()),
+                                      interval: 0.1,
+                                      repeats: true) { timer in
+                        self.sendData(data: sendableData)
+                    }
+                    RunLoop.current.add(keyRepeat!, forMode: .default)
+                    sendData(data: sendableData)
+                    continue
+                }
+            }
             if kittyFlags.isEmpty,
                key.modifierFlags.contains(.command),
                !(key.modifierFlags.contains(.alternate) && key.charactersIgnoringModifiers == "o") {

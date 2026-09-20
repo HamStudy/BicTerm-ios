@@ -157,7 +157,7 @@ final class TerminalUITests: XCTestCase {
         // would trip zsh's globbing ("bad pattern") on this fixture shell.
         launchPreview(
             command: "unsetopt nomatch 2>/dev/null; stty -isig -icanon -echo; printf __GO__\\\\n; (sleep 2; printf \\\\033\\\\133?1h) & cat -v",
-            hwkeys: "ctrl+c,ctrl+d,esc,tab,meta+b,home,end,down,left,right,up,up,up,up,await:decckm,pageup,pagedown"
+            hwkeys: "ctrl+c,ctrl+d,esc,tab,meta+b,home,end,down,left,right,opt+left,opt+right,cmd+left,cmd+right,up,up,up,up,await:decckm,pageup,pagedown"
         )
         waitForTail("__GO__")
 
@@ -171,16 +171,26 @@ final class TerminalUITests: XCTestCase {
         // `cat -v` renders most control bytes as caret notation but keeps
         // TAB and LF raw, so Tab delivery is asserted as the literal 0x09.
         XCTAssertTrue(echoed.contains("\t"), "Tab must reach the remote as 0x09")
-        XCTAssertTrue(echoed.contains("^[b"), "Option-b (optionAsMetaKey) must arrive as ESC b")
+        XCTAssertEqual(
+            echoed.components(separatedBy: "^[b").count - 1, 2,
+            "Option-b and option+left must both arrive as ESC b (word back)"
+        )
+        XCTAssertTrue(echoed.contains("^[f"), "Option+right must arrive as ESC f (word forward)")
         let upCount = echoed.components(separatedBy: "^[[A").count - 1
         XCTAssertEqual(upCount, 4, "every repeated Up press must be delivered (got \(upCount) of 4; tail: \(echoed.suffix(300)))")
         XCTAssertTrue(echoed.contains("^[[B"), "Down arrow must arrive as ESC [ B")
         XCTAssertTrue(echoed.contains("^[[D"), "Left arrow must arrive as ESC [ D")
         XCTAssertTrue(echoed.contains("^[[C"), "Right arrow must arrive as ESC [ C")
+        XCTAssertEqual(
+            echoed.components(separatedBy: "^[[H").count - 1, 2,
+            "Home and cmd+left must both arrive as ESC [ H (line start)"
+        )
+        XCTAssertEqual(
+            echoed.components(separatedBy: "^[[F").count - 1, 2,
+            "End and cmd+right must both arrive as ESC [ F (line end)"
+        )
         XCTAssertTrue(echoed.contains("^[[5~"), "PageUp must arrive as ESC [ 5 ~")
         XCTAssertTrue(echoed.contains("^[[6~"), "PageDown must arrive as ESC [ 6 ~")
-        XCTAssertTrue(echoed.contains("^[[H") || echoed.contains("^[[1~") || echoed.contains("^[[F") || echoed.contains("^[[4~"),
-            "Home/End must arrive as escape sequences (got: \(echoed.suffix(200)))")
     }
 
     // MARK: - CJK / IME
