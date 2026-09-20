@@ -138,7 +138,7 @@ final class ConnectionEditorUITests: XCTestCase {
         launchApp(reset: true)
 
         openEditorForNewConnection()
-        app.buttons["key-selector"].tap()
+        openKeyPicker()
 
         XCTAssertTrue(app.buttons["key-Fixture-Ed25519"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["key-Fixture-Ed25519-Passphrase"].exists)
@@ -183,7 +183,7 @@ final class ConnectionEditorUITests: XCTestCase {
 
     private func openKeyPickerForNewConnection() {
         openEditorForNewConnection()
-        app.buttons["key-selector"].tap()
+        openKeyPicker()
         XCTAssertTrue(
             app.navigationBars["Customize Keys"].waitForExistence(timeout: 5),
             "Key picker did not open"
@@ -211,6 +211,10 @@ final class ConnectionEditorUITests: XCTestCase {
         app.buttons["picker-empty-generate"].tap()
         let labelField = app.textFields["generate-label"]
         XCTAssertTrue(labelField.waitForExistence(timeout: 5), "Generate sheet must open over the picker")
+        // The sheet is still animating in when its fields enter the AX
+        // hierarchy; a tap synthesized mid-presentation is swallowed and the
+        // keyboard-focus wait below would fail.
+        awaitHittable(labelField)
         typeInto(labelField, "Inline Key")
         XCTAssertTrue(setToggle(app.switches["generate-biometrics"], on: false))
 
@@ -234,6 +238,7 @@ final class ConnectionEditorUITests: XCTestCase {
         app.buttons["picker-empty-import"].tap()
         let labelField = app.textFields["import-label"]
         XCTAssertTrue(labelField.waitForExistence(timeout: 5), "Import sheet must open over the picker")
+        awaitHittable(labelField)
         typeInto(labelField, "Inline Import")
 
         app.buttons["import-paste"].tap()
@@ -319,8 +324,10 @@ final class ConnectionEditorUITests: XCTestCase {
         swipeRow(named: "Swipe-Me")
         let edit = app.buttons["edit-Swipe-Me"]
         XCTAssertTrue(edit.waitForExistence(timeout: 5))
+        awaitHittable(edit)
         edit.tap()
         XCTAssertTrue(app.textFields["field-name"].waitForExistence(timeout: 5))
+        awaitConnectionEditorInteractive()
         app.buttons["cancel-editor"].tap()
 
         // Duplicate opens the editor as a pre-filled add flow; nothing
@@ -328,12 +335,14 @@ final class ConnectionEditorUITests: XCTestCase {
         swipeRow(named: "Swipe-Me")
         let duplicate = app.buttons["duplicate-Swipe-Me"]
         XCTAssertTrue(duplicate.waitForExistence(timeout: 5))
+        awaitHittable(duplicate)
         duplicate.tap()
 
         XCTAssertTrue(
             app.descendants(matching: .any)["connection-editor"].waitForExistence(timeout: 10),
             "duplicate must open the connection editor"
         )
+        awaitConnectionEditorInteractive()
         XCTAssertTrue(app.navigationBars["New Connection"].exists,
                       "duplicate must behave as the add flow, not an edit")
         let nameField = app.textFields["field-name"]
@@ -368,8 +377,10 @@ final class ConnectionEditorUITests: XCTestCase {
         // Saving the pre-filled editor persists exactly one new row.
         swipeRow(named: "Swipe-Me")
         XCTAssertTrue(app.buttons["duplicate-Swipe-Me"].waitForExistence(timeout: 5))
+        awaitHittable(app.buttons["duplicate-Swipe-Me"])
         app.buttons["duplicate-Swipe-Me"].tap()
         XCTAssertTrue(app.textFields["field-name"].waitForExistence(timeout: 5))
+        awaitConnectionEditorInteractive()
         app.buttons["save-editor"].tap()
 
         let copy = app.buttons["connection-Swipe-Me-(copy)"]
@@ -383,12 +394,14 @@ final class ConnectionEditorUITests: XCTestCase {
         swipeRow(named: "Swipe-Me-(copy)")
         let delete = app.buttons["delete-Swipe-Me-(copy)"]
         XCTAssertTrue(delete.waitForExistence(timeout: 5))
+        awaitHittable(delete)
         delete.tap()
         let confirm = app.buttons["confirm-delete-connection"].firstMatch
         XCTAssertTrue(
             confirm.waitForExistence(timeout: 10),
             "connection deletes ask for confirmation"
         )
+        awaitHittable(confirm)
         confirm.tap()
         let copyGone = NSPredicate(format: "exists == false")
         expectation(for: copyGone, evaluatedWith: app.buttons["connection-Swipe-Me-(copy)"])
@@ -425,6 +438,9 @@ final class ConnectionEditorUITests: XCTestCase {
         XCTAssertTrue(app.buttons["forget-host-Menu-Me"].exists, "context menu must expose Forget Host")
         XCTAssertTrue(app.buttons["delete-Menu-Me"].exists, "context menu must expose Delete")
 
+        // The context menu is still scaling in when its items enter the AX
+        // hierarchy; gate the tap on the item being tappable.
+        awaitHittable(app.buttons["edit-Menu-Me"])
         app.buttons["edit-Menu-Me"].tap()
         let nameField = app.textFields["field-name"]
         XCTAssertTrue(
@@ -432,6 +448,7 @@ final class ConnectionEditorUITests: XCTestCase {
             "context-menu Edit must open the connection editor"
         )
         XCTAssertEqual(nameField.value as? String, "Menu Me")
+        awaitConnectionEditorInteractive()
         app.buttons["cancel-editor"].tap()
 
         XCTAssertTrue(row.waitForExistence(timeout: 5), "the row must survive the menu round-trip")
@@ -483,6 +500,7 @@ final class ConnectionEditorUITests: XCTestCase {
         app.buttons["protocol-picker"].tap()
         let unavailableChoice = app.buttons["uppercase-echo (Unavailable)"]
         XCTAssertTrue(unavailableChoice.waitForExistence(timeout: 5))
+        awaitHittable(unavailableChoice)
         unavailableChoice.tap()
 
         let connect = app.buttons["connect-button"]
@@ -582,11 +600,8 @@ final class ConnectionEditorUITests: XCTestCase {
         launchApp(reset: true)
         openEditorForNewConnection()
 
-        let addHop = app.buttons["add-hop"]
-        scrollToHittable(addHop)
-        addHop.tap()
+        openHopEditor()
         let hostField = app.textFields["hop-field-host"]
-        XCTAssertTrue(hostField.waitForExistence(timeout: 10))
         typeInto(hostField, "hop.example.com")
 
         app.buttons["cancel-hop"].tap()
@@ -597,9 +612,11 @@ final class ConnectionEditorUITests: XCTestCase {
         )
         dialogButton(identifier: "discard-confirm", label: "Discard Changes").tap()
 
-        let popped = NSPredicate(format: "exists == false")
-        expectation(for: popped, evaluatedWith: hostField)
-        waitForExpectations(timeout: 10)
+        // The old gate waited only for the hop editor's host field to leave
+        // the AX hierarchy — that fires at pop START, while the dialog
+        // dismissal and pop transition are still unwinding, so the scroll
+        // below raced them (same family as the rerun8 line-704 failure).
+        awaitHopDiscardPopCompleted()
         scrollToHittable(app.textFields["field-name"], swipingUp: false)
         XCTAssertTrue(
             app.textFields["field-name"].waitForExistence(timeout: 5),
@@ -653,6 +670,10 @@ final class ConnectionEditorUITests: XCTestCase {
         let predicate = NSPredicate(format: "identifier == %@ OR label == %@", identifier, label)
         let button = app.buttons.matching(predicate).firstMatch
         XCTAssertTrue(button.waitForExistence(timeout: 5), "dialog action \(label) must exist")
+        // The dialog is still animating in when its buttons enter the AX
+        // hierarchy; a tap synthesized mid-presentation is swallowed and the
+        // action silently never fires.
+        awaitHittable(button)
         return button
     }
 
@@ -683,12 +704,9 @@ final class ConnectionEditorUITests: XCTestCase {
         launchApp(reset: true)
         openEditorForNewConnection()
 
-        let addHop = app.buttons["add-hop"]
-        scrollToHittable(addHop)
-        addHop.tap()
+        openHopEditor()
 
         let hostField = app.textFields["hop-field-host"]
-        XCTAssertTrue(hostField.waitForExistence(timeout: 10))
         XCTAssertFalse(app.staticTexts["hop-field-host-error"].exists,
                        "a pristine blank hop must not flag the host field")
         XCTAssertFalse(app.staticTexts["hop-field-username-error"].exists,
@@ -700,6 +718,14 @@ final class ConnectionEditorUITests: XCTestCase {
 
         app.buttons["cancel-hop"].tap()
         dialogButton(identifier: "discard-confirm", label: "Discard Changes").tap()
+        // The discard fires two stacked transitions — the dialog dismissal
+        // and the hop-editor pop — and the scroll below must not race them:
+        // a swipe-down issued mid-pop falls through the interaction-disabled
+        // transitioning content onto the sheet's platter, where the sheet's
+        // pan recognizer reads it as a drag-to-dismiss. With a clean parent
+        // draft that dismissal is permitted, so the editor sheet closes and
+        // field-name never returns (rerun8 line-704 failure).
+        awaitHopDiscardPopCompleted()
         scrollToHittable(app.textFields["field-name"], swipingUp: false)
         XCTAssertTrue(app.textFields["field-name"].waitForExistence(timeout: 5),
                       "discarding the hop must return to the connection editor")
@@ -725,7 +751,7 @@ final class ConnectionEditorUITests: XCTestCase {
         XCTAssertEqual(password.value as? String, String(repeating: "•", count: 13))
         XCTAssertTrue(setToggle(toggle, on: true))
         XCTAssertTrue(app.buttons["key-selector"].isEnabled)
-        app.buttons["key-selector"].tap()
+        openKeyPicker()
         XCTAssertEqual(app.buttons["key-Fixture-Ed25519"].value as? String, "Selected")
         XCTAssertNotEqual(app.buttons["key-Fixture-Hop2-Unauthorized"].value as? String, "Selected")
         capturePortState("offer-keys-customization-preserved")
@@ -759,7 +785,7 @@ final class ConnectionEditorUITests: XCTestCase {
                                "--uitest-custom-disabled"]
         app.launch()
         openEditorForConnection(named: "Disabled-Custom")
-        app.buttons["key-selector"].tap()
+        openKeyPicker()
         let row = app.buttons["key-Disabled-Fixture"]
         XCTAssertEqual(row.value as? String, "Selected")
         XCTAssertTrue(app.staticTexts["disabled-key-badge"].exists)
@@ -833,8 +859,12 @@ final class ConnectionEditorUITests: XCTestCase {
         launchPasswordFixture("saved")
         app.buttons["cancel-editor"].tap()
         swipeRow(named: "Credential-Fixture")
-        app.buttons["duplicate-Credential-Fixture"].tap()
+        let duplicate = app.buttons["duplicate-Credential-Fixture"]
+        XCTAssertTrue(duplicate.waitForExistence(timeout: 5))
+        awaitHittable(duplicate)
+        duplicate.tap()
         XCTAssertTrue(app.buttons["save-editor"].waitForExistence(timeout: 5))
+        awaitConnectionEditorInteractive()
         app.buttons["save-editor"].tap()
         XCTAssertTrue(app.buttons["connection-Credential-Fixture-(copy)"].waitForExistence(timeout: 5))
         openEditorForConnection(named: "Credential-Fixture")
@@ -872,7 +902,7 @@ final class ConnectionEditorUITests: XCTestCase {
         XCTAssertTrue(setToggle(toggle, on: false))
         XCTAssertFalse(warning.exists)
         XCTAssertTrue(setToggle(toggle, on: true))
-        app.buttons["key-selector"].tap()
+        openKeyPicker()
         app.buttons["key-Fixture-Ed25519"].tap()
         app.buttons["customize-done"].tap()
         XCTAssertFalse(warning.exists)
@@ -951,9 +981,11 @@ final class ConnectionEditorUITests: XCTestCase {
             ? app.buttons["picker-menu-generate"]
             : app.buttons["Generate Key"]
         XCTAssertTrue(generateItem.waitForExistence(timeout: 5))
+        awaitHittable(generateItem)
         generateItem.tap()
         let labelField = app.textFields["generate-label"]
         XCTAssertTrue(labelField.waitForExistence(timeout: 5))
+        awaitHittable(labelField)
         typeInto(labelField, "Fresh Hop Key")
         XCTAssertTrue(setToggle(app.switches["generate-biometrics"], on: false))
         app.buttons["generate-save"].tap()
@@ -979,20 +1011,19 @@ final class ConnectionEditorUITests: XCTestCase {
         selector.tap()
         XCTAssertTrue(app.buttons["use-all-enabled-keys"].waitForExistence(timeout: 5),
                       "hop key picker did not open")
+        // The picker push must finish before any key row is tapped.
+        awaitHittable(app.buttons["customize-done"])
     }
 
     private func editHop(_ index: Int) {
         let edit = app.buttons["edit-hop-\(index)"]
         scrollToHittable(edit)
         edit.tap()
-        XCTAssertTrue(app.textFields["hop-field-host"].waitForExistence(timeout: 10))
         // The push must finish before the hop editor can receive taps:
         // mid-slide the destination's controls sit off-window and a tap
         // synthesized at a stale frame is swallowed. Gate on the editor's
         // own toolbar being interactive (same pattern as saveHop).
-        let hopReady = NSPredicate(format: "hittable == true")
-        expectation(for: hopReady, evaluatedWith: app.buttons["cancel-hop"])
-        waitForExpectations(timeout: 10)
+        awaitHopEditorPushed()
     }
 
     private func saveHop() {
@@ -1025,6 +1056,81 @@ final class ConnectionEditorUITests: XCTestCase {
         let saveReady = NSPredicate(format: "hittable == true")
         expectation(for: saveReady, evaluatedWith: app.buttons["save-hop"])
         waitForExpectations(timeout: 10)
+    }
+
+    /// `hittable` is the "incoming chrome can receive the synthesized tap"
+    /// signal: existence fires at a transition's START (SwiftUI puts views
+    /// into the AX hierarchy while the animation is still running, with user
+    /// interaction disabled on the transitioning content), while hittable
+    /// only holds once the element is on-screen and uncovered. Passes
+    /// instantly for an already-at-rest view, so callers can gate every
+    /// entry unconditionally.
+    private func awaitHittable(_ element: XCUIElement, timeout: TimeInterval = 10) {
+        expectation(for: NSPredicate(format: "hittable == true"), evaluatedWith: element)
+        waitForExpectations(timeout: timeout)
+    }
+
+    /// The connection editor sheet can receive taps: any pushed key picker
+    /// has finished popping back (`customize-done` left the hierarchy) and
+    /// the editor's own Cancel is hittable. Both predicates hold instantly
+    /// when no transition is in flight, so every editor entry point can gate
+    /// on it. The settle covers the UIKit transition-snapshot window no
+    /// AX-visible predicate can see — hittable can fire mid-transition
+    /// (dfa04fb) — and a tap or swipe issued in that window lands on the
+    /// sliding views and is swallowed (or, on a sheet with a clean draft,
+    /// falls through to the platter and reads as a drag-to-dismiss).
+    private func awaitConnectionEditorInteractive() {
+        let pickerGone = NSPredicate(format: "exists == false")
+        expectation(for: pickerGone, evaluatedWith: app.buttons["customize-done"])
+        waitForExpectations(timeout: 10)
+        awaitHittable(app.buttons["cancel-editor"])
+        Thread.sleep(forTimeInterval: 0.4)
+    }
+
+    /// The hop editor push has finished: the pushed form exists and its own
+    /// toolbar is interactive. Same mid-transition caveat as
+    /// awaitConnectionEditorInteractive; this gate plus typeInto's focus
+    /// gate are the dfa04fb editHop pattern, proven across certification
+    /// runs.
+    private func awaitHopEditorPushed() {
+        XCTAssertTrue(app.textFields["hop-field-host"].waitForExistence(timeout: 10))
+        awaitHittable(app.buttons["cancel-hop"])
+    }
+
+    /// Scrolls to and taps add-hop, then gates on the hop editor being
+    /// interactive before any field is touched.
+    private func openHopEditor() {
+        let addHopButton = app.buttons["add-hop"]
+        scrollToHittable(addHopButton)
+        addHopButton.tap()
+        awaitHopEditorPushed()
+    }
+
+    /// Opens the connection editor's key picker and gates on its toolbar
+    /// being interactive before any row is tapped.
+    private func openKeyPicker() {
+        dismissKeyboard()
+        let selector = app.buttons["key-selector"]
+        scrollToHittable(selector)
+        selector.tap()
+        awaitHittable(app.buttons["customize-done"])
+    }
+
+    /// Discarding a hop dismisses the confirmation dialog AND pops the hop
+    /// editor — two stacked transitions. Gate on the outgoing hop chrome
+    /// leaving the hierarchy (fires at pop start) and the connection editor
+    /// being interactive again (fires once the pop completes) before any
+    /// further tap or scroll. A swipe issued mid-pop falls through the
+    /// interaction-disabled transitioning content onto the sheet's platter,
+    /// where the sheet's pan recognizer reads it as a drag-to-dismiss; with
+    /// a clean parent draft that dismissal is permitted and the editor
+    /// closes outright, so the connection form never returns (rerun8
+    /// line-704 failure).
+    private func awaitHopDiscardPopCompleted() {
+        let hopGone = NSPredicate(format: "exists == false")
+        expectation(for: hopGone, evaluatedWith: app.buttons["cancel-hop"])
+        waitForExpectations(timeout: 10)
+        awaitConnectionEditorInteractive()
     }
 
     private func assertHopCredential(_ index: Int, equals expected: String) {
@@ -1068,8 +1174,15 @@ final class ConnectionEditorUITests: XCTestCase {
     private func connectPasswordFixture(expectPrompt: Bool, name: String = "Credential-Fixture") {
         let row = app.buttons["connection-\(name)"]
         XCTAssertTrue(row.waitForExistence(timeout: 15))
+        // The row may sit under an editor sheet that is still dismissing
+        // (or under a just-dismissed confirmation dialog); a tap on the
+        // covered row is swallowed.
+        awaitHittable(row)
         row.tap()
-        if app.buttons["trust-confirm"].waitForExistence(timeout: 3) { app.buttons["trust-confirm"].tap() }
+        if app.buttons["trust-confirm"].waitForExistence(timeout: 3) {
+            awaitHittable(app.buttons["trust-confirm"])
+            app.buttons["trust-confirm"].tap()
+        }
         if expectPrompt {
             XCTAssertTrue(app.secureTextFields["password-prompt-field"].waitForExistence(timeout: 15))
         } else {
@@ -1097,16 +1210,24 @@ final class ConnectionEditorUITests: XCTestCase {
     private func openEditorForNewConnection() {
         let add = app.buttons["add-connection"]
         XCTAssertTrue(add.waitForExistence(timeout: 15))
+        // The add button may still be covered by a dismissing key-management
+        // cover or Settings scene; a tap on the covered button is swallowed.
+        awaitHittable(add)
         add.tap()
         XCTAssertTrue(app.textFields["field-name"].waitForExistence(timeout: 10))
+        awaitConnectionEditorInteractive()
     }
 
     private func openEditorForConnection(named identifier: String) {
         swipeRow(named: identifier)
         let edit = app.buttons["edit-\(identifier)"]
         XCTAssertTrue(edit.waitForExistence(timeout: 5))
+        // The swipe actions are still sliding in when they enter the AX
+        // hierarchy; a tap synthesized mid-reveal lands on the row instead.
+        awaitHittable(edit)
         edit.tap()
         XCTAssertTrue(app.buttons["cancel-editor"].waitForExistence(timeout: 10))
+        awaitConnectionEditorInteractive()
     }
 
     /// Types `text` into `field`. A replacement (`clearing`) is only done
@@ -1242,12 +1363,13 @@ final class ConnectionEditorUITests: XCTestCase {
     }
 
     private func selectAuthenticationKey(_ label: String) {
-        dismissKeyboard()
-        let selector = app.buttons["key-selector"]
-        scrollToHittable(selector)
-        selector.tap()
+        openKeyPicker()
         selectOnlyKey(label)
         app.buttons["customize-done"].tap()
+        // customize-done pops the picker back onto the editor; gate the pop
+        // before the caller's next tap or scroll (save-editor taps have
+        // raced this pop's tail).
+        awaitConnectionEditorInteractive()
     }
 
     private func selectOnlyKey(_ label: String) {
@@ -1288,10 +1410,9 @@ final class ConnectionEditorUITests: XCTestCase {
         let addHopButton = app.buttons["add-hop"]
         scrollToHittable(addHopButton)
         addHopButton.tap()
+        awaitHopEditorPushed()
 
-        let hostField = app.textFields["hop-field-host"]
-        XCTAssertTrue(hostField.waitForExistence(timeout: 10))
-        typeInto(hostField, host)
+        typeInto(app.textFields["hop-field-host"], host)
         typeInto(app.textFields["hop-field-port"], port, clearing: "22")
         typeInto(app.textFields["hop-field-username"], username)
         saveHop()
@@ -1301,10 +1422,9 @@ final class ConnectionEditorUITests: XCTestCase {
         let addHopButton = app.buttons["add-hop"]
         scrollToHittable(addHopButton)
         addHopButton.tap()
+        awaitHopEditorPushed()
 
-        let hostField = app.textFields["hop-field-host"]
-        XCTAssertTrue(hostField.waitForExistence(timeout: 10))
-        typeInto(hostField, host)
+        typeInto(app.textFields["hop-field-host"], host)
         if let port {
             let portField = app.textFields["hop-field-port"]
             typeInto(portField, port, clearing: "22")
@@ -1312,6 +1432,7 @@ final class ConnectionEditorUITests: XCTestCase {
         typeInto(app.textFields["hop-field-username"], username)
 
         app.buttons["hop-key-selector"].tap()
+        awaitHittable(app.buttons["customize-done"])
         let keyButton = app.buttons["key-\(key.replacingOccurrences(of: " ", with: "-"))"]
         XCTAssertTrue(keyButton.waitForExistence(timeout: 5))
         selectOnlyKey(key)
@@ -1323,6 +1444,11 @@ final class ConnectionEditorUITests: XCTestCase {
     }
 
     private func swipeRow(named identifier: String) {
+        // A swipe issued while an editor sheet is still dismissing falls on
+        // the transition remnant and is swallowed; the list's own chrome is
+        // only hittable once the sheet is fully gone. Passes instantly when
+        // the list is already at rest.
+        awaitHittable(app.buttons["add-connection"])
         let row = app.buttons["connection-\(identifier)"]
         let cell = app.cells.containing(.button, identifier: "connection-\(identifier)").firstMatch
         if cell.exists {
