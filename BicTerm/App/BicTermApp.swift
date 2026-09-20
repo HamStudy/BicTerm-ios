@@ -227,6 +227,12 @@ struct BicTermApp: App {
     @State private var herdConnect = HerdSessionCoordinator()
 
     init() {
+        // A write to a socket whose peer died must surface as EPIPE, not
+        // kill the process: the embedded herdr client (Rust staticlib —
+        // its lang_start SIGPIPE-ignore never runs inside a host app)
+        // writes to its Local-endpoint bridge socket after the relay
+        // closes it on server death, and iOS leaves SIGPIPE at SIG_DFL.
+        signal(SIGPIPE, SIG_IGN)
         #if DEBUG
         UITestSupport.activate()
         #endif
