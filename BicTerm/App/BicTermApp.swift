@@ -300,6 +300,11 @@ struct BicTermApp: App {
         // writes to its Local-endpoint bridge socket after the relay
         // closes it on server death, and iOS leaves SIGPIPE at SIG_DFL.
         signal(SIGPIPE, SIG_IGN)
+        // Opt this app out of the system press-and-hold accent palette so a
+        // held key repeats instead (the same registration every terminal app
+        // ships — Ghostty, VimR): iPadOS offers no user-facing setting for
+        // it, and the palette is what swallows hardware key repeat.
+        UserDefaults.standard.register(defaults: ["ApplePressAndHoldEnabled": false])
         #if DEBUG
         UITestSupport.activate()
         #endif
