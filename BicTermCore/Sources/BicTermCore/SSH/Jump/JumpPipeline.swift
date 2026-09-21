@@ -305,6 +305,15 @@ final class NIOJumpHopConnection: JumpHopConnection, @unchecked Sendable {
                 terminalPixelHeight: 0,
                 terminalModes: SSHTerminalModes([:])
             ))
+            // Advertise true-color capability in the spawned shell's
+            // environment. wantReply: false (OpenSSH parity): a server that
+            // declines AcceptEnv never replies, so denial can neither block
+            // nor fail setup and cannot race the handler's FIFO
+            // success/failure tracker.
+            session.triggerUserOutboundEvent(
+                SSHChannelRequestEvent.EnvironmentRequest(wantReply: false, name: "COLORTERM", value: "truecolor"),
+                promise: nil
+            )
             try await handler.sendRequestExpectingSuccess(SSHChannelRequestEvent.ShellRequest(wantReply: true))
         } catch {
             try? await session.close().get()

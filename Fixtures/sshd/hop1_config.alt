@@ -31,6 +31,7 @@ IgnoreUserKnownHosts yes
 LogLevel DEBUG3
 
 AcceptEnv BICTERM_*
+AcceptEnv COLORTERM
 PrintMotd no
 
 # herdr fixture: the FIXED remote-client-bridge command built by
