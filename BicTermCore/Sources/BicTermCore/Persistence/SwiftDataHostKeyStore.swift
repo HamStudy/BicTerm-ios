@@ -7,10 +7,13 @@ public actor SwiftDataHostKeyStore: HostKeyStoreProtocol {
         do {
             let records = try modelContext.fetch(FetchDescriptor<StoredHostKeyRecord>())
             return try records.map(Self.domainRecord)
-        } catch let error as PersistenceError {
-            throw error
         } catch {
-            throw .operationFailed("load host keys")
+            // Conditional cast: swift-frontend 6.4 SILGen assertion on catch-as in typed-throws funcs; preserves the typed-vs-fallback clause split.
+            if let error = error as? PersistenceError {
+                throw error
+            } else {
+                throw .operationFailed("load host keys")
+            }
         }
     }
 
@@ -22,10 +25,13 @@ public actor SwiftDataHostKeyStore: HostKeyStoreProtocol {
             )
             descriptor.fetchLimit = 1
             return try modelContext.fetch(descriptor).first.map(Self.domainRecord)
-        } catch let error as PersistenceError {
-            throw error
         } catch {
-            throw .operationFailed("lookup host key")
+            // Conditional cast: swift-frontend 6.4 SILGen assertion on catch-as in typed-throws funcs; preserves the typed-vs-fallback clause split.
+            if let error = error as? PersistenceError {
+                throw error
+            } else {
+                throw .operationFailed("lookup host key")
+            }
         }
     }
 

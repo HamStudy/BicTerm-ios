@@ -229,14 +229,17 @@ public struct HerdrEndpointConnector: Sendable {
                 executablePath: probed.executablePath,
                 sessionName: connection.herdrSessionName
             )
-        } catch let error as SSHTransportError {
-            await carrier.close()
-            throw .bridgeChannelFailed(error)
         } catch {
-            // HerdrCommandBuilder.BuildError — unreachable: the session
-            // name passed the same grammar check at entry.
-            await carrier.close()
-            throw .invalidSessionName(connection.herdrSessionName ?? "")
+            // Conditional cast: swift-frontend 6.4 SILGen assertion on catch-as in typed-throws funcs; preserves the typed-vs-fallback clause split.
+            if let error = error as? SSHTransportError {
+                await carrier.close()
+                throw .bridgeChannelFailed(error)
+            } else {
+                // HerdrCommandBuilder.BuildError — unreachable: the session
+                // name passed the same grammar check at entry.
+                await carrier.close()
+                throw .invalidSessionName(connection.herdrSessionName ?? "")
+            }
         }
     }
 
@@ -323,7 +326,9 @@ public struct HerdrEndpointConnector: Sendable {
                 installDir: installDir,
                 progress: installProgress
             )
-        } catch let error as HerdrRemoteInstallerError {
+        } catch {
+            // Force cast: swift-frontend 6.4 SILGen assertion on catch-as in typed-throws funcs; do-block error type is exactly HerdrRemoteInstallerError.
+            let error = error as! HerdrRemoteInstallerError
             throw .installFailed(error)
         }
         // RE-PROBE connection: fresh establish + probe + close.
@@ -374,12 +379,15 @@ public struct HerdrEndpointConnector: Sendable {
             )
             await carrier.close()
             return probe
-        } catch let error as HerdrProbe.ProbeError {
-            await carrier.close()
-            throw .probeFailed(error)
         } catch {
-            await carrier.close()
-            throw .probeFailed(.execChannelFailed)
+            // Conditional cast: swift-frontend 6.4 SILGen assertion on catch-as in typed-throws funcs; preserves the typed-vs-fallback clause split.
+            if let error = error as? HerdrProbe.ProbeError {
+                await carrier.close()
+                throw .probeFailed(error)
+            } else {
+                await carrier.close()
+                throw .probeFailed(.execChannelFailed)
+            }
         }
     }
 
@@ -400,29 +408,35 @@ public struct HerdrEndpointConnector: Sendable {
             )
             do {
                 try await transport.connectExecOnly(to: connection)
-            } catch let error as SSHTransportError {
-                try await handleTrustDemand(
-                    error,
-                    host: connection.host,
-                    port: connection.port
-                )
-                do {
-                    try await transport.connectExecOnly(to: connection)
-                } catch let error as SSHTransportError {
-                    throw .sshEstablish(error)
-                } catch {
+            } catch {
+                // Conditional cast: swift-frontend 6.4 SILGen assertion on catch-as in typed-throws funcs; preserves the typed-vs-fallback clause split.
+                if let error = error as? SSHTransportError {
+                    try await handleTrustDemand(
+                        error,
+                        host: connection.host,
+                        port: connection.port
+                    )
+                    do {
+                        try await transport.connectExecOnly(to: connection)
+                    } catch {
+                        // Conditional cast: swift-frontend 6.4 SILGen assertion on catch-as in typed-throws funcs; preserves the typed-vs-fallback clause split.
+                        if let error = error as? SSHTransportError {
+                            throw .sshEstablish(error)
+                        } else {
+                            SSHEstablishDiagnostics.shared.record(
+                                "direct establish retry failed with a non-SSH error",
+                                error: error
+                            )
+                            throw .sshEstablish(.channelDenied)
+                        }
+                    }
+                } else {
                     SSHEstablishDiagnostics.shared.record(
-                        "direct establish retry failed with a non-SSH error",
+                        "direct establish failed with a non-SSH error",
                         error: error
                     )
                     throw .sshEstablish(.channelDenied)
                 }
-            } catch {
-                SSHEstablishDiagnostics.shared.record(
-                    "direct establish failed with a non-SSH error",
-                    error: error
-                )
-                throw .sshEstablish(.channelDenied)
             }
             return transport
         }
@@ -438,22 +452,25 @@ public struct HerdrEndpointConnector: Sendable {
         )
         do {
             return try await builder.buildExecConnection(connection: connection)
-        } catch let error as JumpError {
-            guard case let .hopFailed(_, host, port, underlying) = error else {
-                SSHEstablishDiagnostics.shared.record(
-                    "jump chain failed with a non-hop error",
-                    error: error
-                )
-                throw .sshEstablish(.channelDenied)
-            }
-            try await handleTrustDemand(underlying, host: host, port: port)
-            do {
-                return try await builder.buildExecConnection(connection: connection)
-            } catch {
+        } catch {
+            // Conditional cast: swift-frontend 6.4 SILGen assertion on catch-as in typed-throws funcs; preserves the typed-vs-fallback clause split.
+            if let error = error as? JumpError {
+                guard case let .hopFailed(_, host, port, underlying) = error else {
+                    SSHEstablishDiagnostics.shared.record(
+                        "jump chain failed with a non-hop error",
+                        error: error
+                    )
+                    throw .sshEstablish(.channelDenied)
+                }
+                try await handleTrustDemand(underlying, host: host, port: port)
+                do {
+                    return try await builder.buildExecConnection(connection: connection)
+                } catch {
+                    throw .sshEstablish(Self.transportError(from: error))
+                }
+            } else {
                 throw .sshEstablish(Self.transportError(from: error))
             }
-        } catch {
-            throw .sshEstablish(Self.transportError(from: error))
         }
     }
 
@@ -487,10 +504,13 @@ public struct HerdrEndpointConnector: Sendable {
                 key: publicKeyData,
                 algorithm: algorithm
             )
-        } catch let error as HostKeyTrustError {
-            throw .sshEstablish(Self.transportError(from: error))
         } catch {
-            throw .sshEstablish(.unreachable)
+            // Conditional cast: swift-frontend 6.4 SILGen assertion on catch-as in typed-throws funcs; preserves the typed-vs-fallback clause split.
+            if let error = error as? HostKeyTrustError {
+                throw .sshEstablish(Self.transportError(from: error))
+            } else {
+                throw .sshEstablish(.unreachable)
+            }
         }
     }
 

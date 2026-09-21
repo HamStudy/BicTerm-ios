@@ -156,10 +156,13 @@ final class ExecChannelHandler: ChannelDuplexHandler, @unchecked Sendable {
                     context.channel.triggerUserOutboundEvent(request, promise: nil)
                 }
             }
-        } catch let error as TransportError {
-            throw error
         } catch {
-            throw .channelDenied
+            // Conditional cast: swift-frontend 6.4 SILGen assertion on catch-as in typed-throws funcs; preserves the typed-vs-fallback clause split.
+            if let error = error as? TransportError {
+                throw error
+            } else {
+                throw .channelDenied
+            }
         }
     }
 

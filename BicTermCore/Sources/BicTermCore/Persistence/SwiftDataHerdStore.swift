@@ -14,10 +14,13 @@ public actor SwiftDataHerdStore: HerdStoreProtocol {
                 }
             }
             return herds.sorted { $0.name < $1.name }
-        } catch let error as PersistenceError {
-            throw error
         } catch {
-            throw .operationFailed("load herds")
+            // Conditional cast: swift-frontend 6.4 SILGen assertion on catch-as in typed-throws funcs; preserves the typed-vs-fallback clause split.
+            if let error = error as? PersistenceError {
+                throw error
+            } else {
+                throw .operationFailed("load herds")
+            }
         }
     }
 
@@ -30,7 +33,9 @@ public actor SwiftDataHerdStore: HerdStoreProtocol {
                 from: payload,
                 modelName: "Herd"
             )
-        } catch let error as PersistenceError {
+        } catch {
+            // Force cast: swift-frontend 6.4 SILGen assertion on catch-as in typed-throws funcs; do-block error type is exactly PersistenceError.
+            let error = error as! PersistenceError
             if case .decodingFailed = error { return nil }
             throw error
         }
@@ -44,10 +49,13 @@ public actor SwiftDataHerdStore: HerdStoreProtocol {
                 from: record.payload,
                 modelName: "Herd"
             )
-        } catch let error as PersistenceError {
-            throw error
         } catch {
-            throw .operationFailed("load herd")
+            // Conditional cast: swift-frontend 6.4 SILGen assertion on catch-as in typed-throws funcs; preserves the typed-vs-fallback clause split.
+            if let error = error as? PersistenceError {
+                throw error
+            } else {
+                throw .operationFailed("load herd")
+            }
         }
     }
 

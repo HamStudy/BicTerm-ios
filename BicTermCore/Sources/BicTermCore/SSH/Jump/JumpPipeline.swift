@@ -252,12 +252,15 @@ final class NIOJumpHopConnection: JumpHopConnection, @unchecked Sendable {
                 }
             }
             return NIOJumpRawLink(channel: child)
-        } catch let error as SSHTransportError {
-            throw error
         } catch {
-            // A dead handshake fails the queued createChannel promise with a
-            // generic ChannelError — recover the typed cause first.
-            throw await recordedFirstError() ?? .channelDenied
+            // Conditional cast: swift-frontend 6.4 SILGen assertion on catch-as in typed-throws funcs; preserves the typed-vs-fallback clause split.
+            if let error = error as? SSHTransportError {
+                throw error
+            } else {
+                // A dead handshake fails the queued createChannel promise with a
+                // generic ChannelError — recover the typed cause first.
+                throw await recordedFirstError() ?? .channelDenied
+            }
         }
     }
 
@@ -354,7 +357,9 @@ final class NIOJumpHopConnection: JumpHopConnection, @unchecked Sendable {
             try await handler.sendRequestExpectingSuccess(
                 SSHChannelRequestEvent.ExecRequest(command: command, wantReply: true)
             )
-        } catch let error as SSHTransportError {
+        } catch {
+            // Force cast: swift-frontend 6.4 SILGen assertion on catch-as in typed-throws funcs; do-block error type is exactly SSHTransportError.
+            let error = error as! SSHTransportError
             try? await session.close().get()
             throw error
         }

@@ -6,10 +6,13 @@ public actor SwiftDataSnippetStore: SnippetStoreProtocol {
     public func loadSnippets() async throws(PersistenceError) -> [Snippet] {
         do {
             return Snippet.deterministicallyOrdered(try decodedSnippets())
-        } catch let error as PersistenceError {
-            throw error
         } catch {
-            throw .operationFailed("load snippets")
+            // Conditional cast: swift-frontend 6.4 SILGen assertion on catch-as in typed-throws funcs; preserves the typed-vs-fallback clause split.
+            if let error = error as? PersistenceError {
+                throw error
+            } else {
+                throw .operationFailed("load snippets")
+            }
         }
     }
 
@@ -17,10 +20,13 @@ public actor SwiftDataSnippetStore: SnippetStoreProtocol {
         do {
             guard let record = try storedSnippet(id: id) else { return nil }
             return try decodeSkippingQuarantined(record.payload)
-        } catch let error as PersistenceError {
-            throw error
         } catch {
-            throw .operationFailed("load snippet")
+            // Conditional cast: swift-frontend 6.4 SILGen assertion on catch-as in typed-throws funcs; preserves the typed-vs-fallback clause split.
+            if let error = error as? PersistenceError {
+                throw error
+            } else {
+                throw .operationFailed("load snippet")
+            }
         }
     }
 
@@ -30,10 +36,13 @@ public actor SwiftDataSnippetStore: SnippetStoreProtocol {
                 $0.connectionID == nil || $0.connectionID == connectionID
             }
             return Snippet.deterministicallyOrdered(visible)
-        } catch let error as PersistenceError {
-            throw error
         } catch {
-            throw .operationFailed("load snippets for connection")
+            // Conditional cast: swift-frontend 6.4 SILGen assertion on catch-as in typed-throws funcs; preserves the typed-vs-fallback clause split.
+            if let error = error as? PersistenceError {
+                throw error
+            } else {
+                throw .operationFailed("load snippets for connection")
+            }
         }
     }
 
@@ -61,10 +70,13 @@ public actor SwiftDataSnippetStore: SnippetStoreProtocol {
                 modelContext.insert(StoredSnippet(id: persisted.id, payload: payload))
             }
             try modelContext.save()
-        } catch let error as PersistenceError {
-            throw error
         } catch {
-            throw .operationFailed("save snippet")
+            // Conditional cast: swift-frontend 6.4 SILGen assertion on catch-as in typed-throws funcs; preserves the typed-vs-fallback clause split.
+            if let error = error as? PersistenceError {
+                throw error
+            } else {
+                throw .operationFailed("save snippet")
+            }
         }
     }
 
@@ -89,10 +101,13 @@ public actor SwiftDataSnippetStore: SnippetStoreProtocol {
                 matched = true
             }
             if matched { try modelContext.save() }
-        } catch let error as PersistenceError {
-            throw error
         } catch {
-            throw .operationFailed("delete connection snippets")
+            // Conditional cast: swift-frontend 6.4 SILGen assertion on catch-as in typed-throws funcs; preserves the typed-vs-fallback clause split.
+            if let error = error as? PersistenceError {
+                throw error
+            } else {
+                throw .operationFailed("delete connection snippets")
+            }
         }
     }
 
@@ -102,7 +117,9 @@ public actor SwiftDataSnippetStore: SnippetStoreProtocol {
     private func decodeSkippingQuarantined(_ payload: Data) throws(PersistenceError) -> Snippet? {
         do {
             return try PersistenceCodec.decode(Snippet.self, from: payload, modelName: "Snippet")
-        } catch let error as PersistenceError {
+        } catch {
+            // Force cast: swift-frontend 6.4 SILGen assertion on catch-as in typed-throws funcs; do-block error type is exactly PersistenceError.
+            let error = error as! PersistenceError
             if case .decodingFailed = error { return nil }
             throw error
         }
@@ -119,10 +136,13 @@ public actor SwiftDataSnippetStore: SnippetStoreProtocol {
                 }
             }
             return snippets
-        } catch let error as PersistenceError {
-            throw error
         } catch {
-            throw .operationFailed("load snippets")
+            // Conditional cast: swift-frontend 6.4 SILGen assertion on catch-as in typed-throws funcs; preserves the typed-vs-fallback clause split.
+            if let error = error as? PersistenceError {
+                throw error
+            } else {
+                throw .operationFailed("load snippets")
+            }
         }
     }
 

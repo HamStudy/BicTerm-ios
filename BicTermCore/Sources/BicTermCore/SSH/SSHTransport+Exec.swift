@@ -63,13 +63,16 @@ extension SSHTransport {
                     try child.pipeline.syncOperations.addHandler(handler)
                 }
             }
-        } catch let error as TransportError {
-            throw error
         } catch {
-            // The typed contract carries no payload; capture the real
-            // reason for the device diagnostic before the collapse.
-            SSHEstablishDiagnostics.shared.record("exec channel open failed", error: error)
-            throw .channelDenied
+            // Conditional cast: swift-frontend 6.4 SILGen assertion on catch-as in typed-throws funcs; preserves the typed-vs-fallback clause split.
+            if let error = error as? TransportError {
+                throw error
+            } else {
+                // The typed contract carries no payload; capture the real
+                // reason for the device diagnostic before the collapse.
+                SSHEstablishDiagnostics.shared.record("exec channel open failed", error: error)
+                throw .channelDenied
+            }
         }
 
         // wantReply-tracked exec request: a refusal (e.g. the server's
@@ -79,7 +82,9 @@ extension SSHTransport {
             try await handler.sendRequestExpectingSuccess(
                 SSHChannelRequestEvent.ExecRequest(command: command, wantReply: true)
             )
-        } catch let error as TransportError {
+        } catch {
+            // Force cast: swift-frontend 6.4 SILGen assertion on catch-as in typed-throws funcs; do-block error type is exactly TransportError.
+            let error = error as! TransportError
             // The typed contract carries no payload; capture the real
             // reason for the device diagnostic before the collapse.
             SSHEstablishDiagnostics.shared.record("exec channel request refused", error: error)

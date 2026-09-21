@@ -91,10 +91,13 @@ public enum PersistenceStoreFactory {
                 configuration = ModelConfiguration(name, schema: schema, url: url)
             }
             return try ModelContainer(for: schema, configurations: configuration)
-        } catch let error as PersistenceError {
-            throw error
         } catch {
-            throw .initializationFailed(name)
+            // Conditional cast: swift-frontend 6.4 SILGen assertion on catch-as in typed-throws funcs; preserves the typed-vs-fallback clause split.
+            if let error = error as? PersistenceError {
+                throw error
+            } else {
+                throw .initializationFailed(name)
+            }
         }
     }
 

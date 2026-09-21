@@ -621,17 +621,20 @@ final class HerdrEmbedTransportCoordinator {
                 // lost" becomes per-relay failure and the bridge keeps
                 // listening. The client's supervisor redial drives
                 // reconnect (now actually working on strict gateways).
-            } catch let error as HerdrEmbedBridgeError {
-                if bridgeFailure == nil { bridgeFailure = .bridge(error) }
-                failureLines.append("\(item.link.machine.label): bridge bind failed — \(error)")
             } catch {
-                if bridgeFailure == nil {
-                    bridgeFailure = .bridge(.bindFailed(
-                        path: socketPath(for: item.link.machine),
-                        reason: "\(error)"
-                    ))
+                // Conditional cast: swift-frontend 6.4 SILGen assertion on catch-as in typed-throws funcs; preserves the typed-vs-fallback clause split.
+                if let error = error as? HerdrEmbedBridgeError {
+                    if bridgeFailure == nil { bridgeFailure = .bridge(error) }
+                    failureLines.append("\(item.link.machine.label): bridge bind failed — \(error)")
+                } else {
+                    if bridgeFailure == nil {
+                        bridgeFailure = .bridge(.bindFailed(
+                            path: socketPath(for: item.link.machine),
+                            reason: "\(error)"
+                        ))
+                    }
+                    failureLines.append("\(item.link.machine.label): bridge bind failed — \(error)")
                 }
-                failureLines.append("\(item.link.machine.label): bridge bind failed — \(error)")
             }
         }
         guard !started.isEmpty else {

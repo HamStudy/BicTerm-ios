@@ -14,10 +14,13 @@ public actor SwiftDataConfigurationStore: ConnectionStoreProtocol {
                 }
             }
             return connections.sorted { $0.name < $1.name }
-        } catch let error as PersistenceError {
-            throw error
         } catch {
-            throw .operationFailed("load connections")
+            // Conditional cast: swift-frontend 6.4 SILGen assertion on catch-as in typed-throws funcs; preserves the typed-vs-fallback clause split.
+            if let error = error as? PersistenceError {
+                throw error
+            } else {
+                throw .operationFailed("load connections")
+            }
         }
     }
 
@@ -31,7 +34,9 @@ public actor SwiftDataConfigurationStore: ConnectionStoreProtocol {
                 from: payload,
                 modelName: "Connection"
             )
-        } catch let error as PersistenceError {
+        } catch {
+            // Force cast: swift-frontend 6.4 SILGen assertion on catch-as in typed-throws funcs; do-block error type is exactly PersistenceError.
+            let error = error as! PersistenceError
             if case .decodingFailed = error { return nil }
             throw error
         }
@@ -45,10 +50,13 @@ public actor SwiftDataConfigurationStore: ConnectionStoreProtocol {
                 from: record.payload,
                 modelName: "Connection"
             )
-        } catch let error as PersistenceError {
-            throw error
         } catch {
-            throw .operationFailed("load connection")
+            // Conditional cast: swift-frontend 6.4 SILGen assertion on catch-as in typed-throws funcs; preserves the typed-vs-fallback clause split.
+            if let error = error as? PersistenceError {
+                throw error
+            } else {
+                throw .operationFailed("load connection")
+            }
         }
     }
 

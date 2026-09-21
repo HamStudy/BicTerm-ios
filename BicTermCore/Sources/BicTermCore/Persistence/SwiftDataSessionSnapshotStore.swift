@@ -15,10 +15,13 @@ public actor SwiftDataSessionSnapshotStore: SessionSnapshotStoreProtocol {
                     )
                 }
                 .sorted { $0.createdAt < $1.createdAt }
-        } catch let error as PersistenceError {
-            throw error
         } catch {
-            throw .operationFailed("load session snapshots")
+            // Conditional cast: swift-frontend 6.4 SILGen assertion on catch-as in typed-throws funcs; preserves the typed-vs-fallback clause split.
+            if let error = error as? PersistenceError {
+                throw error
+            } else {
+                throw .operationFailed("load session snapshots")
+            }
         }
     }
 
@@ -30,10 +33,13 @@ public actor SwiftDataSessionSnapshotStore: SessionSnapshotStoreProtocol {
                 from: record.payload,
                 modelName: "SessionSnapshot"
             )
-        } catch let error as PersistenceError {
-            throw error
         } catch {
-            throw .operationFailed("load session snapshot")
+            // Conditional cast: swift-frontend 6.4 SILGen assertion on catch-as in typed-throws funcs; preserves the typed-vs-fallback clause split.
+            if let error = error as? PersistenceError {
+                throw error
+            } else {
+                throw .operationFailed("load session snapshot")
+            }
         }
     }
 

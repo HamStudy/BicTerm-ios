@@ -36,10 +36,13 @@ public actor JumpTerminalTransport: TerminalTransport {
         let built: any SSHSessionTransport
         do {
             built = try await builder.build(connection: connection, cols: cols, rows: rows)
-        } catch let error as JumpError {
-            throw Self.transportError(error)
         } catch {
-            throw .unreachable
+            // Conditional cast: swift-frontend 6.4 SILGen assertion on catch-as in typed-throws funcs; preserves the typed-vs-fallback clause split.
+            if let error = error as? JumpError {
+                throw Self.transportError(error)
+            } else {
+                throw .unreachable
+            }
         }
         guard !isClosed else {
             await built.close()

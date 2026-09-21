@@ -291,7 +291,9 @@ public struct JumpChainBuilder: Sendable {
         )
         do {
             try await transport.connect(to: connection, cols: cols, rows: rows)
-        } catch let error as SSHTransportError {
+        } catch {
+            // Force cast: swift-frontend 6.4 SILGen assertion on catch-as in typed-throws funcs; do-block error type is exactly SSHTransportError.
+            let error = error as! SSHTransportError
             throw JumpError.hopFailed(
                 hopIndex: 1,
                 host: destination.host,

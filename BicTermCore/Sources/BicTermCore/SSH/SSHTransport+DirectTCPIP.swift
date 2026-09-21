@@ -38,10 +38,13 @@ extension SSHTransport {
                 }
             }
             return SSHChannelHandle(channel: child)
-        } catch let error as SSHTransportError {
-            throw error
         } catch {
-            throw .channelDenied
+            // Conditional cast: swift-frontend 6.4 SILGen assertion on catch-as in typed-throws funcs; preserves the typed-vs-fallback clause split.
+            if let error = error as? SSHTransportError {
+                throw error
+            } else {
+                throw .channelDenied
+            }
         }
     }
 }

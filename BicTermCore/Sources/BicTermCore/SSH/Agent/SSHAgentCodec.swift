@@ -125,10 +125,13 @@ public struct SSHAgentCodec: Sendable {
                 throw SSHAgentCodecError.malformedPayload(opcode: opcodeSignRequest)
             }
             return .signRequest(keyBlob: keyBlob, data: data, flags: flags)
-        } catch let error as SSHAgentCodecError {
-            throw error
         } catch {
-            throw .malformedPayload(opcode: opcodeSignRequest)
+            // Conditional cast: swift-frontend 6.4 SILGen assertion on catch-as in typed-throws funcs; preserves the typed-vs-fallback clause split.
+            if let error = error as? SSHAgentCodecError {
+                throw error
+            } else {
+                throw .malformedPayload(opcode: opcodeSignRequest)
+            }
         }
     }
 

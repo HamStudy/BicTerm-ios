@@ -315,14 +315,17 @@ public struct HerdrRemoteInstaller: Sendable {
             await session.close()
             await connection.close()
             return ScriptOutcome(stdout: stdout, stderr: stderrData, termination: termination)
-        } catch let mapped as HerdrRemoteInstallerError {
-            await session.close()
-            await connection.close()
-            throw mapped
         } catch {
-            await session.close()
-            await connection.close()
-            throw failure("unexpected non-typed error: \(error)")
+            // Conditional cast: swift-frontend 6.4 SILGen assertion on catch-as in typed-throws funcs; preserves the typed-vs-fallback clause split.
+            if let mapped = error as? HerdrRemoteInstallerError {
+                await session.close()
+                await connection.close()
+                throw mapped
+            } else {
+                await session.close()
+                await connection.close()
+                throw failure("unexpected non-typed error: \(error)")
+            }
         }
     }
 
@@ -377,14 +380,17 @@ public struct HerdrRemoteInstaller: Sendable {
                     )
                 )
             }
-        } catch let mapped as HerdrRemoteInstallerError {
-            await session.close()
-            await connection.close()
-            throw mapped
         } catch {
-            await session.close()
-            await connection.close()
-            throw HerdrRemoteInstallerError.uploadFailed("unexpected non-typed error: \(error)")
+            // Conditional cast: swift-frontend 6.4 SILGen assertion on catch-as in typed-throws funcs; preserves the typed-vs-fallback clause split.
+            if let mapped = error as? HerdrRemoteInstallerError {
+                await session.close()
+                await connection.close()
+                throw mapped
+            } else {
+                await session.close()
+                await connection.close()
+                throw HerdrRemoteInstallerError.uploadFailed("unexpected non-typed error: \(error)")
+            }
         }
     }
 
