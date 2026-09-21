@@ -58,6 +58,20 @@ public enum PersistenceStoreFactory {
         return SwiftDataHerdStore(modelContainer: container)
     }
 
+    public static func makeSnippetStore(
+        inMemoryOnly: Bool = false,
+        storeURL: URL? = nil
+    ) throws(PersistenceError) -> SwiftDataSnippetStore {
+        let schema = Schema([StoredSnippet.self])
+        let container = try makeContainer(
+            name: "BicTermSnippets",
+            schema: schema,
+            inMemoryOnly: inMemoryOnly,
+            storeURL: storeURL
+        )
+        return SwiftDataSnippetStore(modelContainer: container)
+    }
+
     private static func makeContainer(
         name: String,
         schema: Schema,

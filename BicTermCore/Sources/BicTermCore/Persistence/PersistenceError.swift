@@ -5,6 +5,7 @@ public enum PersistenceError: Error, Equatable, Sendable {
     case encodingFailed(String)
     case decodingFailed(String)
     case operationFailed(String)
+    case duplicateSnippetName(String)
 }
 
 extension PersistenceError: LocalizedError {
@@ -18,6 +19,8 @@ extension PersistenceError: LocalizedError {
             "Unable to decode \(model)"
         case let .operationFailed(operation):
             "Persistence operation failed: \(operation)"
+        case let .duplicateSnippetName(name):
+            "A snippet named \(name) already exists in this scope"
         }
     }
 }

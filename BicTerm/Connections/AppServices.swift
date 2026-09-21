@@ -18,6 +18,15 @@ final class AppServices {
     let protocols: [ProtocolDescriptor]
     let connectionStore: any ConnectionStoreProtocol
     let herdStore: any HerdStoreProtocol
+    /// Process-wide snippet persistence: bootstrapped exactly once here at
+    /// app-service ownership and shared by every window — never per-window,
+    /// which would open duplicate containers over one store file. The
+    /// SwiftUI layer consumes the erased store below and must not become a
+    /// second direct SwiftData ownership layer.
+    let snippetStoreBootstrap = SnippetStoreBootstrap.live()
+    /// The erased snippet store (one process-wide instance; see
+    /// ``snippetStoreBootstrap``).
+    var snippetStore: any SnippetStoreProtocol { snippetStoreBootstrap.store() }
     let keyRepository = KeychainKeyRepository()
     let keyStore = KeyStore()
     let keyAvailabilityPreferences = KeyAvailabilityPreferences()

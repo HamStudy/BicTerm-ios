@@ -14,6 +14,7 @@ final class ConnectionsModel {
 
     private let services: AppServices
     private let connectionStore: any ConnectionStoreProtocol
+    private let snippetStore: any SnippetStoreProtocol
     private let keyListProvider: () async -> [KeyMetadata]
     private let protocolDescriptors: [ProtocolDescriptor]
     private let descriptorProvider: (String) -> ProtocolDescriptor?
@@ -37,6 +38,7 @@ final class ConnectionsModel {
     init(services: AppServices = .shared) {
         self.services = services
         self.connectionStore = services.connectionStore
+        self.snippetStore = services.snippetStore
         self.keyListProvider = { (try? await services.keyRepository.list()) ?? [] }
         self.protocolDescriptors = services.protocols
         self.descriptorProvider = services.descriptor(forProtocolID:)
@@ -48,12 +50,14 @@ final class ConnectionsModel {
         connectionStore: any ConnectionStoreProtocol,
         protocolDescriptors: [ProtocolDescriptor],
         descriptorProvider: @escaping (String) -> ProtocolDescriptor?,
+        snippetStore: (any SnippetStoreProtocol)? = nil,
         keyListProvider: @escaping () async -> [KeyMetadata] = { [] },
         bootstrapPreparation: @escaping @MainActor () async -> Void = {},
         keyRefresh: @escaping @MainActor () async -> Void = {}
     ) {
         self.services = .shared
         self.connectionStore = connectionStore
+        self.snippetStore = snippetStore ?? services.snippetStore
         self.protocolDescriptors = protocolDescriptors
         self.descriptorProvider = descriptorProvider
         self.keyListProvider = keyListProvider
@@ -154,6 +158,11 @@ final class ConnectionsModel {
         do {
             try await connectionStore.deleteConnection(id: connection.id)
             connections.removeAll { $0.id == connection.id }
+            // Scoped snippets go only now, after the authoritative
+            // connection deletion succeeded — a failed delete (or a
+            // connection the store quarantined on load, which never
+            // reaches this path) preserves them.
+            try? await snippetStore.deleteSnippets(connectionID: connection.id)
             let stillReferenced = Set(connections.flatMap(Self.passwordTags(in:)))
             for tag in tags where !stillReferenced.contains(tag) {
                 try? await services.passwordStore.deletePassword(for: tag)
