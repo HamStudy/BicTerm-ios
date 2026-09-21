@@ -26,7 +26,7 @@ Swift actor wrapper over the herdr Rust FFI (`HerdrCore.xcframework`); static-li
 - Build with a generic simulator destination. The xcframework is arm64-only; x86_64 simulator slice does not exist. Always name a simulator (e.g. `iPhone 17 Pro`).
 - Skip the `BicTerm` linker anchor `-u _herdr_client_create` when restructuring `BicTerm.OTHER_LDFLAGS`; without it the linker drops every object in the static archive.
 - Touch `Vendor/herdr/herdr-ios-ffi/src/abi.rs` from this dir; patch it upstream and document the hunk in `Vendor/herdr/MODIFICATIONS.md`.
-- Run herdr integration against a live `herdr-server` on this host. zig 0.15.x fails to link on macOS 26; tests stay on committed-frame replay.
+- Run herdr integration against a live `herdr-server` on this host outside the fixture flow. The fixture servers are the pinned prebuilt release binary (`scripts/herdr-server-fetch.sh`, never built from source); `HerdrServerFixtureHandshakeTests` exercises them live, and golden-frame replay covers the no-fixture cases.
 
 ## NOTES
 - `build-herdr-core.sh` installs cbindgen repo-locally into `.build-artifacts/tools/` on first run and refuses to ship a headerless archive without `_herdr_client_create` in `nm -gU`.

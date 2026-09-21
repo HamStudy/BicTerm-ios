@@ -6,21 +6,22 @@ SwiftUI app target: UI, session/connection state, and the SwiftTerm bridge only;
 ## STRUCTURE
 | Subdir | Files | Contents |
 |--------|-------|----------|
-| App | 2 | @main entry, scenes |
+| App | 3 | @main entry, scenes |
 | Agent | 2 | SSH agent authorization UI |
 | Connections | 8 | connection list/editor, DI root |
-| Design | 1 | design tokens, dark-first |
-| Herdr | 19 | herdr workspace UI (panes/surfaces) |
+| Design | 3 | design tokens, dark-first |
+| Herdr | 21 | herdr workspace UI (panes/surfaces) |
+| Herds | 2 | herd editor UI |
 | Keys | 8 | key management UI |
-| Sessions | 7 | session registry, scene chrome |
-| Settings | 2 | app settings |
-| Terminal | 9 | SwiftTerm bridge, toolbar, previews/test injectors |
+| Sessions | 12 | session registry, scene chrome |
+| Settings | 7 | app settings |
+| Terminal | 14 | SwiftTerm bridge, toolbar, previews/test injectors |
 | Resources | 0 | assets (no Swift) |
 
 ## WHERE TO LOOK
 | Task | File | Notes |
 |------|------|-------|
-| App entry | `App/BicTermApp.swift` | @main, 3 WindowGroups: main, "Terminal", "Herdr Workspace" (multi-window iPad) |
+| App entry | `App/BicTermApp.swift` | @main, 4 WindowGroups: main, "Terminal", "Herdr Workspace", "Settings" (multi-window iPad) |
 | DI root | `Connections/AppServices.swift` | `AppServices.shared` singleton |
 | Connection list | `Connections/ConnectionListView.swift` | tap row = connect (default action); swipe = edit |
 | SwiftTerm bridge | `Terminal/TerminalRepresentable.swift` | SwiftTerm ↔ SwiftUI |

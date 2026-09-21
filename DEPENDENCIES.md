@@ -21,10 +21,10 @@ forwarding (confirmed: outbound `auth-agent-req@openssh.com` →
 SSHMessages.swift:905-906, which kills the connection).
 
 Note (2026-09-12, herdr-support T11 — fixture-binary provenance): the test
-fixtures run a REAL herdr v0.9.0 server, but never one built from source.
+fixtures run a REAL herdr v0.9.1 server, but never one built from source.
 `scripts/herdr-server-fetch.sh` downloads the pinned upstream release asset
 `herdr-macos-aarch64` from
-`https://github.com/herdrdev/herdr/releases/download/v0.9.0/` into the
+`https://github.com/herdrdev/herdr/releases/download/v0.9.1/` into the
 gitignored `Fixtures/run/herdr/herdr` and verifies it byte-exact against
 the committed sha256 lockfile `Fixtures/herdr/server-0.9.1.sha256`
 (idempotent; a mismatch re-downloads or fails loudly). The binary is test
@@ -37,9 +37,9 @@ dependency graph or license surface beyond the vendored herdr source above
 | Name | Pinned revision | License | Source | Notes |
 |---|---|---|---|---|
 | swift-nio-ssh (NIOSSH), BicTerm fork | 0.15.0 (`3ec281496f28a3b6581afd946b759e2642f5cd8d`) + 12 `BICTERM-PATCH` hunks | Apache-2.0 | https://github.com/apple/swift-nio-ssh | Vendored at `Vendor/swift-nio-ssh` (2026-09-04, task T8); the 12 marked hunks add OpenSSH agent channel/request parsing and serialization plus outbound agent-request emission; LICENSE.txt retained; upstream PR candidate |
-| SwiftTerm, BicTerm fork | 1.20.0 (`v1.20.0`, commit `5d14406844143538cd8f8851d2d8a67c1fe443e5`) + keyboard test-seam access | MIT | https://github.com/migueldeicaza/SwiftTerm | Vendored at `Vendor/SwiftTerm` (2026-09-06, task T12; hunks completed 2026-09-07); 5 additive hunks documented in `Vendor/SwiftTerm/BICTERM-PATCH.md` with inline `BICTERM-PATCH hunk N` markers; LICENSE preserved verbatim; hunks widen `keyRepeat`/`pressesEnded` access and add the `installsSoftwareKeyboard` opt-out (hidden blocker input view + `.causesPageTurn` gating) consumed only by the app's DEBUG UI-test seams; production input paths, timers, and traits are unchanged; upstream PR candidate |
+| SwiftTerm, BicTerm fork | 1.20.0 (`v1.20.0`, commit `5d14406844143538cd8f8851d2d8a67c1fe443e5`) + 12 `BICTERM-PATCH` hunks | MIT | https://github.com/migueldeicaza/SwiftTerm | Vendored at `Vendor/SwiftTerm` (2026-09-06, task T12); 12 hunks documented in `Vendor/SwiftTerm/BICTERM-PATCH.md` with inline `BICTERM-PATCH hunk N` markers (1-5 keyboard DEBUG UI-test seams, 6-7 mouse/selection repair, 8 hosted accessory fallback, 9 local selection reliability, 10 reconnect mode reset, 11 OSC 52 typed write surface, 12 hardware-keyboard word movement); LICENSE preserved verbatim; upstream PR candidate |
  | herdr (protocol core + iOS FFI) | v0.9.0 (`b99002ac99b09e00b4ca692436cb15a6b0d676f1`) | Apache-2.0 | https://github.com/herdrdev/herdr | Vendored at `Vendor/herdr`; builds `HerdrCore.xcframework` via `scripts/build-herdr-core.sh`; Rust dependency licenses/advisories enforced by cargo-deny policy in `Vendor/herdr/check.sh` |
- | herdr (embedded TUI client + xcframework) | v0.9.0 (`b99002ac99b09e00b4ca692436cb15a6b0d676f1`) + 4-patch embed series | Apache-2.0 | https://github.com/herdrdev/herdr | Vendored at `Vendor/herdr` (the same commit, the embed patch series at `Vendor/herdr/embed-patches/` is replayed into a working copy by `scripts/herdr-embed-prepare.sh`); the working copy builds `HerdrEmbed.xcframework` via `scripts/herdr-embed-core.sh` (headerless, device + simulator slices; `BicTerm/Herdr/Embed/` consumes the ABI through `HerdrEmbedC`); patch-by-patch ledger + provenance + rebase instructions in `Vendor/herdr/EMBED-PATCHES.md`; the cbindgen-generated `HerdrEmbed.h` is committed at `HerdrEmbedC/include/HerdrEmbed.h` and drift-checked on every build |
+ | herdr (embedded TUI client + xcframework) | v0.9.1 (`065ef9d6a531c49fb8bee7e818ef837065b21ee9`) + 8-patch embed series | Apache-2.0 | https://github.com/herdrdev/herdr | Vendored at `Vendor/herdr` (embed baseline per `Vendor/herdr/EMBED-PATCHES.md`; the embed patch series at `Vendor/herdr/embed-patches/` is replayed into a working copy by `scripts/herdr-embed-prepare.sh`); the working copy builds `HerdrEmbed.xcframework` via `scripts/herdr-embed-core.sh` (headerless, device + simulator slices; `BicTerm/Herdr/Embed/` consumes the ABI through `HerdrEmbedC`); patch-by-patch ledger + provenance + rebase instructions in `Vendor/herdr/EMBED-PATCHES.md`; the cbindgen-generated `HerdrEmbed.h` is committed at `HerdrEmbedC/include/HerdrEmbed.h` and drift-checked on every build |
 | OpenSSH portable `bcrypt_pbkdf.c` | `7fe3b24c922b7af2d743737f7cf37df61ea06426` | ISC | https://github.com/openssh/openssh-portable | Adapted to CommonCrypto SHA-512 in `CBcryptPBKDF`; original notice retained |
 | OpenSSH portable `blowfish.c` / `blf.h` | `7fe3b24c922b7af2d743737f7cf37df61ea06426` | BSD-3-Clause | https://github.com/openssh/openssh-portable | bcrypt PBKDF support only; original notices retained |
 

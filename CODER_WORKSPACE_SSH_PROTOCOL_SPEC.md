@@ -1,5 +1,11 @@
 # Coder workspace SSH client: protocol and implementation specification
 
+> **HISTORICAL SPEC. DO NOT IMPLEMENT.** Coder/AGPL tailnet support was
+> removed from this project in commit `ee9956e` ("refactor!: remove Coder
+> support and all AGPL-linked code"). This document is retained as a
+> historical research record only; do not implement from it and do not
+> resurrect Coder patterns.
+
 **Research date:** September 6, 2026  
 **Reference release:** Coder `v2.36.4`  
 **Reference commit:** `10fd510ada0e3a7c222511dbd9916f83afd1acf0`  

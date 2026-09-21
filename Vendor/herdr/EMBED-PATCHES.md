@@ -7,8 +7,8 @@ into a working copy under `.build-artifacts/herdr-embed/`.
 
 Purpose: let the full herdr TUI client compile and link for
 `aarch64-apple-ios` so it can be embedded in-process by the BicTerm app
-(plan `.omo/plans/herdr-embed.md`, task 1). Patches 1-3 are written to be
-upstreamable; patch 4 is BicTerm-specific and feature-gated.
+(plan `.omo/plans/herdr-embed.md`, task 1). Patches 1-3 and 5 are written to
+be upstreamable; patches 4 and 6-8 are BicTerm-specific and feature-gated.
 
 ## Series
 

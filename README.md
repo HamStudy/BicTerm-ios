@@ -44,7 +44,10 @@ An iOS 18+ SSH terminal client for iPhone and iPad, built on
   mouse. Shift also bypasses capture, unless the remote application explicitly
   requests Shift capture.
 - **Paste** is a local user action again, with bracketed-paste framing when the
-  remote application requests it. Remote OSC 52 clipboard writes remain denied.
+  remote application requests it. Remote OSC 52 clipboard writes follow the
+  app-side hardened policy: foreground-gated, capped at 100 KiB, controlled by
+  a default-ON Settings toggle, with an attribution toast; OSC 52 reads stay
+  denied unconditionally.
 - Simulator acceptance covers selection/copy/paste over SSH, SGR drag bytes,
   Option-forced local selection, and moving a real Vim cursor by tapping. Physical trackpad hover, wheel, and
   two-finger gestures still need device validation. Secondary/middle-button
@@ -133,7 +136,9 @@ BicTermCore (Swift package — no SwiftUI/UIKit)
 ├── Sessions/     Session registry, reconnect engine
 ├── Keys/         Keychain repo, OpenSSH parser, Secure Enclave
 ├── Trust/        Host-key TOFU verifier
-└── Models/       Connection, Hop, SessionSnapshot, etc.
+├── Models/       Connection, Hop, SessionSnapshot, etc.
+├── Persistence/  SwiftData stores (config, host keys, snapshots)
+└── Herdr/        herdr transports, command builder, probe
 
 BicTerm (iOS app)
 ├── App/          SwiftUI shell, scene manifest
@@ -142,6 +147,9 @@ BicTerm (iOS app)
 ├── Connections/  Connection list + editor
 ├── Keys/         Key management UI
 ├── Agent/        Agent authorization UI
+├── Herdr/        Embedded herdr workspace UI
+├── Herds/        Herd editor UI
+├── Settings/     App settings
 └── Design/       Tokens, dual dark/light palettes
 ```
 

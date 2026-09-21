@@ -26,7 +26,7 @@ No convenience, default behavior, debugging need, or evidence requirement permit
 
 # PROJECT KNOWLEDGE BASE
 
-**Generated:** 2026-09-11 · **Commit:** 7e06a3c · **Branch:** main
+**Generated:** 2026-09-20 · **Branch:** main
 
 ## OVERVIEW
 iOS 18+ SSH terminal (SwiftUI, Swift 6 strict concurrency) on vendored SwiftNIO SSH + SwiftTerm forks; also a herdr workspace client via a Rust FFI core. Xcode project is Xcodegen-generated; platform-agnostic logic lives in a SwiftPM core package.
@@ -34,13 +34,17 @@ iOS 18+ SSH terminal (SwiftUI, Swift 6 strict concurrency) on vendored SwiftNIO 
 ## STRUCTURE
 ```
 BicTerm-ios/
-├── BicTerm/            # iOS app (SwiftUI): Terminal, Herdr, Sessions, Connections, Keys, Agent, Design
+├── BicTerm/            # iOS app (SwiftUI): Terminal, Herdr, Herds, Sessions, Connections, Keys, Agent, Settings, Design
 ├── BicTermCore/        # SwiftPM core — SSH/transport/session logic, no SwiftUI/UIKit
+├── BicTermTests/       # Core + app-logic unit/integration tests
+├── BicTermUITests/     # XCUITest suites (FreeformResize, TerminalToolbar, herdr embed, ...)
 ├── HerdrClientCore/    # Swift actor wrapper over the herdr Rust FFI (3 files, framework target)
+├── HerdrClientCoreTests/ # HerdrClientCore smoke tests (golden-frame replay)
 ├── HerdrCoreC/         # Clang-module host exposing cbindgen HerdrCore.h (stub.c only)
+├── HerdrEmbedC/        # Clang-module host exposing cbindgen HerdrEmbed.h (stub.c only)
 ├── Fixtures/           # Local test fixtures: sshd (ports 12222/12223), UDS forwarder, herdr, keys
 ├── Vendor/             # Vendored forks: SwiftTerm, swift-nio-ssh, herdr (Rust)
-├── scripts/            # Build/test/fixture harness (7 shell scripts, env-override contract)
+├── scripts/            # Build/test/fixture harness (12 shell scripts, env-override contract)
 ├── Docs/               # Design/traceability docs
 └── project.yml         # Xcodegen spec — source of truth for the Xcode project
 ```
@@ -48,13 +52,13 @@ BicTerm-ios/
 ## WHERE TO LOOK
 | Task | Location | Notes |
 |------|----------|-------|
-| App entry / scenes | `BicTerm/App/BicTermApp.swift` | @main, 3 WindowGroups |
+| App entry / scenes | `BicTerm/App/BicTermApp.swift` | @main, 4 WindowGroups |
 | Session lifecycle, reconnect | `BicTerm/Sessions/SessionStore.swift` | registry + toolbar state |
 | Terminal view bridge | `BicTerm/Terminal/TerminalRepresentable.swift` | SwiftTerm ↔ SwiftUI |
 | Terminal toolbar strip | `BicTerm/Terminal/TerminalToolbar.swift` | esc/ctrl/tab/arrows, GCKeyboard heuristic |
 | SSH transport, ProxyJump, agent | `BicTermCore/Sources/BicTermCore/SSH/` | NIO SSH based |
 | Transport abstraction seam | `BicTermCore/Sources/BicTermCore/Transport/TerminalTransport.swift` | SSH is one conformer |
-| herdr UI (panes/surfaces) | `BicTerm/Herdr/` | largest app subdir (19 files) |
+| herdr UI (panes/surfaces) | `BicTerm/Herdr/` | largest app subdir (21 Swift files) |
 | herdr client core | `HerdrClientCore/HerdrClient.swift` | actor over C ABI |
 | Rust FFI exports | `Vendor/herdr/herdr-ios-ffi/src/abi.rs` | `herdr_client_*` |
 | Test fixtures | `Fixtures/` + `scripts/fixtures-up.sh` | sshd 12222/12223 |
@@ -63,7 +67,7 @@ BicTerm-ios/
 ## CODE MAP
 | Symbol | Type | Location | Role |
 |--------|------|----------|------|
-| `BicTermApp` | @main App | `BicTerm/App/BicTermApp.swift` | scenes, 3 WindowGroups |
+| `BicTermApp` | @main App | `BicTerm/App/BicTermApp.swift` | scenes, 4 WindowGroups |
 | `SessionStore` | ObservableObject | `BicTerm/Sessions/SessionStore.swift` | session registry, reconnect |
 | `AppServices` | singleton (`.shared`) | `BicTerm/Connections/AppServices.swift` | DI root |
 | `TerminalTransport` | protocol | `BicTermCore/Sources/BicTermCore/Transport/TerminalTransport.swift` | transport seam |
@@ -109,12 +113,12 @@ xcodebuild -project BicTerm.xcodeproj -scheme BicTerm \
 scripts/fixtures-up.sh                 # sshd fixtures (idempotent)
 scripts/test-core.sh                   # unit/integration (needs fixtures up)
 scripts/test-ui.sh                     # UI tests
-scripts/check-isolation.sh             # containment verifier
+scripts/check-isolation.sh             # module-isolation check (BicTermCore layering)
 ```
 
 ## NOTES
 - `HerdrCore.xcframework` is arm64-only: a generic simulator destination builds x86_64 → link failure. ALWAYS name a simulator.
 - Fresh clone order: `build-herdr-core.sh` → `xcodegen generate` → build (package resolution needs the xcframework present).
-- Live herdr-server fixture blocked: zig 0.15.x fails to link on macOS 26; herdr tests use committed-frame replay.
+- herdr fixture servers use the pinned prebuilt release binary (`scripts/herdr-server-fetch.sh`, sha256-verified; never built from source), so live fixture handshake tests run without a toolchain; golden-frame replay covers the no-fixture cases. zig 0.16.0 is only needed to regenerate the vendored libghostty-vt artifact (`scripts/herdr-vt-build.sh`).
 - Coder/AGPL tailnet support was removed upstream (`ee9956e`); `CODER_WORKSPACE_SSH_PROTOCOL_SPEC.md` remains as historical spec only — do not resurrect Coder patterns from it.
 - Device vs simulator sandbox behavior differs (openpty EPERM, container-root write denied, getpwuid escapes the container): probed facts, design rules, and the re-probe recipe live in `Docs/DEVICE-SANDBOX.md`.
