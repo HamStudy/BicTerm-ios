@@ -73,12 +73,12 @@ Framing: uint32 BE length + payload. Opcodes: 11=request-identities,
 
 ### herdr servers (`Fixtures/herdr/`)
 
-Real herdr v0.9.0 servers for live-endpoint E2E — always the pinned
+Real herdr v0.9.1 servers for live-endpoint E2E — always the pinned
 PREBUILT release binary, never built from source (standing project
 policy; no zig anywhere in the fixture chain):
 
 - **Binary**: `scripts/herdr-server-fetch.sh` downloads
-  `herdr-macos-aarch64` from the upstream v0.9.0 GitHub release into
+  `herdr-macos-aarch64` from the upstream v0.9.1 GitHub release into
   `Fixtures/run/herdr/herdr` (gitignored) and verifies it against the
   committed sha256 lockfile `Fixtures/herdr/server-0.9.1.sha256`.
   Idempotent: a binary already matching the lockfile is left alone.
