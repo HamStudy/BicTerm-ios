@@ -69,6 +69,13 @@ struct TerminalRepresentable: UIViewRepresentable {
 
     var cursorStyle: CursorStyle = .blinkBlock
 
+    /// Optional OSC 777 notification routing for this surface. Production
+    /// session surfaces route through the cache-owned coordinator; the
+    /// DEBUG preview leaves it nil (no scene to banner in).
+    var notificationCoordinator: TerminalNotificationCoordinator? = nil
+    /// Scene identity the OSC 777 handler reports events under.
+    var notificationSceneID: String = ""
+
     func makeCoordinator() -> TerminalCoordinator {
         TerminalCoordinator(parent: self)
     }
@@ -104,6 +111,12 @@ struct TerminalRepresentable: UIViewRepresentable {
 
         view.terminalDelegate = context.coordinator
         view.accessibilityIdentifier = "terminalView"
+
+        TerminalNotificationRouting.apply(
+            to: view,
+            coordinator: notificationCoordinator,
+            sceneID: notificationSceneID
+        )
 
         context.coordinator.startFeeding(into: view)
         return view

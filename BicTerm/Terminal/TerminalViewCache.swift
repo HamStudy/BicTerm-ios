@@ -31,6 +31,11 @@ final class TerminalSurface: NSObject, @preconcurrency TerminalViewDelegate {
     private let osc52ToastPresenter: (@MainActor (Osc52ClipboardToast) -> Void)?
     /// Hook for DEBUG denial observability; production keeps this nil.
     private let osc52DenialRecorder: (@MainActor (Osc52ClipboardDenial) -> Void)?
+    /// OSC 777 routing target for this surface; nil keeps the terminal on
+    /// SwiftTerm's built-in (no-op delegate) 777 dispatch.
+    private let notificationCoordinator: TerminalNotificationCoordinator?
+    /// Scene identity the OSC 777 handler reports events under.
+    private let notificationSceneID: String
     /// Attribution label baked into every approved toast ("Alpha", "Beta",
     /// …) so the user can tell which remote triggered the clipboard
     /// change. The cache passes this in from the session descriptor.
@@ -46,6 +51,8 @@ final class TerminalSurface: NSObject, @preconcurrency TerminalViewDelegate {
         osc52Settings: Osc52ClipboardSettings = Osc52ClipboardSettings(),
         osc52ToastPresenter: (@MainActor (Osc52ClipboardToast) -> Void)? = nil,
         osc52DenialRecorder: (@MainActor (Osc52ClipboardDenial) -> Void)? = nil,
+        notificationCoordinator: TerminalNotificationCoordinator? = nil,
+        notificationSceneID: String = "",
         sourceLabel: String = ""
     ) {
         self.sendBytes = send
@@ -53,6 +60,8 @@ final class TerminalSurface: NSObject, @preconcurrency TerminalViewDelegate {
         self.osc52Settings = osc52Settings
         self.osc52ToastPresenter = osc52ToastPresenter
         self.osc52DenialRecorder = osc52DenialRecorder
+        self.notificationCoordinator = notificationCoordinator
+        self.notificationSceneID = notificationSceneID
         self.sourceLabel = sourceLabel
 
         let options = TerminalOptions(
@@ -83,6 +92,14 @@ final class TerminalSurface: NSObject, @preconcurrency TerminalViewDelegate {
         // Installs pinch-to-zoom when a model is present (nil in tests that
         // construct the cache directly).
         view.fontModel = fontModel
+
+        // Visible BEL + app-side OSC 777 routing (the registered handler
+        // replaces SwiftTerm's built-in 777 dispatch).
+        TerminalNotificationRouting.apply(
+            to: view,
+            coordinator: notificationCoordinator,
+            sceneID: notificationSceneID
+        )
 
         feedTask = Task { [weak view] in
             for await chunk in output {
@@ -257,6 +274,10 @@ final class TerminalViewCache {
     /// App-global OSC 52 clipboard settings. SessionStore wires a shared
     /// instance so the toggle in Settings applies to every surface at once.
     var osc52Settings: Osc52ClipboardSettings = Osc52ClipboardSettings()
+    /// App-side OSC 777 notification routing: one coordinator shared by
+    /// every session surface, keyed by registry scene ID. Owned here (with
+    /// the session state); injectable for focused tests.
+    var notificationCoordinator = TerminalNotificationCoordinator()
 
     let capacity: Int
 
@@ -288,6 +309,7 @@ final class TerminalViewCache {
     func attachSurface(for sessionID: UUID, model: SessionSceneModel) -> SurfaceAttachment {
         let generation = (attachGenerations[sessionID] ?? 0) &+ 1
         attachGenerations[sessionID] = generation
+        model.attachNotificationCoordinator(notificationCoordinator)
 
         if let entry = entries[sessionID] {
             touch(sessionID)
@@ -310,6 +332,8 @@ final class TerminalViewCache {
             osc52Settings: osc52Settings,
             osc52ToastPresenter: { toast in model.presentOsc52Toast(toast) },
             osc52DenialRecorder: { reason in model.recordOsc52Denial(reason) },
+            notificationCoordinator: notificationCoordinator,
+            notificationSceneID: model.sceneID,
             sourceLabel: sourceLabel
         )
         let sceneID = model.sceneID

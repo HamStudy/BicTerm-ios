@@ -64,6 +64,10 @@ final class SessionSceneModel: Identifiable {
     #if DEBUG
     private(set) var lastOsc52Denial: Osc52ClipboardDenial?
     #endif
+    /// OSC 777 banner coordinator, attached by the view cache when this
+    /// scene's surface wires in. Nil until the first attach (a detached
+    /// session has no banner surface).
+    private(set) var notificationCoordinator: TerminalNotificationCoordinator?
 
     let viewOutput: AsyncStream<Data>
     private var viewOutputContinuation: AsyncStream<Data>.Continuation
@@ -293,6 +297,25 @@ final class SessionSceneModel: Identifiable {
             guard !Task.isCancelled else { return }
             self?.osc52Toast = nil
         }
+    }
+
+    // MARK: - Terminal notifications (OSC 777)
+
+    /// The scene's live OSC 777 banner, if any. Forwards to the
+    /// coordinator's per-scene state; tracked through @Observable when
+    /// read from a view body.
+    var notificationBanner: TerminalNotificationBanner? {
+        notificationCoordinator?.banner(for: sceneID)
+    }
+
+    /// Wired by the view cache at surface attach (idempotent).
+    func attachNotificationCoordinator(_ coordinator: TerminalNotificationCoordinator) {
+        notificationCoordinator = coordinator
+    }
+
+    /// Manual dismiss of this scene's OSC 777 banner (its × button).
+    func dismissNotificationBanner() {
+        notificationCoordinator?.dismissBanner(for: sceneID)
     }
 
     #if DEBUG

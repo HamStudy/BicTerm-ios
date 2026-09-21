@@ -35,11 +35,15 @@ struct SessionSceneView: View {
     /// guarantees a structural re-render. This is the security guardrail
     /// of OSC 52; rendering MUST happen.
     @State private var renderedOsc52Toast: Osc52ClipboardToast?
+    /// Same mirror pattern for the OSC 777 banner (see
+    /// `renderedOsc52Toast` for the render-cache rationale).
+    @State private var renderedNotificationBanner: TerminalNotificationBanner?
 
     private var agentPresenter: AgentApprovalPresenter { store.agentPresenter }
 
     var body: some View {
         let toastToShow = renderedOsc52Toast ?? model.osc52Toast
+        let bannerToShow = renderedNotificationBanner ?? model.notificationBanner
         return VStack(spacing: 0) {
             Group {
                 if let osc52Toast = toastToShow {
@@ -48,6 +52,18 @@ struct SessionSceneView: View {
                         palette: colors,
                         typography: typography,
                         spacing: spacing,
+                        sceneID: sanitized
+                    )
+                }
+            }
+            Group {
+                if let notificationBanner = bannerToShow {
+                    TerminalNotificationBannerView(
+                        banner: notificationBanner,
+                        palette: colors,
+                        typography: typography,
+                        spacing: spacing,
+                        onDismiss: { model.dismissNotificationBanner() },
                         sceneID: sanitized
                     )
                 }
@@ -95,8 +111,12 @@ struct SessionSceneView: View {
             // @State write forces an explicit structural invalidation here.
             renderedOsc52Toast = new
         }
+        .onChange(of: model.notificationBanner) { _, new in
+            renderedNotificationBanner = new
+        }
         .animation(.easeInOut(duration: 0.2), value: model.showReconnectedToast)
         .animation(.easeInOut(duration: 0.2), value: model.osc52Toast)
+        .animation(.easeInOut(duration: 0.2), value: model.notificationBanner)
         .background(colors.background.ignoresSafeArea())
         .sceneAppearance(store.effectiveTheme(model.sceneID))
         .task {
