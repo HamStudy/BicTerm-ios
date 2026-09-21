@@ -34,7 +34,7 @@ iOS 18+ SSH terminal (SwiftUI, Swift 6 strict concurrency) on vendored SwiftNIO 
 ## STRUCTURE
 ```
 BicTerm-ios/
-├── BicTerm/            # iOS app (SwiftUI): Terminal, Herdr, Herds, Sessions, Connections, Keys, Agent, Settings, Design
+├── BicTerm/            # iOS app (SwiftUI): Terminal, Herdr, Herds, Sessions, Connections, Keys, Agent, Settings, Security, Design
 ├── BicTermCore/        # SwiftPM core — SSH/transport/session logic, no SwiftUI/UIKit
 ├── BicTermTests/       # Core + app-logic unit/integration tests
 ├── BicTermUITests/     # XCUITest suites (FreeformResize, TerminalToolbar, herdr embed, ...)
@@ -58,7 +58,7 @@ BicTerm-ios/
 | Terminal toolbar strip | `BicTerm/Terminal/TerminalToolbar.swift` | esc/ctrl/tab/arrows, GCKeyboard heuristic |
 | SSH transport, ProxyJump, agent | `BicTermCore/Sources/BicTermCore/SSH/` | NIO SSH based |
 | Transport abstraction seam | `BicTermCore/Sources/BicTermCore/Transport/TerminalTransport.swift` | SSH is one conformer |
-| herdr UI (panes/surfaces) | `BicTerm/Herdr/` | largest app subdir (21 Swift files) |
+| herdr UI (embed host) | `BicTerm/Herdr/` | herdr workspace UI (16 Swift files) |
 | herdr client core | `HerdrClientCore/HerdrClient.swift` | actor over C ABI |
 | Rust FFI exports | `Vendor/herdr/herdr-ios-ffi/src/abi.rs` | `herdr_client_*` |
 | Test fixtures | `Fixtures/` + `scripts/fixtures-up.sh` | sshd 12222/12223 |
@@ -122,3 +122,4 @@ scripts/check-isolation.sh             # module-isolation check (BicTermCore lay
 - herdr fixture servers use the pinned prebuilt release binary (`scripts/herdr-server-fetch.sh`, sha256-verified; never built from source), so live fixture handshake tests run without a toolchain; golden-frame replay covers the no-fixture cases. zig 0.16.0 is only needed to regenerate the vendored libghostty-vt artifact (`scripts/herdr-vt-build.sh`).
 - Coder/AGPL tailnet support was removed upstream (`ee9956e`); `CODER_WORKSPACE_SSH_PROTOCOL_SPEC.md` remains as historical spec only — do not resurrect Coder patterns from it.
 - Device vs simulator sandbox behavior differs (openpty EPERM, container-root write denied, getpwuid escapes the container): probed facts, design rules, and the re-probe recipe live in `Docs/DEVICE-SANDBOX.md`.
+- Feature validation is simulator-only. Physical pointer hover/wheel, hardware-keyboard chords (⌘N/⌘W/⌘]/⌘[/⌘, are verified at the routing level only), and other device-only behaviors remain pending separate device authorization.

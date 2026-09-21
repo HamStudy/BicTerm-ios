@@ -8,14 +8,15 @@ SwiftUI app target: UI, session/connection state, and the SwiftTerm bridge only;
 |--------|-------|----------|
 | App | 3 | @main entry, scenes |
 | Agent | 2 | SSH agent authorization UI |
-| Connections | 8 | connection list/editor, DI root |
+| Connections | 9 | connection list/editor, DI root |
 | Design | 3 | design tokens, dark-first |
-| Herdr | 21 | herdr workspace UI (panes/surfaces) |
+| Herdr | 16 | herdr workspace UI (embed host, chrome, session state) |
 | Herds | 2 | herd editor UI |
 | Keys | 8 | key management UI |
-| Sessions | 12 | session registry, scene chrome |
-| Settings | 7 | app settings |
-| Terminal | 14 | SwiftTerm bridge, toolbar, previews/test injectors |
+| Security | 3 | app-lock policy, privacy covers, UI-test seam |
+| Sessions | 14 | session registry, scene chrome, snippets, commands |
+| Settings | 9 | app settings |
+| Terminal | 16 | SwiftTerm bridge, toolbar, notifications/links, previews/test injectors |
 | Resources | 0 | assets (no Swift) |
 
 ## WHERE TO LOOK

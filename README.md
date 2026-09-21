@@ -23,6 +23,16 @@ An iOS 18+ SSH terminal client for iPhone and iPad, built on
 - **Terminal UI** — SwiftTerm-based, hardware keyboard, IME/CJK composition, multi-window on iPad with freeform resizing (iPadOS 26 classifies the app as continuously resizable — drag the window's corner grip to any size or aspect ratio; declared via the orientation arrays in the xcodegen-generated `BicTerm/Info.plist`, guarded by `BicTermUITests/FreeformResizeUITests.swift`)
 - **Multiple concurrent sessions** — session switcher with detach/reattach that preserves terminal state, on iPhone and iPad. The scene's top-right **session menu** (ellipsis) lists every live session with its state for jump-to-session (on iPad it focuses the window already hosting the session, or gives a detached session its own window), opens the full switcher via **Manage Sessions…**, starts a **New Session**, and opens **Settings…** (its own window on iPad, a sheet on iPhone)
 - **Graceful reconnect** — network drops reconnect automatically; a clean remote shell exit stays disconnected until manual Retry. Background suspends live sessions and foreground re-handshakes; app relaunch requires manual reconnect. Reconnect resets terminal mouse, paste, and keyboard modes and exits the alternate screen while preserving normal scrollback. New connections reuse dead iPad terminal windows; active sessions keep separate windows.
+- **Bell and OSC 777 notifications** — BEL on SSH terminals is visible and audible (`soundAndVisual`: layer flash plus sound). Remote `OSC 777 ; notify ; title ; body` events render a dismissible banner in the sending scene for about five seconds (per-scene isolation, a newer event replaces the banner). While the app is not visible, at most one sanitized local notification per session per five seconds is posted opportunistically; backgrounding closes SSH transports, so no delivery is ever promised after suspension.
+- **True color** — SSH sessions advertise `COLORTERM=truecolor` to the remote PTY on both the direct and the ProxyJump path, so 24-bit color applications get full-depth output.
+- **Confirmed links** — tapping with a finger or Apple Pencil opens a confirmation sheet for both explicit OSC 8 hyperlinks and implicitly detected URLs, showing the full target; **Open** is enabled only for `http` and `https` links, and Cancel never opens anything. Trackpad and mouse clicks keep the existing hover-gated link behavior. Built on SwiftTerm fork hunks 13 (touch-type-aware activation) and 14 (semicolon-safe OSC 8 parsing); hunk 12 (hardware-keyboard word movement) predates them. The fork's patch ledger is `Vendor/SwiftTerm/BICTERM-PATCH.md`.
+- **Multi-line paste preview** — pasting text that contains line breaks into an SSH terminal first shows a preview of the captured content (line count plus a bounded excerpt) with Confirm and Cancel; the captured string, never a later pasteboard value, is what gets delivered. Sessions whose remote application enabled bracketed paste bypass the sheet and keep SwiftTerm's framing.
+- **Startup-command presets** — the connection editor offers Shell (empty), tmux (`tmux new-session -A -s main`), screen (`screen -xRR main`), and Custom presets over the typed startup command. The command is sent to the opened shell followed by Return after every connect and reconnect; it applies only to terminal sessions, must exist server-side, and the whole section is hidden while the connection uses herdr.
+- **Keep Screen On** — Settings → Terminal → Keep Screen On (default off) keeps the display awake while the app is frontmost; the choice persists across launches.
+- **Snippets** — named reusable commands, managed globally under Settings → Terminal → Snippets and offered per connection in the terminal scene's session menu (global plus current-connection snippets). **Insert** sends the exact command bytes without pressing Return; **Run** asks for confirmation of command and target, then sends the bytes plus Return exactly once.
+- **iPad keyboard commands** — a Session command menu routes ⌘N (New Session), ⌘W (Close Session, with the existing close confirmation), ⌘] and ⌘[ (next/previous session with wraparound), and ⌘, (Settings) to the focused terminal window only. While a Settings or herdr window holds focus the commands no-op, and chords the menu does not claim keep reaching the terminal.
+- **App lock** — an opt-in lock under Settings → Security requires owner authentication (biometrics with passcode fallback) when returning to the app. While locked, every window scene is covered by an opaque privacy cover, and the in-app SSH agent refuses to authorize signing until the lock is released.
+- **Passwords AutoFill** — SSH password fields (the connect prompt, the connection editor, and the hop editor) advertise password semantics to the system, so Passwords AutoFill suggestions and the Keychain save flow work on them.
 - **Herdr** — the real herdr 0.9.1 TUI client compiled for iOS and embedded in-process. Its surface renders through the vendored SwiftTerm view inside the BicTerm host; its protocol networking rides the BicTermCore SSH stack via a per-machine bridge socket (no OpenSSH subprocess on device); its own native multi-machine sidebar drives Mode A and herd selection; its own input/clipboard/capability-query handling replaces the prior app-layer panes. Embed patch series in `Vendor/herdr/EMBED-PATCHES.md`; xcframework build in `scripts/herdr-embed-core.sh` (idempotent after `scripts/herdr-server-fetch.sh` + `scripts/fixtures-up.sh`).
 - **Herdr in two modes** — (A) a per-connection "Use Herdr" toggle that opens one machine's herdr workspace over that SSH connection, and (B) Herd mode: named herds of existing connections that seed the embedded client's machine catalog so its own sidebar selects / dials / reports health per machine (selection-driven surface interest, per-machine failure isolation, one transport link per machine over the same SSH bridge)
 - **Multi-endpoint hardening** — one aggregate reconnect budget across every machine in a workspace (no reconnect storms), parallel background detach (an N-machine herd suspends in one drain window), bounded per-machine surface caches, and a typed authentication-lost diagnostic that never auto-retries
@@ -53,6 +63,10 @@ An iOS 18+ SSH terminal client for iPhone and iPad, built on
   two-finger gestures still need device validation. Secondary/middle-button
   reporting and horizontal wheel reporting are not implemented. These changes
   apply to the SSH terminal; the herdr surface is the embedded real client (T7).
+- Validation boundary for everything in this README: features are validated on
+  the simulator only. Physical pointer hover and wheel behavior, hardware-keyboard
+  chords, and other device-only behaviors remain pending separate device
+  authorization and have not been exercised on hardware.
 
 ### Terminal toolbar
 
@@ -113,7 +127,7 @@ An iOS 18+ SSH terminal client for iPhone and iPad, built on
 ## What Doesn't Work Yet
 
 - **No mosh or Eternal Terminal** — architecture supports adding them, but they are not implemented in v1.
-- **Pointer/touch routing for herdr TUI scenes, graphics scenes, OSC 8 safe-open** — triaged as future-phase work in `Docs/HERDR-RELEASE-TRACEABILITY.md`.
+- **Pointer/touch routing for herdr TUI scenes and graphics scenes** — triaged as future-phase work in `Docs/HERDR-RELEASE-TRACEABILITY.md`. (SSH-terminal OSC 8 links are covered by the confirmed-link flow above.)
 
 ## What's Not In Scope (v1)
 
@@ -256,7 +270,7 @@ scripts/fixtures-down.sh
 ## Vendored Libraries
 
 - [swift-nio-ssh](https://github.com/apple/swift-nio-ssh) 0.15.0 (Apache 2.0) — vendored fork with agent-forwarding patches
-- [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) 1.20.0 (MIT) — vendored fork
+- [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm) 1.20.0 (MIT) — vendored local fork; every BicTerm hunk (mouse/selection repair, reconnect mode reset, OSC 52 write surface, hardware-keyboard word movement, touch-activated links) is documented hunk-by-hunk in `Vendor/SwiftTerm/BICTERM-PATCH.md`
 - [herdr](https://github.com/herdrdev/herdr) 0.9.1 (Apache 2.0) — vendored protocol core + iOS FFI, **embedded in-process** in this app as the herdr TUI. The embed patch series lives under `Vendor/herdr/embed-patches/` and is replayed by `scripts/herdr-embed-prepare.sh`; the resulting staticlib ships as `HerdrEmbed.xcframework` (built by `scripts/herdr-embed-core.sh`). Full ledger of every patch and provenance step: `Vendor/herdr/EMBED-PATCHES.md`. Runbook for moving the embed stack to a new herdr release: `scripts/herdr-embed-update.sh` (enforces the embed ABI contract; regenerates `HerdrCore.h`; rebuilds the xcframework).
 
 See [DEPENDENCIES.md](DEPENDENCIES.md) for the full license inventory.
