@@ -41,6 +41,13 @@ public protocol AgentAuthorizationPrompt: Sendable {
 /// suspension on the decision hot path.
 public protocol LockStateProvider: Sendable {
     var isInteractive: Bool { get }
+    /// Monotonic counter incremented on every true background transition
+    /// (regardless of app-lock enablement). Authorization flows capture it
+    /// before deciding and revalidate it before acting on the decision: an
+    /// unchanged generation proves the app never left the foreground in
+    /// between, so a gesture recorded before a background excursion can
+    /// never authorize work performed after the return.
+    var interactivityGeneration: UInt64 { get }
 }
 
 /// Guarded sign-authorization policy for the forwarded SSH agent.
@@ -80,6 +87,20 @@ public actor AgentAuthorizationService {
         self.lockState = lockState
         self.maxConcurrentPrompts = max(1, maxConcurrentPrompts)
         self.maxPendingRequests = max(0, maxPendingRequests)
+    }
+
+    /// Interactivity generation at the start of an authorization flow. The
+    /// bridge captures it before ``authorize(_:)`` and revalidates it after
+    /// signing, immediately before the success response is enqueued.
+    nonisolated public var currentAuthorizationGeneration: UInt64 {
+        lockState.interactivityGeneration
+    }
+
+    /// Pre-enqueue revalidation: an authorization that began at `generation`
+    /// is still valid only if the app never backgrounded since (generation
+    /// unchanged) and is interactive now.
+    nonisolated public func isAuthorizationValid(generation: UInt64) -> Bool {
+        lockState.isInteractive && lockState.interactivityGeneration == generation
     }
 
     public func authorize(_ request: AgentAuthorizationRequest) async -> Bool {

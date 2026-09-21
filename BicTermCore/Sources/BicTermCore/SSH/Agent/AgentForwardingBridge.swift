@@ -48,7 +48,7 @@ public actor AgentForwardingBridge {
     /// One decoded request → one framed response. Never throws: every
     /// failure mode maps to SSH_AGENT_FAILURE so a broken request can only
     /// ever deny service to itself.
-    func respond(to message: SSHAgentMessage) async -> Data {
+    public func respond(to message: SSHAgentMessage) async -> Data {
         switch message {
         case .requestIdentities:
             guard let keys = try? await keyProvider.publicKeys() else {
@@ -64,6 +64,11 @@ public actor AgentForwardingBridge {
                   let metadata = keys.first(where: { $0.publicKeyBlob == keyBlob }) else {
                 return SSHAgentCodec.encodeFailure()
             }
+            // Capture the interactivity generation BEFORE authorization: the
+            // pre-enqueue revalidation below must reject any flow that crossed
+            // a background transition (prompt wait, cached approval, or the
+            // signing await itself).
+            let generation = authorizer.currentAuthorizationGeneration
             let authorized = await authorizer.authorize(
                 AgentAuthorizationRequest(
                     sessionID: sessionID,
@@ -77,6 +82,13 @@ public actor AgentForwardingBridge {
             }
             do {
                 let signature = try await keyProvider.sign(data: data, publicKeyBlob: keyBlob)
+                // Pre-enqueue revalidation: the authorization decision and
+                // the signature must belong to the same foreground span. A
+                // background transition during the prompt or the signing
+                // invalidates the response — FAILURE, never a signature.
+                guard authorizer.isAuthorizationValid(generation: generation) else {
+                    return SSHAgentCodec.encodeFailure()
+                }
                 let blob = try SSHAgentCodec.signatureBlob(for: signature)
                 return SSHAgentCodec.encodeSignResponse(signatureBlob: blob)
             } catch {

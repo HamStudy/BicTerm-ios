@@ -94,17 +94,20 @@ final class AgentApprovalPresenter: AgentAuthorizationPrompt {
 }
 
 /// Production ``LockStateProvider``: interactive only while the application
-/// is foreground-active. Notification-updated so the sync `isInteractive`
-/// check never touches UIKit off the main thread.
+/// is foreground-active AND the app lock is not engaged. Notification-updated
+/// so the sync `isInteractive` check never touches UIKit off the main thread;
+/// the app-lock status crosses through its thread-safe mirror.
 final class ApplicationLockStateProvider: LockStateProvider, @unchecked Sendable {
     private let lock = NSLock()
     private var applicationIsActive: Bool
+    private let appLock: AppLockStatusMirror
 
-    init() {
+    init(appLock: AppLockState) {
         let state = MainActor.assumeIsolated {
             UIApplication.shared.applicationState
         }
         applicationIsActive = state == .active
+        self.appLock = appLock.statusMirror
 
         let center = NotificationCenter.default
         center.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
@@ -118,7 +121,11 @@ final class ApplicationLockStateProvider: LockStateProvider, @unchecked Sendable
     var isInteractive: Bool {
         lock.lock()
         defer { lock.unlock() }
-        return applicationIsActive
+        return applicationIsActive && !appLock.isLocked
+    }
+
+    var interactivityGeneration: UInt64 {
+        appLock.generation
     }
 
     private func setActive(_ active: Bool) {

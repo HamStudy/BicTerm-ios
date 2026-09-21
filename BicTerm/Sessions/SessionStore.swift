@@ -180,7 +180,7 @@ final class SessionStore {
         })
         let authorizer = AgentAuthorizationService(
             prompt: presenter,
-            lockState: ApplicationLockStateProvider()
+            lockState: ApplicationLockStateProvider(appLock: AppServices.shared.appLock)
         )
 
         let verifier: HostKeyVerifier

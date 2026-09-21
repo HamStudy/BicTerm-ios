@@ -35,6 +35,10 @@ final class AppServices {
     /// catalog through it so attention-state machines redial without
     /// reopening the workspace (embed patch 0008).
     let herdrEmbedRuntime: HerdrEmbedRuntime = .shared
+    /// App-global app-lock policy state (default OFF). One instance shared
+    /// by every scene and the agent authorization gate; todo 11 threads it
+    /// through the scene roots and Settings.
+    let appLock = AppLockState()
 
     #if DEBUG
     /// Set by the `--uitest-demo-editor` launch hook: name of a connection
@@ -57,6 +61,7 @@ final class AppServices {
 
         #if DEBUG
         UITestPasswordServerSeam.startIfRequested()
+        AppLockUITestSeam.activateIfNeeded(state: appLock)
         #endif
     }
 

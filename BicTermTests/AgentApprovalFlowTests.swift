@@ -4,10 +4,12 @@ import XCTest
 
 private struct AlwaysInteractive: LockStateProvider {
     var isInteractive: Bool { true }
+    var interactivityGeneration: UInt64 { 0 }
 }
 
 private struct NeverInteractive: LockStateProvider {
     var isInteractive: Bool { false }
+    var interactivityGeneration: UInt64 { 0 }
 }
 
 /// Behavioral coverage of the agent approval surface T14 wires to the T8

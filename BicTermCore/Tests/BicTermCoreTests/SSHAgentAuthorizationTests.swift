@@ -28,6 +28,7 @@ private final class ScriptedPrompt: AgentAuthorizationPrompt, @unchecked Sendabl
 
 private struct FixedLockState: LockStateProvider {
     let isInteractive: Bool
+    var interactivityGeneration: UInt64 { 0 }
 }
 
 private final class MutableLockState: LockStateProvider, @unchecked Sendable {
@@ -38,6 +39,7 @@ private final class MutableLockState: LockStateProvider, @unchecked Sendable {
     init(_ initial: Bool) { value = initial }
 
     var isInteractive: Bool { lock.withLock { value } }
+    var interactivityGeneration: UInt64 { 0 }
 
     func set(_ newValue: Bool) { lock.withLock { value = newValue } }
 }

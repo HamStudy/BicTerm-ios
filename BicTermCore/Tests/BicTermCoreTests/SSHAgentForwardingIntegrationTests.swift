@@ -50,6 +50,7 @@ private final class IntegrationPrompt: AgentAuthorizationPrompt, @unchecked Send
 
 private struct InteractiveTestLock: LockStateProvider {
     let isInteractive: Bool
+    var interactivityGeneration: UInt64 { 0 }
 }
 
 final class SSHAgentForwardingIntegrationTests: XCTestCase {

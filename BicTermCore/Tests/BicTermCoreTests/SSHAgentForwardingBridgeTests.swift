@@ -54,6 +54,7 @@ private final class BridgeTestPrompt: AgentAuthorizationPrompt, @unchecked Senda
 
 private struct InteractiveLock: LockStateProvider {
     let isInteractive: Bool
+    var interactivityGeneration: UInt64 { 0 }
 }
 
 final class SSHAgentForwardingBridgeTests: XCTestCase {
