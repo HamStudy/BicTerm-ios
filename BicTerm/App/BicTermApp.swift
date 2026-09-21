@@ -60,6 +60,7 @@ private struct TerminalWindowRoot: View {
     @Environment(\.openWindow) private var openWindow
     @Environment(\.dismissWindow) private var dismissWindow
     @Environment(\.supportsMultipleWindows) private var supportsMultipleWindows
+    @Environment(\.scenePhase) private var scenePhase
 
     let store: SessionStore
     let herdConnect: HerdSessionCoordinator
@@ -119,8 +120,16 @@ private struct TerminalWindowRoot: View {
             }
         }
         .onChange(of: switchedSessionID) { _, _ in registerHosting() }
+        .onChange(of: scenePhase, initial: true) { _, _ in updateCommandFocus() }
         .onDisappear { deregisterHosting() }
         .sceneAppearance(effectiveTheme)
+        #if DEBUG
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if TerminalCommandsUITestSeam.isActive {
+                TerminalCommandsUITestSeamView(store: store)
+            }
+        }
+        #endif
     }
 
     /// The session this window currently shows (in-window switch wins over
@@ -141,11 +150,53 @@ private struct TerminalWindowRoot: View {
     private func registerHosting() {
         guard let windowSessionID, let shown = shownSessionID else { return }
         store.noteWindowHosting(windowValue: windowSessionID, shows: shown)
+        updateCommandFocus()
     }
 
     private func deregisterHosting() {
         guard let windowSessionID else { return }
         store.noteWindowClosed(windowValue: windowSessionID)
+        if let shown = shownSessionID {
+            store.terminalCommands.noteTerminalSceneUnfocused(sessionID: shown)
+        }
+    }
+
+    /// Publishes this window's session as the keyboard-command target
+    /// while this scene is the active (key) window — the covered-sibling
+    /// windows report `.background`, so exactly one terminal scene is
+    /// registered at a time. A window with no session never registers
+    /// one, and a non-terminal scene taking focus leaves no registered
+    /// scene at all (commands no-op there).
+    private func updateCommandFocus() {
+        guard let shown = shownSessionID else { return }
+        if scenePhase == .active {
+            store.terminalCommands.noteFocusedTerminalScene(sessionID: shown, target: commandTarget)
+        } else {
+            store.terminalCommands.noteTerminalSceneUnfocused(sessionID: shown)
+        }
+    }
+
+    /// The window-local actions keyboard commands route to while this
+    /// window is the focused terminal scene — the same routing the
+    /// session menu performs for the same actions: New Session presents
+    /// the connection list sheet in THIS window, a session switch
+    /// attaches a detached session in THIS window or focuses the window
+    /// already hosting it (never one session in two windows), and
+    /// Settings opens the independent Settings window.
+    private var commandTarget: TerminalCommandTarget {
+        TerminalCommandTarget(
+            presentConnectionList: { listPresented = true },
+            switchToSession: { pickedID in
+                if let hosting = store.hostingWindowValue(for: pickedID), hosting != windowSessionID {
+                    openWindow(id: "terminal", value: SessionID(value: hosting))
+                } else {
+                    switchedSessionID = pickedID
+                }
+            },
+            presentSettings: {
+                openWindow(id: "settings", value: SettingsWindowValue.main)
+            }
+        )
     }
 
     private var forcesConnectionListForUITests: Bool {
@@ -341,6 +392,13 @@ struct BicTermApp: App {
             .environment(sessionStore.terminalMargin)
             .environment(AppServices.shared.keyStore)
             .environment(AppServices.shared.keyAvailabilityPreferences)
+        }
+        // Attached exactly ONCE: SwiftUI merges scene commands app-wide,
+        // so a second attach would duplicate every command menu. The
+        // commands themselves resolve the focused terminal scene at
+        // keypress time (see TerminalCommands).
+        .commands {
+            TerminalCommands(store: sessionStore)
         }
 
         WindowGroup("Terminal", id: "terminal", for: SessionID.self) { $sessionID in

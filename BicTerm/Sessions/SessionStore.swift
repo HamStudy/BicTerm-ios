@@ -84,6 +84,12 @@ final class SessionStore {
     /// mutation, so a Settings change (or a relaunch) never leaves the
     /// idle timer in a stale state.
     let keepAwake = KeepAwakeModel()
+    /// App-global keyboard-command routing: which terminal window is the
+    /// focused (active) scene and the window-local actions its commands
+    /// dispatch to. One instance shared by every scene; only terminal
+    /// windows register, so Settings and herdr scenes never receive
+    /// terminal session actions.
+    let terminalCommands = TerminalCommandsModel()
     var appearanceOverrides: [String: SessionAppearanceOverrides] = [:]
 
     private let hostKeyStore: (any HostKeyStoreProtocol)?
@@ -166,6 +172,45 @@ final class SessionStore {
         hostingWindowValue(for: sessionID)
             ?? requestDeadWindowAttachment(for: sessionID)
             ?? sessionID
+    }
+
+    // MARK: - Focused-scene command routing
+
+    /// The session attached in the focused terminal window; nil when a
+    /// non-terminal scene (Settings, herdr) holds focus or no terminal
+    /// window exists.
+    var focusedTerminalSessionID: UUID? {
+        terminalCommands.focusedSessionID
+    }
+
+    /// ⌘W: route the focused terminal session through the EXISTING close
+    /// confirmation (`requestClose` — the same guard the scene's Close
+    /// button uses), never a direct teardown. Strict no-op when no
+    /// terminal scene is focused.
+    func requestCloseFocusedTerminalSession() {
+        guard let id = terminalCommands.focusedSessionID else { return }
+        existingModel(for: id)?.requestClose()
+    }
+
+    /// The neighboring live session in opening order, WRAPPING AROUND at
+    /// both ends. Nil when the session is alone or no longer live.
+    func neighboringTerminalSession(of sessionID: UUID, forward: Bool) -> UUID? {
+        let ids = orderedDescriptors.map(\.id)
+        guard ids.count > 1, let index = ids.firstIndex(of: sessionID) else { return nil }
+        let offset = forward ? 1 : -1
+        let neighbor = ids[(index + ids.count + offset) % ids.count]
+        return neighbor == sessionID ? nil : neighbor
+    }
+
+    /// ⌘]/⌘[: hand the focused terminal window the neighboring session
+    /// (wraparound) through its registered target — the same switch the
+    /// session menu performs. Strict no-op when no terminal scene is
+    /// focused or the session has no neighbor.
+    func switchFocusedTerminalSession(forward: Bool) {
+        guard let focused = terminalCommands.focusedSessionID,
+              let neighbor = neighboringTerminalSession(of: focused, forward: forward)
+        else { return }
+        terminalCommands.focused?.target.switchToSession(neighbor)
     }
 
     /// Production wiring: real SSH factory (agent-forwarding enabled) and
@@ -359,6 +404,7 @@ final class SessionStore {
     }
 
     func closeScene(_ descriptorID: UUID) async {
+        terminalCommands.noteSessionClosed(sessionID: descriptorID)
         agentPresenter.denyPendingIfTargeting(scene: descriptorID)
         viewCache.removeSurface(for: descriptorID)
         if let descriptor = descriptors[descriptorID] {
