@@ -20,12 +20,14 @@ RUN="$FIX/run"
 KEYS="$FIX/keys"
 SSHD_DIR="$FIX/sshd"
 # Trailing slash anchors each match to a path boundary: "/BicTerm/" must never
-# match the "/BicTerm-ios/" checkout or every run appends another "-ios". The
-# second pattern normalizes configs still carrying the OLD "/BicTerm-ios/"
-# checkout prefix (this repo moved from BicTerm-ios to BicTerm); rewriting to
-# "$ROOT/" in the checkout a path already names is a no-op.
-OLD_PATH_PREFIX="/Users/richard/code/BicTerm/"
-OLD_PATH_PREFIX_IOS="/Users/richard/code/BicTerm-ios/"
+# match a "/BicTerm-ios/" checkout or every run appends another "-ios". The
+# committed configs carry the neutral placeholder prefix "/Users/localdev/";
+# this sed rewrites it to "$ROOT/" so sshd gets this checkout's absolute paths
+# (a runtime-only change; never commit the rewritten configs). The second
+# pattern also normalizes configs still carrying the legacy non-ios checkout
+# prefix; rewriting to "$ROOT/" in the checkout a path already names is a no-op.
+OLD_PATH_PREFIX="/Users/localdev/code/BicTerm/"
+OLD_PATH_PREFIX_IOS="/Users/localdev/code/BicTerm-ios/"
 
 mkdir -p "$RUN" "$SSHD_DIR/host_keys" "$SSHD_DIR/host_key_alt"
 

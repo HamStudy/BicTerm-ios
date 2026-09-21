@@ -32,7 +32,7 @@ Per-script contracts and gotchas for the build/test/fixture shell harness. Root 
 - Never execute `env-local-caches.sh` as a subprocess; exports won't survive.
 - Never "fix" the headerless xcframework: `-create-xcframework` is called without `-headers` on purpose (ProcessXCFramework would flatten colliding module maps). The clang module lives in `HerdrCoreC/include`.
 - Never hand-edit `HerdrCoreC/include/HerdrCore.h`. build-herdr-core.sh regenerates it and FAILS LOUDLY on drift (updates the committed copy, exits 1, asks for re-run).
-- Don't weaken the sed anchor in fixtures-up.sh. The match prefix `/Users/richard/code/BicTerm/` keeps its trailing slash so it can't match the `BicTerm-ios/` checkout; the un-anchored version corrupted paths into `BicTerm-ios-ios-ios`.
+- Don't weaken the sed anchor in fixtures-up.sh. The match prefix `/Users/localdev/code/BicTerm/` keeps its trailing slash so it can't match a `BicTerm-ios/` checkout; the un-anchored version corrupted paths into `BicTerm-ios-ios-ios`.
 - Don't bypass the `Fixtures/run/bin/ssh` wrapper in self-checks: macOS ssh `-J` re-execs `/usr/bin/ssh` and loses `-o` flags and project known_hosts, so the wrapper translates `-J` into an explicit ProxyCommand.
 
 ## NOTES

@@ -27,7 +27,7 @@ Fixtures/
 
 ## CONVENTIONS
 - One directory per fixture block; each new block gets a pidfile `run/<name>.pid`, log `run/<name>.log`, a port-wait and a self-check in `fixtures-up.sh`, and a README section.
-- sshd configs use absolute paths; `fixtures-up.sh` rewrites the path prefix to the current checkout via ANCHORED sed each run. The trailing slash in the anchor (`/Users/richard/code/BicTerm/`) is load-bearing: un-anchored, `/BicTerm/` matches `/BicTerm-ios/` and every run appends another `-ios` (`BicTerm-ios-ios-ios` corruption).
+- sshd configs use absolute paths; the committed configs carry the neutral placeholder prefix `/Users/localdev/`, and `fixtures-up.sh` rewrites it to the current checkout via ANCHORED sed each run (the working-tree configs therefore show as modified after a run; never commit the rewritten paths). The trailing slash in the anchor (`/Users/localdev/code/BicTerm/`) is load-bearing: un-anchored, `/BicTerm/` matches `/BicTerm-ios/` and every run appends another `-ios` (`BicTerm-ios-ios-ios` corruption).
 - Configs are edited in place, not templated into `run/`; keys are committed (deterministic for T3 parser golden tests) and regenerated if deleted.
 - Both sshds: `PasswordAuthentication no`, `AllowTcpForwarding yes` (ProxyJump needs it), `AllowAgentForwarding yes`, `StrictModes no`, `UsePAM no` (unprivileged sshd on macOS).
 - `fixtures-up.sh` generates `run/bin/ssh`, a wrapper translating `-J` into an explicit `ProxyCommand`: the implicit ProxyJump child re-execs `/usr/bin/ssh` and inherits neither `-o` flags nor `$HOME`, so project-local known_hosts/identity would be unreachable otherwise.

@@ -97,7 +97,7 @@ the pinned herdr 0.9.0 CLI onto that host. Facts for review:
 
 ## Contact
 
-App owner: Richard (repository owner). Contact email must be filled in
+App owner: <repository owner>. Contact email must be filled in
 before submission: `TODO(app-owner): contact email for App Review`.
 
 ## Out-of-scope honesty notes

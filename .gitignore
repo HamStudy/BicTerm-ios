@@ -14,6 +14,9 @@ DerivedData/
 Fixtures/run/
 tmp/
 
+# opencode: machine-local MCP tool config (carries absolute checkout paths)
+opencode.json
+
 # XcodeGen: generated project, regenerated via `xcodegen generate` (see project.yml)
 *.xcodeproj/
 # ...except the SwiftPM resolution pin, the only workspace-level reproducibility

@@ -4,15 +4,15 @@ Port 12222
 ListenAddress 127.0.0.1
 Protocol 2
 
-HostKey /Users/richard/code/BicTerm-ios/Fixtures/sshd/host_keys/hop1_host_ed25519
-PidFile /Users/richard/code/BicTerm-ios/Fixtures/run/hop1.pid
+HostKey /Users/localdev/code/BicTerm-ios/Fixtures/sshd/host_keys/hop1_host_ed25519
+PidFile /Users/localdev/code/BicTerm-ios/Fixtures/run/hop1.pid
 
 # Key-only auth
 PubkeyAuthentication yes
 PasswordAuthentication no
 KbdInteractiveAuthentication no
 PermitRootLogin no
-AuthorizedKeysFile /Users/richard/code/BicTerm-ios/Fixtures/sshd/authorized_keys_hop1
+AuthorizedKeysFile /Users/localdev/code/BicTerm-ios/Fixtures/sshd/authorized_keys_hop1
 
 # Capabilities under test (T7/T8/T9)
 AllowTcpForwarding yes
@@ -37,4 +37,4 @@ PrintMotd no
 # herdr fixture: the FIXED remote-client-bridge command built by
 # HerdrCommandBuilder cannot carry an env prefix, so the per-port fixture
 # herdr server socket is injected here (see scripts/fixtures-up.sh §herdr).
-SetEnv HERDR_SOCKET_PATH=/Users/richard/code/BicTerm-ios/Fixtures/run/herdr/server-12222/herdr.sock
+SetEnv HERDR_SOCKET_PATH=/Users/localdev/code/BicTerm-ios/Fixtures/run/herdr/server-12222/herdr.sock

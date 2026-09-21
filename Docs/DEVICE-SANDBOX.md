@@ -80,12 +80,12 @@ xcodebuild -project BicTerm.xcodeproj -scheme BicTerm \
   -destination 'platform=iOS,name=<device name>' \
   -derivedDataPath .build-artifacts/DerivedData/sandbox-probe \
   -only-testing:BicTermTests/SandboxCapabilityProbeTests \
-  DEVELOPMENT_TEAM=BALVL8YD22 -allowProvisioningUpdates test | tee .sisyphus/evidence/device-probe.log
+  DEVELOPMENT_TEAM=<TEAM_ID> -allowProvisioningUpdates test | tee .sisyphus/evidence/device-probe.log
 ```
 
 Gotchas:
 
-- `DEVELOPMENT_TEAM=BALVL8YD22` must be passed on the command line for device runs: `project.yml`
+- `DEVELOPMENT_TEAM=<TEAM_ID>` (the Apple team ID from `project.yml`) must be passed on the command line for device runs: `project.yml`
   sets the team only on the app target; the test targets carry no team and
   `-allowProvisioningUpdates` cannot invent one.
 - Keep DerivedData repo-local under `.build-artifacts/DerivedData/` (containment rule).
