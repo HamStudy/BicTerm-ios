@@ -12,6 +12,63 @@ enum TerminalScrollback {
     static let maxLines = 10_000
 }
 
+// MARK: - Multi-line paste preview (t4)
+
+/// One immutable multi-line paste request captured at intercept time.
+/// The captured string is the ONLY text ever delivered on confirm — the
+/// pasteboard is never re-read (the user may have copied something else
+/// while the confirmation sheet was open). Value semantics with a fresh
+/// identity per request, mirroring ``TerminalLinkRequest``.
+struct TerminalPasteRequest: Identifiable, Equatable, Sendable {
+    let id: UUID
+    let text: String
+
+    init(text: String) {
+        self.id = UUID()
+        self.text = text
+    }
+}
+
+/// Classification and wire-encoding for intercepted pastes.
+enum TerminalPastePolicy {
+    /// ESC [ 2 0 0 ~ — xterm's bracketed-paste start marker. Spelled
+    /// locally (not `EscapeSequences.bracketedPasteStart`) because the
+    /// fork declares those as mutable statics, which Swift 6 rejects.
+    static let bracketedPasteStart: [UInt8] = [0x1b, 0x5b, 0x32, 0x30, 0x30, 0x7e]
+    /// ESC [ 2 0 1 ~ — xterm's bracketed-paste end marker.
+    static let bracketedPasteEnd: [UInt8] = [0x1b, 0x5b, 0x32, 0x30, 0x31, 0x7e]
+
+    /// A paste needs preview confirmation when the captured text spans
+    /// multiple lines — any CR or LF counts (LF, CR, and CRLF are all
+    /// line terminators on the paste side). Scans unicode scalars: a
+    /// CRLF pair is ONE Swift `Character` (grapheme cluster), so a
+    /// `Character`-level `contains` would miss it entirely.
+    static func needsPreview(_ text: String) -> Bool {
+        text.unicodeScalars.contains { $0 == "\r" || $0 == "\n" }
+    }
+
+    /// Splits the captured text into display lines, treating CRLF, CR,
+    /// and LF as single terminators (never splitting a CRLF pair into
+    /// two lines).
+    static func lines(in text: String) -> [String] {
+        var result: [String] = []
+        text.enumerateLines { line, _ in
+            result.append(line)
+        }
+        return result
+    }
+
+    /// Wire bytes for a confirmed paste. Bracketed-paste framing is
+    /// resolved by the CALLER at confirmation time — DECSET 2004 can
+    /// flip while the sheet is open, so an intercept-time snapshot
+    /// would frame wrongly.
+    static func framedBytes(for text: String, bracketed: Bool) -> Data {
+        let payload = Data(text.utf8)
+        guard bracketed else { return payload }
+        return Data(bracketedPasteStart) + payload + Data(bracketedPasteEnd)
+    }
+}
+
 /// SwiftUI wrapper around SwiftTerm's `TerminalView`.
 ///
 /// Transport-agnostic by design (T14 wires this into session scenes):
@@ -267,6 +324,12 @@ final class TerminalContainerView: TerminalView {
     /// A session pinch writes its own override, starting from the displayed
     /// font rather than the global model, so zoom never reflows other windows.
     var onFontPinch: (@MainActor (Double) -> Void)?
+    /// Multi-line paste preview routing for this surface. Production
+    /// session surfaces get the cache-wired presenter (the scene model
+    /// presents the confirmation sheet); nil keeps SwiftTerm's direct
+    /// `paste(_:)` delivery — the standalone DEBUG preview and the
+    /// herdr embed both stay on that path.
+    var pastePreviewPresenter: (@MainActor (TerminalPasteRequest) -> Void)?
     /// Point size captured at pinch start; the gesture's absolute scale
     /// multiplies it, so quantization steps the size in 0.5pt increments
     /// as the pinch grows (no per-event re-anchoring needed).
@@ -277,6 +340,31 @@ final class TerminalContainerView: TerminalView {
         if window != nil, !isFirstResponder {
             becomeFirstResponder()
         }
+    }
+
+    /// Multi-line paste interception (t4): when the captured pasteboard
+    /// string spans lines, bracketed paste is OFF, and a scene owner is
+    /// attached, the paste is routed to the owner for confirmation
+    /// instead of SwiftTerm's direct delivery. The string is captured
+    /// ONCE here — the confirmed delivery sends exactly this value and
+    /// never re-reads the pasteboard. Every other case (single-line,
+    /// bracketed ON, no owner — the standalone preview and the herdr
+    /// embed) keeps `super.paste(_:)` unchanged. The fork's
+    /// `disableSelectionPanGesture` teardown is internal to SwiftTerm,
+    /// so the intercept path leaves selection state to the next
+    /// copy/paste action.
+    override func paste(_ sender: Any?) {
+        let captured = UIPasteboard.general.string
+        if let captured,
+           TerminalPastePolicy.needsPreview(captured),
+           !getTerminal().bracketedPasteMode,
+           let presenter = pastePreviewPresenter {
+            MainActor.assumeIsolated {
+                presenter(TerminalPasteRequest(text: captured))
+            }
+            return
+        }
+        super.paste(sender)
     }
 
     /// An appearance change (the app-level theme override applied at the

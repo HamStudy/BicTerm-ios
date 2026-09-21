@@ -230,6 +230,11 @@ final class SessionSceneModel: Identifiable {
                     self.onReconnect?()
                 }
                 self.state = newState
+                if newState != .active {
+                    // A pending paste targets the CURRENT shell; a
+                    // reconnect/suspend/disconnect invalidates it.
+                    self.invalidatePendingPaste()
+                }
                 if self.canRetry, !wasRetryable {
                     self.lastRetryableTransition = Date()
                 }
@@ -358,6 +363,118 @@ final class SessionSceneModel: Identifiable {
         UIApplication.shared.open(url)
     }
 
+    // MARK: - Multi-line paste preview (t4)
+
+    /// Immutable captured-text paste request pending confirmation; nil
+    /// when no preview is pending. A second paste while one is pending
+    /// REPLACES it — never two queued sheets.
+    private(set) var pendingPasteRequest: TerminalPasteRequest?
+
+    /// Inline error retained in the sheet when a confirmed send fails.
+    /// A non-nil error keeps the sheet up so the user can retry or
+    /// cancel; a successful confirm clears it.
+    private(set) var pasteErrorMessage: String?
+
+    /// Attachment generation the pending request was captured under.
+    /// Bumped by every surface attach AND detach; a request whose
+    /// generation no longer matches is stale and can never send.
+    private var surfaceGeneration: UInt64 = 0
+    private var pendingPasteGeneration: UInt64?
+
+    /// True while a confirm is awaiting the registry send; a second
+    /// confirm (double-tap) must not enqueue a second delivery.
+    private var pasteConfirmationInFlight = false
+
+    /// Resolves a confirmed paste into wire bytes, applying the
+    /// terminal's CURRENT bracketed-paste framing. Wired by the view
+    /// cache at surface attach; nil frames as plain UTF-8.
+    private var pasteByteFramer: (@MainActor (String) -> Data)?
+
+    /// Restores first responder to the terminal after the sheet
+    /// dismisses. Wired by the view cache at surface attach.
+    private var pasteRefocus: (@MainActor () -> Void)?
+
+    /// The request the confirmation sheet should present right now:
+    /// nil when nothing is pending OR the pending request's attachment
+    /// generation went stale (surface rebind) — the sheet dismisses
+    /// reactively in both cases.
+    var currentPasteRequest: TerminalPasteRequest? {
+        guard let request = pendingPasteRequest,
+              pendingPasteGeneration == surfaceGeneration else { return nil }
+        return request
+    }
+
+    /// Cache-wired surface hooks (idempotent across re-attaches).
+    func attachPasteSurfaceHooks(
+        framePaste: @escaping @MainActor (String) -> Data,
+        refocus: @escaping @MainActor () -> Void
+    ) {
+        pasteByteFramer = framePaste
+        pasteRefocus = refocus
+    }
+
+    /// A multi-line paste was intercepted on this scene's terminal:
+    /// present the confirmation sheet. The request is immutable from
+    /// here on — the sheet renders and (on confirm) delivers exactly
+    /// the captured text.
+    func presentPasteConfirmation(_ request: TerminalPasteRequest) {
+        guard !isClosed else { return }
+        pendingPasteRequest = request
+        pendingPasteGeneration = surfaceGeneration
+        pasteErrorMessage = nil
+    }
+
+    /// Cancel (or swipe-down) dismisses the sheet and sends nothing.
+    func cancelPasteConfirmation() {
+        pendingPasteRequest = nil
+        pendingPasteGeneration = nil
+        pasteErrorMessage = nil
+        pasteRefocus?()
+    }
+
+    /// The ONLY delivery path for an intercepted paste: requires the
+    /// pending request AND a current attachment generation, sends the
+    /// captured string through the registry's throwing seam, and
+    /// dismisses only on confirmed delivery. A send failure retains the
+    /// sheet with an inline error.
+    func confirmPaste() async {
+        guard !pasteConfirmationInFlight else { return }
+        guard let request = pendingPasteRequest,
+              let generation = pendingPasteGeneration,
+              generation == surfaceGeneration, !isClosed else {
+            invalidatePendingPaste()
+            return
+        }
+        pasteConfirmationInFlight = true
+        defer { pasteConfirmationInFlight = false }
+
+        let bytes = pasteByteFramer?(request.text) ?? Data(request.text.utf8)
+        do {
+            try await registry.send(sceneID: sceneID, bytes)
+            guard surfaceGeneration == generation, !isClosed else {
+                // The surface rebound mid-send; the bytes were already
+                // delivered to the session. Clear silently.
+                invalidatePendingPaste()
+                return
+            }
+            pendingPasteRequest = nil
+            pendingPasteGeneration = nil
+            pasteErrorMessage = nil
+            pasteRefocus?()
+        } catch {
+            pasteErrorMessage = (error as? SessionRegistryError)?.localizedDescription
+                ?? String(describing: error)
+        }
+    }
+
+    /// Drops a pending request without sending. Called on background,
+    /// non-active session states, and surface detach.
+    private func invalidatePendingPaste() {
+        pendingPasteRequest = nil
+        pendingPasteGeneration = nil
+        pasteErrorMessage = nil
+    }
+
     #if DEBUG
     /// DEBUG-only: record a denial so UI suites can prove the right
     /// branch fired without depending on the global `Osc52ClipboardSink`
@@ -393,6 +510,7 @@ final class SessionSceneModel: Identifiable {
         guard !isClosed else { return }
         switch phase {
         case .background:
+            invalidatePendingPaste()
             await registry.didEnterBackground(sceneID: sceneID)
         case .active:
             guard didUserConnect else { return }
@@ -519,11 +637,16 @@ final class SessionSceneModel: Identifiable {
     /// FIFO per session.
     func surfaceAttached() {
         guard !isClosed else { return }
+        // A new placement claimed the surface: any pending paste was
+        // captured under an older attachment and must never send.
+        surfaceGeneration &+= 1
         presentationCommands.yield(.attached)
     }
 
     func surfaceDetached() {
         guard !isClosed else { return }
+        surfaceGeneration &+= 1
+        invalidatePendingPaste()
         presentationCommands.yield(.detached)
     }
 
@@ -571,6 +694,7 @@ final class SessionSceneModel: Identifiable {
         viewOutputContinuation.finish()
         resyncCommandContinuation.finish()
         presentationCommands.finish()
+        invalidatePendingPaste()
         await onClose(id)
         state = .closed
     }

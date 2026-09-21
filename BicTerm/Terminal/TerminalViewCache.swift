@@ -324,6 +324,7 @@ final class TerminalViewCache {
 
         if let entry = entries[sessionID] {
             touch(sessionID)
+            wirePastePreview(on: entry.surface.view, model: model)
             model.surfaceAttached()
             #if DEBUG
             Self.maybeFireUITestOsc52Trigger(on: entry.surface, connectionName: model.connectionName)
@@ -352,6 +353,7 @@ final class TerminalViewCache {
         if let onSceneFontPinch {
             surface.view.onFontPinch = { size in onSceneFontPinch(sceneID, size) }
         }
+        wirePastePreview(on: surface.view, model: model)
         entries[sessionID] = Entry(
             surface: surface,
             onDetach: { [weak model] in model?.surfaceDetached() }
@@ -376,6 +378,28 @@ final class TerminalViewCache {
         guard let entry = entries[sessionID],
               attachGenerations[sessionID] == generation else { return }
         entry.onDetach()
+    }
+
+    /// Wires the multi-line paste preview for one session surface: the
+    /// view's intercept presenter routes captured requests into scene
+    /// state, and the model's confirm path resolves bracketed-paste
+    /// framing and first-responder restoration against THIS surface's
+    /// view. Idempotent across re-attaches.
+    private func wirePastePreview(on view: TerminalContainerView, model: SessionSceneModel) {
+        view.pastePreviewPresenter = { [weak model] request in
+            model?.presentPasteConfirmation(request)
+        }
+        model.attachPasteSurfaceHooks(
+            framePaste: { [weak view] text in
+                TerminalPastePolicy.framedBytes(
+                    for: text,
+                    bracketed: view?.getTerminal().bracketedPasteMode ?? false
+                )
+            },
+            refocus: { [weak view] in
+                view?.becomeFirstResponder()
+            }
+        )
     }
 
     /// Session close: drop the entry unconditionally. The evicted marker

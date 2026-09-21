@@ -189,6 +189,14 @@ struct SessionSceneView: View {
                 onCancel: { model.cancelLinkConfirmation() }
             )
         }
+        .sheet(item: pasteRequestSheetBinding) { request in
+            TerminalPasteConfirmationSheet(
+                request: request,
+                errorMessage: model.pasteErrorMessage,
+                onPaste: { Task { await model.confirmPaste() } },
+                onCancel: { model.cancelPasteConfirmation() }
+            )
+        }
     }
 
     // MARK: - Chrome
@@ -438,7 +446,109 @@ struct SessionSceneView: View {
         )
     }
 
+    /// Swipe-down on the paste sheet is a cancel: it sends nothing. The
+    /// presented item is generation-checked so a surface rebind
+    /// dismisses the sheet reactively.
+    private var pasteRequestSheetBinding: Binding<TerminalPasteRequest?> {
+        Binding(
+            get: { model.currentPasteRequest },
+            set: { if $0 == nil { model.cancelPasteConfirmation() } }
+        )
+    }
+
     private var sanitized: String {
         model.connectionName.replacingOccurrences(of: " ", with: "-")
+    }
+}
+
+/// Host-visible confirmation for one intercepted multi-line paste: the
+/// line count and a bounded preview of the CAPTURED text (never a
+/// re-read of the pasteboard), Paste delivering exactly those bytes
+/// through the scene model's confirmed path, and Cancel (or
+/// swipe-down) sending nothing. A failed delivery keeps the sheet up
+/// with the error inline.
+struct TerminalPasteConfirmationSheet: View {
+    @Environment(\.terminalColors) private var colors
+    @Environment(\.terminalTypography) private var typography
+    @Environment(\.terminalSpacing) private var spacing
+
+    static let previewLineLimit = 5
+
+    let request: TerminalPasteRequest
+    let errorMessage: String?
+    let onPaste: () -> Void
+    let onCancel: () -> Void
+
+    private var lines: [String] {
+        TerminalPastePolicy.lines(in: request.text)
+    }
+
+    private var previewLines: [String] {
+        Array(lines.prefix(Self.previewLineLimit))
+    }
+
+    private var hiddenLineCount: Int {
+        max(0, lines.count - Self.previewLineLimit)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: spacing.sm) {
+            HStack(spacing: spacing.xs) {
+                Image(systemName: "doc.on.clipboard")
+                    .font(typography.headline)
+                    .foregroundColor(colors.accent)
+                Text("Paste Multiple Lines?")
+                    .font(typography.headline)
+                    .foregroundColor(colors.foreground)
+            }
+            Text(lines.count == 1 ? "1 line" : "\(lines.count) lines")
+                .font(typography.body)
+                .foregroundColor(colors.foreground)
+                .accessibilityIdentifier("paste-confirm-count")
+            VStack(alignment: .leading, spacing: spacing.xxxs) {
+                ForEach(Array(previewLines.enumerated()), id: \.offset) { _, line in
+                    Text(line.isEmpty ? " " : line)
+                        .font(typography.caption)
+                        .foregroundColor(colors.dimmed)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+                if hiddenLineCount > 0 {
+                    Text("… \(hiddenLineCount) more line\(hiddenLineCount == 1 ? "" : "s")")
+                        .font(typography.caption)
+                        .foregroundColor(colors.dimmed)
+                }
+            }
+            .padding(spacing.xs)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(colors.selection.opacity(TerminalMetric.bannerFill))
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("paste-confirm-preview")
+            if let errorMessage {
+                Text(errorMessage)
+                    .font(typography.caption)
+                    .foregroundColor(colors.error)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("paste-confirm-error")
+            }
+            HStack(spacing: spacing.sm) {
+                Spacer()
+                Button("Cancel") { onCancel() }
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
+                    .accessibilityIdentifier("paste-confirm-cancel")
+                Button("Paste") { onPaste() }
+                    .buttonStyle(.borderedProminent)
+                    .tint(colors.accent)
+                    .frame(minHeight: 44)
+                    .accessibilityIdentifier("paste-confirm-paste")
+            }
+        }
+        .padding(spacing.lg)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(colors.background.ignoresSafeArea())
+        .presentationDetents([.medium])
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("paste-confirmation-sheet")
     }
 }
