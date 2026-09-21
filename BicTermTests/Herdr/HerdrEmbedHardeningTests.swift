@@ -229,19 +229,16 @@ final class HerdrEmbedHardeningTests: XCTestCase {
 
     // MARK: - (a) Sync honesty through live cycles (fixtures)
 
-    /// T8 probe (env-gated: `HERDR_EMBED_DETACH_PROBE=1`, run SOLO): the
-    /// detach key ends the embedded run honestly — `.stopped` with a clean
-    /// drain, socket unlinked, cwd restored — and since embed patch 0005
-    /// (`run_client` returns its loop error instead of
-    /// `std::process::exit`) the host process SURVIVES the non-detached
-    /// error paths that follow teardown. The gate remains because the
-    /// detach key itself is timing-sensitive through the SwiftUI-hosted
-    /// TUI (T3/T5 learnings) — this is a solo evidence probe, not a
-    /// shared-suite test.
+    /// T8 sync honesty: the detach key ends the embedded run honestly —
+    /// `.stopped` with a clean drain, socket unlinked, cwd restored — and
+    /// since embed patch 0005 (`run_client` returns its loop error instead
+    /// of `std::process::exit`) the host process SURVIVES the non-detached
+    /// error paths that follow teardown. Formerly a solo-only evidence
+    /// probe (first for the process-poisoning, then for the detach key's
+    /// timing sensitivity); un-gated 2026-09-20 after 2x solo + 2x
+    /// full-class green runs (probe third of ten, every follower green) —
+    /// the single-write detach form is deterministic on this stack.
     func testDetachKeySequenceEndsLiveRunWithCleanTeardown() async throws {
-        guard Self.detachProbeEnabled else {
-            throw XCTSkip("set HERDR_EMBED_DETACH_PROBE=1 and run this test solo (evidence runs)")
-        }
         try requireFixtures(serverPort: 12222)
         let connection = try makeDirectConnection(label: "detach")
         let cwdBeforeStart = FileManager.default.currentDirectoryPath
@@ -1078,14 +1075,6 @@ final class HerdrEmbedHardeningTests: XCTestCase {
             return candidate!
         }
         return "richard"
-    }
-
-    /// Host-side marker file (`.scratch/enable-detach-probe`) opts the
-    /// process-poisoning detach probe in for solo evidence runs.
-    nonisolated static var detachProbeEnabled: Bool {
-        FileManager.default.fileExists(
-            atPath: repoRoot.appendingPathComponent(".scratch/enable-detach-probe").path
-        )
     }
 
     private nonisolated static var herdrBin: String {

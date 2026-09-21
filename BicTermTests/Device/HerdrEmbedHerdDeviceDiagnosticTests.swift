@@ -36,7 +36,15 @@ final class HerdrEmbedHerdDeviceDiagnosticTests: XCTestCase {
                 in: .whitespacesAndNewlines
             ) == "enabled"
         else {
-            throw XCTSkip("diagnostic gated: push an 'enabled' marker file to the app container first")
+            throw XCTSkip(
+                "DIAGNOSTIC TOOL, opt-in by design — arms only when a marker file containing "
+                    + "exactly \"enabled\" sits at <App Support>/herdr-embed-herd-diagnostic.enabled "
+                    + "(push with: xcrun devicectl device copy to --device <id> --domain-type "
+                    + "appDataContainer --domain-identifier com.bicterm.app --source <file> "
+                    + "--destination \"Library/Application Support/herdr-embed-herd-diagnostic.enabled\"; "
+                    + "the run consumes it). It drives the user's REAL herd through the production "
+                    + "connector and dumps establish diagnostics — it must never run unattended."
+            )
         }
         try? "consumed".write(to: marker, atomically: true, encoding: .utf8)
 

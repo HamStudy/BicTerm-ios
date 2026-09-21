@@ -304,9 +304,30 @@ final class HerdrSecureEnclaveConcurrentEstablishTests: XCTestCase {
             var evaluationError: NSError?
             try XCTSkipUnless(
                 context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &evaluationError),
-                "no biometry enrolled in this simulator — the LAContext single-use variant "
-                    + "cannot run (enroll with: xcrun simctl biometry <udid> enroll)"
+                "no biometry enrolled — the LAContext single-use variant needs enrolled biometry "
+                    + "(device-only: the simulator's emulated Secure Enclave refuses biometry-gated "
+                    + "key creation even with biometry enrolled)"
             )
+            // Empirically verified (Xcode 26.6, iPhone 17 Pro simulator, biometry
+            // enrolled via `simctl spawn <udid> notifyutil -s
+            // com.apple.BiometricKit.enrollmentChanged 1` + `-p`): the emulated
+            // Secure Enclave refuses `.biometryCurrentSet` key creation outright
+            // (LAError -1020 "This call is not supported on iOS Simulator"), so
+            // enrollment alone cannot unlock this variant. Probe the real
+            // capability so the skip fires before generate() fails.
+            var accessError: Unmanaged<CFError>?
+            guard let probeAccess = SecAccessControlCreateWithFlags(
+                nil,
+                kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
+                [.privateKeyUsage, .biometryCurrentSet],
+                &accessError
+            ), (try? SecureEnclave.P256.Signing.PrivateKey(accessControl: probeAccess)) != nil else {
+                throw XCTSkip(
+                    "this environment cannot create biometry-protected Secure Enclave keys "
+                        + "(the simulator's emulated SE rejects them with LAError -1020) — "
+                        + "the LAContext single-use variant is device-only"
+                )
+            }
         }
         let metadata = try await service.generate(
             label: biometric ? "SE biometric concurrent repro" : "SE concurrent repro",
