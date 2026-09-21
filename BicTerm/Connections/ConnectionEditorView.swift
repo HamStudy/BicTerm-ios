@@ -292,8 +292,8 @@ struct ConnectionEditorView: View {
                             .foregroundColor(colors.foreground)
                         Spacer()
                         SecureField("", text: touchedBinding($draft.passwordInput, field: .password))
-                            // Opt out of the system password-vault save flow; BicTerm owns persistence.
-                            .textContentType(.oneTimeCode)
+                            // Advertise Passwords AutoFill; BicTerm owns persistence in the device Keychain.
+                            .textContentType(SSHPasswordContentType.contentType)
                             .focused($focus, equals: .password)
                             .font(typography.body)
                             .foregroundColor(colors.foreground)

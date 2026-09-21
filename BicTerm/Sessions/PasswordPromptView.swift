@@ -17,8 +17,9 @@ struct PasswordPromptView: View {
                     Text("\(request.username)@\(request.host):\(String(request.port))")
                         .textSelection(.enabled)
                     SecureField("Password", text: $password)
-                        // Only this sheet's explicit toggle may offer to persist the password.
-                        .textContentType(.oneTimeCode)
+                        // Advertise Passwords AutoFill; persistence stays behind
+                        // this sheet's explicit toggle only.
+                        .textContentType(SSHPasswordContentType.contentType)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .focused($focused)
