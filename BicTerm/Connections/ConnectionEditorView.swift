@@ -53,7 +53,10 @@ struct ConnectionEditorView: View {
                 passwordSection
                 if jumpChainSupported { jumpChainSection }
                 protocolOptionsSection
-                if draft.protocolID == ProtocolDescriptor.ssh.id { herdrSection }
+                if draft.protocolID == ProtocolDescriptor.ssh.id {
+                    if !draft.herdrEnabled { startupCommandSection }
+                    herdrSection
+                }
                 connectSection
             }
             .scrollContentBackground(.hidden)
@@ -508,20 +511,70 @@ struct ConnectionEditorView: View {
         }
     }
 
+    /// Startup-command presets over the always-visible text field. The
+    /// field stays the source of truth: the picker's displayed selection is
+    /// derived from the text (text identical to a preset displays as that
+    /// preset), and picking a preset writes the text — Custom preserves it
+    /// and focuses the field for editing. Hidden while herdr is on, like
+    /// the field always was; the stored value is retained either way.
+    private var startupCommandSection: some View {
+        Section {
+            Picker("Preset", selection: startupPresetSelection) {
+                ForEach(StartupCommandPreset.allCases) { preset in
+                    Text(preset.title).tag(preset)
+                }
+            }
+            .pickerStyle(.menu)
+            .tint(colors.accent)
+            .accessibilityIdentifier("startup-command-preset")
+
+            labeledField(
+                "Command",
+                text: $draft.startupCommand,
+                identifier: "startup-command-field",
+                error: nil,
+                focus: .startupCommand
+            )
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
+        } header: {
+            Text("Startup Command")
+        } footer: {
+            VStack(alignment: .leading, spacing: spacing.xxs) {
+                Text("Sent to the shell as input (with Return) after each connect and reconnect. The command must exist on the server — e.g. tmux attach restores your session automatically. Stored unencrypted — never put credentials here.")
+                    .font(typography.caption)
+                    .foregroundColor(colors.dimmed)
+                    .accessibilityIdentifier("startup-section-footer")
+                Text("Applies to terminal sessions only")
+                    .font(typography.caption)
+                    .foregroundColor(colors.dimmed)
+            }
+        }
+    }
+
+    /// The preset picker writes the field text (the source of truth);
+    /// Custom keeps the text and focuses the field. Preset writes flip the
+    /// draft's dirty state, so the discard-confirmation flow applies.
+    private var startupPresetSelection: Binding<StartupCommandPreset> {
+        Binding(
+            get: { StartupCommandPreset.preset(for: draft.startupCommand) },
+            set: { selection in
+                switch selection {
+                case .shell:
+                    draft.startupCommand = ""
+                case .tmux:
+                    draft.startupCommand = StartupCommandPreset.tmuxCommand
+                case .screen:
+                    draft.startupCommand = StartupCommandPreset.screenCommand
+                case .custom:
+                    focus = .startupCommand
+                }
+            }
+        )
+    }
+
     private var herdrSection: some View {
         Section {
-            if !draft.herdrEnabled {
-                labeledField(
-                    "Startup Command (optional)",
-                    text: $draft.startupCommand,
-                    identifier: "startup-command-field",
-                    error: nil,
-                    focus: .startupCommand
-                )
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-            }
-
             Toggle(isOn: $draft.herdrEnabled) {
                 VStack(alignment: .leading, spacing: spacing.xxxs) {
                     Text("Use Herdr")
@@ -701,5 +754,57 @@ struct ConnectionEditorView: View {
         for tag in Set(oldTags) where !liveTags.contains(tag) {
             try? await AppServices.shared.passwordStore.deletePassword(for: tag)
         }
+    }
+}
+
+/// Editor-side startup-command presets. The persisted model stays a plain
+/// string (`Connection.startupCommand`); this enum only maps between that
+/// text and the editor's preset picker, where the text field remains the
+/// source of truth — text identical to a preset displays as that preset.
+enum StartupCommandPreset: String, CaseIterable, Identifiable {
+    /// Plain shell, no startup command (the default; clears the field).
+    case shell
+    /// Create-or-attach the persistent "main" tmux session.
+    case tmux
+    /// Create-or-attach the persistent "main" screen session.
+    case screen
+    /// Whatever the user typed; picking it preserves and focuses the text.
+    case custom
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .shell: "Shell"
+        case .tmux: "tmux"
+        case .screen: "screen"
+        case .custom: "Custom"
+        }
+    }
+
+    /// The exact field text this preset writes. `nil` for Custom — its
+    /// text is whatever the user typed, preserved on selection.
+    var commandText: String? {
+        switch self {
+        case .shell: ""
+        case .tmux: Self.tmuxCommand
+        case .screen: Self.screenCommand
+        case .custom: nil
+        }
+    }
+
+    static let tmuxCommand = "tmux new-session -A -s main"
+    static let screenCommand = "screen -xRR main"
+
+    /// The preset a command text displays as: blank/whitespace-only text is
+    /// Shell (it saves as no command), exact preset matches map to their
+    /// preset, anything else is Custom. Matching trims surrounding
+    /// whitespace because saving trims too.
+    static func preset(for command: String) -> StartupCommandPreset {
+        let trimmed = command.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { return .shell }
+        if trimmed == tmuxCommand { return .tmux }
+        if trimmed == screenCommand { return .screen }
+        return .custom
     }
 }
