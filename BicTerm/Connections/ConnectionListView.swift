@@ -25,12 +25,15 @@ struct ConnectionListView: View {
     let themeModel: ThemeModel
     /// Shared OSC 52 clipboard-write toggle handed to the Settings screen.
     let osc52Model: Osc52ClipboardModel
+    /// Shared keep-screen-on toggle handed to the Settings screen.
+    let keepAwakeModel: KeepAwakeModel
     var onOpenHerd: ((Herd) -> Void)?
 
     init(
         fontModel: TerminalFontModel,
         themeModel: ThemeModel,
         osc52Model: Osc52ClipboardModel,
+        keepAwakeModel: KeepAwakeModel,
         onConnectRequested: @escaping (Connection) -> Void = { _ in },
         onOpenSessions: (() -> Void)? = nil,
         onClose: (() -> Void)? = nil,
@@ -40,6 +43,7 @@ struct ConnectionListView: View {
         self.fontModel = fontModel
         self.themeModel = themeModel
         self.osc52Model = osc52Model
+        self.keepAwakeModel = keepAwakeModel
         self.onConnectRequested = onConnectRequested
         self.onOpenSessions = onOpenSessions
         self.onClose = onClose
@@ -109,7 +113,7 @@ struct ConnectionListView: View {
                     }
                 }
                 ToolbarItem(placement: .topBarLeading) {
-                    NavigationLink(destination: SettingsView(fontModel: fontModel, themeModel: themeModel, osc52Model: osc52Model)) {
+                    NavigationLink(destination: SettingsView(fontModel: fontModel, themeModel: themeModel, osc52Model: osc52Model, keepAwakeModel: keepAwakeModel)) {
                         Image(systemName: "gear")
                             .foregroundColor(colors.accent)
                     }

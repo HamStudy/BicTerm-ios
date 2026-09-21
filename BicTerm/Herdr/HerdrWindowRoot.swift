@@ -70,6 +70,7 @@ struct HerdrWindowRoot: View {
                 fontModel: store.terminalFont,
                 themeModel: store.theme,
                 osc52Model: store.osc52Clipboard,
+                keepAwakeModel: store.keepAwake,
                 onConnectRequested: { connection in
                     listPresented = false
                     connectFromListSheet(connection)

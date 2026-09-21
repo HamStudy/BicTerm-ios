@@ -15,6 +15,7 @@ import SwiftUI
 ///   --uitest-keep-toolbar-pref             keep the persisted toolbar visibility choice (relaunch tests)
 ///   --uitest-keep-font-pref                keep the persisted terminal font size (persistence tests)
 ///   --uitest-keep-theme-pref               keep the persisted appearance preference (persistence tests)
+///   --uitest-keep-screen-on                keep the persisted keep-screen-on preference (persistence tests)
 ///   --uitest-open-settings-scene           open the independent Settings window once at bootstrap
 enum TerminalSceneUITest {
     static var seamsEnabled: Bool {
@@ -40,6 +41,24 @@ enum TerminalSceneUITest {
             return nil
         }
         return arguments[index + 1]
+    }
+}
+
+/// Keep-awake UI-test determinism. `KeepAwakeModel` applies the persisted
+/// preference to `UIApplication.shared.isIdleTimerDisabled` AT INIT, so
+/// this reset cannot ride the post-bootstrap driver below (the
+/// theme/font pattern — by the time the driver ran, a stale `true` from
+/// an earlier launch would already have disabled the idle timer).
+/// `BicTermApp.init` calls ``apply()`` before constructing `SessionStore`,
+/// ahead of the model.
+enum KeepAwakeUITestLaunchControl {
+    /// Resets the persisted keep-screen-on pref to the default (OFF)
+    /// unless this launch deliberately preserves it. DEBUG-only caller.
+    static func apply() {
+        guard TerminalSceneUITest.seamsEnabled,
+              !ProcessInfo.processInfo.arguments.contains("--uitest-keep-screen-on")
+        else { return }
+        KeepAwakeSettings().reset()
     }
 }
 

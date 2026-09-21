@@ -18,6 +18,10 @@ struct SettingsView: View {
     /// updates every terminal surface and the embedded herdr TUI in one
     /// step (all read the same UserDefaults key).
     let osc52Model: Osc52ClipboardModel
+    /// App-global keep-screen-on toggle. The Terminal section's "Keep
+    /// Screen On" row binds directly to this model's live value; the
+    /// model applies the choice to the UIKit idle timer on every change.
+    let keepAwakeModel: KeepAwakeModel
 
     var body: some View {
         @Bindable var keyPreferences = keyPreferences
@@ -67,6 +71,28 @@ struct SettingsView: View {
                 .foregroundStyle(colors.foreground)
                 .listRowBackground(colors.background)
                 .accessibilityIdentifier("settings-margins")
+            }
+
+            Section("Terminal") {
+                Toggle(isOn: Binding(
+                    get: { keepAwakeModel.keepScreenOn },
+                    set: { keepAwakeModel.setKeepScreenOn($0) }
+                )) {
+                    VStack(alignment: .leading, spacing: spacing.xxxs) {
+                        Text("Keep Screen On")
+                            .font(typography.body)
+                            .foregroundColor(colors.foreground)
+                        Text("Prevents the display from sleeping while the app is open.")
+                            .font(typography.caption)
+                            .foregroundColor(colors.dimmed)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .font(typography.body)
+                .foregroundStyle(colors.foreground)
+                .tint(colors.accent)
+                .listRowBackground(colors.background)
+                .accessibilityIdentifier("settings-keep-screen-on")
             }
 
             Section {

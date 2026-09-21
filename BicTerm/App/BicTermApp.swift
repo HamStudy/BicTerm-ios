@@ -92,6 +92,7 @@ private struct TerminalWindowRoot: View {
                 fontModel: store.terminalFont,
                 themeModel: store.theme,
                 osc52Model: store.osc52Clipboard,
+                keepAwakeModel: store.keepAwake,
                 onConnectRequested: { connection in
                     listPresented = false
                     let descriptor = store.openSession(for: connection)
@@ -287,7 +288,11 @@ private struct UITestSessionDriverSeam: ViewModifier {
 @main
 struct BicTermApp: App {
     @State private var connectionsModel = ConnectionsModel()
-    @State private var sessionStore = SessionStore()
+    // Constructed in `init` (not as a default value): the DEBUG keep-awake
+    // UI-test control below must run BEFORE SessionStore constructs
+    // `KeepAwakeModel`, which applies the persisted pref to the UIKit
+    // idle timer at init — a post-bootstrap reset would be too late.
+    @State private var sessionStore: SessionStore
     // App-scoped so the herd workspace presentations (full-screen cover on
     // iPhone, herdr window on iPad) can surface this coordinator's TOFU
     // prompts above themselves (F3-B).
@@ -307,7 +312,14 @@ struct BicTermApp: App {
         UserDefaults.standard.register(defaults: ["ApplePressAndHoldEnabled": false])
         #if DEBUG
         UITestSupport.activate()
+        // Keep-awake determinism: reset the persisted pref (unless this
+        // launch deliberately preserves it) BEFORE the store below
+        // constructs KeepAwakeModel — the model applies the pref to the
+        // UIKit idle timer at init, so the driver's post-bootstrap reset
+        // pattern (theme/font) cannot be used here.
+        KeepAwakeUITestLaunchControl.apply()
         #endif
+        sessionStore = SessionStore()
     }
 
     var body: some Scene {
@@ -406,7 +418,8 @@ struct BicTermApp: App {
                         SettingsView(
                             fontModel: sessionStore.terminalFont,
                             themeModel: sessionStore.theme,
-                            osc52Model: sessionStore.osc52Clipboard
+                            osc52Model: sessionStore.osc52Clipboard,
+                            keepAwakeModel: sessionStore.keepAwake
                         )
                     }
                     .terminalStyle()
@@ -416,7 +429,8 @@ struct BicTermApp: App {
                     SettingsView(
                         fontModel: sessionStore.terminalFont,
                         themeModel: sessionStore.theme,
-                        osc52Model: sessionStore.osc52Clipboard
+                        osc52Model: sessionStore.osc52Clipboard,
+                        keepAwakeModel: sessionStore.keepAwake
                     )
                 }
                 .terminalStyle()

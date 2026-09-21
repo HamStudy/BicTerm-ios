@@ -69,7 +69,8 @@ struct SessionMenuView: View {
                 SettingsView(
                     fontModel: store.terminalFont,
                     themeModel: store.theme,
-                    osc52Model: store.osc52Clipboard
+                    osc52Model: store.osc52Clipboard,
+                    keepAwakeModel: store.keepAwake
                 )
                     .toolbar {
                         ToolbarItem(placement: .confirmationAction) {

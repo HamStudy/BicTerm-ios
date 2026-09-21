@@ -78,6 +78,12 @@ final class SessionStore {
     /// instance shared by every scene and the terminal cache so a
     /// Settings change applies to every surface at once.
     let osc52Clipboard = Osc52ClipboardModel()
+    /// App-global keep-screen-on preference (default OFF). One instance
+    /// shared by every scene: the model applies the persisted choice to
+    /// `UIApplication.shared.isIdleTimerDisabled` at init and on every
+    /// mutation, so a Settings change (or a relaunch) never leaves the
+    /// idle timer in a stale state.
+    let keepAwake = KeepAwakeModel()
     var appearanceOverrides: [String: SessionAppearanceOverrides] = [:]
 
     private let hostKeyStore: (any HostKeyStoreProtocol)?
