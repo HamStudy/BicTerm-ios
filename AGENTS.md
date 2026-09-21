@@ -22,6 +22,15 @@ No convenience, default behavior, debugging need, or evidence requirement permit
 - Never poll or wait for device availability: no lock-state probe loops, no retries that wait for an unlock, no periodic re-checks. Waiting for access is wasted work by definition.
 - Instead: do everything device-free first (local builds such as `build-for-testing`, simulator suites, fixture-based tests), then ask the user once to intervene, state the exact resume commands, and stop.
 
+## NEVER Sleep Longer Than 180 Seconds In One Command
+
+**A single `sleep`/blocking wait is capped at 180 seconds — the ceiling, and it must be rare.** Long blind sleeps waste the session and hide real progress.
+
+- Never issue `sleep 200`, `sleep 240`, or any wait over 180s — not directly, not inside retry loops, not in delegated worker scripts, not as a "wait for build/test" shortcut.
+- Prefer bounded readiness polling: a loop of short sleeps (5–30s) that CHECKS AN ACTUAL CONDITION each iteration (port listening, file present, process exited, log marker appeared) with a bounded iteration count and a hard failure when exhausted — e.g. `for i in {1..12}; do nc -z 127.0.0.1 12222 && break; sleep 10; done`.
+- Collision/backoff retries follow the same shape: check-then-short-sleep, never one long sleep.
+- This rule binds every agent and every delegated subprocess; orchestrators must reject worker reports that contain a >180s sleep and re-dispatch with the bounded-polling pattern (user directive, 2026-09-21).
+
 ---
 
 # PROJECT KNOWLEDGE BASE
