@@ -6,16 +6,16 @@ import UIKit
 /// Release; inert without `--uitest-applock-pend`.
 ///
 ///   --uitest-applock-pend     use the pended fake owner-auth client and
-///                             activate this seam (overlay + auto-trigger)
+///                             activate this seam (overlay below)
 ///   --uitest-applock-enable   enable the app lock at bootstrap
 ///
 /// Real LAContext cannot run in simulator tests. The seam drives the
 /// PRODUCTION `AppLockState` code path deterministically: a small overlay
 /// window (status line + release controls) makes the model state
-/// XCUITest-observable, and the auto-trigger stands in for the unlock UI
-/// todo 11 will build by requesting authentication whenever the app is
-/// locked and becomes active. The overlay's release buttons resolve the
-/// pended fake client with success/failure.
+/// XCUITest-observable, and the overlay's release buttons resolve the
+/// pended fake client with success/failure. The unlock path itself is
+/// production UI — the per-scene cover's Unlock button is the single
+/// trigger; this seam never requests authentication on its own.
 @MainActor
 enum AppLockUITestSeam {
     nonisolated static let pendArgument = "--uitest-applock-pend"
@@ -52,7 +52,6 @@ enum AppLockUITestSeam {
         ) { _ in
             Task { @MainActor in
                 installOverlayWindowIfNeeded(state: state)
-                triggerAuthenticationIfLocked(state: state)
             }
         })
         // Robustness for launches whose scene activates after (or without)
@@ -64,27 +63,28 @@ enum AppLockUITestSeam {
         ) { _ in
             Task { @MainActor in
                 installOverlayWindowIfNeeded(state: state)
-                triggerAuthenticationIfLocked(state: state)
             }
         })
     }
 
-    /// The unlock stand-in: whenever the app is locked and becomes active,
-    /// request owner authentication (the in-flight guard in `AppLockState`
-    /// makes repeated activations no-ops).
-    private static func triggerAuthenticationIfLocked(state: AppLockState) {
-        guard state.isEnabled, state.isLocked else { return }
-        Task { @MainActor in
-            await state.authenticate(reason: "Unlock BicTerm")
-        }
-    }
-
     private static func installOverlayWindowIfNeeded(state: AppLockState) {
-        guard overlayWindow == nil else { return }
+        // The overlay must live in the FOREGROUND scene: on iPad only the
+        // active window is visible and tappable — an overlay left in a
+        // covered background window stays readable in the AX tree but
+        // its release buttons can never receive a tap (XCUITest taps land
+        // on the foreground window). Re-parent on every activation so the
+        // controls follow focus across windows.
         guard let scene = UIApplication.shared.connectedScenes
             .compactMap({ $0 as? UIWindowScene })
             .first(where: { $0.activationState == .foregroundActive })
         else { return }
+
+        if let existing = overlayWindow {
+            if existing.windowScene !== scene {
+                existing.windowScene = scene
+            }
+            return
+        }
 
         let window = UIWindow(windowScene: scene)
         window.windowLevel = .alert + 1

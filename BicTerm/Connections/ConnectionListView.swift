@@ -113,7 +113,7 @@ struct ConnectionListView: View {
                     }
                 }
                 ToolbarItem(placement: .topBarLeading) {
-                    NavigationLink(destination: SettingsView(fontModel: fontModel, themeModel: themeModel, osc52Model: osc52Model, keepAwakeModel: keepAwakeModel)) {
+                    NavigationLink(destination: SettingsView(fontModel: fontModel, themeModel: themeModel, osc52Model: osc52Model, keepAwakeModel: keepAwakeModel, appLockModel: AppServices.shared.appLockModel)) {
                         Image(systemName: "gear")
                             .foregroundColor(colors.accent)
                     }

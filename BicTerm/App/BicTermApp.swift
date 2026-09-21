@@ -349,6 +349,21 @@ struct BicTermApp: App {
     // prompts above themselves (F3-B).
     @State private var herdConnect = HerdSessionCoordinator()
 
+    /// The per-scene app-lock cover context: the shared app-lock model
+    /// plus the settings models its recovery sheet's SettingsView needs.
+    /// Attached OUTERMOST at every scene root so the cover occludes the
+    /// whole window and the recovery sheet inherits the environment
+    /// injections below it.
+    private func appLockCoverContext() -> AppLockCoverContext {
+        AppLockCoverContext(
+            model: AppServices.shared.appLockModel,
+            fontModel: sessionStore.terminalFont,
+            themeModel: sessionStore.theme,
+            osc52Model: sessionStore.osc52Clipboard,
+            keepAwakeModel: sessionStore.keepAwake
+        )
+    }
+
     init() {
         // A write to a socket whose peer died must surface as EPIPE, not
         // kill the process: the embedded herdr client (Rust staticlib —
@@ -369,6 +384,10 @@ struct BicTermApp: App {
         // UIKit idle timer at init, so the driver's post-bootstrap reset
         // pattern (theme/font) cannot be used here.
         KeepAwakeUITestLaunchControl.apply()
+        // App-lock determinism: same pattern — AppLockModel (inside
+        // AppServices.shared) applies the persisted pref at init, so the
+        // reset must precede the first AppServices.shared touch.
+        AppLockUITestLaunchControl.apply()
         #endif
         sessionStore = SessionStore()
     }
@@ -392,6 +411,7 @@ struct BicTermApp: App {
             .environment(sessionStore.terminalMargin)
             .environment(AppServices.shared.keyStore)
             .environment(AppServices.shared.keyAvailabilityPreferences)
+            .appLockCover(appLockCoverContext())
         }
         // Attached exactly ONCE: SwiftUI merges scene commands app-wide,
         // so a second attach would duplicate every command menu. The
@@ -425,6 +445,7 @@ struct BicTermApp: App {
             .environment(sessionStore.terminalMargin)
             .environment(AppServices.shared.keyStore)
             .environment(AppServices.shared.keyAvailabilityPreferences)
+            .appLockCover(appLockCoverContext())
         }
 
         WindowGroup("Herdr Workspace", id: "herdr", for: SessionID.self) { $sessionID in
@@ -459,6 +480,7 @@ struct BicTermApp: App {
             .environment(sessionStore.terminalMargin)
             .environment(AppServices.shared.keyStore)
             .environment(AppServices.shared.keyAvailabilityPreferences)
+            .appLockCover(appLockCoverContext())
         }
 
         WindowGroup("Settings", id: "settings", for: SettingsWindowValue.self) { _ in
@@ -477,7 +499,8 @@ struct BicTermApp: App {
                             fontModel: sessionStore.terminalFont,
                             themeModel: sessionStore.theme,
                             osc52Model: sessionStore.osc52Clipboard,
-                            keepAwakeModel: sessionStore.keepAwake
+                            keepAwakeModel: sessionStore.keepAwake,
+                            appLockModel: AppServices.shared.appLockModel
                         )
                     }
                     .terminalStyle()
@@ -488,7 +511,8 @@ struct BicTermApp: App {
                         fontModel: sessionStore.terminalFont,
                         themeModel: sessionStore.theme,
                         osc52Model: sessionStore.osc52Clipboard,
-                        keepAwakeModel: sessionStore.keepAwake
+                        keepAwakeModel: sessionStore.keepAwake,
+                        appLockModel: AppServices.shared.appLockModel
                     )
                 }
                 .terminalStyle()
@@ -501,6 +525,7 @@ struct BicTermApp: App {
             .environment(sessionStore.terminalMargin)
             .environment(AppServices.shared.keyStore)
             .environment(AppServices.shared.keyAvailabilityPreferences)
+            .appLockCover(appLockCoverContext())
         }
     }
 }

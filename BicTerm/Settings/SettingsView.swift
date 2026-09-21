@@ -22,6 +22,11 @@ struct SettingsView: View {
     /// Screen On" row binds directly to this model's live value; the
     /// model applies the choice to the UIKit idle timer on every change.
     let keepAwakeModel: KeepAwakeModel
+    /// App-global app-lock toggle. The Security section's "App Lock" row
+    /// binds directly to this model; enabling persists the choice and
+    /// arms the per-scene privacy covers for the next background
+    /// transition.
+    let appLockModel: AppLockModel
 
     var body: some View {
         @Bindable var keyPreferences = keyPreferences
@@ -95,6 +100,28 @@ struct SettingsView: View {
                 .accessibilityIdentifier("settings-keep-screen-on")
             }
 
+            Section("Security") {
+                Toggle(isOn: Binding(
+                    get: { appLockModel.isEnabled },
+                    set: { appLockModel.setEnabled($0) }
+                )) {
+                    VStack(alignment: .leading, spacing: spacing.xxxs) {
+                        Text("App Lock")
+                            .font(typography.body)
+                            .foregroundColor(colors.foreground)
+                        Text("Require Face ID or your passcode to unlock BicTerm after it moves to the background. Every window is covered while locked.")
+                            .font(typography.caption)
+                            .foregroundColor(colors.dimmed)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .font(typography.body)
+                .foregroundStyle(colors.foreground)
+                .tint(colors.accent)
+                .listRowBackground(colors.background)
+                .accessibilityIdentifier("settings-app-lock")
+            }
+
             Section {
                 NavigationLink {
                     KeyManagementView()
@@ -132,7 +159,7 @@ Toggle(isOn: Binding(
                     .listRowBackground(colors.background)
                     .accessibilityIdentifier("settings-hardware-keys")
             } header: {
-                Text("Security")
+                Text("Keys & Clipboard")
             } footer: {
                 Text("Applies to keys offered by default. Explicitly selected keys always apply.")
             }

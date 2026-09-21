@@ -45,9 +45,15 @@ final class AppServices {
     /// reopening the workspace (embed patch 0008).
     let herdrEmbedRuntime: HerdrEmbedRuntime = .shared
     /// App-global app-lock policy state (default OFF). One instance shared
-    /// by every scene and the agent authorization gate; todo 11 threads it
-    /// through the scene roots and Settings.
+    /// by every scene and the agent authorization gate; the cover modifier
+    /// and Settings thread it through the scene roots.
     let appLock = AppLockState()
+    /// App-global app-lock preference: the Settings Security toggle's
+    /// write path over `appLock`, with the choice persisted (default
+    /// OFF). Constructed right after `appLock` so the persisted pref is
+    /// applied to the policy state before the first background
+    /// transition can engage the lock.
+    let appLockModel: AppLockModel
 
     #if DEBUG
     /// Set by the `--uitest-demo-editor` launch hook: name of a connection
@@ -67,6 +73,7 @@ final class AppServices {
         self.connectionStore = Self.makeConfigurationStore()
         self.herdStore = Self.makeHerdStore()
         self.passwordStore = KeychainPasswordStore()
+        self.appLockModel = AppLockModel(state: appLock)
 
         #if DEBUG
         UITestPasswordServerSeam.startIfRequested()

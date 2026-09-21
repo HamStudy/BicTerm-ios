@@ -120,10 +120,12 @@ targets:
     info:
       path: BicTerm/Info.plist
       properties:
-        # Face ID gates SSH key use/generation (biometryCurrentSet). Without
-        # this key iOS TERMINATES the app on the first biometry evaluation —
-        # device-only kill, invisible on simulators without enrolled Face ID.
-        NSFaceIDUsageDescription: "BicTerm uses Face ID to protect and use your SSH keys."
+        # Face ID gates app unlock (deviceOwnerAuthentication, passcode
+        # fallback) and SSH key use/generation (biometryCurrentSet).
+        # Without this key iOS TERMINATES the app on the first biometry
+        # evaluation — device-only kill, invisible on simulators without
+        # enrolled Face ID.
+        NSFaceIDUsageDescription: "BicTerm uses Face ID to unlock the app and to protect and use your SSH keys."
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationLandscapeLeft

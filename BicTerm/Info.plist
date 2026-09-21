@@ -19,7 +19,7 @@
 	<key>CFBundleVersion</key>
 	<string>1</string>
 	<key>NSFaceIDUsageDescription</key>
-	<string>BicTerm uses Face ID to protect and use your SSH keys.</string>
+	<string>BicTerm uses Face ID to unlock the app and to protect and use your SSH keys.</string>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
