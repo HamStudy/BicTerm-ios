@@ -98,6 +98,22 @@ struct SettingsView: View {
                 .tint(colors.accent)
                 .listRowBackground(colors.background)
                 .accessibilityIdentifier("settings-keep-screen-on")
+
+                NavigationLink {
+                    SnippetManagementView()
+                } label: {
+                    VStack(alignment: .leading, spacing: spacing.xxxs) {
+                        Text("Snippets")
+                            .font(typography.body)
+                            .foregroundColor(colors.foreground)
+                        Text("Reusable commands for any terminal. Insert types them; Run executes them after confirmation.")
+                            .font(typography.caption)
+                            .foregroundColor(colors.dimmed)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .listRowBackground(colors.background)
+                .accessibilityIdentifier("settings-snippets")
             }
 
             Section("Security") {

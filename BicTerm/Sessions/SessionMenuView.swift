@@ -34,6 +34,11 @@ struct SessionMenuView: View {
     var onPickSession: (UUID) -> Void
     var onNewConnection: () -> Void
     var onManageSessions: () -> Void
+    /// Opens this scene's snippet sheet (Insert / confirmed Run). Nil
+    /// (the herdr workspace chrome) hides the item — snippet delivery
+    /// rides the terminal session's registry send route, which a herdr
+    /// surface has no session for.
+    var onOpenSnippets: (() -> Void)? = nil
 
     @State private var settingsPresented = false
     @State private var fontEditorPresented = false
@@ -43,6 +48,7 @@ struct SessionMenuView: View {
             toolbarToggleItem
             sessionsSubmenu
             newSessionItem
+            snippetsItem
             if let descriptor = store.descriptor(id: currentSessionID) {
                 SessionAppearanceMenu(store: store, sceneID: descriptor.registrySceneID,
                                       onEditFont: { fontEditorPresented = true })
@@ -132,6 +138,16 @@ struct SessionMenuView: View {
             Label("New Session", systemImage: "plus")
         }
         .accessibilityIdentifier("scene-new-session\(identifierSuffix)")
+    }
+
+    @ViewBuilder
+    private var snippetsItem: some View {
+        if let onOpenSnippets {
+            Button(action: onOpenSnippets) {
+                Label("Snippets…", systemImage: "chevron.left.forwardslash.chevron.right")
+            }
+            .accessibilityIdentifier("scene-snippets\(identifierSuffix)")
+        }
     }
 
     private var settingsItem: some View {

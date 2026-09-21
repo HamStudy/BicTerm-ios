@@ -33,6 +33,10 @@ final class SessionSceneModel: Identifiable {
 
     private let onClose: @MainActor (UUID) async -> Void
     private weak var trustStore: SessionStore?
+    /// Process-wide snippet persistence (global + per-connection
+    /// snippets). Injectable for tests; defaults to the app-services
+    /// erased store.
+    private let snippetStore: any SnippetStoreProtocol
 
     private(set) var state: SessionState
     private(set) var lastRetryableTransition = Date.distantPast
@@ -92,7 +96,8 @@ final class SessionSceneModel: Identifiable {
         descriptor: SessionStore.SessionDescriptor,
         registry: SessionRegistry,
         onClose: @escaping @MainActor (UUID) async -> Void,
-        trustStore: SessionStore? = nil
+        trustStore: SessionStore? = nil,
+        snippetStore: (any SnippetStoreProtocol)? = nil
     ) {
         self.descriptor = descriptor
         self.id = descriptor.id
@@ -101,6 +106,7 @@ final class SessionSceneModel: Identifiable {
         self.registry = registry
         self.onClose = onClose
         self.trustStore = trustStore
+        self.snippetStore = snippetStore ?? AppServices.shared.snippetStore
         self.state = descriptor.isRestored ? .suspended : .connecting
         let (stream, continuation) = AsyncStream<Data>.makeStream(bufferingPolicy: .bufferingNewest(256))
         self.viewOutput = stream
@@ -231,9 +237,10 @@ final class SessionSceneModel: Identifiable {
                 }
                 self.state = newState
                 if newState != .active {
-                    // A pending paste targets the CURRENT shell; a
-                    // reconnect/suspend/disconnect invalidates it.
+                    // A pending paste or snippet Run targets the CURRENT
+                    // shell; a reconnect/suspend/disconnect invalidates it.
                     self.invalidatePendingPaste()
+                    self.invalidatePendingSnippetRun()
                 }
                 if self.canRetry, !wasRetryable {
                     self.lastRetryableTransition = Date()
@@ -475,6 +482,135 @@ final class SessionSceneModel: Identifiable {
         pasteErrorMessage = nil
     }
 
+    // MARK: - Snippets (t8)
+
+    /// Snippets visible to this scene's connection (global plus
+    /// connection-scoped), in the store's deterministic order. Loaded
+    /// when the snippet sheet opens.
+    private(set) var snippets: [Snippet] = []
+
+    /// Load failure for the snippet sheet.
+    private(set) var snippetLoadError: String?
+
+    /// Inline error from a failed snippet Insert; shown in the snippet
+    /// sheet. A non-nil error keeps the sheet up; a successful insert
+    /// clears it and the view dismisses.
+    private(set) var snippetErrorMessage: String?
+
+    /// Immutable Run request pending confirmation; nil when none. A
+    /// second Run while one is pending REPLACES it — never two queued
+    /// confirmations.
+    private(set) var pendingSnippetRunRequest: TerminalSnippetRunRequest?
+
+    /// Inline error retained when a confirmed Run fails delivery; a
+    /// non-nil error keeps the confirmation up so the user can retry or
+    /// cancel.
+    private(set) var snippetRunErrorMessage: String?
+
+    /// Attachment generation the Run request was captured under — the
+    /// t4 paste discipline: a request whose generation no longer matches
+    /// (surface rebind) can never send.
+    private var pendingSnippetRunGeneration: UInt64?
+
+    /// True while a Run confirm is awaiting the registry send; a second
+    /// confirm (double-tap) must not enqueue a second delivery.
+    private var snippetRunInFlight = false
+
+    /// The request the snippet sheet should confirm right now: nil when
+    /// nothing is pending OR the pending request's attachment
+    /// generation went stale (surface rebind) — the confirmation
+    /// content leaves in both cases.
+    var currentSnippetRunRequest: TerminalSnippetRunRequest? {
+        guard let request = pendingSnippetRunRequest,
+              pendingSnippetRunGeneration == surfaceGeneration else { return nil }
+        return request
+    }
+
+    /// Loads global plus connection-scoped snippets for THIS scene's
+    /// connection.
+    func reloadSnippets() async {
+        do {
+            snippets = try await snippetStore.snippets(connectionID: descriptor.connection.id)
+            snippetLoadError = nil
+        } catch {
+            snippetLoadError = error.localizedDescription
+        }
+    }
+
+    /// Insert: deliver the snippet's exact command bytes with NO Return
+    /// through the registry's throwing seam. A failure keeps the sheet
+    /// up with the error inline.
+    func insertSnippet(_ snippet: Snippet) async {
+        guard !isClosed else { return }
+        snippetErrorMessage = nil
+        do {
+            try await registry.send(sceneID: sceneID, Data(snippet.command.utf8))
+        } catch {
+            snippetErrorMessage = Self.snippetSendErrorMessage(error)
+        }
+    }
+
+    /// A Run was requested: present the confirmation. The request is
+    /// immutable from here on — the sheet renders and (on confirm)
+    /// delivers exactly the captured command.
+    func presentSnippetRunConfirmation(_ request: TerminalSnippetRunRequest) {
+        guard !isClosed else { return }
+        pendingSnippetRunRequest = request
+        pendingSnippetRunGeneration = surfaceGeneration
+        snippetRunErrorMessage = nil
+    }
+
+    /// Cancel (or sheet dismissal) drops the request without sending.
+    func cancelSnippetRunConfirmation() {
+        pendingSnippetRunRequest = nil
+        pendingSnippetRunGeneration = nil
+        snippetRunErrorMessage = nil
+    }
+
+    /// The ONLY delivery path for a confirmed Run: requires the pending
+    /// request AND a current attachment generation, sends the exact
+    /// command bytes plus CR (0x0D) exactly once through the registry's
+    /// throwing seam. A send failure retains the confirmation with an
+    /// inline error.
+    func confirmSnippetRun() async {
+        guard !snippetRunInFlight else { return }
+        guard let request = pendingSnippetRunRequest,
+              let generation = pendingSnippetRunGeneration,
+              generation == surfaceGeneration, !isClosed else {
+            invalidatePendingSnippetRun()
+            return
+        }
+        snippetRunInFlight = true
+        defer { snippetRunInFlight = false }
+
+        do {
+            try await registry.send(sceneID: sceneID, Data(request.command.utf8) + Data([0x0D]))
+            guard surfaceGeneration == generation, !isClosed else {
+                // The surface rebound mid-send; the bytes were already
+                // delivered to the session. Clear silently.
+                invalidatePendingSnippetRun()
+                return
+            }
+            pendingSnippetRunRequest = nil
+            pendingSnippetRunGeneration = nil
+            snippetRunErrorMessage = nil
+        } catch {
+            snippetRunErrorMessage = Self.snippetSendErrorMessage(error)
+        }
+    }
+
+    /// Drops a pending Run request without sending. Called on
+    /// background, non-active session states, and surface detach.
+    private func invalidatePendingSnippetRun() {
+        pendingSnippetRunRequest = nil
+        pendingSnippetRunGeneration = nil
+        snippetRunErrorMessage = nil
+    }
+
+    private static func snippetSendErrorMessage(_ error: any Error) -> String {
+        (error as? SessionRegistryError)?.localizedDescription ?? String(describing: error)
+    }
+
     #if DEBUG
     /// DEBUG-only: record a denial so UI suites can prove the right
     /// branch fired without depending on the global `Osc52ClipboardSink`
@@ -511,6 +647,7 @@ final class SessionSceneModel: Identifiable {
         switch phase {
         case .background:
             invalidatePendingPaste()
+            invalidatePendingSnippetRun()
             await registry.didEnterBackground(sceneID: sceneID)
         case .active:
             guard didUserConnect else { return }
@@ -647,6 +784,7 @@ final class SessionSceneModel: Identifiable {
         guard !isClosed else { return }
         surfaceGeneration &+= 1
         invalidatePendingPaste()
+        invalidatePendingSnippetRun()
         presentationCommands.yield(.detached)
     }
 
@@ -695,6 +833,7 @@ final class SessionSceneModel: Identifiable {
         resyncCommandContinuation.finish()
         presentationCommands.finish()
         invalidatePendingPaste()
+        invalidatePendingSnippetRun()
         await onClose(id)
         state = .closed
     }

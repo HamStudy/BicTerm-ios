@@ -26,6 +26,9 @@ struct SessionSceneView: View {
     var actions: SessionSceneActions?
 
     @State private var switcherPresented = false
+    /// The scene's snippet sheet (Insert / confirmed Run). Dismissing
+    /// it (swipe or Done) also cancels any pending Run confirmation.
+    @State private var snippetPickerPresented = false
     /// Local mirror of `model.osc52Toast` written from the
     /// `osc52ToastPresenter` callback on surface attach. `@Observable`
     /// observation through the SessionSceneModel setter was firing the
@@ -142,6 +145,13 @@ struct SessionSceneView: View {
                 }
             )
         }
+        .sheet(isPresented: $snippetPickerPresented, onDismiss: {
+            // Swipe-down (or Done) while a Run confirmation is pending is
+            // a cancel: it sends nothing.
+            model.cancelSnippetRunConfirmation()
+        }) {
+            SnippetPickerSheet(model: model)
+        }
         .confirmationDialog(
             "Disconnect from \(model.connectionName)?",
             isPresented: closeConfirmationBinding,
@@ -223,7 +233,8 @@ struct SessionSceneView: View {
                 currentSessionID: model.id,
                 onPickSession: { pickedID in actions?.onPickSession(pickedID) },
                 onNewConnection: { actions?.onNewConnection() },
-                onManageSessions: { switcherPresented = true }
+                onManageSessions: { switcherPresented = true },
+                onOpenSnippets: { snippetPickerPresented = true }
             )
 
             Button {

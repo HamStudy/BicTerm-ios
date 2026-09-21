@@ -90,6 +90,10 @@ final class SessionStore {
     /// windows register, so Settings and herdr scenes never receive
     /// terminal session actions.
     let terminalCommands = TerminalCommandsModel()
+    /// Process-wide snippet persistence shared by every scene model this
+    /// store creates (global + per-connection snippets). Injectable for
+    /// tests; defaults to the app-services erased store.
+    let snippetStore: any SnippetStoreProtocol
     var appearanceOverrides: [String: SessionAppearanceOverrides] = [:]
 
     private let hostKeyStore: (any HostKeyStoreProtocol)?
@@ -221,7 +225,8 @@ final class SessionStore {
         snapshotStore: (any SessionSnapshotStoreProtocol)? = nil,
         connectionLookup: ConnectionLookup? = nil,
         hostKeyVerifier injectedVerifier: HostKeyVerifier? = nil,
-        hostKeyStore injectedHostKeyStore: (any HostKeyStoreProtocol)? = nil
+        hostKeyStore injectedHostKeyStore: (any HostKeyStoreProtocol)? = nil,
+        snippetStore injectedSnippetStore: (any SnippetStoreProtocol)? = nil
     ) {
         let snapshots = snapshotStore ?? Self.defaultSnapshotStore()
         let book = AgentSessionBook()
@@ -270,6 +275,7 @@ final class SessionStore {
         self.agentBook = book
         self.hostKeyVerifier = verifier
         self.hostKeyStore = injectedHostKeyStore ?? keyStore
+        self.snippetStore = injectedSnippetStore ?? AppServices.shared.snippetStore
         // The RESOLVED store — the same instance the registry holds — so
         // snapshot dismissal/forget paths operate on live persistence even
         // when the caller relied on the default store.
@@ -394,7 +400,8 @@ final class SessionStore {
             onClose: { [weak self] id in
                 await self?.closeScene(id)
             },
-            trustStore: self
+            trustStore: self,
+            snippetStore: snippetStore
         )
         sceneModels[descriptorID] = model
         model.onReconnect = { [weak self] in

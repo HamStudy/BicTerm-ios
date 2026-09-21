@@ -203,7 +203,7 @@ final class ConnectionsModel {
     // MARK: DEBUG UI-test hooks
     //
     // Launch-argument contracts used by BicTermUITests (DEBUG builds only):
-    //   --uitest-reset          wipe connections + re-seed fixture keys
+    //   --uitest-reset          wipe connections + snippets + re-seed fixture keys
     //   --uitest-seed-keys      idempotently import fixture keys
     //   --uitest-demo           seed a demo 2-hop connection
     //   --uitest-demo-editor    demo connection + auto-open its editor
@@ -229,6 +229,7 @@ final class ConnectionsModel {
 
         if arguments.contains("--uitest-reset") || arguments.contains("--uitest-unavailable-connection") {
             await resetConnections()
+            await resetSnippets()
             await seedFixtureKeys()
         } else if arguments.contains("--uitest-seed-keys") {
             await seedFixtureKeys()
@@ -293,6 +294,16 @@ final class ConnectionsModel {
                     try? await services.passwordStore.deletePassword(for: tag)
                 }
             }
+        }
+    }
+
+    /// Snippets persist in the app container across UI-test launches;
+    /// `--uitest-reset` wipes them so every suite starts from a known
+    /// empty store (snippet suites re-create exactly what they need).
+    private func resetSnippets() async {
+        let all = (try? await snippetStore.loadSnippets()) ?? []
+        for snippet in all {
+            try? await snippetStore.deleteSnippet(id: snippet.id)
         }
     }
 
