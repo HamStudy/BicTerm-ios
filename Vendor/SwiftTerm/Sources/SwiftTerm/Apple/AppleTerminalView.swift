@@ -1325,7 +1325,16 @@ extension TerminalView {
     // "k=v:k2=v2;URL"
     func urlAndParamsFrom(payload: String) -> (String, [String:String])?
     {
-        let split = payload.split(separator: ";", maxSplits: Int.max, omittingEmptySubsequences: false)
+        // BICTERM-PATCH hunk 14: split at the FIRST semicolon only, so a
+        // params-prefixed payload like "id=example;https://example.com/a;b"
+        // keeps the complete URI (semicolons are legal URI characters).
+        // Matches Terminal.parseHyperlinkPayload's single-split. Inherent
+        // grammar limitation: a bare semicolon-containing URI WITHOUT the
+        // params separator ("https://example.com/a;b") remains ambiguous —
+        // the first semicolon is always treated as the separator, which
+        // no single-split parser can avoid; emitters must send the
+        // (possibly empty) params field: `OSC 8 ; ; URI ST`.
+        let split = payload.split(separator: ";", maxSplits: 1, omittingEmptySubsequences: false)
         if split.count > 1 {
             let pairs = split[0].split(separator: ":")
             var params: [String:String] = [:]

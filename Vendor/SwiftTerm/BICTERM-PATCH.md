@@ -427,3 +427,77 @@ bare Home/End/meta+b deliveries).
 
 Reapply hunk 12 with hunks 1-11. The hunk touches only
 `Sources/SwiftTerm/iOS/iOSTerminalView.swift` (`pressesBegan`).
+
+### Hunk 13 — touch-type-aware link activation (`iOS/iOSTerminalView.swift`)
+
+Touch devices have no hover, so under the default `.hover`
+`linkHighlightMode` a finger or Pencil tap could never activate a link:
+`singleTap` resolves through `linkForClick`, whose `.hover` visibility
+gate requires a prior hover highlight (`linkHighlightRange`), which only
+pointer/trackpad hover produces. The hunk keeps the default `.hover`
+mode and the indirect-pointer path EXACTLY as upstream, and adds a
+direct-touch path:
+
+- `TouchTypeTapGestureRecognizer` (new class, internal): a
+  `UITapGestureRecognizer` subclass that captures the first
+  `UITouch.TouchType` in `touchesBegan` and retains it through
+  target-action dispatch — `touchesEnded` can run before the handler,
+  so the type is cleared only on consumption
+  (`consumeCapturedTouchType()`) or recognizer `reset()`. A later touch
+  never overwrites the first capture.
+- `setupGestures` installs the subclass for the single-tap recognizer
+  (same target/action, same failure requirements).
+- `singleTap` consults the captured type FIRST: `.direct` (finger) or
+  `.pencil` taps resolve explicit AND implicit links at the tap point
+  through the new `linkForDirectTouch(at:)` — which mirrors
+  `linkForClick` minus the highlight-mode visibility gate and always
+  allows the implicit-detection fallback — and call
+  `requestOpenLink`. `.indirectPointer` (trackpad/mouse) taps and taps
+  of unknown provenance (a plain `UITapGestureRecognizer`, or the
+  captured type already consumed) keep the existing hover-gated
+  `linkForClick` path untouched.
+
+The host's `requestOpenLink` delegate remains the only activation
+surface; the fork adds no policy (the app confirms before opening).
+
+Tests: `Tests/SwiftTermTests/BicTermLinkTests.swift` — direct and Pencil
+taps activate explicit and implicit links with NO hover highlight (and
+a params-prefixed semicolon URI round-trips complete),
+indirect-pointer taps stay hover-gated (no activation without a hover
+highlight, activation with one), and the captured type clears on both
+consumption and `reset()`. UIKit-only tests require an iOS test
+destination; host `swift test` runs the shared parser tests.
+
+Reapply hunk 13 with hunks 1-12. The hunk touches only
+`Sources/SwiftTerm/iOS/iOSTerminalView.swift` (recognizer class,
+`setupGestures`, `singleTap`, `linkForDirectTouch`).
+
+### Hunk 14 — semicolon-safe OSC 8 payload parsing (`Apple/AppleTerminalView.swift`)
+
+`urlAndParamsFrom(payload:)` split the OSC 8 payload on EVERY semicolon
+(`maxSplits: Int.max`) and returned `split[1]`, so a params-prefixed
+payload like `id=example;https://example.com/a;b` truncated the URI at
+its first semicolon (`https://example.com/a`) — semicolons are legal
+URI characters. The hunk splits ONCE (`maxSplits: 1,
+omittingEmptySubsequences: false`), matching
+`Terminal.parseHyperlinkPayload`'s existing single-split, so the
+complete URI survives; the params parsing is unchanged.
+
+Inherent grammar limitation (not fixable by any single-split parser):
+the OSC 8 grammar is `OSC 8 ; params ; URI ST`, and the payload this
+function receives is `params;URI`. A bare semicolon-containing URI
+sent WITHOUT the params separator (`OSC 8 ; https://example.com/a;b`)
+is indistinguishable from `params;URI` — the first semicolon is always
+treated as the separator, so the tail after it becomes the URI.
+Emitters must send the (possibly empty) params field:
+`OSC 8 ; ; URI ST`. `BicTermLinkTests.testUrlAndParamsFromBareSemicolonUriRemainsAmbiguous`
+pins this documented behavior.
+
+Tests: `Tests/SwiftTermTests/BicTermLinkTests.swift` — the
+params-prefixed payload keeps the complete URI plus metadata,
+empty-params payloads parse, no-separator payloads return nil, and the
+ambiguous bare-URI behavior is pinned.
+
+Reapply hunk 14 with hunks 1-13. The hunk touches only
+`Sources/SwiftTerm/Apple/AppleTerminalView.swift`
+(`urlAndParamsFrom`).

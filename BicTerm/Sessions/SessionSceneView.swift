@@ -182,6 +182,13 @@ struct SessionSceneView: View {
         )) { request in
             PasswordPromptView(request: request, presenter: store.passwordPresenter)
         }
+        .sheet(item: linkRequestSheetBinding) { request in
+            TerminalLinkConfirmationSheet(
+                request: request,
+                onOpen: { model.confirmLinkOpen() },
+                onCancel: { model.cancelLinkConfirmation() }
+            )
+        }
     }
 
     // MARK: - Chrome
@@ -420,6 +427,14 @@ struct SessionSceneView: View {
             set: { presented in
                 if !presented { model.cancelTrustPrompt() }
             }
+        )
+    }
+
+    /// Swipe-down on the link sheet is a cancel: it sends nothing.
+    private var linkRequestSheetBinding: Binding<TerminalLinkRequest?> {
+        Binding(
+            get: { model.pendingLinkRequest },
+            set: { if $0 == nil { model.cancelLinkConfirmation() } }
         )
     }
 

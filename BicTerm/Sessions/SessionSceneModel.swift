@@ -318,6 +318,46 @@ final class SessionSceneModel: Identifiable {
         notificationCoordinator?.dismissBanner(for: sceneID)
     }
 
+    // MARK: - Link confirmation (OSC 8 / implicit)
+
+    /// Immutable link-open request from a terminal tap (fork hunk 13
+    /// surfaces direct finger/Pencil activation); nil when no
+    /// confirmation is pending.
+    private(set) var pendingLinkRequest: TerminalLinkRequest?
+
+    /// Opener used by ``confirmLinkOpen()``; nil (production) uses the
+    /// system opener. Injectable for tests.
+    var linkOpener: (@MainActor (URL) -> Void)?
+
+    /// A terminal tap surfaced a link: present the confirmation sheet.
+    /// The request is immutable from here on — the sheet renders exactly
+    /// what the terminal reported.
+    func presentLinkConfirmation(_ request: TerminalLinkRequest) {
+        guard !isClosed else { return }
+        pendingLinkRequest = request
+    }
+
+    /// Cancel (or swipe-down) dismisses the sheet and sends nothing.
+    func cancelLinkConfirmation() {
+        pendingLinkRequest = nil
+    }
+
+    /// The ONLY path to the system opener: requires the pending request
+    /// AND a policy-approved http(s) URL. Consumes the request.
+    func confirmLinkOpen() {
+        guard let request = pendingLinkRequest else { return }
+        pendingLinkRequest = nil
+        guard TerminalLinkPolicy.evaluate(request.link).canOpen,
+              let url = URL(string: request.link)
+        else { return }
+        let opener = linkOpener ?? Self.openLinkThroughSystem
+        opener(url)
+    }
+
+    private static func openLinkThroughSystem(_ url: URL) {
+        UIApplication.shared.open(url)
+    }
+
     #if DEBUG
     /// DEBUG-only: record a denial so UI suites can prove the right
     /// branch fired without depending on the global `Osc52ClipboardSink`

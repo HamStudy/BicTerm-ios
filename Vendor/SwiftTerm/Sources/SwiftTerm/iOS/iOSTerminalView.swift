@@ -1032,6 +1032,22 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
         return result
     }
 
+    // BICTERM-PATCH hunk 13: link resolution for direct finger/Pencil
+    // taps. Mirrors `linkForClick` but skips the highlight-mode visibility
+    // gate (touch devices have no hover, so `.hover` would never admit a
+    // link) and always allows the implicit-detection fallback.
+    private func linkForDirectTouch(at position: Position) -> (link: String, params: [String:String])? {
+        guard let match = terminal.linkMatch(at: .buffer(position), mode: .explicitAndImplicit) else {
+            return nil
+        }
+        if match.isExplicit,
+           let payload = payloadString(at: position),
+           let (url, params) = urlAndParamsFrom(payload: payload) {
+            return (url, params)
+        }
+        return (match.text, [:])
+    }
+
     @objc func singleTap (_ gestureRecognizer: UITapGestureRecognizer)
     {
         if isFirstResponder {
@@ -1042,6 +1058,19 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
             }
 
             let tapHit = calculateTapHit(gesture: gestureRecognizer).grid
+            // BICTERM-PATCH hunk 13: touch devices have no hover, so
+            // direct finger/Pencil taps resolve explicit AND implicit
+            // links at the tap point without requiring a prior hover
+            // highlight. Indirect-pointer (trackpad/mouse) taps and taps
+            // of unknown provenance keep the hover-gated path below,
+            // exactly as upstream.
+            if let typeTap = gestureRecognizer as? TouchTypeTapGestureRecognizer,
+               let touchType = typeTap.consumeCapturedTouchType(),
+               touchType == .direct || touchType == .pencil,
+               let result = linkForDirectTouch(at: tapHit) {
+                terminalDelegate?.requestOpenLink(source: self, link: result.link, params: result.params)
+                return
+            }
             if let result = linkForClick(at: tapHit, hasCommandModifier: commandActive) {
                 terminalDelegate?.requestOpenLink(source: self, link: result.link, params: result.params)
                 return
@@ -1379,7 +1408,10 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
         longPress.minimumPressDuration = 0.7
         addGestureRecognizer(longPress)
         
-        let singleTap = UITapGestureRecognizer (target: self, action: #selector(singleTap(_:)))
+        // BICTERM-PATCH hunk 13: the touch-type-capturing subclass so
+        // singleTap can distinguish finger/Pencil taps from
+        // indirect-pointer taps.
+        let singleTap = TouchTypeTapGestureRecognizer(target: self, action: #selector(singleTap(_:)))
         addGestureRecognizer(singleTap)
         
         let doubleTap = UITapGestureRecognizer (target: self, action: #selector(doubleTap(_:)))
@@ -3634,6 +3666,39 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
 
     public func iTermContent (source: Terminal, content: ArraySlice<UInt8>) {
         terminalDelegate?.iTermContent(source: self, content: content)
+    }
+}
+
+// BICTERM-PATCH hunk 13: tap recognizer that remembers whether the tap
+// came from a direct touch (finger/Pencil) or an indirect pointer
+// (trackpad/mouse). UIKit does not surface the touch type to the tap
+// target-action, and touch devices have no hover, so `singleTap` needs
+// the distinction to activate links from fingers without requiring a
+// prior hover highlight (the default `.hover` linkHighlightMode keeps
+// indirect-pointer behavior exactly as upstream). The captured type is
+// retained through target-action dispatch — `touchesEnded` can run
+// before the handler — and cleared only on consumption or `reset()`.
+class TouchTypeTapGestureRecognizer: UITapGestureRecognizer {
+    var capturedTouchType: UITouch.TouchType?
+
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
+        // Only the first touch of the gesture decides the type; a later
+        // finger must not overwrite it.
+        if capturedTouchType == nil {
+            capturedTouchType = touches.first?.type
+        }
+        super.touchesBegan(touches, with: event)
+    }
+
+    override func reset() {
+        capturedTouchType = nil
+        super.reset()
+    }
+
+    /// Reads and clears the captured type (handler consumption).
+    func consumeCapturedTouchType() -> UITouch.TouchType? {
+        defer { capturedTouchType = nil }
+        return capturedTouchType
     }
 }
 

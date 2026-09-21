@@ -31,6 +31,10 @@ final class TerminalSurface: NSObject, @preconcurrency TerminalViewDelegate {
     private let osc52ToastPresenter: (@MainActor (Osc52ClipboardToast) -> Void)?
     /// Hook for DEBUG denial observability; production keeps this nil.
     private let osc52DenialRecorder: (@MainActor (Osc52ClipboardDenial) -> Void)?
+    /// Hook to surface the link-confirmation request on the scene's
+    /// model (fork hunk 13 activation). Nil in previews/tests that
+    /// construct the surface directly.
+    private let linkPresenter: (@MainActor (TerminalLinkRequest) -> Void)?
     /// OSC 777 routing target for this surface; nil keeps the terminal on
     /// SwiftTerm's built-in (no-op delegate) 777 dispatch.
     private let notificationCoordinator: TerminalNotificationCoordinator?
@@ -51,6 +55,7 @@ final class TerminalSurface: NSObject, @preconcurrency TerminalViewDelegate {
         osc52Settings: Osc52ClipboardSettings = Osc52ClipboardSettings(),
         osc52ToastPresenter: (@MainActor (Osc52ClipboardToast) -> Void)? = nil,
         osc52DenialRecorder: (@MainActor (Osc52ClipboardDenial) -> Void)? = nil,
+        linkPresenter: (@MainActor (TerminalLinkRequest) -> Void)? = nil,
         notificationCoordinator: TerminalNotificationCoordinator? = nil,
         notificationSceneID: String = "",
         sourceLabel: String = ""
@@ -60,6 +65,7 @@ final class TerminalSurface: NSObject, @preconcurrency TerminalViewDelegate {
         self.osc52Settings = osc52Settings
         self.osc52ToastPresenter = osc52ToastPresenter
         self.osc52DenialRecorder = osc52DenialRecorder
+        self.linkPresenter = linkPresenter
         self.notificationCoordinator = notificationCoordinator
         self.notificationSceneID = notificationSceneID
         self.sourceLabel = sourceLabel
@@ -166,7 +172,12 @@ final class TerminalSurface: NSObject, @preconcurrency TerminalViewDelegate {
     func rangeChanged(source: TerminalView, startY: Int, endY: Int) {}
 
     func requestOpenLink(source: TerminalView, link: String, params: [String: String]) {
-        // Links open only after explicit user confirmation (v1: never).
+        // Fork hunk 13 surfaces direct finger/Pencil taps (and
+        // hover-gated pointer clicks) here: forward the immutable
+        // request into scene state. The scene presents the host-visible
+        // confirmation sheet, and only an explicit Open on a
+        // policy-approved http(s) URL reaches the system opener.
+        linkPresenter?(TerminalLinkRequest(link: link, params: params))
     }
 
     func clipboardCopy(source: TerminalView, content: Data) {
@@ -332,6 +343,7 @@ final class TerminalViewCache {
             osc52Settings: osc52Settings,
             osc52ToastPresenter: { toast in model.presentOsc52Toast(toast) },
             osc52DenialRecorder: { reason in model.recordOsc52Denial(reason) },
+            linkPresenter: { request in model.presentLinkConfirmation(request) },
             notificationCoordinator: notificationCoordinator,
             notificationSceneID: model.sceneID,
             sourceLabel: sourceLabel

@@ -75,6 +75,11 @@ struct TerminalRepresentable: UIViewRepresentable {
     var notificationCoordinator: TerminalNotificationCoordinator? = nil
     /// Scene identity the OSC 777 handler reports events under.
     var notificationSceneID: String = ""
+    /// Optional link-confirmation routing for this surface (fork hunk 13
+    /// activation). Production session surfaces route through the
+    /// cache-owned scene model; the DEBUG preview leaves it nil (no
+    /// scene to confirm in — links never auto-navigate).
+    var linkPresenter: (@MainActor (TerminalLinkRequest) -> Void)? = nil
 
     func makeCoordinator() -> TerminalCoordinator {
         TerminalCoordinator(parent: self)
@@ -193,8 +198,15 @@ final class TerminalCoordinator: NSObject, TerminalViewDelegate {
     func rangeChanged(source: TerminalView, startY: Int, endY: Int) {}
 
     func requestOpenLink(source: TerminalView, link: String, params: [String: String]) {
-        // Links are only opened after explicit user confirmation in a
-        // later task; ignore for now (never auto-navigate).
+        // Forward the immutable request; the presenter (scene state in
+        // production session surfaces) owns the confirmation policy.
+        // Nil (the DEBUG preview) confirms nothing and opens nothing —
+        // links never auto-navigate.
+        let presenter = parent.linkPresenter
+        let request = TerminalLinkRequest(link: link, params: params)
+        MainActor.assumeIsolated {
+            presenter?(request)
+        }
     }
 
     // OSC 52 clipboard WRITE from the remote: legacy byte-level callback,
