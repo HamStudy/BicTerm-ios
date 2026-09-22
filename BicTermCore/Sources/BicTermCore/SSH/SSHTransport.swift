@@ -37,6 +37,16 @@ public actor SSHTransport {
     // Internal (not private) so the UDS entry points in SSHTransport+UDS.swift
     // can reach them — Swift `private` is file-scoped.
     let hostKeyVerifier: HostKeyVerifier
+    /// Connect-scoped key resolution for THIS transport's connect action,
+    /// installed by ``SSHSessionTransportFactory`` (one scope per
+    /// constructed transport). Invalidated at every ``connect(to:cols:rows:)``
+    /// and UDS-connect exit — the moment the connect settles, the key
+    /// handle is no longer needed by NIOSSH auth. Internal (not private)
+    /// for the same file-scope reason as ``hostKeyVerifier``.
+    /// ``connectExecOnly(to:)`` deliberately does NOT invalidate it: herdr
+    /// callers pass their own already-scoped providers whose span
+    /// (probe → bridge → relay) must outlive a single connect.
+    let connectKeyScope: ConnectScopedKeyResolution?
     private let authenticationKeyProvider: any SSHAuthenticationKeyProvider
     private let passwordStore: any PasswordStoring
     private let passwordPrompt: (any SSHPasswordPrompting)?
@@ -76,9 +86,11 @@ public actor SSHTransport {
         passwordPrompt: (any SSHPasswordPrompting)? = nil,
         hardwareKeysEnabledByDefault: @escaping @Sendable () -> Bool = { true },
         keyOfferResolver: KeyOfferResolver = KeyOfferResolver(),
-        metadataProvider: any SSHKeyMetadataProviding = DefaultSSHKeyMetadataProvider()
+        metadataProvider: any SSHKeyMetadataProviding = DefaultSSHKeyMetadataProvider(),
+        connectKeyScope: ConnectScopedKeyResolution? = nil
     ) {
         self.hostKeyVerifier = hostKeyVerifier
+        self.connectKeyScope = connectKeyScope
         self.authenticationKeyProvider = authenticationKeyProvider
         self.passwordStore = passwordStore
         self.passwordPrompt = passwordPrompt
@@ -90,22 +102,36 @@ public actor SSHTransport {
     }
 
     public func connect(to connection: Connection, cols: Int, rows: Int) async throws(SSHTransportError) {
-        guard cols > 0, rows > 0 else { throw .channelDenied }
-        await tearDown()
-        let userAuth = try await userAuthDelegate(for: connection)
-        let serverAuth = VerifyingHostKeyDelegate(
-            host: connection.host,
-            port: connection.port,
-            verifier: hostKeyVerifier
-        )
-        try await openSessionAndActivate(
-            SessionSetup(cols: cols, rows: rows, userAuth: userAuth, serverAuth: serverAuth)
-        ) { bootstrap in
-            try await bootstrap
-                .channelOption(ChannelOptions.socket(SocketOptionLevel(IPPROTO_TCP), TCP_NODELAY), value: 1)
-                .connect(host: connection.host, port: connection.port)
-                .get()
+        guard cols > 0, rows > 0 else {
+            await connectKeyScope?.invalidate()
+            throw .channelDenied
         }
+        await tearDown()
+        do {
+            let userAuth = try await userAuthDelegate(for: connection)
+            let serverAuth = VerifyingHostKeyDelegate(
+                host: connection.host,
+                port: connection.port,
+                verifier: hostKeyVerifier
+            )
+            try await openSessionAndActivate(
+                SessionSetup(cols: cols, rows: rows, userAuth: userAuth, serverAuth: serverAuth)
+            ) { bootstrap in
+                try await bootstrap
+                    .channelOption(ChannelOptions.socket(SocketOptionLevel(IPPROTO_TCP), TCP_NODELAY), value: 1)
+                    .connect(host: connection.host, port: connection.port)
+                    .get()
+            }
+        } catch {
+            // The connect action settled (failed): the key handle is no
+            // longer needed by NIOSSH auth — drop the scope's resolved key
+            // so nothing outlives the failed connect.
+            await connectKeyScope?.invalidate()
+            throw error
+        }
+        // Settled (success): same drop — one evaluation per connect intent,
+        // so a reconnect (fresh makeTransport = fresh scope) re-evaluates.
+        await connectKeyScope?.invalidate()
     }
 
     /// Channel-less establish: TCP dial + SSH handshake + authentication,

@@ -21,19 +21,28 @@ extension SSHTransport {
         cols: Int,
         rows: Int
     ) async throws(SSHTransportError) {
-        guard cols > 0, rows > 0 else { throw .channelDenied }
-        await tearDown()
-        let userAuth = try await userAuthDelegate(for: connection)
-        let serverAuth = VerifyingHostKeyDelegate(
-            host: connection.host,
-            port: connection.port,
-            verifier: hostKeyVerifier
-        )
-        try await openSessionAndActivate(
-            SessionSetup(cols: cols, rows: rows, userAuth: userAuth, serverAuth: serverAuth)
-        ) { bootstrap in
-            let address = try SocketAddress(unixDomainSocketPath: path)
-            return try await bootstrap.connect(to: address).get()
+        guard cols > 0, rows > 0 else {
+            await connectKeyScope?.invalidate()
+            throw .channelDenied
         }
+        await tearDown()
+        do {
+            let userAuth = try await userAuthDelegate(for: connection)
+            let serverAuth = VerifyingHostKeyDelegate(
+                host: connection.host,
+                port: connection.port,
+                verifier: hostKeyVerifier
+            )
+            try await openSessionAndActivate(
+                SessionSetup(cols: cols, rows: rows, userAuth: userAuth, serverAuth: serverAuth)
+            ) { bootstrap in
+                let address = try SocketAddress(unixDomainSocketPath: path)
+                return try await bootstrap.connect(to: address).get()
+            }
+        } catch {
+            await connectKeyScope?.invalidate()
+            throw error
+        }
+        await connectKeyScope?.invalidate()
     }
 }

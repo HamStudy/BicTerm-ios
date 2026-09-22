@@ -11,6 +11,12 @@ import Foundation
 /// chain down in reverse hop order via the built transport.
 public actor JumpTerminalTransport: TerminalTransport {
     private let builder: JumpChainBuilder
+    /// Connect-scoped key resolution for THIS transport's connect action,
+    /// installed by ``SSHSessionTransportFactory`` (one scope per
+    /// constructed transport). Invalidated at every ``connect(to:cols:rows:)``
+    /// exit — after ALL hop handshakes and the destination session open
+    /// settle, the key handle is no longer needed by NIOSSH auth.
+    private let connectKeyScope: ConnectScopedKeyResolution?
     private var inner: (any SSHSessionTransport)?
     private var bridgeTask: Task<Void, Never>?
     private let outputContinuation: AsyncStream<Data>.Continuation
@@ -21,8 +27,9 @@ public actor JumpTerminalTransport: TerminalTransport {
         get async { await inner?.closeReason ?? .connectionLost }
     }
 
-    public init(builder: JumpChainBuilder) {
+    public init(builder: JumpChainBuilder, connectKeyScope: ConnectScopedKeyResolution? = nil) {
         self.builder = builder
+        self.connectKeyScope = connectKeyScope
         let (stream, continuation) = AsyncStream.makeStream(
             of: Data.self,
             bufferingPolicy: .bufferingNewest(32)
@@ -32,11 +39,18 @@ public actor JumpTerminalTransport: TerminalTransport {
     }
 
     public func connect(to connection: Connection, cols: Int, rows: Int) async throws(TransportError) {
-        guard !isClosed, inner == nil else { throw .channelDenied }
+        guard !isClosed, inner == nil else {
+            await connectKeyScope?.invalidate()
+            throw .channelDenied
+        }
         let built: any SSHSessionTransport
         do {
             built = try await builder.build(connection: connection, cols: cols, rows: rows)
         } catch {
+            // The connect action settled (failed): every hop handshake is
+            // done and the key handle is no longer needed — drop the
+            // scope's resolved key so nothing outlives the failed connect.
+            await connectKeyScope?.invalidate()
             // Conditional cast: swift-frontend 6.4 SILGen assertion on catch-as in typed-throws funcs; preserves the typed-vs-fallback clause split.
             if let error = error as? JumpError {
                 throw Self.transportError(error)
@@ -46,6 +60,7 @@ public actor JumpTerminalTransport: TerminalTransport {
         }
         guard !isClosed else {
             await built.close()
+            await connectKeyScope?.invalidate()
             throw .channelDenied
         }
         inner = built
@@ -62,6 +77,10 @@ public actor JumpTerminalTransport: TerminalTransport {
             }
             outputContinuation.finish()
         }
+        // Settled (success): all hop handshakes AND the destination
+        // session open completed — same drop, so a reconnect (a fresh
+        // makeTransport = a fresh scope) re-evaluates.
+        await connectKeyScope?.invalidate()
     }
 
     public func send(_ bytes: Data) async throws(TransportError) {

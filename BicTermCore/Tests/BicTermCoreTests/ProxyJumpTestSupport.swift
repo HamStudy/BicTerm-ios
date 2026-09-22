@@ -32,6 +32,31 @@ final class RecordingKeyProvider: SSHAuthenticationKeyProvider, @unchecked Senda
     }
 }
 
+// MARK: - Counting key provider
+
+/// Forwarding decorator over any ``SSHAuthenticationKeyProvider`` that
+/// counts underlying calls per key reference (lock-confined): proves how
+/// many times a connect scope reached the UNDERLYING (biometric-gated)
+/// resolution, while real keys still flow through untouched.
+final class CountingKeyProvider: SSHAuthenticationKeyProvider, @unchecked Sendable {
+    private let underlying: any SSHAuthenticationKeyProvider
+    private let lock = NSLock()
+    private var callCounts: [String: Int] = [:]
+
+    init(underlying: any SSHAuthenticationKeyProvider) {
+        self.underlying = underlying
+    }
+
+    func authenticationPrivateKey(with reference: String, reason: String) async throws -> NIOSSHPrivateKey {
+        lock.withLock { callCounts[reference, default: 0] += 1 }
+        return try await underlying.authenticationPrivateKey(with: reference, reason: reason)
+    }
+
+    func callCount(for reference: String) -> Int {
+        lock.withLock { callCounts[reference] ?? 0 }
+    }
+}
+
 // MARK: - Fixture helpers
 
 enum JumpFixture {

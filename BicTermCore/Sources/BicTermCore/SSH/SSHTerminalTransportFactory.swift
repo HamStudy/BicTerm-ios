@@ -38,25 +38,40 @@ public struct SSHSessionTransportFactory: TerminalTransportFactory {
         guard connection.type == .ssh else {
             throw .protocolUnavailable(protocolID: connection.type.rawValue)
         }
+        // One key-resolution scope per constructed transport = per connect
+        // action: every handshake of ONE connect (direct, or every hop +
+        // destination of a jump chain) shares a single underlying key
+        // resolution — one biometric evaluation per connect intent. The
+        // factory itself is long-lived (SessionStore holds it across
+        // reconnects), so the scope is created HERE, per transport, and the
+        // transport invalidates it when its connect settles (success or
+        // failure): a reconnect is a fresh makeTransport = fresh scope =
+        // fresh evaluation.
+        let connectKeyScope = ConnectScopedKeyResolution()
+        let scopedKeyProvider = connectKeyScope.wrapping(authenticationKeyProvider)
         if connection.jumpChain.isEmpty {
             return SSHTransport(
                 hostKeyVerifier: hostKeyVerifier,
-                authenticationKeyProvider: authenticationKeyProvider,
+                authenticationKeyProvider: scopedKeyProvider,
+                passwordStore: passwordStore,
+                passwordPrompt: passwordPrompt,
+                hardwareKeysEnabledByDefault: hardwareKeysEnabledByDefault,
+                keyOfferResolver: keyOfferResolver,
+                metadataProvider: metadataProvider,
+                connectKeyScope: connectKeyScope
+            )
+        }
+        return JumpTerminalTransport(
+            builder: JumpChainBuilder(
+                hostKeyVerifier: hostKeyVerifier,
+                authenticationKeyProvider: scopedKeyProvider,
                 passwordStore: passwordStore,
                 passwordPrompt: passwordPrompt,
                 hardwareKeysEnabledByDefault: hardwareKeysEnabledByDefault,
                 keyOfferResolver: keyOfferResolver,
                 metadataProvider: metadataProvider
-            )
-        }
-        return JumpTerminalTransport(builder: JumpChainBuilder(
-            hostKeyVerifier: hostKeyVerifier,
-            authenticationKeyProvider: authenticationKeyProvider,
-            passwordStore: passwordStore,
-            passwordPrompt: passwordPrompt,
-            hardwareKeysEnabledByDefault: hardwareKeysEnabledByDefault,
-            keyOfferResolver: keyOfferResolver,
-            metadataProvider: metadataProvider
-        ))
+            ),
+            connectKeyScope: connectKeyScope
+        )
     }
 }
