@@ -156,6 +156,8 @@ private struct AppLockCoverView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(palette.accent)
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
                 .accessibilityIdentifier("applock-cover-unlock")
 
                 if context.model.state.authStatus == .unavailable {
@@ -165,6 +167,8 @@ private struct AppLockCoverView: View {
                         Text("Open Settings")
                             .font(typography.body)
                     }
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
                     .accessibilityIdentifier("applock-cover-recovery")
                 }
             }
