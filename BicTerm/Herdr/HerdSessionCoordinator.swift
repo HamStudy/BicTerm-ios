@@ -367,7 +367,7 @@ final class HerdSessionCoordinator {
         // Per-open caches (one liveConnector resolution per herd open):
         // every machine's connects and redials share one biometric key
         // resolution and one password prompt per destination tag.
-        let keyResolution = KeyResolutionCache()
+        let keyResolution = ConnectScopedKeyResolution()
         let passwordPrompts = PasswordPromptCache()
         return { connection, hostKeyVerifier in
             let verifier: HostKeyVerifier

@@ -1,6 +1,5 @@
 import BicTermCore
 import Foundation
-import NIOSSH
 import Observation
 
 /// One machine in the embedded client's endpoint catalog (plan herdr-embed
@@ -322,7 +321,7 @@ final class HerdrEmbedTransportCoordinator {
     /// device bug, one machine working and the other always failing,
     /// alternating). One resolution per key also means ONE biometric
     /// prompt per herd open instead of one per machine.
-    private let keyResolution = KeyResolutionCache()
+    private let keyResolution = ConnectScopedKeyResolution()
     /// One interactive password prompt per destination tag per bring-up,
     /// no matter how many carrier connects ask. Herdr paths inject no
     /// prompt source today, so this stays a nil passthrough until one is.
@@ -732,6 +731,11 @@ final class HerdrEmbedTransportCoordinator {
         }
         removeTransportDirectory()
         restoreCWD()
+        // Defense-in-depth: this coordinator is done, so its resolved
+        // keys must not survive it (the cache dies with the coordinator
+        // anyway; invalidation also fences any resolution still in
+        // flight against repopulating).
+        await keyResolution.invalidate()
     }
 
     /// Mid-run catalog re-seed (app config reload → embed patch 0008):
@@ -1065,63 +1069,5 @@ private final class EventSink: @unchecked Sendable {
             line = "bridge stopped unlinked=\(unlinked) relays=\(relaysTornDown)"
         }
         emit("\(label): \(line)")
-    }
-}
-
-/// Coalesces authentication-key reads for one bring-up (see the
-/// coordinator's `keyResolution`): the first read for a reference goes to
-/// the underlying provider, concurrent readers of the same reference
-/// await that one in-flight read, and later reads return the resolved
-/// key. The resolved `NIOSSHPrivateKey` is an opaque signing handle
-/// that already lives in memory for each connection's lifetime; sharing
-/// one instance across this bring-up's connections is the same exposure
-/// class, and it is what turns N concurrent biometric evaluations (one
-/// per machine) into ONE.
-actor KeyResolutionCache {
-    private var resolved: [String: NIOSSHPrivateKey] = [:]
-    private var inFlight: [String: Task<NIOSSHPrivateKey, any Error>] = [:]
-
-    nonisolated func wrapping(
-        _ underlying: any SSHAuthenticationKeyProvider
-    ) -> any SSHAuthenticationKeyProvider {
-        CoalescedKeyProvider(cache: self, underlying: underlying)
-    }
-
-    func key(
-        for reference: String,
-        reason: String,
-        underlying: any SSHAuthenticationKeyProvider
-    ) async throws -> NIOSSHPrivateKey {
-        if let key = resolved[reference] {
-            return key
-        }
-        if let task = inFlight[reference] {
-            return try await task.value
-        }
-        let task = Task {
-            try await underlying.authenticationPrivateKey(with: reference, reason: reason)
-        }
-        inFlight[reference] = task
-        do {
-            let key = try await task.value
-            resolved[reference] = key
-            inFlight[reference] = nil
-            return key
-        } catch {
-            inFlight[reference] = nil
-            throw error
-        }
-    }
-}
-
-private struct CoalescedKeyProvider: SSHAuthenticationKeyProvider {
-    let cache: KeyResolutionCache
-    let underlying: any SSHAuthenticationKeyProvider
-
-    func authenticationPrivateKey(
-        with reference: String,
-        reason: String
-    ) async throws -> NIOSSHPrivateKey {
-        try await cache.key(for: reference, reason: reason, underlying: underlying)
     }
 }
