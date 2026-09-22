@@ -124,6 +124,30 @@ public final class LoopbackPasswordSSHServer: @unchecked Sendable {
         }
     }
 
+    /// Opt-in `exec` drain mode: instead of replying immediately, the
+    /// handler DISCARDS stdin until the client's SSH EOF (write
+    /// half-close), then writes the canned response, exit-status 0, and
+    /// closes — the wire shape a real stdin-consuming remote command
+    /// takes, so streaming uploaders can round-trip against this
+    /// server. Captured when ``start(port:)`` binds (set it before
+    /// start); the drain shape needs the session child channel to
+    /// allow remote half-closure, which is applied with it. Default
+    /// false: the historical immediate-reply shape.
+    public var execDrainsStdin: Bool {
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            return execDrainsStdinStorage
+        }
+        set {
+            lock.lock()
+            execDrainsStdinStorage = newValue
+            lock.unlock()
+        }
+    }
+
+    private var execDrainsStdinStorage = false
+
     private func noteInboundConnection() {
         lock.lock()
         inboundChannelCount += 1
@@ -164,6 +188,7 @@ public final class LoopbackPasswordSSHServer: @unchecked Sendable {
         let password = offeredPassword
         let keyAuthentication = keyAuthentication
         let sessionChannelPolicy = sessionChannelPolicy
+        let execDrainsStdin = self.execDrainsStdin
 
         let bootstrap = ServerBootstrap(group: group)
             .serverChannelOption(.socketOption(.so_reuseaddr), value: 1)
@@ -196,8 +221,21 @@ public final class LoopbackPasswordSSHServer: @unchecked Sendable {
                                 return child.eventLoop.makeFailedFuture(TransportError.channelDenied)
                             }
                             return child.eventLoop.makeCompletedFuture {
+                                if execDrainsStdin {
+                                    // The drain shape replies on the client's
+                                    // SSH EOF, which NIOSSH surfaces as
+                                    // ChannelEvent.inputClosed only when the
+                                    // child channel allows remote half-closure.
+                                    try child.setOption(
+                                        ChannelOptions.allowRemoteHalfClosure,
+                                        value: true
+                                    )
+                                }
                                 try child.pipeline.syncOperations.addHandler(
-                                    EchoSessionHandler(execResponse: { [weak self] in self?.execResponse ?? "" })
+                                    EchoSessionHandler(
+                                        execResponse: { [weak self] in self?.execResponse ?? "" },
+                                        drainsStdin: execDrainsStdin
+                                    )
                                 )
                             }
                         }
@@ -296,9 +334,18 @@ private final class EchoSessionHandler: ChannelDuplexHandler, @unchecked Sendabl
     typealias OutboundOut = SSHChannelData
 
     private let execResponse: @Sendable () -> String
+    private let drainsStdin: Bool
+    /// Drain mode: an exec request arrived and the reply is deferred until
+    /// the client's SSH EOF. EventLoop-confined (all handler callbacks run
+    /// on the channel's loop).
+    private var execPending = false
 
-    init(execResponse: @escaping @Sendable () -> String) {
+    init(
+        execResponse: @escaping @Sendable () -> String,
+        drainsStdin: Bool = false
+    ) {
         self.execResponse = execResponse
+        self.drainsStdin = drainsStdin
     }
 
     func userInboundEventTriggered(context: ChannelHandlerContext, event: Any) {
@@ -318,20 +365,40 @@ private final class EchoSessionHandler: ChannelDuplexHandler, @unchecked Sendabl
             if exec.wantReply {
                 context.triggerUserOutboundEvent(ChannelSuccessEvent(), promise: nil)
             }
-            let response = execResponse()
-            var buffer = context.channel.allocator.buffer(capacity: response.utf8.count)
-            buffer.writeString(response)
-            context.writeAndFlush(wrapOutboundOut(SSHChannelData(type: .channel, data: .byteBuffer(buffer))), promise: nil)
-            context.triggerUserOutboundEvent(SSHChannelRequestEvent.ExitStatus(exitStatus: 0), promise: nil)
-            // Wire order: data, exit-status, EOF, close (RFC 4254 §5.3).
-            context.channel.close(mode: .output, promise: nil)
-            context.close(promise: nil)
+            if drainsStdin {
+                // Drain shape: hold the reply until the client's SSH EOF
+                // arrives as ChannelEvent.inputClosed.
+                execPending = true
+            } else {
+                finishExec(context)
+            }
         default:
-            context.fireUserInboundEventTriggered(event)
+            if let channelEvent = event as? ChannelEvent,
+               channelEvent == .inputClosed,
+               execPending {
+                execPending = false
+                finishExec(context)
+            } else {
+                context.fireUserInboundEventTriggered(event)
+            }
         }
     }
 
+    /// The exec round-trip's terminal half: canned stdout, exit-status 0,
+    /// EOF, close (RFC 4254 §5.3 wire order).
+    private func finishExec(_ context: ChannelHandlerContext) {
+        let response = execResponse()
+        var buffer = context.channel.allocator.buffer(capacity: response.utf8.count)
+        buffer.writeString(response)
+        context.writeAndFlush(wrapOutboundOut(SSHChannelData(type: .channel, data: .byteBuffer(buffer))), promise: nil)
+        context.triggerUserOutboundEvent(SSHChannelRequestEvent.ExitStatus(exitStatus: 0), promise: nil)
+        context.channel.close(mode: .output, promise: nil)
+        context.close(promise: nil)
+    }
+
     func channelRead(context: ChannelHandlerContext, data: NIOAny) {
+        // Drain mode discards stdin (the reply is deferred to EOF).
+        guard !execPending else { return }
         let message = unwrapInboundIn(data)
         guard message.type == .channel, case .byteBuffer = message.data else { return }
         context.writeAndFlush(data, promise: nil)

@@ -4,10 +4,12 @@ import NIOSSH
 
 /// An established SSH connection that opens non-PTY exec channels.
 /// ``SSHTransport`` (direct) and the jump-chain carrier conform, so herdr
-/// consumers get exec channels regardless of hops. Each consumer (probe,
-/// bridge, installer step) establishes its own connection — gateways that
-/// permit one session channel per connection lifetime make a shared
-/// connection unusable (see ``SSHTransport/connectExecOnly(to:)``).
+/// consumers get exec channels regardless of hops. Consumers ride
+/// shared-first carriers within a consumer group (see
+/// ``SharedExecCarrierPool``): one connection carries the group's execs
+/// by default, and a DEDICATED connection is the fallback when a
+/// channel-budget gateway denies the channel open (one key evaluation
+/// per connect intent).
 public protocol SSHExecCapableConnection: Sendable {
     /// Opens a NEW non-PTY exec session channel on the established
     /// connection (same posture as ``SSHTransport/openExecChannel(command:)``).

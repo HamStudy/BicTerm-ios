@@ -385,15 +385,18 @@ final class HerdrEndpointConnectorInstallTests: XCTestCase {
             SSHTestFixture.makeConnection(),
             installProgress: { progress.append($0) }
         )
-        // Connection-per-consumer: the full consented install flow used
-        // exactly FIVE connections before the bridge — probe(1), the
-        // installer's three per-step connections (prepare/upload/
-        // commit), and the re-probe(1).
+        // SHARED-FIRST: the full consented install flow used exactly
+        // THREE connections before the bridge — probe(1), the
+        // installer's ONE shared carrier (prepare/upload/commit all ride
+        // it; the pre-pool shape was three per-step connections), and
+        // the re-probe(1). The budget-gateway fallback shape (denial →
+        // per-step dedicated) is pinned in `SharedExecInstallPathTests`
+        // against the lifetime-1 loopback fixture.
         XCTAssertEqual(
             fixtureLogAppendage("hop1.log", from: logOffset)
                 .components(separatedBy: "Accepted publickey").count - 1,
-            5,
-            "probe, three install-step connections, and the re-probe — one per consumer"
+            3,
+            "probe, the install's shared carrier, and the re-probe"
         )
         let carrier = try await probed.carrierFactory()
         await carrier.close()
@@ -431,12 +434,12 @@ final class HerdrEndpointConnectorInstallTests: XCTestCase {
             "the probe and the re-probe both ran on the sshd"
         )
         XCTAssertTrue(appendage.contains("tee "), "the binary upload ran on the sshd")
-        // Plus the bridge-factory connection resolved above: 5 + 1 = 6
+        // Plus the bridge-factory connection resolved above: 3 + 1 = 4
         // authentications in total.
         XCTAssertEqual(
             appendage.components(separatedBy: "Accepted publickey").count - 1,
-            6,
-            "probe, three install steps, re-probe, and bridge-factory connections — one per consumer"
+            4,
+            "probe, the install's shared carrier, re-probe, and bridge-factory connections"
         )
     }
 }

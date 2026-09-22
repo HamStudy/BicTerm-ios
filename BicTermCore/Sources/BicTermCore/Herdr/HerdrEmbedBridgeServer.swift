@@ -42,23 +42,22 @@ public enum HerdrEmbedBridgeEvent: Sendable, Equatable {
 /// Serves the host side of herdr's `bicterm-transport` seam (plan
 /// herdr-embed T5): binds ONE unix-domain-socket listener at
 /// `{HERDR_EMBED_TRANSPORT_DIR}/{profile id}.sock` and relays every
-/// accepted connection to a FRESH `remote-client-bridge` exec channel
-/// on a FRESH channel-less SSH connection resolved from the injected
-/// factory — the per-relay connection shape that survives strict
-/// gateways.
+/// accepted connection to a `remote-client-bridge` exec channel over
+/// the server's ``SharedExecCarrierPool``.
 ///
-/// **Why per-relay connections** (the design gap the Oracle review
-/// flagged, the unit-5 fix): CoderSSHGW permits exactly ONE session
-/// channel open per connection LIFETIME (exec channels are
-/// session-type on the wire, RFC 4254). Today's prior shape — one
-/// long-lived carrier with N exec channels opened across its life —
-/// means the embedded client's FIRST supervisor reconnect (a new local
-/// dial → a second exec on the same carrier) is refused on such
-/// gateways. Each dial here resolves the factory into a brand-new
-/// connection, opens the bridge exec on THAT connection as its only
-/// session channel, and closes the connection at relay end. The
-/// re-auth cost per redial is deliberate; it is the only shape that
-/// works on CoderSSHGW-class gateways.
+/// **Carrier contract (shared-first with dedicated fallback).** The
+/// server wraps its injected factory in a ``SharedExecCarrierPool``:
+/// sequential relays ride ONE lazily-dialed shared SSH connection (the
+/// efficient default — one key evaluation per connect intent), and a
+/// channel-budget gateway's denial of the shared carrier's channel open
+/// flips the pool sticky-dedicated so every later relay dials its OWN
+/// connection and opens the bridge exec on it as that connection's only
+/// session channel. That dedicated shape is exactly what strict gateways
+/// (CoderSSHGW: ONE session channel open per connection LIFETIME — exec
+/// channels are session-type on the wire, RFC 4254) require, so the
+/// embedded client's supervisor reconnect keeps working there; the
+/// re-auth cost per dedicated dial is the deliberate fallback price.
+/// ``stop()`` closes the pool alongside the relay teardown.
 ///
 /// Relay shape mirrors `Fixtures/bin/uds-forward.py` (the fixture
 /// precedent) natively: full-duplex, half-close on EOF, both directions
@@ -81,16 +80,16 @@ public enum HerdrEmbedBridgeEvent: Sendable, Equatable {
 /// then resolve the same relative path against that cwd.
 public actor HerdrEmbedBridgeServer {
     private let socketPath: String
-    /// Resolved PER RELAY (not once at start): each accepted local
-    /// connection calls this factory once, opens the bridge exec on the
-    /// resolved connection, and closes the connection at relay end.
-    /// Reuses ``HerdrInstallConnectionFactory`` (same typealias shape —
-    /// `@Sendable () async throws -> any SSHExecCapableConnection`) so
-    /// every per-step exec consumer (installer + bridge) shares one
-    /// generic-untyped-throws factory type; the connector's typed
+    /// Shared-first exec carriers for this server's relays, dialed from
+    /// the injected factory (``HerdrInstallConnectionFactory`` — the same
+    /// typealias shape the installer uses, so every exec consumer shares
+    /// one generic-untyped-throws factory type; the connector's typed
     /// `HerdrEndpointConnectorError` flows into a `carrierLost` event
-    /// instead of being force-mapped at this seam.
-    private let connectionFactory: HerdrInstallConnectionFactory
+    /// instead of being force-mapped at this seam). Sequential relays
+    /// ride ONE lazily-dialed shared connection; a budget-gateway denial
+    /// flips it sticky-dedicated (per-relay connections). Closed by
+    /// ``stop()``.
+    private let pool: SharedExecCarrierPool
     private let command: String
     private let commandIsInvalid: Bool
 
@@ -116,7 +115,7 @@ public actor HerdrEmbedBridgeServer {
         sessionName: String? = nil
     ) {
         self.socketPath = socketPath
-        self.connectionFactory = connectionFactory
+        self.pool = SharedExecCarrierPool(dial: connectionFactory)
         // BuildError is unreachable for a probe-verified path plus a
         // grammar-checked session name; keep the failure observable
         // instead of trapping in an actor init.
@@ -183,9 +182,12 @@ public actor HerdrEmbedBridgeServer {
 
     /// Idempotent teardown with receipts: stops accepting, cancels and
     /// closes every live relay's local channel (so inbound iterators wake
-    /// from a real EOF instead of dangling), and unlinks the socket path
-    /// when it still exists. The per-relay SSH connections are owned by
-    /// their own relay tasks (and torn down on every relay exit arm).
+    /// from a real EOF instead of dangling), closes the carrier pool
+    /// (shared-mode lease closes are releases, so the pool is what tears
+    /// the shared SSH connection down), and unlinks the socket path when
+    /// it still exists. Relays that own dedicated carriers (the
+    /// budget-gateway fallback era) keep them across the pool close —
+    /// their own relay-exit arms close them.
     public func stop() async {
         guard !didStop else { return }
         didStop = true
@@ -206,6 +208,7 @@ public actor HerdrEmbedBridgeServer {
         for task in liveTasks {
             task.cancel()
         }
+        await pool.close()
 
         let unlinked = Self.unlinkIfPresent(socketPath)
         onEvent(.stopped(unlinked: unlinked, relaysTornDown: liveRelays.count))
@@ -251,22 +254,23 @@ public actor HerdrEmbedBridgeServer {
         identifier: ObjectIdentifier
     ) async {
         defer {
-            // The relay owns its SSH connection; close on EVERY exit
-            // path (EOF, error, cancel, stop()) — the prior design
-            // pattern, now applied to the connection held inside this
-            // scope rather than to a long-lived carrier field.
+            // The LOCAL channel closes on EVERY exit path (EOF, error,
+            // cancel, stop()); the carrier lease's own close lives in the
+            // relay's exit arms below.
             child.channel.close(promise: nil)
             Task { await self.endRelay(child, identifier: identifier) }
         }
 
-        // Resolve the per-relay factory into a FRESH channel-less
-        // connection. A factory throw fails THIS relay only — the
-        // listener survives and a subsequent dial retries fresh (the
-        // the client's supervisor redial drives recovery; the listener
-        // is never stopped by one bad dial).
+        // Lease the carrier pool: shared-first (this relay rides the
+        // server's shared connection when one is established), with the
+        // pool's dedicated fallback on a budget-gateway denial. A lease
+        // failure fails THIS relay only — the listener survives and a
+        // subsequent dial retries fresh (the client's supervisor redial
+        // drives recovery; the listener is never stopped by one bad
+        // dial).
         let carrier: any SSHExecCapableConnection
         do {
-            carrier = try await connectionFactory()
+            carrier = try await pool.lease()
         } catch {
             discardUnrelayedChild(child)
             if !didStop {
@@ -279,8 +283,10 @@ public actor HerdrEmbedBridgeServer {
         do {
             session = try await carrier.openExecChannel(command: command)
         } catch {
-            // Owner-close: the relay connection is no longer usable,
-            // close it regardless of why the exec open failed.
+            // Owner-close: in the pool's dedicated era the lease owns its
+            // carrier, so close it regardless of why the exec open
+            // failed; in the shared era this is a release (the pool
+            // manages the shared carrier's health).
             await carrier.close()
             discardUnrelayedChild(child)
             if !didStop {
@@ -375,10 +381,10 @@ public actor HerdrEmbedBridgeServer {
         }
 
         await session.close()
-        // Per-relay ownership-close: every exit arm (clean EOF, relay
-        // cancellation, exec failure) tears down the relay's SSH
-        // connection — the next dial resolves a fresh one from the
-        // factory.
+        // Lease close: release-only in the pool's shared era (the shared
+        // carrier survives for the next relay); owner-close of this
+        // relay's dedicated carrier in the fallback era — every exit arm
+        // (clean EOF, relay cancellation, exec failure) honors it.
         await carrier.close()
         onEvent(.relayEnded(clean: clean, bytesUp: totals.up, bytesDown: totals.down))
     }

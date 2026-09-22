@@ -51,8 +51,8 @@ final class HerdrRemoteInstallerTests: XCTestCase {
 
     /// `SSHExecCapableConnection` double wrapping another connection:
     /// records every exec command attempted on it and its `close()`
-    /// receipts — the per-step connection-discipline probe (one exec per
-    /// connection, closed by the installer).
+    /// receipts — the per-step connection-discipline probe (which execs
+    /// rode which connection, closed by whom).
     private final class RecordingConnection: SSHExecCapableConnection, @unchecked Sendable {
         private let underlying: any SSHExecCapableConnection
         private let lock = NSLock()
@@ -83,6 +83,41 @@ final class HerdrRemoteInstallerTests: XCTestCase {
             lock.lock()
             defer { lock.unlock() }
             return closeReceipts
+        }
+    }
+
+    /// Channel-budget gateway model at the factory seam: permits exactly
+    /// `budget` exec-channel opens on the wrapped connection over its
+    /// LIFETIME, refusing every later open with typed `.channelDenied`
+    /// (the CoderSSHGW shape — the signal ``SharedExecCarrierPool``
+    /// reacts to).
+    private final class BudgetedConnection: SSHExecCapableConnection, @unchecked Sendable {
+        private let underlying: any SSHExecCapableConnection
+        private let budget: Int
+        private let lock = NSLock()
+        private var opens = 0
+
+        init(underlying: any SSHExecCapableConnection, budget: Int) {
+            self.underlying = underlying
+            self.budget = budget
+        }
+
+        func openExecChannel(command: String) async throws(TransportError) -> SSHExecSession {
+            guard consumeOpen() else { throw .channelDenied }
+            return try await underlying.openExecChannel(command: command)
+        }
+
+        // NSLock is unavailable from async contexts; the lock-confined
+        // decision lives in the sync helper.
+        private func consumeOpen() -> Bool {
+            lock.lock()
+            defer { lock.unlock() }
+            opens += 1
+            return opens <= budget
+        }
+
+        func close() async {
+            await underlying.close()
         }
     }
 
@@ -341,9 +376,14 @@ final class HerdrRemoteInstallerTests: XCTestCase {
         XCTAssertEqual(factory.calls, 0, "a throwing factory establishes nothing")
     }
 
-    /// The prepare step's connection fails to open its exec channel: the
-    /// installer must close THAT connection and resolve no more — the
-    /// failed step is exactly one factory call.
+    /// The prepare step's exec open is refused everywhere: the shared
+    /// carrier's denial flips the installer's pool sticky-dedicated (the
+    /// budget-fallback pin — a SECOND connection is dialed for the
+    /// retried open), whose open is refused too, and the typed prepare
+    /// failure surfaces. Both resolved connections are closed (the
+    /// shared one retired by the pool, the dedicated one owner-closed by
+    /// the failed step's lease) and no third connection is resolved —
+    /// the upload and commit steps never ran.
     func testPrepareStepFailureClosesItsConnectionAndResolvesNoMore() async throws {
         try XCTSkipUnless(
             FileManager.default.fileExists(atPath: Self.fixtureBinaryURL.path),
@@ -364,15 +404,32 @@ final class HerdrRemoteInstallerTests: XCTestCase {
         } catch let error as HerdrRemoteInstallerError {
             XCTAssertEqual(error, .remotePrepareFailed("failed to open the script exec channel"))
         }
-        XCTAssertEqual(factory.calls, 1, "only the prepare step's connection was resolved")
+        XCTAssertEqual(
+            factory.calls, 2,
+            "the shared carrier plus its dedicated fallback — the denial redialed; no step after prepare ran"
+        )
         let connections = factory.connections
-        XCTAssertEqual(connections.first?.closes, 1, "the failed step's connection must be closed by the installer")
+        XCTAssertEqual(connections.count, 2)
+        XCTAssertEqual(
+            connections[0].closes, 1,
+            "the denied shared carrier was retired (closed) by the pool"
+        )
+        XCTAssertEqual(
+            connections[1].closes, 1,
+            "the failed step's lease owner-closed its dedicated fallback connection"
+        )
     }
 
-    /// The upload step's connection fails to open its exec channel after a
-    /// REAL prepare: both resolved connections must be closed by the
-    /// installer (prepare's by its own step, upload's by the failure
-    /// path), and no third connection is resolved.
+    /// The upload step's exec open is denied by a budget gateway after a
+    /// REAL prepare (the shared carrier is wrapped with a one-channel
+    /// lifetime budget — the CoderSSHGW shape at the factory seam): the
+    /// pool retires the shared carrier, flips sticky-dedicated, and dials
+    /// the upload its OWN connection (the budget-fallback pin); the
+    /// dedicated fallback's open is refused too, so the typed upload
+    /// failure surfaces. Both resolved connections are closed (the
+    /// shared one retired by the pool on the denial, the dedicated one
+    /// owner-closed by the failed step's lease), and no third connection
+    /// is resolved — the commit step never ran.
     func testUploadStepFailureClosesEveryResolvedConnection() async throws {
         let fm = FileManager.default
         try XCTSkipUnless(
@@ -396,7 +453,13 @@ final class HerdrRemoteInstallerTests: XCTestCase {
         let factory = RecordingInstallFactory { index -> any SSHExecCapableConnection in
             switch index {
             case 0:
-                return try await Self.makeFreshFixtureTransport()
+                // The shared carrier: a REAL fixture transport behind a
+                // one-channel lifetime budget (the budget gateway) —
+                // prepare succeeds on it, the upload's open is denied.
+                return BudgetedConnection(
+                    underlying: try await Self.makeFreshFixtureTransport(),
+                    budget: 1
+                )
             default:
                 return RefusingConnection()
             }
@@ -412,12 +475,32 @@ final class HerdrRemoteInstallerTests: XCTestCase {
         } catch let error as HerdrRemoteInstallerError {
             XCTAssertEqual(error, .uploadFailed("failed to open the upload exec channel"))
         }
-        XCTAssertEqual(factory.calls, 2, "prepare and upload resolved; the commit step was never reached")
+        XCTAssertEqual(
+            factory.calls, 2,
+            "the shared carrier plus the upload's dedicated fallback; the commit step was never reached"
+        )
         let connections = factory.connections
         XCTAssertEqual(connections.count, 2)
-        XCTAssertEqual(connections[0].commands, ["/bin/sh -s"], "the prepare connection ran exactly its one script exec")
-        XCTAssertEqual(connections[0].closes, 1, "the prepare connection was closed by its own step")
-        XCTAssertEqual(connections[1].closes, 1, "the failed upload connection must be closed by the installer")
+        XCTAssertEqual(
+            connections[0].commands.count, 2,
+            "prepare succeeded on the shared carrier and the upload's open was ATTEMPTED (and denied) there first"
+        )
+        XCTAssertEqual(
+            connections[0].commands.first, "/bin/sh -s",
+            "the prepare step ran its script exec on the shared carrier"
+        )
+        XCTAssertTrue(
+            connections[0].commands.last?.hasPrefix("tee '") == true,
+            "the denied upload attempt was the tee stream command: \(connections[0].commands)"
+        )
+        XCTAssertEqual(
+            connections[0].closes, 1,
+            "the denied shared carrier was retired (closed) by the pool"
+        )
+        XCTAssertEqual(
+            connections[1].closes, 1,
+            "the failed upload's lease owner-closed its dedicated fallback connection"
+        )
     }
 
     // MARK: - Pin table
@@ -535,9 +618,13 @@ final class HerdrRemoteInstallerTests: XCTestCase {
     /// gitignored dir under `Fixtures/run/` → file present, executable,
     /// sha256 equal to the pin, and a probe-style candidate check with an
     /// overridden search path finding a compatible herdr there. The
-    /// install rides a recording factory — one FRESH channel-less
-    /// connection per exec step, each running exactly one exec, closed by
-    /// the installer.
+    /// install rides a recording factory — SHARED-FIRST: the three exec
+    /// steps (prepare/upload/commit) ride ONE lazily-dialed shared
+    /// connection, each exec opening on it, and the pool's close at
+    /// install exit is the single close (the budget-gateway fallback
+    /// shape — denial → per-step dedicated — is pinned in
+    /// `SharedExecInstallPathTests` against the lifetime-1 loopback
+    /// fixture).
     func testOfflineFixtureRoundTripInstallsPinnedBinary() async throws {
         let fm = FileManager.default
         let binaryURL = Self.fixtureBinaryURL
@@ -580,29 +667,27 @@ final class HerdrRemoteInstallerTests: XCTestCase {
             progress: { progress.append($0) }
         )
 
-        // Connection-per-step: exactly three factory resolutions — prepare,
-        // upload, commit — each a FRESH connection running exactly its one
-        // exec, each closed by the installer.
-        XCTAssertEqual(factory.calls, 3, "the factory is resolved once per exec step")
+        // SHARED-FIRST: exactly ONE factory resolution for the whole
+        // install — the pool's lazily-dialed shared carrier carries the
+        // prepare, upload, and commit execs (the pre-pool shape resolved
+        // one FRESH connection per step: 3 dials).
+        XCTAssertEqual(factory.calls, 1, "the three exec steps rode ONE shared connection")
         let connections = factory.connections
-        XCTAssertEqual(connections.count, 3)
+        XCTAssertEqual(connections.count, 1)
         XCTAssertEqual(
-            Set(connections.map { ObjectIdentifier($0) }).count, 3,
-            "each exec step must get a FRESH connection"
+            connections[0].commands.count, 3,
+            "prepare, upload, and commit each opened their exec on the shared carrier"
         )
-        XCTAssertEqual(connections[0].commands, ["/bin/sh -s"], "the prepare step runs exactly its script exec")
-        XCTAssertEqual(connections[1].commands.count, 1, "the upload step runs exactly one exec")
+        XCTAssertEqual(connections[0].commands[0], "/bin/sh -s", "the prepare step runs exactly its script exec")
         XCTAssertTrue(
-            connections[1].commands.first?.hasPrefix("tee '") == true,
-            "the upload step's exec is the tee stream command: \(connections[1].commands)"
+            connections[0].commands[1].hasPrefix("tee '"),
+            "the upload step's exec is the tee stream command: \(connections[0].commands)"
         )
-        XCTAssertEqual(connections[2].commands, ["/bin/sh -s"], "the commit step runs exactly its script exec")
-        for (step, connection) in connections.enumerated() {
-            XCTAssertEqual(
-                connection.closes, 1,
-                "step \(step + 1)'s connection must be closed exactly once by the installer"
-            )
-        }
+        XCTAssertEqual(connections[0].commands[2], "/bin/sh -s", "the commit step runs exactly its script exec")
+        XCTAssertEqual(
+            connections[0].closes, 1,
+            "the pool's close at install exit closed the shared carrier exactly once"
+        )
 
         // 3. Remote-reported destination, file present, executable bit,
         //    byte-identical to the pin.

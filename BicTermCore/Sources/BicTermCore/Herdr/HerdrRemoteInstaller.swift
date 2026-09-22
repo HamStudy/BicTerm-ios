@@ -33,12 +33,15 @@ public enum HerdrRemoteInstallerError: Error, Equatable, Sendable {
 /// upload/commit), delivered in order. Purely informational.
 public typealias HerdrInstallProgress = @Sendable (String) -> Void
 
-/// Establishes one FRESH exec-capable connection per install exec step.
-/// Deliberately a generic (untyped) throwing closure rather than one typed
-/// over ``HerdrRemoteInstallerError``: the caller's establish failures are
+/// Establishes one FRESH exec-capable connection per call. Deliberately a
+/// generic (untyped) throwing closure rather than one typed over
+/// ``HerdrRemoteInstallerError``: the caller's establish failures are
 /// not installer-domain failures, so the installer maps them onto the
 /// failing step's typed case instead of forcing the caller into this error
-/// domain.
+/// domain. The installer wraps the factory in a ``SharedExecCarrierPool``
+/// as its dial: the exec steps share ONE connection by default, and the
+/// factory is re-resolved per connection only when a channel-budget
+/// gateway's denial flips the pool to dedicated fallbacks.
 public typealias HerdrInstallConnectionFactory = @Sendable () async throws -> any SSHExecCapableConnection
 
 /// Result of one successful remote install.
@@ -70,11 +73,16 @@ public struct HerdrRemoteInstallOutcome: Sendable, Equatable {
 ///    and `mv`s it into place (upstream's
 ///    `remote_install_commit_script`).
 ///
-/// CONNECTION-PER-STEP: each exec step resolves its OWN connection from
-/// the injected ``HerdrInstallConnectionFactory`` and the installer closes
-/// it when the step ends (success or failure) — gateways that permit one
-/// session-channel open per connection lifetime see exactly one exec per
-/// connection.
+/// SHARED-FIRST CARRIERS: the installer wraps the injected
+/// ``HerdrInstallConnectionFactory`` in a ``SharedExecCarrierPool`` for
+/// the whole install — the three exec steps ride ONE lazily-dialed
+/// shared connection by default (one key evaluation per connect
+/// intent), and a channel-budget gateway's denial of the shared
+/// carrier's channel open flips the pool sticky-dedicated so every later
+/// step dials its OWN connection (the Coder-era per-step shape,
+/// recovered exactly where the budget gateway requires it). Install
+/// success is preserved on both paths; the pool is closed at every exit
+/// of ``install(using:probe:installDir:progress:)``.
 ///
 /// Scope (stage A): the MISSING-binary case only — the caller passes a
 /// ``HerdrProbe.Result`` whose `foundPath` is nil; a probe that found any
@@ -113,16 +121,19 @@ public struct HerdrRemoteInstaller: Sendable {
     }
 
     /// Installs the pinned herdr release binary on the remote host, keyed
-    /// off `probe`'s normalized platform. Each exec step (prepare, upload,
-    /// commit) resolves its OWN fresh connection from `factory` and the
-    /// installer closes it when the step ends — on every success and
-    /// failure path, no connection leaks.
+    /// off `probe`'s normalized platform. The three exec steps (prepare,
+    /// upload, commit) lease the installer's internal
+    /// ``SharedExecCarrierPool`` — they share ONE connection by default,
+    /// and a budget-gateway denial flips the pool to per-step dedicated
+    /// connections. The pool is closed on every success and failure path
+    /// of this method, no connection leaks.
     ///
     /// - Parameters:
     ///   - factory: establishes a FRESH exec-capable connection (direct or
-    ///     jump-chained) per call. Resolved once per exec step; the
-    ///     installer owns and closes each resolved connection. A thrown
-    ///     error maps onto the failing step's typed case.
+    ///     jump-chained) per call — the pool's dial. Resolved lazily for
+    ///     the shared carrier and once per dedicated fallback; the pool
+    ///     owns and closes each resolved connection. A thrown error maps
+    ///     onto the failing step's typed case.
     ///   - probe: the preflight probe result for the same host. Must be a
     ///     missing-binary result (`foundPath == nil`).
     ///   - installDir: directory the `herdr` binary is installed into
@@ -134,7 +145,7 @@ public struct HerdrRemoteInstaller: Sendable {
     /// - Returns: the remote-reported destination path and the pinned
     ///   target that was installed.
     public func install(
-        using factory: HerdrInstallConnectionFactory,
+        using factory: @escaping HerdrInstallConnectionFactory,
         probe: HerdrProbe.Result,
         installDir: String = HerdrRemoteInstaller.defaultInstallDir,
         progress: HerdrInstallProgress? = nil
@@ -164,10 +175,42 @@ public struct HerdrRemoteInstaller: Sendable {
             throw .checksumMismatch(target: target, expected: asset.sha256, actual: actualSHA)
         }
 
+        // The install's exec-connection source: shared-first, dedicated
+        // on a budget-gateway denial. Closed at every exit below.
+        let pool = SharedExecCarrierPool(dial: factory)
+        do {
+            let outcome = try await runInstallSteps(
+                pool: pool,
+                target: target,
+                binary: binary,
+                installDir: installDir,
+                progress: progress
+            )
+            await pool.close()
+            return outcome
+        } catch {
+            await pool.close()
+            // Force cast: swift-frontend 6.4 SILGen assertion on catch-as
+            // in typed-throws funcs; do-block error type is exactly
+            // HerdrRemoteInstallerError.
+            throw error as! HerdrRemoteInstallerError
+        }
+    }
+
+    /// The prepare/upload/commit sequence over the install's pool. The
+    /// pool's close-at-every-exit lives in
+    /// ``install(using:probe:installDir:progress:)``.
+    private func runInstallSteps(
+        pool: SharedExecCarrierPool,
+        target: HerdrReleasePins.Target,
+        binary: Data,
+        installDir: String,
+        progress: HerdrInstallProgress?
+    ) async throws(HerdrRemoteInstallerError) -> HerdrRemoteInstallOutcome {
         progress?("preparing the remote install directory")
         let prepare = try await Self.runScript(
             Self.prepareScript(installDir: installDir),
-            using: factory,
+            pool: pool,
             failure: { .remotePrepareFailed($0) }
         )
         guard case .exited(status: 0) = prepare.termination else {
@@ -184,12 +227,12 @@ public struct HerdrRemoteInstaller: Sendable {
         }
 
         progress?("uploading the binary (\(binary.count) bytes)")
-        try await Self.uploadBinary(binary, toTmpPath: paths.tmpPath, using: factory)
+        try await Self.uploadBinary(binary, toTmpPath: paths.tmpPath, pool: pool)
 
         progress?("committing the install")
         let commit = try await Self.runScript(
             Self.commitScript(tmpPath: paths.tmpPath, destPath: paths.destPath),
-            using: factory,
+            pool: pool,
             failure: { .commitFailed($0) }
         )
         guard case .exited(status: 0) = commit.termination else {
@@ -275,22 +318,23 @@ public struct HerdrRemoteInstaller: Sendable {
         let termination: SSHExecTermination
     }
 
-    /// Runs one `/bin/sh -s` script over a fresh exec channel on a FRESH
-    /// factory-resolved connection — upstream's `sh_output` posture: the
-    /// script arrives on the channel's stdin, SSH EOF closes it,
-    /// stdout/stderr are read bounded, and the exit status comes from
-    /// ``SSHExecSession/termination()``. The connection is closed when the
-    /// step ends, on every success and failure path. Factory and
-    /// channel-open and stdin failures map onto the caller's typed case
-    /// through `failure`.
+    /// Runs one `/bin/sh -s` script over a fresh exec channel on a LEASE
+    /// of the install's ``SharedExecCarrierPool`` — upstream's `sh_output`
+    /// posture: the script arrives on the channel's stdin, SSH EOF closes
+    /// it, stdout/stderr are read bounded, and the exit status comes from
+    /// ``SSHExecSession/termination()``. The lease is closed when the
+    /// step ends (release-only in the pool's shared era; owner-close of the
+    /// lease's dedicated carrier after a budget-gateway fallback), on
+    /// every success and failure path. Lease and channel-open and stdin
+    /// failures map onto the caller's typed case through `failure`.
     private static func runScript(
         _ script: String,
-        using factory: HerdrInstallConnectionFactory,
+        pool: SharedExecCarrierPool,
         failure: @Sendable (String) -> HerdrRemoteInstallerError
     ) async throws(HerdrRemoteInstallerError) -> ScriptOutcome {
         let connection: any SSHExecCapableConnection
         do {
-            connection = try await factory()
+            connection = try await pool.lease()
         } catch {
             throw failure("failed to establish the install connection: \(error)")
         }
@@ -330,20 +374,22 @@ public struct HerdrRemoteInstaller: Sendable {
     }
 
     /// Streams `binary` into `tee '<tmp>'` over a fresh exec channel on a
-    /// FRESH factory-resolved connection — upstream's upload step: chunked
-    /// writes paced by the session's flow-control gate, SSH EOF to
-    /// terminate `tee`, stderr drained concurrently (an exec channel whose
-    /// stderr nobody reads eventually stalls — see ``SSHExecSession``). The
-    /// connection is closed when the step ends, on every success and
-    /// failure path.
+    /// LEASE of the install's ``SharedExecCarrierPool`` — upstream's
+    /// upload step: chunked writes paced by the session's flow-control
+    /// gate, SSH EOF to terminate `tee`, stderr drained concurrently (an
+    /// exec channel whose stderr nobody reads eventually stalls — see
+    /// ``SSHExecSession``). The lease is closed when the step ends
+    /// (release-only in the pool's shared era; owner-close of the lease's
+    /// dedicated carrier after a budget-gateway fallback), on every
+    /// success and failure path.
     private static func uploadBinary(
         _ binary: Data,
         toTmpPath tmpPath: String,
-        using factory: HerdrInstallConnectionFactory
-    ) async throws(HerdrRemoteInstallerError) {
+        pool: SharedExecCarrierPool
+    ) async throws(HerdrRemoteInstallerError) -> Void {
         let connection: any SSHExecCapableConnection
         do {
-            connection = try await factory()
+            connection = try await pool.lease()
         } catch {
             throw .uploadFailed("failed to establish the install connection: \(error)")
         }

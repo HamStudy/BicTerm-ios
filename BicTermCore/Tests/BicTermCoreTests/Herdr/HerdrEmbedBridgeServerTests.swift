@@ -6,12 +6,19 @@ import XCTest
 
 /// T5 transport-injection proof at the CORE boundary: the bridge server
 /// serves herdr's `bicterm-transport` host socket and relays local-socket
-/// bytes to a fresh `remote-client-bridge` exec channel on the established
-/// carrier — direct (12222) and jump-chained (12222 → 12223) — against the
-/// prebuilt herdr 0.9.1 fixture servers. The local side of each test is a
-/// plain POSIX UDS client standing in for the embedded Rust client (same
-/// dial the embed crate performs); the E2E with the REAL embedded TUI
-/// lives in the app suite (`HerdrEmbedTransportTests`).
+/// bytes to a `remote-client-bridge` exec channel — direct (12222) and
+/// jump-chained (12222 → 12223) — against the prebuilt herdr 0.9.1
+/// fixture servers. The local side of each test is a plain POSIX UDS
+/// client standing in for the embedded Rust client (same dial the embed
+/// crate performs); the E2E with the REAL embedded TUI lives in the app
+/// suite (`HerdrEmbedTransportTests`).
+///
+/// Carrier contract (shared-first): the server wraps its factory in a
+/// ``SharedExecCarrierPool``, so sequential relays ride ONE shared SSH
+/// connection; a channel-budget gateway's denial of the shared carrier's
+/// open flips the pool sticky-dedicated, and every later relay dials its
+/// OWN connection (the Coder-era per-relay shape, recovered exactly
+/// where the budget gateway requires it).
 ///
 /// Teardown receipts are asserted, not assumed: every relay reports its
 /// byte counts, stop() unlinks the socket path, and the second stop() is
@@ -136,17 +143,19 @@ final class HerdrEmbedBridgeServerTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: stale))
     }
 
-    /// Per-relay proof against the CoderSSHGW emulation fixture
+    /// Budget-fallback proof against the CoderSSHGW emulation fixture
     /// (``LoopbackPasswordSSHServer(.lifetimeTotal(1))``: ONE session
     /// channel open per connection LIFETIME, the strict-gateway shape).
-    /// Two sequential local dials → two relays → TWO SSH connections
-    /// (NOT one carried-over connection with a second exec) → two exec
-    /// channels, each as the only session channel on its connection.
-    /// This is the regression that proves the unit-5 design fix: the
-    /// prior "one long-lived carrier with N exec channels over its
-    /// life" shape would be refused on the second dial (budget
-    /// exhausted on the carrier's second session channel open).
-    func testTwoSequentialDialsAgainstLifetimeBudgetOneEachResolveAFreshConnection() async throws {
+    /// Two sequential local dials: the FIRST relay rides the pool's
+    /// shared carrier (its exec is that connection's only lifetime slot);
+    /// the SECOND relay's exec open on the shared carrier is DENIED, so
+    /// the pool retires it, flips sticky-dedicated, and dials the relay
+    /// its OWN connection — the relay still opens and round-trips. Two
+    /// dials and two SSH connections total: the Coder guarantee (one
+    /// session channel per connection lifetime, never a second exec on
+    /// a spent carrier) is preserved by the FALLBACK, not by dialing
+    /// dedicated up front.
+    func testSequentialDialsAgainstLifetimeBudgetOneFallBackToDedicatedOnDenial() async throws {
         let (key, acceptedBlob) = try Self.makeClientKeyStatic()
         let server = LoopbackPasswordSSHServer(
             username: Self.lifetimeUsername,
@@ -159,15 +168,23 @@ final class HerdrEmbedBridgeServerTests: XCTestCase {
         // The canned exec reply — the same shape every relay drains.
         server.execResponse = "hello-from-lifetime-1\n"
 
+        // Dial-counting factory: pins WHICH relay triggered a dial (the
+        // shared establish at relay 1, the dedicated fallback at relay 2).
+        let dialCount = AtomicCounter()
+        let countingFactory: @Sendable () async throws -> any SSHExecCapableConnection = {
+            await dialCount.increment()
+            return try await Self.makeExecOnlyLoopbackConnection(
+                port: port,
+                key: key,
+                server: server
+            )
+        }
+
         let socketPath = try Self.bridgeSocketPath(profile: "cgwtwodials0000000000000000000")
         let log = eventLog!
         let bridge = HerdrEmbedBridgeServer(
             socketPath: socketPath,
-            connectionFactory: { try await Self.makeExecOnlyLoopbackConnection(
-                port: port,
-                key: key,
-                server: server
-            )},
+            connectionFactory: countingFactory,
             executablePath: "/usr/bin/herdr",
             sessionName: nil
         )
@@ -175,9 +192,10 @@ final class HerdrEmbedBridgeServerTests: XCTestCase {
         try await bridge.start()
         addTeardownBlock { await bridge.stop() }
 
-        // FIRST DIAL: relay round-trips the canned exec reply, the
-        // bridge's exec-open is this connection's ONLY session channel
-        // (budget slot #1), the connection closes at relay end.
+        // FIRST DIAL: rides the pool's shared carrier — the bridge's
+        // exec-open is this connection's ONLY session channel (budget
+        // slot #1), and the shared-mode lease close at relay end is a
+        // RELEASE (the carrier survives for the next relay).
         let firstClient = try UnixStreamClient.connect(path: socketPath)
         try firstClient.writeAll(Data("ping\n".utf8))
         let firstBytes: Data
@@ -205,15 +223,21 @@ final class HerdrEmbedBridgeServerTests: XCTestCase {
         let firstRelayEnd = await log.firstRelayEnd(timeout: .seconds(10))
         XCTAssertNotNil(firstRelayEnd, "first relay ended with a typed receipt")
 
-        // Wait for the first connection to be torn down — the bridge's
-        // exec-session close + per-relay connection close cascade
-        // before the second dial, otherwise the server's
-        // authenticatedConnectionCount would still be 1 mid-flight.
-        try await Self.waitForConnectionCount(server: server, expected: 1, timeout: .seconds(5))
+        // Wait for the first relay's tail (session close + release-only
+        // lease close) before the second dial, so the dial-count
+        // assertion cannot conflate an in-flight shared establish with
+        // the fallback dial.
+        let dialsAfterFirst = await dialCount.value
+        XCTAssertEqual(
+            dialsAfterFirst, 1,
+            "the first relay rode the pool's ONE shared dial"
+        )
 
-        // SECOND DIAL: the factory resolves a SECOND connection; the
+        // SECOND DIAL: the shared carrier's lifetime budget refuses the
+        // exec open — the pool retires the carrier, flips
+        // sticky-dedicated, and dials this relay its OWN connection; the
         // bridge exec opens as that connection's only session channel
-        // (budget slot #1 of the new connection); the canned reply
+        // (budget slot #1 of the new connection) and the canned reply
         // round-trips.
         let secondClient = try UnixStreamClient.connect(path: socketPath)
         defer { secondClient.close() }
@@ -221,21 +245,27 @@ final class HerdrEmbedBridgeServerTests: XCTestCase {
         let secondBytes = try await secondClient.readUntil(needle: "hello-from-lifetime-1", timeout: .seconds(10))
         XCTAssertTrue(
             secondBytes.contains(Data("hello-from-lifetime-1".utf8)),
-            "second relay saw the canned reply on a fresh connection"
+            "second relay saw the canned reply on its dedicated fallback connection"
         )
         secondClient.close()
 
-        // The load-bearing assertion (per-relay design proof): each dial
-        // resolved a DISTINCT connection — two SSH connections, two exec
+        // The load-bearing assertion (budget-fallback design proof): the
+        // second dial succeeded only because the denial moved it onto a
+        // FRESH dedicated connection — two SSH connections, two exec
         // channels, each as its connection's ONLY session channel under
-        // a `.lifetimeTotal(1)` budget. A regression to the prior
-        // "one carrier with N exec channels" shape would re-use the
-        // first connection's session channel and the SECOND exec open
-        // would be refused as `NIOSSHError.channelSetupRejected`.
+        // a `.lifetimeTotal(1)` budget. A regression that re-opens on the
+        // spent shared carrier would be refused as
+        // `NIOSSHError.channelSetupRejected` and the second relay would
+        // fail instead of round-tripping.
         try await Self.waitForConnectionCount(server: server, expected: 2, timeout: .seconds(5))
         XCTAssertEqual(
             server.authenticatedConnectionCount, 2,
-            "two dials resolved two distinct connections — the per-relay design"
+            "the denial fallback resolved the second relay a dedicated connection"
+        )
+        let dials = await dialCount.value
+        XCTAssertEqual(
+            dials, 2,
+            "exactly two dials: the shared establish and the denial's dedicated fallback"
         )
 
         // Each successful relay also produces a `.relayEnded` receipt —
@@ -249,23 +279,37 @@ final class HerdrEmbedBridgeServerTests: XCTestCase {
         )
     }
 
-    /// T6 regression (the prior shape): with per-relay connections, a
-    /// stale held carrier close no longer applies — the bridge server
-    /// owns no carrier. The redial scenario still applies, but the
-    /// proof now lives in the two-dials tests above (each dial
-    /// resolves a FRESH factory into a brand-new connection; the first
-    /// connection is independent of the second).
-    func testPerRelayFactoryResolvesFreshConnectionForEachAcceptedDial() async throws {
+    /// SHARED-FIRST (the efficient default): two sequential dials ride ONE
+    /// shared carrier — the first relay's dial establishes the pool's
+    /// shared connection, its release-only lease close at relay end keeps
+    /// that carrier alive, and the second relay's exec opens on it without
+    /// another dial (the pre-pool shape dialed per relay: 2 dials). Both
+    /// relays round-trip the real herdr welcome frame.
+    func testSequentialRelaysShareOneCarrierConnection() async throws {
         try Self.requireFixture(serverPort: 12222)
         let probed = try await establishProbed(connection: try SSHTestFixture.makeConnection())
         let socketPath = try Self.bridgeSocketPath(profile: "twodialstest00000000000000000000")
 
-        let server = await makeServer(probed: probed, socketPath: socketPath)
+        // Dial-counting factory: the shared-carrier proof's witness.
+        let dialCount = AtomicCounter()
+        let countingFactory: @Sendable () async throws -> any SSHExecCapableConnection = {
+            await dialCount.increment()
+            return try await probed.carrierFactory()
+        }
+        let server = HerdrEmbedBridgeServer(
+            socketPath: socketPath,
+            connectionFactory: countingFactory,
+            executablePath: probed.executablePath,
+            sessionName: nil
+        )
+        let log = eventLog!
+        await server.setOnEvent { log.record($0) }
         try await server.start()
 
-        // First dial: the bridge resolves the factory, opens the bridge
-        // exec on the fresh connection, relays the hello+welcome, the
-        // client closes, the relay ends and the connection is torn down.
+        // First dial: establishes the shared carrier, opens the bridge
+        // exec on it, relays the hello+welcome, the client closes, the
+        // relay ends with a release-only lease close (the carrier
+        // survives).
         let firstClient = try UnixStreamClient.connect(path: socketPath)
         try firstClient.writeAll(Self.helloFrame)
         _ = try await firstClient.readFirstFrame(
@@ -273,15 +317,14 @@ final class HerdrEmbedBridgeServerTests: XCTestCase {
             timeout: .seconds(10)
         )
         firstClient.close()
-        let firstRelayEnd = await eventLog.firstRelayEnd(timeout: .seconds(10))
+        let firstRelayEnd = await log.firstRelayEnd(timeout: .seconds(10))
         let first = try XCTUnwrap(firstRelayEnd, "first relay end receipt")
         XCTAssertGreaterThan(first.bytesUp, 0)
         XCTAssertGreaterThan(first.bytesDown, 0)
 
-        // Second dial AFTER the first fully ended: the factory is
-        // resolved AGAIN into a fresh connection; the bridge exec
-        // opens as that connection's only session channel; the welcome
-        // frame round-trips on the new connection.
+        // Second dial AFTER the first fully ended: rides the SAME shared
+        // carrier — no new dial, the bridge exec opens as a sibling
+        // session channel, and the welcome frame round-trips again.
         let secondClient = try UnixStreamClient.connect(path: socketPath)
         defer { secondClient.close() }
         try secondClient.writeAll(Self.helloFrame)
@@ -291,19 +334,22 @@ final class HerdrEmbedBridgeServerTests: XCTestCase {
         )
         secondClient.close()
 
-        // Two relayEnd events: one per dial. The factory was resolved
-        // exactly twice (one per relay); each fresh connection carried
-        // one exec open and one close. Waited (the relay tail races the
-        // assertion — the cleanup awaits session/carrier close AFTER
-        // the local channel close).
-        let relayEndCount = await eventLog.waitForRelayEndCount(2, timeout: .seconds(5))
+        // Two relayEnd events: one per dial. Waited (the relay tail
+        // races the assertion — the cleanup awaits session/carrier
+        // close AFTER the local channel close).
+        let relayEndCount = await log.waitForRelayEndCount(2, timeout: .seconds(5))
         XCTAssertEqual(
             relayEndCount, 2,
             "two sequential dials produced two relayEnded receipts"
         )
+        let dials = await dialCount.value
+        XCTAssertEqual(
+            dials, 1,
+            "both sequential relays rode ONE shared carrier (the pre-pool shape dialed once per relay)"
+        )
 
         await server.stop()
-        let stoppedEvent = await eventLog.firstStopped()
+        let stoppedEvent = await log.firstStopped()
         let stopped = try XCTUnwrap(stoppedEvent, "stop receipt arrived after both dials")
         XCTAssertTrue(stopped.isStopped)
         XCTAssertFalse(FileManager.default.fileExists(atPath: socketPath))

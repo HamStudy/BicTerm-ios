@@ -173,20 +173,25 @@ final class HerdrEmbedTransportBringUpTests: XCTestCase {
                 "teardown unlinked \(socket.lastPathComponent)"
             )
         }
-        // Per-relay truth (unit-5): each dial that reached the bridge
-        // listener resolved the factory into a fresh carrier. The test
+        // Per-relay truth (shared-first carriers): each dial that reached
+        // the bridge listener rode the server's carrier pool. The test
         // did `connect(2)` + close for each machine; the NoopCarrier
-        // makes the exec-open throw, so the relay's owner-close path
-        // fires once per relay — `closeCount == 1` is the proof the
-        // relay executed end-to-end on a fresh carrier. (With a
-        // NoopCarrier the relay exits the `exec-open` failure path,
-        // emitting `carrierLost` rather than `relayEnded`; either is a
-        // proof the relay ran — closeCount is the durable signal.)
+        // makes the exec-open throw, so the relay's exit path fires —
+        // and because that typed denial is the budget-gateway signal,
+        // the pool ALSO retires the shared carrier and dials the
+        // dedicated fallback (the same fixed instance this test's
+        // factory hands out), which the failed relay's lease then
+        // owner-closes. `closeCount == 2` — the retirement close plus
+        // the owner-close — is the proof the relay executed end-to-end
+        // through the fallback. (With a NoopCarrier the relay exits the
+        // `exec-open` failure path, emitting `carrierLost` rather than
+        // `relayEnded`; either is a proof the relay ran — closeCount is
+        // the durable signal.)
         for (index, carrier) in carriers.enumerated() {
             let closeCount = await carrier.closeCount
             XCTAssertEqual(
-                closeCount, 1,
-                "carrier \(index) closed exactly once across the run"
+                closeCount, 2,
+                "carrier \(index) retired by the denial fallback and owner-closed by its relay"
             )
         }
         XCTAssertEqual(
@@ -320,11 +325,14 @@ final class HerdrEmbedTransportBringUpTests: XCTestCase {
             FileManager.default.fileExists(atPath: socket.path),
             "teardown unlinked the real-home socket"
         )
-        // The brief connect-then-close dial triggers one relay attempt,
-        // which resolves the factory once and (because NoopCarrier
-        // throws on exec-open) closes that fresh carrier once.
+        // The brief connect-then-close dial triggers one relay attempt.
+        // The NoopCarrier throws on exec-open — the budget-gateway
+        // signal — so the pool retires the shared carrier (close #1)
+        // and dials the dedicated fallback (the same fixed instance),
+        // whose open also throws and whose lease then owner-closes it
+        // (close #2).
         let closeCount = await carriers[0].closeCount
-        XCTAssertEqual(closeCount, 1, "one dial → one relay → one fresh carrier close")
+        XCTAssertEqual(closeCount, 2, "one dial → one relay → retirement close + fallback owner-close")
         XCTAssertEqual(FileManager.default.currentDirectoryPath, cwdBefore)
     }
 

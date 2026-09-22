@@ -90,16 +90,22 @@ public enum HerdrEndpointConnectorError: Error, Equatable, Sendable {
 /// (integration doc §6.1): SSH establish → read-only ``HerdrProbe`` → only
 /// on a compatible probe, the `remote-client-bridge` exec channel.
 ///
-/// CONNECTION-PER-CONSUMER (CoderSSHGW fix): every channel consumer —
-/// probe, install, re-probe, bridge — establishes its OWN channel-less
-/// connection (direct via ``SSHTransport/connectExecOnly(to:)``, jump
-/// chains through the jump pipeline) and closes it when done. Gateways
-/// like CoderSSHGW permit ONE session-channel open per connection
-/// LIFETIME, and exec channels are session-type channels on the wire
-/// (RFC 4254), so a shared connection cannot carry two consumers; the
-/// old establish's unconsumed PTY session burned the one slot before the
-/// probe's exec could open. Hop handling (per-hop host-key verification,
-/// per-hop credentials, ≤5 hops) stays transparent to the caller.
+/// CARRIER CONTRACT (shared-first within a consumer group; dedicated
+/// connection is the fallback when channel-open is denied — budget
+/// gateways): the probe, re-probe, and bridge each establish their OWN
+/// channel-less connection (direct via
+/// ``SSHTransport/connectExecOnly(to:)``, jump chains through the jump
+/// pipeline) and close it when done — one key evaluation per connect
+/// intent. The INSTALL is one consumer group: its three exec steps ride
+/// ONE shared connection through the installer's internal
+/// ``SharedExecCarrierPool``, falling back to per-step dedicated
+/// connections when a budget gateway denies the shared channel open.
+/// Gateways like CoderSSHGW permit ONE session-channel open per
+/// connection LIFETIME, and exec channels are session-type channels on
+/// the wire (RFC 4254); the old establish's unconsumed PTY session
+/// burned the one slot before the probe's exec could open. Hop handling
+/// (per-hop host-key verification, per-hop credentials, ≤5 hops) stays
+/// transparent to the caller.
 ///
 /// TOFU host-key trust (doc §4): when establish surfaces the typed
 /// `.requiresTrust` payload, the injected user-approval callback receives
@@ -117,13 +123,18 @@ public enum HerdrEndpointConnectorError: Error, Equatable, Sendable {
 /// Result of ``HerdrEndpointConnector/establishProbed(_:)``: the probe that
 /// passed, the remote herdr executable the bridge command should exec, and
 /// a factory that establishes a FRESH channel-less connection per call
-/// (same trust-retry semantics as the probe's establish). The caller owns
-/// each resolved connection's lifetime from the factory call on.
+/// (same trust-retry semantics as the probe's establish) — one key
+/// evaluation per connect intent. Callers that pool consumers (the bridge
+/// server) wrap this factory in a ``SharedExecCarrierPool`` so sequential
+/// consumers share ONE carrier, with the pool's dedicated fallback
+/// preserving the budget-gateway shape; the pool (and its leases) own each
+/// resolved connection's lifetime from the factory call on.
 public struct HerdrProbedCarrier: Sendable {
     /// Establishes a FRESH channel-less exec-capable connection (direct
     /// or jump-chained) on each call, with the same trust-retry semantics
     /// as the probe's establish. Throws the connector's typed errors
-    /// (`.sshEstablish`, `.trustDeclined`).
+    /// (`.sshEstablish`, `.trustDeclined`). Typically used as a
+    /// ``SharedExecCarrierPool`` dial by shared-first consumers.
     public let carrierFactory: @Sendable () async throws(HerdrEndpointConnectorError) -> any SSHExecCapableConnection
     public let probe: HerdrProbe.Result
     /// Absolute path of the remote herdr binary the probe verified.
@@ -272,8 +283,9 @@ public struct HerdrEndpointConnector: Sendable {
     /// a probe that fails SOLELY because no herdr binary exists on the
     /// host (foundPath nil, platform otherwise supported) asks the
     /// injected approval once, and on approval runs the injected
-    /// installer over its own FRESH per-step connections (resolved from
-    /// the same carrier factory the bridge uses) and re-probes over
+    /// installer over its internal shared-first carrier pool (the three
+    /// exec steps ride ONE connection; a budget-gateway denial falls
+    /// back to per-step dedicated connections) and re-probes over
     /// another — bring-up then continues through the normal
     /// compatibility gate.
     /// Decline aborts typed and quiet
@@ -315,10 +327,11 @@ public struct HerdrEndpointConnector: Sendable {
         guard await approveInstall(consent) else {
             throw .installDeclined(consent)
         }
-        // INSTALL connections: the installer resolves the shared carrier
-        // factory once per exec step (prepare/upload/commit) and closes
-        // each connection itself — the connector opens no install
-        // connection of its own.
+        // INSTALL connections: the installer wraps this carrier factory
+        // in its internal shared-first pool — the three exec steps ride
+        // ONE connection by default, with per-step dedicated fallback on
+        // a budget-gateway denial — and closes the pool itself. The
+        // connector opens no install connection of its own.
         do {
             _ = try await installer.install(
                 using: makeCarrierFactory(for: connection),
