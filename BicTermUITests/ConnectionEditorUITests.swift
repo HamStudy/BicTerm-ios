@@ -800,7 +800,12 @@ final class ConnectionEditorUITests: XCTestCase {
         let password = app.secureTextFields["password-field"]
         scrollToHittable(password, swipingUp: false)
         typeInto(password, "bicterm-uitest-fixture-password")
+        // The .password content type can surface the system save prompt
+        // when field editing ends (swallowing the save tap) and again
+        // when the editor sheet dismisses over the list.
+        app.dismissSystemSavePromptIfPresent()
         savePasswordFixture()
+        app.dismissSystemSavePromptIfPresent()
         connectPasswordFixture(expectPrompt: false)
     }
 
@@ -879,9 +884,14 @@ final class ConnectionEditorUITests: XCTestCase {
         let password = app.secureTextFields["password-field"]
         scrollToHittable(password, swipingUp: false)
         typeInto(password, "bicterm-uitest-fixture-password")
+        // The .password content type can surface the system save prompt
+        // when field editing ends (swallowing the save tap) and again
+        // when the editor sheet dismisses over the list.
+        app.dismissSystemSavePromptIfPresent()
         XCTAssertFalse(app.staticTexts["password-removal-status"].exists)
         XCTAssertTrue(app.staticTexts["password-field-status"].label.contains("Will be saved"))
         savePasswordFixture()
+        app.dismissSystemSavePromptIfPresent()
         openEditorForConnection(named: "Credential-Fixture")
         let badge = app.staticTexts["password-saved-badge"]
         scrollToHittable(badge)
