@@ -153,8 +153,8 @@ final class TerminalToolbarHostView: UIView {
 
     /// Sticky keyboard-dismiss control: trailing slot in the strip row,
     /// shown only while the strip is shown AND a scene wired the dismiss
-    /// action (session scenes; the herdr embed and previews keep the strip
-    /// exactly as before this feature). While the keyboard is
+    /// action (session scenes and the herdr embed; previews keep the
+    /// strip exactly as before this feature). While the keyboard is
     /// sticky-hidden the same slot shows the paste control instead —
     /// see ``stripPasteButton``.
     private let keyboardDismissButton = UIButton(type: .system)
@@ -164,9 +164,9 @@ final class TerminalToolbarHostView: UIView {
     /// only other touch path. Tapping routes through the terminal's
     /// existing `paste(_:)` semantics: multi-line pastes go through the
     /// scene's paste-preview confirmation, everything else through
-    /// SwiftTerm's direct (bracketed) delivery. Only session surfaces
-    /// ever go sticky-hidden (the herdr embed never calls
-    /// setKeyboardHidden), so the control is naturally session-scoped.
+    /// SwiftTerm's direct (bracketed) delivery. Only surfaces that wire
+    /// the dismiss action (sessions, herdr embed) ever go sticky-hidden,
+    /// so the control is naturally scoped to those.
     private let stripPasteButton = UIButton(type: .system)
     private let stripControlWidth: CGFloat = 44
 
@@ -199,10 +199,12 @@ final class TerminalToolbarHostView: UIView {
     /// Keyboard-frame layout tracking (K2): when enabled, the keyboard's
     /// end frame (screen coordinates) from the active
     /// keyboardWillChangeFrame notification, nil while no keyboard is on
-    /// screen. Session scenes enable tracking; the herdr embed keeps the
-    /// keyboard as an overlay (the embedded client owns its grid).
+    /// screen. Session scenes and the herdr embed enable tracking; the
+    /// embedded client reflows its grid through the winsize path the
+    /// resize triggers.
     private var keyboardScreenFrame: CGRect?
-    /// Session scenes opt in to keyboard-frame layout tracking.
+    /// Session scenes and the herdr embed opt in to keyboard-frame layout
+    /// tracking.
     var tracksKeyboardFrame = false
     nonisolated(unsafe) private var keyboardFrameObserver: NSObjectProtocol?
 

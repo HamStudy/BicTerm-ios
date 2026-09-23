@@ -18,6 +18,16 @@ struct HerdrTUIHostingView: UIViewRepresentable {
     /// pref, same contract as SSH session surfaces (the terminal shrinks by
     /// the strip's height; the strip never covers the bottom row).
     var toolbarVisible: Bool = false
+    /// App-global sticky keyboard-dismiss state (same model as session
+    /// surfaces): applied to this surface's terminal through the fork's
+    /// runtime toggle.
+    var keyboardHidden: Bool = false
+    /// Dismiss-control action → app-global model hide. Nil (previews,
+    /// tests) keeps the control hidden.
+    var onDismissKeyboard: (() -> Void)? = nil
+    /// Terminal-tap re-enable → app-global model show (the tapped host
+    /// refocuses its own terminal).
+    var onTerminalTap: (() -> Void)? = nil
     var osc52Settings: Osc52ClipboardSettings = Osc52ClipboardSettings()
     /// Optional foreground check; nil = always foreground (tests).
     var osc52ForegroundCheck: (@MainActor () -> Bool)? = nil
@@ -62,6 +72,13 @@ struct HerdrTUIHostingView: UIViewRepresentable {
         view.terminalDelegate = context.coordinator
         view.accessibilityIdentifier = "herdr-embed-tui"
         hostView.setAccessoryVisible(toolbarVisible)
+        // Keyboard parity with session scenes (K1/K2): the host owns the
+        // keyboard layout — the TUI reflows above the actual overlap and
+        // the strip carries the sticky-dismiss control.
+        hostView.tracksKeyboardFrame = true
+        hostView.onDismissKeyboard = onDismissKeyboard
+        hostView.onTerminalTap = onTerminalTap
+        hostView.setKeyboardHidden(keyboardHidden)
         context.coordinator.startFeeding(into: view, runtime: runtime)
         return hostView
     }
@@ -69,6 +86,10 @@ struct HerdrTUIHostingView: UIViewRepresentable {
     func updateUIView(_ uiView: TerminalToolbarHostView, context: Context) {
         context.coordinator.parent = self
         uiView.setAccessoryVisible(toolbarVisible)
+        uiView.tracksKeyboardFrame = true
+        uiView.onDismissKeyboard = onDismissKeyboard
+        uiView.onTerminalTap = onTerminalTap
+        uiView.setKeyboardHidden(keyboardHidden)
         let terminal = uiView.terminalView
         if let liveSize = fontModel?.size, terminal.font.pointSize != CGFloat(liveSize) {
             terminal.font = UIFont.monospacedSystemFont(ofSize: CGFloat(liveSize), weight: .regular)

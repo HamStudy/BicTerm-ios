@@ -95,8 +95,12 @@ struct HerdrEmbedWorkspaceView: View {
             }
         }
         .background(colors.background.ignoresSafeArea())
-        // The embedded client owns the grid: the soft keyboard overlays
-        // instead of compressing it (same contract as the native chrome).
+        // The host view owns the keyboard layout (K2 parity with session
+        // scenes): SwiftUI's keyboard safe-area avoidance shrinks the
+        // scene when the keyboard appears but does not reliably relax
+        // when it hides, so the workspace opts out and
+        // TerminalToolbarHostView's keyboard-frame tracking reflows the
+        // TUI above the actual overlap — and restores it.
         .ignoresSafeArea(.keyboard)
         .overlay(alignment: .top) {
             if let toast = osc52Toast {
@@ -232,6 +236,9 @@ struct HerdrEmbedWorkspaceView: View {
                     runtime: runtime,
                     fontModel: fontModel,
                     toolbarVisible: store.terminalToolbar.isVisible,
+                    keyboardHidden: store.terminalToolbar.keyboardHidden,
+                    onDismissKeyboard: { store.terminalToolbar.hideSoftwareKeyboard() },
+                    onTerminalTap: { store.terminalToolbar.showSoftwareKeyboard() },
                     osc52Settings: osc52Settings ?? Osc52ClipboardSettings(),
                     osc52ForegroundCheck: nil,
                     osc52ToastPresenter: { toast in self.presentOsc52Toast(toast) },
