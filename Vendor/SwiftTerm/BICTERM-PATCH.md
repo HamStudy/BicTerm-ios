@@ -501,3 +501,50 @@ ambiguous bare-URI behavior is pinned.
 Reapply hunk 14 with hunks 1-13. The hunk touches only
 `Sources/SwiftTerm/Apple/AppleTerminalView.swift`
 (`urlAndParamsFrom`).
+
+### Hunk 15 — runtime software-keyboard installation toggle (`iOS/iOSTerminalView.swift`)
+
+Sticky keyboard dismissal (app feature K1): the embedder must be able to
+take the software keyboard down at runtime AND keep it down — after the
+terminal resigns, UIKit's own focus machinery (SwiftTerm's `singleTap`
+calls `becomeFirstResponder()` when the view is not first responder)
+would immediately resurrect the keyboard on the next tap. Hunks 3/4/5
+only apply the opt-out once, in `didMoveToWindow`, before an embedder
+that keeps the keyboard installed could ever want it gone.
+
+The hunk adds `public func setSoftwareKeyboardInstalled(_ installed: Bool)`
+next to the hunk 3 flag (which remains the storage and keeps its
+pre-window behavior — the DEBUG `-uitest-terminal-preview` surface still
+assigns the property directly before `didMoveToWindow` applies hunks
+4/5):
+
+- `false`: install a fresh hidden 1×1 blocker `UIView` as `_inputView`
+  (same construction as hunk 4, fresh instance per call — no shared
+  reparenting), subtract `.causesPageTurn` (hunk 5's trait), and
+  `resignFirstResponder()` when first responder so the keyboard
+  dismisses. A later focus shows the invisible blocker instead of the
+  system keyboard.
+- `true`: clear `_inputView`, re-union `.causesPageTurn`, and — when
+  first responder — `reloadInputViews()` so the system keyboard returns
+  without a refocus (`becomeFirstResponder` is a no-op on an
+  already-focused responder; the embedder calls it for the not-focused
+  case).
+
+No-op when the flag already matches. `didMoveToWindow`'s hunk 4 block
+re-applies the blocker idempotently after a detach/reattach while the
+flag stays false. The vendored `TerminalAccessory` keyboard button
+(`toggleInputKeyboard`) can still swap in SwiftTerm's custom
+`KeyboardView` while hidden — pre-existing upstream behavior, out of
+this hunk's scope.
+
+App side: `TerminalToolbarModel.keyboardHidden` (guarded: no-op while a
+hardware keyboard is attached — resigning would drop hardware-key
+delivery), the strip's trailing dismiss control + terminal-tap
+re-enable in `TerminalToolbarHostView`, wired through
+`SessionTerminalRepresentable`/`SessionSceneView`. Tests:
+`BicTermTests/TerminalToolbarModelTests.swift` (state machine) and
+`BicTermUITests/TerminalKeyboardDismissalUITests.swift` (dismiss →
+sticky through a strip tap → one terminal tap returns the keyboard).
+
+Reapply hunk 15 with hunks 1-14. The hunk touches only
+`Sources/SwiftTerm/iOS/iOSTerminalView.swift`.

@@ -3032,6 +3032,37 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
     // press has no paired pressesEnded.
     public var installsSoftwareKeyboard: Bool = true
 
+    // BICTERM-PATCH hunk 15: runtime counterpart to the hunk 3/4/5
+    // opt-out. The embedder can flip software-keyboard installation AFTER
+    // the view is in a window (sticky dismissal): false installs the
+    // hidden 1x1 blocker input view, drops .causesPageTurn, and resigns
+    // first responder so the keyboard dismisses and a later focus cannot
+    // resurrect it; true clears the blocker, restores the trait, and —
+    // while first responder — reloads input views so the system keyboard
+    // returns without a refocus (a plain becomeFirstResponder is a no-op
+    // on an already-focused responder). The hunk 3 property remains the
+    // storage and keeps its pre-window behavior (the DEBUG UI-test
+    // preview assigns it before didMoveToWindow applies hunks 4/5).
+    public func setSoftwareKeyboardInstalled(_ installed: Bool) {
+        guard installsSoftwareKeyboard != installed else { return }
+        installsSoftwareKeyboard = installed
+        if installed {
+            _inputView = nil
+            accessibilityTraits.formUnion(.causesPageTurn)
+            if isFirstResponder {
+                reloadInputViews()
+            }
+        } else {
+            let blocker = UIView(frame: CGRect(x: 0, y: 0, width: 1, height: 1))
+            blocker.isHidden = true
+            _inputView = blocker
+            accessibilityTraits = accessibilityTraits.subtracting(.causesPageTurn)
+            if isFirstResponder {
+                resignFirstResponder()
+            }
+        }
+    }
+
     private struct PendingKittyKeyEvent {
         let key: UIKey
         let eventType: KittyKeyboardEventType

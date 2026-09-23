@@ -47,6 +47,13 @@ final class TerminalToolbarModel {
 
     private(set) var isVisible: Bool
 
+    /// Sticky software-keyboard dismissal: true while the user dismissed
+    /// the on-screen keyboard and it must stay down until an explicit
+    /// re-enable (a terminal tap). Transient runtime state — never
+    /// persisted; a fresh launch always starts with the keyboard
+    /// installed.
+    private(set) var keyboardHidden = false
+
     /// `hardwareKeyboardAttached` is injectable so unit tests can drive the
     /// heuristic without a physical keyboard; production reads
     /// `GCKeyboard.coalesced`.
@@ -100,10 +107,34 @@ final class TerminalToolbarModel {
         isVisible = !hardwareKeyboardAttached
     }
 
+    /// Dismiss-control action (the host gates the tap on the software
+    /// keyboard actually being on screen — GCKeyboard is a false positive
+    /// on the simulator, where the Mac keyboard bridges as a controller
+    /// while the software keyboard remains the visible input surface).
+    func hideSoftwareKeyboard() {
+        guard !keyboardHidden else { return }
+        keyboardHidden = true
+    }
+
+    /// Terminal-tap re-enable. The tapping surface refocuses its own
+    /// terminal; every other surface clears its blocker through the
+    /// SwiftUI update this flip triggers.
+    func showSoftwareKeyboard() {
+        guard keyboardHidden else { return }
+        keyboardHidden = false
+    }
+
     private func keyboardAttachmentChanged(_ attached: Bool) {
         hardwareKeyboardAttached = attached
         if settings.explicitVisibility == nil {
             isVisible = !attached
+        }
+        if attached, keyboardHidden {
+            // A hardware keyboard taking over ends the sticky dismissal:
+            // the software keyboard is no longer the input source, and
+            // the blocker would keep the terminal from focusing for
+            // hardware keys.
+            keyboardHidden = false
         }
     }
 }
@@ -119,6 +150,42 @@ final class TerminalToolbarHostView: UIView {
     private let accessoryHeight: CGFloat
 
     private(set) var showsAccessory = false
+
+    /// Sticky keyboard-dismiss control: trailing slot in the strip row,
+    /// shown only while the strip is shown AND a scene wired the dismiss
+    /// action (session scenes; the herdr embed and previews keep the strip
+    /// exactly as before this feature).
+    private let keyboardDismissButton = UIButton(type: .system)
+    private let keyboardDismissButtonWidth: CGFloat = 44
+
+    /// Dismiss-control action, wired by session scenes: flips the
+    /// app-global toolbar model's guarded hide. Nil keeps the control
+    /// hidden.
+    var onDismissKeyboard: (() -> Void)? {
+        didSet { refreshKeyboardDismissControl() }
+    }
+    /// A tap in the terminal area while the software keyboard is
+    /// sticky-hidden, wired by session scenes: flips the app-global
+    /// model back to shown. This host then re-enables and refocuses its
+    /// own terminal immediately (see ``terminalTapped(_:)``).
+    var onTerminalTap: (() -> Void)?
+    /// Mirror of the app-global sticky-hide state applied to this
+    /// surface's terminal through the fork's runtime toggle.
+    private(set) var keyboardHidden = false
+    /// Whether a software keyboard is currently on this screen — the
+    /// dismiss control's gate. Tracked from keyboard frame notifications
+    /// (the same signal K2's layout work consumes): GCKeyboard cannot be
+    /// used here because the simulator bridges the Mac keyboard as a
+    /// controller while the software keyboard stays the visible input
+    /// surface.
+    private var softwareKeyboardVisible = false
+    nonisolated(unsafe) private var keyboardFrameObserver: NSObjectProtocol?
+
+    deinit {
+        if let keyboardFrameObserver {
+            NotificationCenter.default.removeObserver(keyboardFrameObserver)
+        }
+    }
 
     init(terminalView: TerminalContainerView) {
         self.terminalView = terminalView
@@ -144,6 +211,43 @@ final class TerminalToolbarHostView: UIView {
         accessoryView.accessibilityIdentifier = "terminal-accessory"
         addSubview(terminalView)
         addSubview(accessoryView)
+
+        keyboardDismissButton.setImage(
+            UIImage(
+                systemName: "keyboard.chevron.compact.down",
+                withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .medium)
+            ),
+            for: .normal
+        )
+        keyboardDismissButton.accessibilityIdentifier = "terminal-keyboard-dismiss"
+        keyboardDismissButton.accessibilityLabel = "Dismiss keyboard"
+        keyboardDismissButton.addTarget(self, action: #selector(keyboardDismissTapped(_:)), for: .touchUpInside)
+        keyboardDismissButton.isHidden = true
+        addSubview(keyboardDismissButton)
+
+        // Re-enable recognizer: with the sticky hide active, UIKit's own
+        // focus path (SwiftTerm's singleTap becomeFirstResponder) shows
+        // only the invisible blocker — this recognizer is the app's
+        // explicit re-enable. cancelsTouchesInView keeps SwiftTerm's own
+        // tap handling (selection, links, context menu) untouched.
+        let terminalTap = UITapGestureRecognizer(target: self, action: #selector(terminalTapped(_:)))
+        terminalTap.cancelsTouchesInView = false
+        terminalView.addGestureRecognizer(terminalTap)
+
+        keyboardFrameObserver = NotificationCenter.default.addObserver(
+            forName: UIResponder.keyboardWillChangeFrameNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] note in
+            let endFrame = (note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect) ?? .zero
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                // Hidden keyboards animate to a frame fully below the
+                // screen; a visible one intersects it.
+                guard let screen = self.window?.screen else { return }
+                self.softwareKeyboardVisible = endFrame.intersects(screen.bounds)
+            }
+        }
     }
 
     @available(*, unavailable)
@@ -155,12 +259,54 @@ final class TerminalToolbarHostView: UIView {
         guard visible != showsAccessory else { return }
         showsAccessory = visible
         accessoryView.isHidden = !visible
+        refreshKeyboardDismissControl()
         setNeedsLayout()
+    }
+
+    /// Applies the app-global sticky-hide state to this surface's
+    /// terminal (fork hunk 15 runtime toggle): hidden installs the
+    /// blocker and resigns; shown clears the blocker. Refocusing on
+    /// re-enable is the tapping surface's job (``terminalTapped(_:)``) —
+    /// a propagated show must not steal focus from the window the user
+    /// is actually tapping in.
+    func setKeyboardHidden(_ hidden: Bool) {
+        guard hidden != keyboardHidden else { return }
+        keyboardHidden = hidden
+        terminalView.setSoftwareKeyboardInstalled(!hidden)
+    }
+
+    private var keyboardDismissControlVisible: Bool {
+        showsAccessory && onDismissKeyboard != nil
+    }
+
+    private func refreshKeyboardDismissControl() {
+        keyboardDismissButton.isHidden = !keyboardDismissControlVisible
+        setNeedsLayout()
+    }
+
+    @objc private func keyboardDismissTapped(_ sender: UIButton) {
+        // Gate: with no software keyboard on screen there is nothing to
+        // dismiss, and the sticky-hide resignation would silently drop
+        // hardware-key delivery to a focused terminal.
+        guard softwareKeyboardVisible else { return }
+        onDismissKeyboard?()
+    }
+
+    @objc private func terminalTapped(_ gesture: UITapGestureRecognizer) {
+        guard keyboardHidden else { return }
+        onTerminalTap?()
+        // Re-enable THIS surface immediately — the model flip reaches
+        // other surfaces through SwiftUI, but the tapped terminal must
+        // not wait for it (and must focus even if it was not first
+        // responder when the recognizer fired).
+        setKeyboardHidden(false)
+        terminalView.becomeFirstResponder()
     }
 
     override func layoutSubviews() {
         super.layoutSubviews()
         let strip = showsAccessory ? accessoryHeight : 0
+        let dismiss = keyboardDismissControlVisible ? keyboardDismissButtonWidth : 0
         // Frame assignments are guarded: TerminalAccessory rebuilds its
         // buttons from a `bounds` didSet, and the terminal recomputes its
         // grid in layoutSubviews — neither should churn on a no-op pass.
@@ -169,9 +315,20 @@ final class TerminalToolbarHostView: UIView {
             terminalView.frame = terminalFrame
         }
         if showsAccessory {
-            let accessoryFrame = CGRect(x: 0, y: bounds.height - strip, width: bounds.width, height: strip)
+            let accessoryFrame = CGRect(x: 0, y: bounds.height - strip, width: bounds.width - dismiss, height: strip)
             if accessoryView.frame != accessoryFrame {
                 accessoryView.frame = accessoryFrame
+            }
+            if keyboardDismissControlVisible {
+                let dismissFrame = CGRect(
+                    x: bounds.width - dismiss,
+                    y: bounds.height - strip,
+                    width: dismiss,
+                    height: strip
+                )
+                if keyboardDismissButton.frame != dismissFrame {
+                    keyboardDismissButton.frame = dismissFrame
+                }
             }
         }
     }

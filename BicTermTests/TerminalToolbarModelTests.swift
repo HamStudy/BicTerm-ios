@@ -73,4 +73,44 @@ final class TerminalToolbarModelTests: XCTestCase {
         XCTAssertNil(settings.explicitVisibility)
         XCTAssertFalse(model.isVisible)
     }
+
+    /// Sticky keyboard dismissal: hide flips the state, show clears it,
+    /// and both are idempotent.
+    func testKeyboardHiddenHideAndShow() throws {
+        let model = makeModel(defaults: try ephemeralDefaults(), hardwareKeyboardAttached: false)
+
+        XCTAssertFalse(model.keyboardHidden)
+        model.hideSoftwareKeyboard()
+        XCTAssertTrue(model.keyboardHidden)
+        model.hideSoftwareKeyboard()
+        XCTAssertTrue(model.keyboardHidden)
+
+        model.showSoftwareKeyboard()
+        XCTAssertFalse(model.keyboardHidden)
+        model.showSoftwareKeyboard()
+        XCTAssertFalse(model.keyboardHidden)
+    }
+
+    /// The model's hide is unconditional — the dismiss gate (software
+    /// keyboard actually on screen) lives in the host view, because
+    /// GCKeyboard is a false positive on the simulator (the Mac keyboard
+    /// bridges as a controller while the software keyboard stays visible).
+    func testKeyboardHideIndependentOfHardwareKeyboardFlag() throws {
+        let model = makeModel(defaults: try ephemeralDefaults(), hardwareKeyboardAttached: true)
+
+        model.hideSoftwareKeyboard()
+        XCTAssertTrue(model.keyboardHidden)
+    }
+
+    /// The sticky state is transient: a fresh model (fresh launch) always
+    /// starts with the keyboard installed.
+    func testKeyboardHiddenNotPersisted() throws {
+        let defaults = try ephemeralDefaults()
+        let model = makeModel(defaults: defaults, hardwareKeyboardAttached: false)
+        model.hideSoftwareKeyboard()
+        XCTAssertTrue(model.keyboardHidden)
+
+        let relaunched = makeModel(defaults: defaults, hardwareKeyboardAttached: false)
+        XCTAssertFalse(relaunched.keyboardHidden)
+    }
 }

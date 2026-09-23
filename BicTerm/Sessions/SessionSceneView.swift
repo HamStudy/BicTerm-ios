@@ -85,7 +85,10 @@ struct SessionSceneView: View {
                 SessionTerminalRepresentable(
                     cache: store.viewCache,
                     model: model,
-                    toolbarVisible: store.terminalToolbar.isVisible
+                    toolbarVisible: store.terminalToolbar.isVisible,
+                    keyboardHidden: store.terminalToolbar.keyboardHidden,
+                    onDismissKeyboard: { store.terminalToolbar.hideSoftwareKeyboard() },
+                    onTerminalTap: { store.terminalToolbar.showSoftwareKeyboard() }
                 )
                 .background(colors.background)
                 .padding(.horizontal, store.effectiveMargin(model.sceneID).rawValue)

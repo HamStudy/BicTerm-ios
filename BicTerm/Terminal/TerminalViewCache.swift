@@ -488,6 +488,14 @@ struct SessionTerminalRepresentable: UIViewRepresentable {
     /// Whether the accessory toolbar strip participates in the layout below
     /// the terminal (app-global pref from `SessionStore.terminalToolbar`).
     var toolbarVisible: Bool = false
+    /// App-global sticky keyboard-dismiss state (same model): applied to
+    /// this surface's terminal through the fork's runtime toggle.
+    var keyboardHidden: Bool = false
+    /// Dismiss-control action → app-global model hide.
+    var onDismissKeyboard: (() -> Void)? = nil
+    /// Terminal-tap re-enable → app-global model show (the tapped host
+    /// refocuses its own terminal).
+    var onTerminalTap: (() -> Void)? = nil
 
     final class Coordinator {
         let cache: TerminalViewCache
@@ -509,11 +517,17 @@ struct SessionTerminalRepresentable: UIViewRepresentable {
         context.coordinator.attachGeneration = attachment.generation
         let hostView = attachment.surface.hostView
         hostView.setAccessoryVisible(toolbarVisible)
+        hostView.onDismissKeyboard = onDismissKeyboard
+        hostView.onTerminalTap = onTerminalTap
+        hostView.setKeyboardHidden(keyboardHidden)
         return hostView
     }
 
     func updateUIView(_ uiView: TerminalToolbarHostView, context: Context) {
         uiView.setAccessoryVisible(toolbarVisible)
+        uiView.onDismissKeyboard = onDismissKeyboard
+        uiView.onTerminalTap = onTerminalTap
+        uiView.setKeyboardHidden(keyboardHidden)
     }
 
     static func dismantleUIView(_ uiView: TerminalToolbarHostView, coordinator: Coordinator) {
