@@ -517,6 +517,7 @@ struct SessionTerminalRepresentable: UIViewRepresentable {
         context.coordinator.attachGeneration = attachment.generation
         let hostView = attachment.surface.hostView
         hostView.setAccessoryVisible(toolbarVisible)
+        hostView.tracksKeyboardFrame = true
         hostView.onDismissKeyboard = onDismissKeyboard
         hostView.onTerminalTap = onTerminalTap
         hostView.setKeyboardHidden(keyboardHidden)
@@ -525,6 +526,7 @@ struct SessionTerminalRepresentable: UIViewRepresentable {
 
     func updateUIView(_ uiView: TerminalToolbarHostView, context: Context) {
         uiView.setAccessoryVisible(toolbarVisible)
+        uiView.tracksKeyboardFrame = true
         uiView.onDismissKeyboard = onDismissKeyboard
         uiView.onTerminalTap = onTerminalTap
         uiView.setKeyboardHidden(keyboardHidden)

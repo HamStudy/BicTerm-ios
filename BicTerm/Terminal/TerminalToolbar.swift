@@ -179,6 +179,14 @@ final class TerminalToolbarHostView: UIView {
     /// controller while the software keyboard stays the visible input
     /// surface.
     private var softwareKeyboardVisible = false
+    /// Keyboard-frame layout tracking (K2): when enabled, the keyboard's
+    /// end frame (screen coordinates) from the active
+    /// keyboardWillChangeFrame notification, nil while no keyboard is on
+    /// screen. Session scenes enable tracking; the herdr embed keeps the
+    /// keyboard as an overlay (the embedded client owns its grid).
+    private var keyboardScreenFrame: CGRect?
+    /// Session scenes opt in to keyboard-frame layout tracking.
+    var tracksKeyboardFrame = false
     nonisolated(unsafe) private var keyboardFrameObserver: NSObjectProtocol?
 
     deinit {
@@ -240,12 +248,16 @@ final class TerminalToolbarHostView: UIView {
             queue: .main
         ) { [weak self] note in
             let endFrame = (note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect) ?? .zero
+            let duration = note.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double ?? 0.25
+            let curve = (note.userInfo?[UIResponder.keyboardAnimationCurveUserInfoKey] as? NSNumber)?.uintValue ?? 7
             MainActor.assumeIsolated {
                 guard let self else { return }
                 // Hidden keyboards animate to a frame fully below the
                 // screen; a visible one intersects it.
                 guard let screen = self.window?.screen else { return }
-                self.softwareKeyboardVisible = endFrame.intersects(screen.bounds)
+                let visible = endFrame.intersects(screen.bounds)
+                self.softwareKeyboardVisible = visible
+                self.applyKeyboardFrame(visible ? endFrame : nil, duration: duration, curve: curve)
             }
         }
     }
@@ -279,6 +291,34 @@ final class TerminalToolbarHostView: UIView {
         showsAccessory && onDismissKeyboard != nil
     }
 
+    /// Keyboard-frame tracking (K2): stores the new end frame and reflows
+    /// the layout alongside the keyboard's own animation, so the terminal
+    /// never sits under the keyboard mid-transition either. The grid
+    /// resize (SwiftTerm layoutSubviews → sizeChanged → pty winsize) fires
+    /// from the layout pass this triggers.
+    private func applyKeyboardFrame(_ screenFrame: CGRect?, duration: Double, curve: UInt) {
+        guard tracksKeyboardFrame, screenFrame != keyboardScreenFrame else { return }
+        keyboardScreenFrame = screenFrame
+        // The keyboard's animation curve arrives as a private
+        // UIView.AnimationCurve raw value; AnimationOptions encodes curve
+        // bits at << 16.
+        let options = UIView.AnimationOptions(rawValue: curve << 16)
+        UIView.animate(withDuration: duration, delay: 0, options: [.beginFromCurrentState, options]) {
+            self.setNeedsLayout()
+            self.layoutIfNeeded()
+        }
+    }
+
+    /// The Y coordinate the terminal + strip stack must end at: the
+    /// keyboard's top edge in this view's coordinates when a keyboard
+    /// overlaps this host, otherwise the host's own bottom.
+    private func keyboardLayoutBottom() -> CGFloat {
+        guard let keyboardScreenFrame, let window else { return bounds.maxY }
+        let frameInHost = convert(window.convert(keyboardScreenFrame, from: nil), from: window)
+        guard frameInHost.minY < bounds.maxY else { return bounds.maxY }
+        return max(bounds.minY, frameInHost.minY)
+    }
+
     private func refreshKeyboardDismissControl() {
         keyboardDismissButton.isHidden = !keyboardDismissControlVisible
         setNeedsLayout()
@@ -307,22 +347,26 @@ final class TerminalToolbarHostView: UIView {
         super.layoutSubviews()
         let strip = showsAccessory ? accessoryHeight : 0
         let dismiss = keyboardDismissControlVisible ? keyboardDismissButtonWidth : 0
+        // The strip + keyboard insets stack: the terminal shrinks by the
+        // strip AND the keyboard overlap, and the strip sits directly
+        // above the keyboard's top edge (never under it).
+        let layoutBottom = keyboardLayoutBottom()
         // Frame assignments are guarded: TerminalAccessory rebuilds its
         // buttons from a `bounds` didSet, and the terminal recomputes its
         // grid in layoutSubviews — neither should churn on a no-op pass.
-        let terminalFrame = CGRect(x: 0, y: 0, width: bounds.width, height: bounds.height - strip)
+        let terminalFrame = CGRect(x: 0, y: 0, width: bounds.width, height: layoutBottom - strip)
         if terminalView.frame != terminalFrame {
             terminalView.frame = terminalFrame
         }
         if showsAccessory {
-            let accessoryFrame = CGRect(x: 0, y: bounds.height - strip, width: bounds.width - dismiss, height: strip)
+            let accessoryFrame = CGRect(x: 0, y: layoutBottom - strip, width: bounds.width - dismiss, height: strip)
             if accessoryView.frame != accessoryFrame {
                 accessoryView.frame = accessoryFrame
             }
             if keyboardDismissControlVisible {
                 let dismissFrame = CGRect(
                     x: bounds.width - dismiss,
-                    y: bounds.height - strip,
+                    y: layoutBottom - strip,
                     width: dismiss,
                     height: strip
                 )

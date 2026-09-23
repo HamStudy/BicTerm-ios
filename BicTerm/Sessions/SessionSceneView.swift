@@ -124,6 +124,15 @@ struct SessionSceneView: View {
         .animation(.easeInOut(duration: 0.2), value: model.osc52Toast)
         .animation(.easeInOut(duration: 0.2), value: model.notificationBanner)
         .background(colors.background.ignoresSafeArea())
+        // The host view owns the keyboard layout (K2): SwiftUI's keyboard
+        // safe-area avoidance shrinks the scene when the keyboard appears
+        // but does not reliably relax when it hides (measured: the stack
+        // stays keyboard-squeezed after dismissal), so the scene opts out
+        // and TerminalToolbarHostView's keyboard-frame tracking shrinks
+        // the terminal above the actual overlap — and restores it. Same
+        // opt-out pattern as the herdr embed (which keeps the overlay
+        // semantics instead).
+        .ignoresSafeArea(.keyboard)
         .sceneAppearance(store.effectiveTheme(model.sceneID))
         .task {
             // Every descriptor needs a scene model for the session menu's
