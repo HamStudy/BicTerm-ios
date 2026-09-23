@@ -58,6 +58,13 @@ An iOS 18+ SSH terminal client for iPhone and iPad, built on
   app-side hardened policy: foreground-gated, capped at 100 KiB, controlled by
   a default-ON Settings toggle, with an attribution toast; OSC 52 reads stay
   denied unconditionally.
+- **Touch copy/paste without a keyboard**: double-tap a word (or long-press →
+  **Select**, then drag) and choose **Copy** from the edit menu — verified on
+  the iPhone simulator. While the software keyboard is sticky-hidden, the
+  accessory strip's trailing control becomes a **Paste** button that routes
+  through the same paste path as the edit menu: multi-line content presents
+  the paste-preview confirmation first, single-line content delivers
+  directly (with bracketed-paste framing when the remote requested it).
 - Simulator acceptance covers selection/copy/paste over SSH, SGR drag bytes,
   Option-forced local selection, and moving a real Vim cursor by tapping. Physical trackpad hover, wheel, and
   two-finger gestures still need device validation. Secondary/middle-button

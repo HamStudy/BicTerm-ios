@@ -1,6 +1,7 @@
 import BicTermCore
 import Foundation
 import Observation
+import UIKit
 
 @MainActor
 @Observable
@@ -212,6 +213,9 @@ final class ConnectionsModel {
     //                                     (port via --uitest-herdr-connection-port)
     //   --uitest-herd-e2e                seed the Herd Alpha/Beta machine
     //                                     connections for the herd live E2E
+    //   --uitest-pasteboard <text>        write <text> to the system pasteboard
+    //                                     at launch ("\\n" escapes a newline) so
+    //                                     paste flows read app-written content
 
     #if DEBUG
     private func runUITestHooksIfRequested() async {
@@ -252,6 +256,17 @@ final class ConnectionsModel {
         }
         if arguments.contains("--uitest-editor-password-fixture") {
             await seedEditorPasswordFixture()
+        }
+        if let pasteboardText = TerminalSceneUITest.value(after: "--uitest-pasteboard") {
+            // Makes the APP the pasteboard writer so the strip's Paste
+            // button can read it without iOS's paste-permission alert
+            // (same-process writes are exempt; cross-process reads — the
+            // test runner writing it — present the alert and hang XCUI's
+            // idle wait). "\\n" escapes a newline.
+            UIPasteboard.general.string = pasteboardText.replacingOccurrences(
+                of: "\\n",
+                with: "\n"
+            )
         }
         if arguments.contains("--uitest-custom-disabled"),
            let connection = try? Connection(name: "Disabled Custom", type: .ssh,

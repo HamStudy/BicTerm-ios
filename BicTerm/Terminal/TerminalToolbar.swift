@@ -154,15 +154,27 @@ final class TerminalToolbarHostView: UIView {
     /// Sticky keyboard-dismiss control: trailing slot in the strip row,
     /// shown only while the strip is shown AND a scene wired the dismiss
     /// action (session scenes; the herdr embed and previews keep the strip
-    /// exactly as before this feature).
+    /// exactly as before this feature). While the keyboard is
+    /// sticky-hidden the same slot shows the paste control instead —
+    /// see ``stripPasteButton``.
     private let keyboardDismissButton = UIButton(type: .system)
-    private let keyboardDismissButtonWidth: CGFloat = 44
+    /// Keyboard-free paste affordance (K3): the strip's trailing app slot
+    /// swaps to this Paste control while the software keyboard is
+    /// sticky-hidden — the state where the system text-edit menu is the
+    /// only other touch path. Tapping routes through the terminal's
+    /// existing `paste(_:)` semantics: multi-line pastes go through the
+    /// scene's paste-preview confirmation, everything else through
+    /// SwiftTerm's direct (bracketed) delivery. Only session surfaces
+    /// ever go sticky-hidden (the herdr embed never calls
+    /// setKeyboardHidden), so the control is naturally session-scoped.
+    private let stripPasteButton = UIButton(type: .system)
+    private let stripControlWidth: CGFloat = 44
 
     /// Dismiss-control action, wired by session scenes: flips the
     /// app-global toolbar model's guarded hide. Nil keeps the control
     /// hidden.
     var onDismissKeyboard: (() -> Void)? {
-        didSet { refreshKeyboardDismissControl() }
+        didSet { refreshStripControls() }
     }
     /// A tap in the terminal area while the software keyboard is
     /// sticky-hidden, wired by session scenes: flips the app-global
@@ -172,6 +184,11 @@ final class TerminalToolbarHostView: UIView {
     /// Mirror of the app-global sticky-hide state applied to this
     /// surface's terminal through the fork's runtime toggle.
     private(set) var keyboardHidden = false
+    /// Debounce state for the tap-to-re-enable: a plain single tap
+    /// re-enables after the double-tap window passes; a second tap inside
+    /// the window cancels it (selection gesture).
+    private var pendingKeyboardReenable: DispatchWorkItem?
+    private var multiTapSuppressedUntil = Date.distantPast
     /// Whether a software keyboard is currently on this screen — the
     /// dismiss control's gate. Tracked from keyboard frame notifications
     /// (the same signal K2's layout work consumes): GCKeyboard cannot be
@@ -233,13 +250,31 @@ final class TerminalToolbarHostView: UIView {
         keyboardDismissButton.isHidden = true
         addSubview(keyboardDismissButton)
 
+        stripPasteButton.setImage(
+            UIImage(
+                systemName: "doc.on.clipboard",
+                withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .medium)
+            ),
+            for: .normal
+        )
+        stripPasteButton.accessibilityIdentifier = "terminal-strip-paste"
+        stripPasteButton.accessibilityLabel = "Paste"
+        stripPasteButton.addTarget(self, action: #selector(stripPasteTapped(_:)), for: .touchUpInside)
+        stripPasteButton.isHidden = true
+        addSubview(stripPasteButton)
+
         // Re-enable recognizer: with the sticky hide active, UIKit's own
         // focus path (SwiftTerm's singleTap becomeFirstResponder) shows
         // only the invisible blocker — this recognizer is the app's
         // explicit re-enable. cancelsTouchesInView keeps SwiftTerm's own
-        // tap handling (selection, links, context menu) untouched.
+        // tap handling (selection, links, context menu) untouched, and
+        // the delegate's simultaneous recognition keeps this tap from
+        // CANCELLING SwiftTerm's double-tap (default exclusivity would
+        // tear down word selection); the handler debounces multi-taps so
+        // a selection gesture never re-enables the keyboard.
         let terminalTap = UITapGestureRecognizer(target: self, action: #selector(terminalTapped(_:)))
         terminalTap.cancelsTouchesInView = false
+        terminalTap.delegate = self
         terminalView.addGestureRecognizer(terminalTap)
 
         keyboardFrameObserver = NotificationCenter.default.addObserver(
@@ -271,7 +306,7 @@ final class TerminalToolbarHostView: UIView {
         guard visible != showsAccessory else { return }
         showsAccessory = visible
         accessoryView.isHidden = !visible
-        refreshKeyboardDismissControl()
+        refreshStripControls()
         setNeedsLayout()
     }
 
@@ -285,10 +320,15 @@ final class TerminalToolbarHostView: UIView {
         guard hidden != keyboardHidden else { return }
         keyboardHidden = hidden
         terminalView.setSoftwareKeyboardInstalled(!hidden)
+        refreshStripControls()
     }
 
     private var keyboardDismissControlVisible: Bool {
-        showsAccessory && onDismissKeyboard != nil
+        showsAccessory && onDismissKeyboard != nil && !keyboardHidden
+    }
+
+    private var stripPasteControlVisible: Bool {
+        showsAccessory && keyboardHidden
     }
 
     /// Keyboard-frame tracking (K2): stores the new end frame and reflows
@@ -319,8 +359,9 @@ final class TerminalToolbarHostView: UIView {
         return max(bounds.minY, frameInHost.minY)
     }
 
-    private func refreshKeyboardDismissControl() {
+    private func refreshStripControls() {
         keyboardDismissButton.isHidden = !keyboardDismissControlVisible
+        stripPasteButton.isHidden = !stripPasteControlVisible
         setNeedsLayout()
     }
 
@@ -332,21 +373,48 @@ final class TerminalToolbarHostView: UIView {
         onDismissKeyboard?()
     }
 
+    @objc private func stripPasteTapped(_ sender: UIButton) {
+        // The terminal's paste(_:) override owns the policy: multi-line
+        // pastes route through the scene's preview confirmation, every
+        // other case through SwiftTerm's direct (bracketed) delivery.
+        terminalView.paste(nil)
+    }
+
     @objc private func terminalTapped(_ gesture: UITapGestureRecognizer) {
         guard keyboardHidden else { return }
-        onTerminalTap?()
-        // Re-enable THIS surface immediately — the model flip reaches
-        // other surfaces through SwiftUI, but the tapped terminal must
-        // not wait for it (and must focus even if it was not first
-        // responder when the recognizer fired).
-        setKeyboardHidden(false)
-        terminalView.becomeFirstResponder()
+        if let pending = pendingKeyboardReenable {
+            // A second tap inside the double-tap window: a selection
+            // gesture — cancel the pending re-enable and ignore the rest
+            // of this tap burst.
+            pending.cancel()
+            pendingKeyboardReenable = nil
+            multiTapSuppressedUntil = Date().addingTimeInterval(0.6)
+            return
+        }
+        guard Date() >= multiTapSuppressedUntil else { return }
+        let reenable = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.pendingKeyboardReenable = nil
+            guard self.keyboardHidden else { return }
+            self.onTerminalTap?()
+            // Re-enable THIS surface immediately — the model flip reaches
+            // other surfaces through SwiftUI, but the tapped terminal must
+            // not wait for it (and must focus even if it was not first
+            // responder when the recognizer fired).
+            self.setKeyboardHidden(false)
+            self.terminalView.becomeFirstResponder()
+        }
+        pendingKeyboardReenable = reenable
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: reenable)
     }
 
     override func layoutSubviews() {
         super.layoutSubviews()
         let strip = showsAccessory ? accessoryHeight : 0
-        let dismiss = keyboardDismissControlVisible ? keyboardDismissButtonWidth : 0
+        // One trailing app slot in the strip row: the dismiss control
+        // while the keyboard is installed, the paste control while it is
+        // sticky-hidden.
+        let slot = (keyboardDismissControlVisible || stripPasteControlVisible) ? stripControlWidth : 0
         // The strip + keyboard insets stack: the terminal shrinks by the
         // strip AND the keyboard overlap, and the strip sits directly
         // above the keyboard's top edge (never under it).
@@ -359,21 +427,38 @@ final class TerminalToolbarHostView: UIView {
             terminalView.frame = terminalFrame
         }
         if showsAccessory {
-            let accessoryFrame = CGRect(x: 0, y: layoutBottom - strip, width: bounds.width - dismiss, height: strip)
+            let accessoryFrame = CGRect(x: 0, y: layoutBottom - strip, width: bounds.width - slot, height: strip)
             if accessoryView.frame != accessoryFrame {
                 accessoryView.frame = accessoryFrame
             }
-            if keyboardDismissControlVisible {
-                let dismissFrame = CGRect(
-                    x: bounds.width - dismiss,
+            if slot > 0 {
+                let slotFrame = CGRect(
+                    x: bounds.width - slot,
                     y: layoutBottom - strip,
-                    width: dismiss,
+                    width: slot,
                     height: strip
                 )
-                if keyboardDismissButton.frame != dismissFrame {
-                    keyboardDismissButton.frame = dismissFrame
+                if keyboardDismissControlVisible, keyboardDismissButton.frame != slotFrame {
+                    keyboardDismissButton.frame = slotFrame
+                }
+                if stripPasteControlVisible, stripPasteButton.frame != slotFrame {
+                    stripPasteButton.frame = slotFrame
                 }
             }
         }
+    }
+}
+
+extension TerminalToolbarHostView: UIGestureRecognizerDelegate {
+    func gestureRecognizer(
+        _ gestureRecognizer: UIGestureRecognizer,
+        shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
+    ) -> Bool {
+        // The re-enable tap must never cancel SwiftTerm's own gesture
+        // chain: default exclusivity would tear down a double-tap word
+        // selection the moment this single-tap recognized. Recognizing
+        // simultaneously and debouncing multi-taps in the handler keeps
+        // both behaviors alive.
+        true
     }
 }
