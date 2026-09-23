@@ -9,6 +9,7 @@
 
 import Foundation
 import UIKit
+import os
 
 /**
  * This class provides an input accessory for the terminal on iOS, you can access this via the `inputAccessoryView`
@@ -31,7 +32,6 @@ public class TerminalAccessory: UIInputView, UIInputViewAudioFeedback {
     }
     
     var touchButton: UIButton!
-    var keyboardButton: UIButton!
     
     var views: [UIView] = []
     
@@ -41,6 +41,12 @@ public class TerminalAccessory: UIInputView, UIInputViewAudioFeedback {
         self.terminal = terminalView?.getTerminal()
         super.init (frame: frame, inputViewStyle: inputViewStyle)
         allowsSelfSizing = true
+        // BICTERM-PATCH hunk 16: the strip is keyboard-styled UI — log
+        // its creation so a device run carries evidence of every
+        // instance (DEBUG only).
+        #if DEBUG
+        keyboardUILog.notice("TerminalAccessory (keyboard-styled strip) created frame=\(frame.debugDescription, privacy: .public)")
+        #endif
     }
     
     public override var bounds: CGRect {
@@ -147,27 +153,21 @@ public class TerminalAccessory: UIInputView, UIInputViewAudioFeedback {
     }
 
 
+    // BICTERM-PATCH hunk 16: neutered. Upstream swapped the terminal's
+    // inputView between nil and SwiftTerm's KeyboardView (a 3-row
+    // function-key panel). BicTerm never wants that surface: the
+    // app-hosted strip already provides those keys, the button's glyph
+    // (keyboard.chevron.compact.down) reads as "dismiss keyboard" so the
+    // toggle trapped users into a panel with no dismissal path once the
+    // strip was hidden (real-device defect 2026-09-22: the panel stuck
+    // with Terminal Toolbar off). The button that reached this selector
+    // is no longer installed (see setupUI); keyboard dismissal is the
+    // app layer's job (TerminalToolbarHostView's dismiss control). The
+    // no-op + fault log keeps any stale selector path observable.
     @objc func toggleInputKeyboard (_ sender: UIButton) {
-        guard let tv = terminalView else { return }
-
-        if tv.inputView == nil {
-            #if os(visionOS)
-            tv.inputView = KeyboardView (frame: CGRect (origin: CGPoint.zero,
-                                                        size: CGSize (width: 300,
-                                                                      height: 400)),
-                                         terminalView: terminalView)
-            #else
-            tv.inputView = KeyboardView (frame: CGRect (origin: CGPoint.zero,
-                                                        size: CGSize (width: UIScreen.main.bounds.width,
-                                                                      height: max((UIScreen.main.bounds.height / 5),140))),
-                                         terminalView: terminalView)
-            #endif
-        } else {
-            tv.inputView = nil
-        }
-        UIView.performWithoutAnimation {
-            tv.reloadInputViews()
-        }
+        #if DEBUG
+        keyboardUILog.fault("toggleInputKeyboard reached — neutered by BICTERM-PATCH hunk 16 (the alternate function-key keyboard must never install)")
+        #endif
     }
 
     @objc func toggleTouch (_ sender: UIButton) {
@@ -216,8 +216,9 @@ public class TerminalAccessory: UIInputView, UIInputViewAudioFeedback {
         touchButton = makeButton ("", #selector(toggleTouch), icon: "hand.draw", isNormal: false)
         touchButton.isSelected = !(terminalView?.allowMouseReporting ?? false)
         rightViews.append (touchButton)
-        keyboardButton = makeButton ("", #selector(toggleInputKeyboard), icon: "keyboard.chevron.compact.down", isNormal: false)
-        rightViews.append (keyboardButton)
+        // BICTERM-PATCH hunk 16: upstream appended a keyboard button here
+        // (toggleInputKeyboard) that swapped in SwiftTerm's alternate
+        // function-key keyboard — removed; see the neutered selector.
 
         // calculate aditional space we can give to keys we want to be bigger (all top level except function keys)
         let minWidth: CGFloat = useSmall ? 20.0 : (UIDevice.current.userInterfaceIdiom == .phone) ? 22 : 32

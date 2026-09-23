@@ -25,6 +25,16 @@ import MetalKit
 @available(iOS 14.0, *)
 internal var log: Logger = Logger(subsystem: "org.tirania.SwiftTerm", category: "msg")
 
+// BICTERM-PATCH hunk 16: DEBUG observability for keyboard-styled UI.
+// Real-device defect (2026-09-22): a 3-row function-key panel (SwiftTerm's
+// KeyboardView, installed as a terminal's inputView by TerminalAccessory's
+// keyboard button) stuck on screen with no dismissal path once the app's
+// strip was hidden. The hunk removes that install path; these logs make
+// any future path ship its own evidence on the next device run — filter
+// Console on category "keyboard-ui".
+@available(iOS 14.0, *)
+internal var keyboardUILog: Logger = Logger(subsystem: "org.tirania.SwiftTerm", category: "keyboard-ui")
+
 public extension Notification.Name {
     /// Posted when TerminalView's controlModifier is reset to false
     static let terminalViewControlModifierReset = Notification.Name("SwiftTerm.TerminalView.controlModifierReset")
@@ -1648,6 +1658,22 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
     public override var inputView: UIView? {
         get { _inputView }
         set {
+            // BICTERM-PATCH hunk 16: every inputView assignment is
+            // instrumented (DEBUG) and defended. SwiftTerm's alternate
+            // KeyboardView (the 3-row function-key panel) must never
+            // become the terminal's input view — the real-device defect
+            // was a panel with no dismissal path once the app's strip was
+            // hidden. The hunk 16 strip change removes the only upstream
+            // path that installed it; the assertion catches any other
+            // path (including future rebases) at the moment of assignment.
+            #if DEBUG
+            if newValue is KeyboardView {
+                keyboardUILog.fault("inputView assignment of KeyboardView (alternate function-key keyboard) — refusing state is a defect")
+                assertionFailure("SwiftTerm KeyboardView (alternate function-key keyboard) must never be installed as inputView (BICTERM-PATCH hunk 16)")
+            } else {
+                keyboardUILog.notice("inputView set to \(String(describing: type(of: newValue)), privacy: .public)")
+            }
+            #endif
             _inputView = newValue
         }
     }

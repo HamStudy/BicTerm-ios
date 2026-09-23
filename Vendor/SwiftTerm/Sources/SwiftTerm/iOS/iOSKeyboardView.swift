@@ -7,6 +7,7 @@
 #if os(iOS) || os(visionOS)
 import Foundation
 import UIKit
+import os
 
 class KeyboardView: UIView {
     weak var terminalView: TerminalView?
@@ -65,7 +66,16 @@ class KeyboardView: UIView {
         guard let terminalView else {
             return
         }
-        
+
+        // BICTERM-PATCH hunk 16: this class IS the 3-row function-key
+        // panel from the real-device defect. The hunk 16 strip change
+        // removes the only path that installed it as a terminal's
+        // inputView, so this fault log firing on a device run means a
+        // NEW install path appeared — the run ships its own evidence.
+        #if DEBUG
+        keyboardUILog.fault("KeyboardView (alternate function-key keyboard) built frame=\(self.frame.debugDescription, privacy: .public)")
+        #endif
+
         for x in views {
             x.removeFromSuperview()
         }

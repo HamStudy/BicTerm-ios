@@ -532,10 +532,9 @@ assigns the property directly before `didMoveToWindow` applies hunks
 
 No-op when the flag already matches. `didMoveToWindow`'s hunk 4 block
 re-applies the blocker idempotently after a detach/reattach while the
-flag stays false. The vendored `TerminalAccessory` keyboard button
-(`toggleInputKeyboard`) can still swap in SwiftTerm's custom
-`KeyboardView` while hidden — pre-existing upstream behavior, out of
-this hunk's scope.
+flag stays false. (The vendored `TerminalAccessory` keyboard button
+could historically swap in SwiftTerm's custom `KeyboardView` while
+hidden — pre-existing upstream behavior that hunk 16 later removed.)
 
 App side: `TerminalToolbarModel.keyboardHidden` (guarded: no-op while a
 hardware keyboard is attached — resigning would drop hardware-key
@@ -547,4 +546,59 @@ re-enable in `TerminalToolbarHostView`, wired through
 sticky through a strip tap → one terminal tap returns the keyboard).
 
 Reapply hunk 15 with hunks 1-14. The hunk touches only
+`Sources/SwiftTerm/iOS/iOSTerminalView.swift`.
+
+### Hunk 16 — alternate function-key keyboard removed + keyboard-UI observability (`iOS/iOSAccessoryView.swift`, `iOS/iOSKeyboardView.swift`, `iOS/iOSTerminalView.swift`)
+
+Real-device defect (2026-09-22, iPhone): a THREE-ROW keyboard-styled
+panel docked at the screen bottom — row 1 `F1–F10`, row 2
+`[ ] { } < > & ins home pgup`, row 3 `+ - * = % \ del end pgdn` — that
+STUCK (no dismissal path) on both herdr and plain SSH sessions, and
+remained with the app's Terminal Toolbar turned off. Root cause:
+`TerminalAccessory`'s trailing keyboard button (`toggleInputKeyboard`)
+swapped SwiftTerm's alternate `KeyboardView` (iOS/iOSKeyboardView.swift)
+in as the terminal's `inputView`. The button's glyph
+(`keyboard.chevron.compact.down`) reads as "dismiss keyboard", so the
+toggle was a trap — and once the app-hosted strip was hidden (Terminal
+Toolbar off) the ONLY toggle-back affordance was gone while the panel
+kept replacing the system keyboard for the focused terminal. Reproduced
+exactly on the iPhone 17 Pro simulator (tap strip keyboard button →
+panel replaces qwerty; strip toggle off → panel remains; evidence in
+`.sisyphus/evidence/t2-repro/`).
+
+BicTerm never wants the alternate keyboard: the app-hosted strip already
+provides those keys, and keyboard dismissal is the app layer's job
+(`TerminalToolbarHostView`'s dismiss control, hunk 15's runtime toggle).
+The hunk:
+
+- `iOSAccessoryView.swift`: the keyboard button is no longer created or
+  appended in `setupUI()` (the `keyboardButton` property is removed);
+  `toggleInputKeyboard` is neutered to a no-op that logs a fault —
+  any stale selector path stays observable. The `TerminalAccessory`
+  initializer logs its creation — the strip is keyboard-styled UI.
+- `iOSKeyboardView.swift`: `buildUI()` logs a fault — this class IS
+  the defect panel; the log firing on a device run means a NEW install
+  path appeared (the hunk removes the only one).
+- `iOSTerminalView.swift`: the `inputView` setter logs every assignment
+  (type name) and asserts the assigned view is never a
+  `KeyboardView` (`assertionFailure` in DEBUG) — the defensive assertion
+  catches any path (including future rebases) at the moment of
+  assignment. A shared `keyboardUILog` (`Logger`, subsystem
+  `org.tirania.SwiftTerm`, category `keyboard-ui`) backs all three files;
+  the app side logs the same category under `com.bicterm.app`
+  (`TerminalToolbarHostView`: strip creation + every keyboard-frame
+  transition), so one Console filter — category `keyboard-ui` — shows
+  every view presenting keyboard-styled UI on the next device run.
+  Observability lines log at `notice` (the unified log's default level —
+  persisted to disk, so a device run without a debugger captures them in
+  Console.app or `log show`); defect conditions log at `fault`. All
+  lines are `#if DEBUG`-gated.
+
+App side: `BicTermUITests/TerminalAlternateKeyboardUITests` pins the
+regression — tapping the strip's right edge (where the button lived)
+never swaps the system keyboard for the panel.
+
+Reapply hunk 16 with hunks 1-15. The hunk touches
+`Sources/SwiftTerm/iOS/iOSAccessoryView.swift`,
+`Sources/SwiftTerm/iOS/iOSKeyboardView.swift`, and
 `Sources/SwiftTerm/iOS/iOSTerminalView.swift`.

@@ -2,6 +2,17 @@ import Foundation
 import GameController
 import SwiftTerm
 import UIKit
+import os
+
+/// T2 DEBUG observability for keyboard-styled UI (companion to SwiftTerm
+/// fork hunk 16): the real-device "stuck 3-row function-key panel" defect
+/// shipped no evidence, so every keyboard-frame transition and every
+/// app-hosted strip creation logs here — filter Console on category
+/// "keyboard-ui" (the fork logs the same category under its own
+/// subsystem).
+#if DEBUG
+private let keyboardUILog = Logger(subsystem: "com.bicterm.app", category: "keyboard-ui")
+#endif
 
 /// UserDefaults-backed persistence for the user's EXPLICIT toolbar choice
 /// (same struct-over-UserDefaults convention as `HerdrClipboardSettings`).
@@ -238,6 +249,9 @@ final class TerminalToolbarHostView: UIView {
         accessoryView.accessibilityIdentifier = "terminal-accessory"
         addSubview(terminalView)
         addSubview(accessoryView)
+        #if DEBUG
+        keyboardUILog.notice("app-hosted TerminalAccessory strip created (TerminalToolbarHostView)")
+        #endif
 
         keyboardDismissButton.setImage(
             UIImage(
@@ -293,6 +307,11 @@ final class TerminalToolbarHostView: UIView {
                 // screen; a visible one intersects it.
                 guard let screen = self.window?.screen else { return }
                 let visible = endFrame.intersects(screen.bounds)
+                #if DEBUG
+                keyboardUILog.notice(
+                    "keyboard frame visible=\(visible) endFrame=\(endFrame.debugDescription, privacy: .public)"
+                )
+                #endif
                 self.softwareKeyboardVisible = visible
                 self.applyKeyboardFrame(visible ? endFrame : nil, duration: duration, curve: curve)
             }
@@ -412,6 +431,17 @@ final class TerminalToolbarHostView: UIView {
 
     override func layoutSubviews() {
         super.layoutSubviews()
+        #if DEBUG
+        // T2 defensive assertion: the app never uses UIKit's
+        // inputAccessoryView dock (it overlays the terminal's bottom rows
+        // when a hardware keyboard is attached) — the strip lives in THIS
+        // host's layout, so the terminal's dock must stay nil at every
+        // hosting site.
+        assert(
+            terminalView.inputAccessoryView == nil,
+            "terminal inputAccessoryView must stay nil (app-hosted strip contract)"
+        )
+        #endif
         let strip = showsAccessory ? accessoryHeight : 0
         // One trailing app slot in the strip row: the dismiss control
         // while the keyboard is installed, the paste control while it is
