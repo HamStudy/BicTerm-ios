@@ -46,6 +46,7 @@ struct SessionMenuView: View {
     var body: some View {
         Menu {
             toolbarToggleItem
+            functionKeysToggleItem
             sessionsSubmenu
             newSessionItem
             snippetsItem
@@ -102,6 +103,23 @@ struct SessionMenuView: View {
             )
         }
         .accessibilityIdentifier("terminal-toolbar-toggle\(identifierSuffix)")
+    }
+
+    /// The function-key panel toggle (fork hunk 17): the strip's
+    /// function-keys button is the primary route; this menu item is the
+    /// always-reachable mirror (the scene chrome never hides, so the
+    /// panel can always be dismissed — the hunk-16-era trap was a
+    /// strip-only toggle).
+    private var functionKeysToggleItem: some View {
+        Button {
+            store.terminalToolbar.toggleFunctionKeys()
+        } label: {
+            Label(
+                store.terminalToolbar.inputMode == .functionKeys ? "Function Keys: On" : "Function Keys: Off",
+                systemImage: "function"
+            )
+        }
+        .accessibilityIdentifier("terminal-function-keys-toggle\(identifierSuffix)")
     }
 
     private var sessionsSubmenu: some View {

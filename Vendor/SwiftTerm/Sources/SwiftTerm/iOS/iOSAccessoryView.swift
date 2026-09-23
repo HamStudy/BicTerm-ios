@@ -153,21 +153,20 @@ public class TerminalAccessory: UIInputView, UIInputViewAudioFeedback {
     }
 
 
-    // BICTERM-PATCH hunk 16: neutered. Upstream swapped the terminal's
-    // inputView between nil and SwiftTerm's KeyboardView (a 3-row
-    // function-key panel). BicTerm never wants that surface: the
-    // app-hosted strip already provides those keys, the button's glyph
-    // (keyboard.chevron.compact.down) reads as "dismiss keyboard" so the
-    // toggle trapped users into a panel with no dismissal path once the
-    // strip was hidden (real-device defect 2026-09-22: the panel stuck
-    // with Terminal Toolbar off). The button that reached this selector
-    // is no longer installed (see setupUI); keyboard dismissal is the
-    // app layer's job (TerminalToolbarHostView's dismiss control). The
-    // no-op + fault log keeps any stale selector path observable.
+    // BICTERM-PATCH hunk 16, superseded by hunk 17 for the routing: the
+    // upstream button swapped the terminal's inputView between nil and
+    // SwiftTerm's KeyboardView directly from the strip — a trap (the
+    // glyph keyboard.chevron.compact.down read as "dismiss keyboard",
+    // and with the embedder's strip hidden the panel had no dismissal
+    // path; real-device defect 2026-09-22). Hunk 17 restores the button
+    // with an HONEST glyph (the "function" symbol, accessibility label
+    // "Function Keys") and routes the tap to the embedder's
+    // onToggleAlternateKeyboard hook: the input-mode state stays
+    // app-owned, the panel installs only through
+    // TerminalView.setAlternateKeyboardActive, and dismissal never
+    // depends on this strip.
     @objc func toggleInputKeyboard (_ sender: UIButton) {
-        #if DEBUG
-        keyboardUILog.fault("toggleInputKeyboard reached — neutered by BICTERM-PATCH hunk 16 (the alternate function-key keyboard must never install)")
-        #endif
+        terminalView?.onToggleAlternateKeyboard?()
     }
 
     @objc func toggleTouch (_ sender: UIButton) {
@@ -216,9 +215,15 @@ public class TerminalAccessory: UIInputView, UIInputViewAudioFeedback {
         touchButton = makeButton ("", #selector(toggleTouch), icon: "hand.draw", isNormal: false)
         touchButton.isSelected = !(terminalView?.allowMouseReporting ?? false)
         rightViews.append (touchButton)
-        // BICTERM-PATCH hunk 16: upstream appended a keyboard button here
-        // (toggleInputKeyboard) that swapped in SwiftTerm's alternate
-        // function-key keyboard — removed; see the neutered selector.
+        // BICTERM-PATCH hunk 17: the function-keys toggle returns to the
+        // strip (upstream's slot) with an HONEST glyph — the "function"
+        // symbol and a "Function Keys" accessibility label, never the
+        // chevron-down that read as "dismiss keyboard" (the hunk-16-era
+        // trap). The tap routes to the embedder's input-mode toggle; it
+        // never installs the panel itself.
+        let functionKeysButton = makeButton ("", #selector(toggleInputKeyboard), icon: "function", isNormal: false)
+        functionKeysButton.accessibilityLabel = "Function Keys"
+        rightViews.append (functionKeysButton)
 
         // calculate aditional space we can give to keys we want to be bigger (all top level except function keys)
         let minWidth: CGFloat = useSmall ? 20.0 : (UIDevice.current.userInterfaceIdiom == .phone) ? 22 : 32

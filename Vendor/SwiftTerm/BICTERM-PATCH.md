@@ -566,25 +566,35 @@ exactly on the iPhone 17 Pro simulator (tap strip keyboard button →
 panel replaces qwerty; strip toggle off → panel remains; evidence in
 `.sisyphus/evidence/t2-repro/`).
 
-BicTerm never wants the alternate keyboard: the app-hosted strip already
-provides those keys, and keyboard dismissal is the app layer's job
-(`TerminalToolbarHostView`'s dismiss control, hunk 15's runtime toggle).
-The hunk:
+BicTerm never wants the alternate keyboard installed from the strip: the
+app-hosted strip already provides those keys, and keyboard dismissal is
+the app layer's job (`TerminalToolbarHostView`'s dismiss control, hunk
+15's runtime toggle). The hunk:
 
 - `iOSAccessoryView.swift`: the keyboard button is no longer created or
   appended in `setupUI()` (the `keyboardButton` property is removed);
   `toggleInputKeyboard` is neutered to a no-op that logs a fault —
   any stale selector path stays observable. The `TerminalAccessory`
   initializer logs its creation — the strip is keyboard-styled UI.
+  (Superseded by hunk 17: the button returns with an honest "function"
+  glyph and routes through the app-owned
+  `onToggleAlternateKeyboard` hook — the trap was the direct
+  inputView swap and the dismiss-reading glyph, not the button's
+  existence.)
 - `iOSKeyboardView.swift`: `buildUI()` logs a fault — this class IS
   the defect panel; the log firing on a device run means a NEW install
-  path appeared (the hunk removes the only one).
+  path appeared (the hunk removes the only one). (Amended by hunk 17:
+  downgraded to a notice — building the panel is legitimate once the
+  sanctioned `setAlternateKeyboardActive` path exists.)
 - `iOSTerminalView.swift`: the `inputView` setter logs every assignment
   (type name) and asserts the assigned view is never a
   `KeyboardView` (`assertionFailure` in DEBUG) — the defensive assertion
   catches any path (including future rebases) at the moment of
-  assignment. A shared `keyboardUILog` (`Logger`, subsystem
-  `org.tirania.SwiftTerm`, category `keyboard-ui`) backs all three files;
+  assignment. (Amended by hunk 17: the refusal still stands for the
+  PUBLIC setter — the sanctioned install path writes the backing store
+  directly, so every other path remains a defect.) A shared
+  `keyboardUILog` (`Logger`, subsystem `org.tirania.SwiftTerm`, category
+  `keyboard-ui`) backs all three files;
   the app side logs the same category under `com.bicterm.app`
   (`TerminalToolbarHostView`: strip creation + every keyboard-frame
   transition), so one Console filter — category `keyboard-ui` — shows
@@ -596,9 +606,103 @@ The hunk:
 
 App side: `BicTermUITests/TerminalAlternateKeyboardUITests` pins the
 regression — tapping the strip's right edge (where the button lived)
-never swaps the system keyboard for the panel.
+never swaps the system keyboard for the panel. (Rewritten by hunk 17 to
+also pin the new deterministic toggle contract.)
 
 Reapply hunk 16 with hunks 1-15. The hunk touches
 `Sources/SwiftTerm/iOS/iOSAccessoryView.swift`,
 `Sources/SwiftTerm/iOS/iOSKeyboardView.swift`, and
 `Sources/SwiftTerm/iOS/iOSTerminalView.swift`.
+
+### Hunk 17 — alternate function-key keyboard as an app-driven input mode (`iOS/iOSTerminalView.swift`, `iOS/iOSKeyboardView.swift`, `iOS/iOSAccessoryView.swift`)
+
+User directive (2026-09-23): "I don't necessarily want to lose the
+alternate function-key keyboard, if it's useful, I just need it to work
+correctly." Hunk 16 removed the panel because its only install path was
+a trap; this hunk reinstates it as a properly-integrated input mode
+with a deterministic, always-reachable toggle.
+
+Design: the panel installs ONLY through a new explicit API —
+`TerminalView.setAlternateKeyboardActive(_:)` — never through the public
+`inputView` setter (hunk 16's refusal there stays: it still catches
+every unsanctioned path, including a future rebase resurrecting the
+strip button). The API:
+
+- `true`: lazily creates ONE `KeyboardView` per terminal (cached across
+  toggles; upstream's frame — screen width ×
+  `alternateKeyboardPanelHeight`, 400 on visionOS), installs it as the
+  input view by writing the backing store directly, clears hunk-15
+  sticky-hide semantics (`installsSoftwareKeyboard = true`), re-unions
+  `.causesPageTurn`, and reloads input views — or focuses the terminal
+  first when it is not first responder, so summoning is deterministic
+  even from an unfocused terminal.
+- `false`: uninstalls — the system keyboard returns for a focused
+  terminal (`_inputView = nil` + `reloadInputViews()`), unless the
+  software keyboard is uninstalled (the hunk-15 blocker owns the input
+  view then; sticky hide wins).
+
+Supporting API in the same hunk:
+
+- `TerminalView.alternateKeyboardPanelHeight` — the panel's height
+  (max(screen height / 5, 140)); the embedder uses it to lay its
+  terminal out above the panel deterministically (keyboard-frame
+  notifications do not fire for custom input views).
+- `TerminalView.onToggleAlternateKeyboard` — app-owned routing for the
+  strip's function-keys button; the button never installs the panel
+  itself, the MODE stays app-owned.
+
+Also in this hunk:
+
+- `iOSAccessoryView.swift`: the function-keys button RETURNS to the
+  strip (upstream's slot, after the touch toggle) with an HONEST glyph —
+  the "function" SF Symbol and a "Function Keys" accessibility label,
+  never the chevron-down that read as "dismiss keyboard" (the
+  hunk-16-era trap). `toggleInputKeyboard` (hunk 16's no-op) now routes
+  the tap through `onToggleAlternateKeyboard`.
+- `iOSKeyboardView.swift`: the hunk-16 `buildUI()` fault is downgraded
+  to a notice — building the panel is legitimate now; the log keeps
+  carrying creation evidence under the `keyboard-ui` Console category.
+  Upstream bug fixed: the `pgup` key sent the page-DOWN sequence (row
+  2's trailing "p" and row 3's trailing "P" both reached `pageDown`);
+  "p" now reaches `pageUp`.
+
+App side: `TerminalToolbarModel.inputMode`
+(`TerminalInputMode`: `.keyboard` / `.functionKeys` / `.hidden` — one
+source of truth, transient, never persisted; a fresh launch starts with
+the system keyboard). Transitions: terminal tap when hidden →
+`.keyboard`; the dismiss control from either surface → `.hidden`; the
+function-keys toggle `.keyboard` ↔ `.functionKeys` and `.hidden` →
+`.functionKeys`; a hardware keyboard attaching at runtime ends
+`.hidden` (the K1 blocker would break hardware-key delivery) but
+deliberately NOT `.functionKeys` (an explicit user mode; hardware keys
+deliver in parallel; the user dismisses it through the same toggle).
+Every surface applies the mode through
+`TerminalToolbarHostView.setInputMode` (blocker first, then the panel
+selection, so every transition order composes). R1 layout parity:
+while the panel is the surface's input view and the terminal is first
+responder, the host stacks the terminal + strip above the panel's
+deterministic height (`alternateKeyboardPanelHeight`), so the panel
+never covers terminal rows and the grid resize reports the new rows to
+the pty. The toggle is reachable from BOTH the strip's function-keys
+button (routes through the hook above) and the scene menu's
+**Function Keys** item (`SessionMenuView`, mirrored in the herdr
+workspace chrome) — chrome that never hides, so the hunk-16-era trap
+(a strip-only toggle) cannot recur. The strip's trailing dismiss
+control also dismisses the panel (its gate accepts the panel as the
+dismissable input surface).
+
+Tests: `BicTermTests/TerminalToolbarModelTests.swift` (state machine:
+toggle transitions incl. hidden→functionKeys, dismiss/tap transitions,
+not persisted, hardware-attach exits hidden but keeps functionKeys) and
+`BicTermUITests/TerminalAlternateKeyboardUITests.swift` (rewritten from
+the hunk-16 trap pin: the menu toggle summons and dismisses the panel
+deterministically with the terminal reflowing above it; the reflow
+reaches the remote pty; the panel dismisses with the Terminal Toolbar
+strip hidden — the original trap condition; the strip's function-keys
+button is an honest deterministic toggle and the dismiss control
+dismisses the panel into the sticky-hidden state).
+
+Reapply hunk 17 with hunks 1-16. The hunk touches
+`Sources/SwiftTerm/iOS/iOSTerminalView.swift`,
+`Sources/SwiftTerm/iOS/iOSKeyboardView.swift`, and
+`Sources/SwiftTerm/iOS/iOSAccessoryView.swift`.

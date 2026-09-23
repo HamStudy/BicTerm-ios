@@ -113,4 +113,92 @@ final class TerminalToolbarModelTests: XCTestCase {
         let relaunched = makeModel(defaults: defaults, hardwareKeyboardAttached: false)
         XCTAssertFalse(relaunched.keyboardHidden)
     }
+
+    // MARK: - Input mode (fork hunk 17)
+
+    /// The function-keys toggle flips between the system keyboard and
+    /// the panel, and from `.hidden` summons the panel directly.
+    func testFunctionKeysToggleTransitions() throws {
+        let model = makeModel(defaults: try ephemeralDefaults(), hardwareKeyboardAttached: false)
+
+        XCTAssertEqual(model.inputMode, .keyboard)
+        model.toggleFunctionKeys()
+        XCTAssertEqual(model.inputMode, .functionKeys)
+        model.toggleFunctionKeys()
+        XCTAssertEqual(model.inputMode, .keyboard)
+
+        model.hideSoftwareKeyboard()
+        XCTAssertEqual(model.inputMode, .hidden)
+        model.toggleFunctionKeys()
+        XCTAssertEqual(model.inputMode, .functionKeys, "the toggle from hidden must summon the panel (the panel IS the input surface)")
+        XCTAssertFalse(model.keyboardHidden)
+    }
+
+    /// The dismiss control lands in `.hidden` from either surface; a
+    /// terminal tap returns to the system keyboard.
+    func testDismissAndTapReEnableTransitions() throws {
+        let model = makeModel(defaults: try ephemeralDefaults(), hardwareKeyboardAttached: false)
+
+        model.hideSoftwareKeyboard()
+        XCTAssertEqual(model.inputMode, .hidden)
+        model.showSoftwareKeyboard()
+        XCTAssertEqual(model.inputMode, .keyboard)
+
+        model.toggleFunctionKeys()
+        XCTAssertEqual(model.inputMode, .functionKeys)
+        model.hideSoftwareKeyboard()
+        XCTAssertEqual(model.inputMode, .hidden, "dismissal from the panel must land in hidden")
+        model.showSoftwareKeyboard()
+        XCTAssertEqual(model.inputMode, .keyboard, "a terminal tap must return the system keyboard, not the panel")
+    }
+
+    /// The mode is transient like the sticky hide: a fresh launch always
+    /// starts with the system keyboard.
+    func testInputModeNotPersisted() throws {
+        let defaults = try ephemeralDefaults()
+        let model = makeModel(defaults: defaults, hardwareKeyboardAttached: false)
+        model.toggleFunctionKeys()
+        XCTAssertEqual(model.inputMode, .functionKeys)
+
+        let relaunched = makeModel(defaults: defaults, hardwareKeyboardAttached: false)
+        XCTAssertEqual(relaunched.inputMode, .keyboard)
+    }
+
+    /// A hardware keyboard attaching at runtime ends the sticky hide (the
+    /// K1 blocker would break hardware-key delivery) but deliberately
+    /// NOT the function-key panel: it is an explicit user mode, hardware
+    /// keys deliver in parallel, and the user dismisses it through the
+    /// same toggle.
+    func testHardwareAttachExitsHiddenButKeepsFunctionKeys() async throws {
+        let model = makeModel(defaults: try ephemeralDefaults(), hardwareKeyboardAttached: false)
+
+        model.hideSoftwareKeyboard()
+        XCTAssertEqual(model.inputMode, .hidden)
+
+        NotificationCenter.default.post(name: .GCKeyboardDidConnect, object: nil)
+        await waitUntil { !model.isVisible }  // proves keyboardAttachmentChanged ran
+        XCTAssertEqual(model.inputMode, .keyboard, "hardware attach must end the sticky hide")
+
+        model.toggleFunctionKeys()
+        XCTAssertEqual(model.inputMode, .functionKeys)
+        NotificationCenter.default.post(name: .GCKeyboardDidConnect, object: nil)
+        await waitUntil { !model.isVisible }
+        XCTAssertEqual(model.inputMode, .functionKeys, "hardware attach must not force-exit the function-key panel")
+    }
+
+    /// The observer handler hops through `Task { @MainActor }`; yield to
+    /// the main actor until the condition flips (bounded).
+    private func waitUntil(
+        _ condition: @escaping () -> Bool,
+        timeout: TimeInterval = 2,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async {
+        let deadline = Date().addingTimeInterval(timeout)
+        while !condition() && Date() < deadline {
+            await Task.yield()
+            try? await Task.sleep(nanoseconds: 20_000_000)
+        }
+        XCTAssertTrue(condition(), "condition not met within \(timeout)s", file: file, line: line)
+    }
 }

@@ -1660,16 +1660,20 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
         set {
             // BICTERM-PATCH hunk 16: every inputView assignment is
             // instrumented (DEBUG) and defended. SwiftTerm's alternate
-            // KeyboardView (the 3-row function-key panel) must never
-            // become the terminal's input view — the real-device defect
-            // was a panel with no dismissal path once the app's strip was
-            // hidden. The hunk 16 strip change removes the only upstream
-            // path that installed it; the assertion catches any other
-            // path (including future rebases) at the moment of assignment.
+            // KeyboardView (the 3-row function-key panel) must never be
+            // installed through the PUBLIC setter — the real-device
+            // defect was a panel with no dismissal path once the app's
+            // strip was hidden, installed by a strip button that read
+            // as "dismiss keyboard". Hunk 17 later made the panel a
+            // deliberate, app-driven input mode, but only through
+            // `setAlternateKeyboardActive(_:)` (which writes the backing
+            // store directly): the refusal here still catches every
+            // other path — including a future rebase resurrecting the
+            // strip button — at the moment of assignment.
             #if DEBUG
             if newValue is KeyboardView {
                 keyboardUILog.fault("inputView assignment of KeyboardView (alternate function-key keyboard) — refusing state is a defect")
-                assertionFailure("SwiftTerm KeyboardView (alternate function-key keyboard) must never be installed as inputView (BICTERM-PATCH hunk 16)")
+                assertionFailure("SwiftTerm KeyboardView (alternate function-key keyboard) must never be installed as inputView (BICTERM-PATCH hunk 16; the only sanctioned path is hunk 17's setAlternateKeyboardActive)")
             } else {
                 keyboardUILog.notice("inputView set to \(String(describing: type(of: newValue)), privacy: .public)")
             }
@@ -3085,6 +3089,88 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
             accessibilityTraits = accessibilityTraits.subtracting(.causesPageTurn)
             if isFirstResponder {
                 resignFirstResponder()
+            }
+        }
+    }
+
+    // BICTERM-PATCH hunk 17: the alternate function-key keyboard
+    // (KeyboardView) as a deliberate, app-driven input mode. Hunk 16
+    // removed the upstream strip button that installed the panel — a
+    // trap: the glyph read as "dismiss keyboard" and, with the embedder's
+    // strip hidden, the panel had no dismissal path. The user directive
+    // (2026-09-23) kept the panel as a feature: it now installs ONLY
+    // through this explicit API, summoned and dismissed by the embedder's
+    // own chrome (deterministic in both directions, independent of any
+    // strip). The public `inputView` setter (hunk 16) still refuses
+    // KeyboardView, so no other path — including a future rebase — can
+    // install the panel. The strip's function-keys button (restored by
+    // this hunk with an honest glyph) routes through
+    // `onToggleAlternateKeyboard`, so the MODE stays app-owned.
+    //
+    // `true` lazily creates ONE panel per terminal (cached across
+    // toggles), installs it as the input view (replacing the system
+    // keyboard for a focused terminal), and reloads — or focuses first,
+    // so summoning is deterministic even from a non-focused terminal.
+    // `false` uninstalls: the system keyboard returns for a focused
+    // terminal, unless the software keyboard is uninstalled (hunk 15
+    // blocker owns the input view then — sticky hide wins).
+    private var _alternateKeyboardActive = false
+    private var _alternateKeyboardView: KeyboardView?
+
+    public var alternateKeyboardActive: Bool { _alternateKeyboardActive }
+
+    /// App-owned routing for the accessory strip's function-keys button:
+    /// the embedder assigns this to flip its input-mode state; the strip
+    /// button never installs the panel itself. Invoked on the main
+    /// thread (a UIControl action); typed as a plain closure because a
+    /// global-actor-qualified closure type in this module trips a
+    /// cross-module metadata link failure against the app target.
+    public var onToggleAlternateKeyboard: (() -> Void)?
+
+    /// The height the alternate function-key panel occupies at the screen
+    /// bottom while it is this terminal's input view: the embedder lays
+    /// its terminal out above the panel deterministically (keyboard-frame
+    /// notifications do not fire for custom input views).
+    public var alternateKeyboardPanelHeight: CGFloat {
+        #if os(visionOS)
+        return 400
+        #else
+        let screenBounds = window?.screen.bounds ?? UIScreen.main.bounds
+        return max(screenBounds.height / 5, 140)
+        #endif
+    }
+
+    public func setAlternateKeyboardActive(_ active: Bool) {
+        guard _alternateKeyboardActive != active else { return }
+        _alternateKeyboardActive = active
+        #if DEBUG
+        keyboardUILog.notice("setAlternateKeyboardActive(\(active, privacy: .public))")
+        #endif
+        if active {
+            // The panel IS the software-keyboard surface while active:
+            // clear any hunk-15 sticky-hide semantics first.
+            installsSoftwareKeyboard = true
+            let screenBounds = window?.screen.bounds ?? UIScreen.main.bounds
+            let panel = _alternateKeyboardView ?? KeyboardView(
+                frame: CGRect(origin: CGPoint.zero,
+                              size: CGSize(width: screenBounds.width,
+                                           height: alternateKeyboardPanelHeight)),
+                terminalView: self
+            )
+            _alternateKeyboardView = panel
+            _inputView = panel
+            accessibilityTraits.formUnion(.causesPageTurn)
+            if isFirstResponder {
+                reloadInputViews()
+            } else {
+                becomeFirstResponder()
+            }
+        } else {
+            if installsSoftwareKeyboard {
+                _inputView = nil
+                if isFirstResponder {
+                    reloadInputViews()
+                }
             }
         }
     }

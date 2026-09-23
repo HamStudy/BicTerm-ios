@@ -82,17 +82,7 @@ struct SessionSceneView: View {
                 statusBanner
             }
             if model.isTerminalVisible {
-                SessionTerminalRepresentable(
-                    cache: store.viewCache,
-                    model: model,
-                    toolbarVisible: store.terminalToolbar.isVisible,
-                    keyboardHidden: store.terminalToolbar.keyboardHidden,
-                    onDismissKeyboard: { store.terminalToolbar.hideSoftwareKeyboard() },
-                    onTerminalTap: { store.terminalToolbar.showSoftwareKeyboard() }
-                )
-                .background(colors.background)
-                .padding(.horizontal, store.effectiveMargin(model.sceneID).rawValue)
-                .padding(.bottom, store.effectiveMargin(model.sceneID).rawValue)
+                terminalSurface
             } else {
                 closedPlaceholder
             }
@@ -222,6 +212,24 @@ struct SessionSceneView: View {
     }
 
     // MARK: - Chrome
+
+    /// The live terminal surface with the app-global toolbar/input-mode
+    /// wiring (extracted from `body`: the closure-heavy representable
+    /// call pushed the body past the type-checker's budget).
+    private var terminalSurface: some View {
+        SessionTerminalRepresentable(
+            cache: store.viewCache,
+            model: model,
+            toolbarVisible: store.terminalToolbar.isVisible,
+            inputMode: store.terminalToolbar.inputMode,
+            onToggleFunctionKeys: { store.terminalToolbar.toggleFunctionKeys() },
+            onDismissKeyboard: { store.terminalToolbar.hideSoftwareKeyboard() },
+            onTerminalTap: { store.terminalToolbar.showSoftwareKeyboard() }
+        )
+        .background(colors.background)
+        .padding(.horizontal, store.effectiveMargin(model.sceneID).rawValue)
+        .padding(.bottom, store.effectiveMargin(model.sceneID).rawValue)
+    }
 
     private var chrome: some View {
         HStack(spacing: spacing.sm) {

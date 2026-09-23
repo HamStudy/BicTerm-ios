@@ -67,13 +67,15 @@ class KeyboardView: UIView {
             return
         }
 
-        // BICTERM-PATCH hunk 16: this class IS the 3-row function-key
-        // panel from the real-device defect. The hunk 16 strip change
-        // removes the only path that installed it as a terminal's
-        // inputView, so this fault log firing on a device run means a
-        // NEW install path appeared — the run ships its own evidence.
+        // BICTERM-PATCH hunk 16 (amended by hunk 17): this class is the
+        // 3-row function-key panel from the real-device defect. Hunk 16
+        // fault-logged every build because NO install path was sanctioned;
+        // hunk 17 made the panel a deliberate input mode installed only
+        // through TerminalView.setAlternateKeyboardActive — the notice
+        // keeps carrying creation evidence (Console filter: category
+        // "keyboard-ui") without flagging the sanctioned path as a defect.
         #if DEBUG
-        keyboardUILog.fault("KeyboardView (alternate function-key keyboard) built frame=\(self.frame.debugDescription, privacy: .public)")
+        keyboardUILog.notice("KeyboardView (alternate function-key keyboard) built frame=\(self.frame.debugDescription, privacy: .public)")
         #endif
 
         for x in views {
@@ -133,7 +135,10 @@ class KeyboardView: UIView {
                 case "&": makeButton ("&", #selector (amp))
                 case "i": makeButton ("ins", #selector (insert), isNormal: false)
                 case "h": makeButton ("home", #selector (home), isNormal: false)
-                case "p": makeButton ("pgup", #selector (pageDown), isNormal: false)
+                // BICTERM-PATCH hunk 17: upstream bug — the "pgup" key
+                // sent the page-DOWN sequence (row 2's trailing "p" and
+                // row 3's trailing "P" both reached pageDown).
+                case "p": makeButton ("pgup", #selector (pageUp), isNormal: false)
                 case "+": makeButton ("+", #selector(plus))
                 case "-": makeButton ("-", #selector(minus))
                 case "*": makeButton ("*", #selector(star))

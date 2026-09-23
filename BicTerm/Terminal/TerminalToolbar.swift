@@ -39,6 +39,20 @@ struct TerminalToolbarSettings {
     }
 }
 
+/// The terminal's input-surface mode — one source of truth for the
+/// system keyboard, the alternate function-key panel, and the sticky
+/// dismissal (K1). App-global like the toolbar visibility: every surface
+/// applies the same mode.
+enum TerminalInputMode: Equatable {
+    /// The system software keyboard (K1 semantics).
+    case keyboard
+    /// SwiftTerm's 3-row function-key panel (fork hunk 17) replaces the
+    /// system keyboard as the input surface.
+    case functionKeys
+    /// Sticky dismissal: no input surface until a terminal tap (K1).
+    case hidden
+}
+
 /// App-global visibility preference for the terminal's accessory toolbar
 /// (SwiftTerm's `TerminalAccessory`: esc/ctrl/tab/arrows strip).
 ///
@@ -58,12 +72,23 @@ final class TerminalToolbarModel {
 
     private(set) var isVisible: Bool
 
-    /// Sticky software-keyboard dismissal: true while the user dismissed
-    /// the on-screen keyboard and it must stay down until an explicit
-    /// re-enable (a terminal tap). Transient runtime state — never
-    /// persisted; a fresh launch always starts with the keyboard
-    /// installed.
-    private(set) var keyboardHidden = false
+    /// The input-surface mode (see ``TerminalInputMode``). Transient
+    /// runtime state — never persisted; a fresh launch always starts
+    /// with the system keyboard. Transitions:
+    ///
+    ///   - terminal tap when hidden → `.keyboard`
+    ///   - dismiss control from keyboard/functionKeys → `.hidden`
+    ///   - the function-keys toggle (strip button or scene menu):
+    ///     `.keyboard` ↔ `.functionKeys`, and `.hidden` → `.functionKeys`
+    ///   - a hardware keyboard attaching at runtime ends `.hidden` (the
+    ///     K1 blocker would break hardware-key delivery) but deliberately
+    ///     NOT `.functionKeys`: the panel is an explicit user mode,
+    ///     hardware keys deliver in parallel, and the user dismisses it
+    ///     through the same toggle.
+    private(set) var inputMode: TerminalInputMode = .keyboard
+
+    /// K1 view of the mode: true while no input surface is on screen.
+    var keyboardHidden: Bool { inputMode == .hidden }
 
     /// `hardwareKeyboardAttached` is injectable so unit tests can drive the
     /// heuristic without a physical keyboard; production reads
@@ -118,21 +143,34 @@ final class TerminalToolbarModel {
         isVisible = !hardwareKeyboardAttached
     }
 
-    /// Dismiss-control action (the host gates the tap on the software
-    /// keyboard actually being on screen — GCKeyboard is a false positive
-    /// on the simulator, where the Mac keyboard bridges as a controller
-    /// while the software keyboard remains the visible input surface).
+    /// Dismiss-control action (the host gates the tap on an input surface
+    /// actually being on screen — GCKeyboard is a false positive on the
+    /// simulator, where the Mac keyboard bridges as a controller while
+    /// the software keyboard remains the visible input surface).
+    /// Dismissal from either surface lands in `.hidden`.
     func hideSoftwareKeyboard() {
-        guard !keyboardHidden else { return }
-        keyboardHidden = true
+        guard inputMode != .hidden else { return }
+        inputMode = .hidden
     }
 
-    /// Terminal-tap re-enable. The tapping surface refocuses its own
-    /// terminal; every other surface clears its blocker through the
-    /// SwiftUI update this flip triggers.
+    /// Terminal-tap re-enable: from `.hidden` back to the system keyboard.
+    /// The tapping surface refocuses its own terminal; every other
+    /// surface clears its blocker through the SwiftUI update this flip
+    /// triggers.
     func showSoftwareKeyboard() {
-        guard keyboardHidden else { return }
-        keyboardHidden = false
+        guard inputMode == .hidden else { return }
+        inputMode = .keyboard
+    }
+
+    /// The function-keys toggle (strip button and scene menu item, same
+    /// route): `.keyboard` ↔ `.functionKeys`, and from `.hidden` straight
+    /// to `.functionKeys` — the panel IS the input surface while active,
+    /// so any sticky hide clears. Deterministic in both directions and
+    /// independent of the toolbar strip's visibility: the scene-menu item
+    /// is always reachable, so the hunk-16-era trap (a strip-only toggle)
+    /// cannot recur.
+    func toggleFunctionKeys() {
+        inputMode = inputMode == .functionKeys ? .keyboard : .functionKeys
     }
 
     private func keyboardAttachmentChanged(_ attached: Bool) {
@@ -140,12 +178,14 @@ final class TerminalToolbarModel {
         if settings.explicitVisibility == nil {
             isVisible = !attached
         }
-        if attached, keyboardHidden {
+        if attached, inputMode == .hidden {
             // A hardware keyboard taking over ends the sticky dismissal:
             // the software keyboard is no longer the input source, and
             // the blocker would keep the terminal from focusing for
-            // hardware keys.
-            keyboardHidden = false
+            // hardware keys. The function-key panel deliberately survives
+            // (see `inputMode`): it is an explicit user mode and hardware
+            // keys deliver in parallel.
+            inputMode = .keyboard
         }
     }
 }
@@ -187,14 +227,18 @@ final class TerminalToolbarHostView: UIView {
     var onDismissKeyboard: (() -> Void)? {
         didSet { refreshStripControls() }
     }
+    /// Function-keys toggle action, wired by session scenes (the strip's
+    /// function-keys button and the scene-menu item route here). Nil (the
+    /// DEBUG preview) leaves the strip button inert.
+    var onToggleFunctionKeys: (() -> Void)?
     /// A tap in the terminal area while the software keyboard is
     /// sticky-hidden, wired by session scenes: flips the app-global
     /// model back to shown. This host then re-enables and refocuses its
     /// own terminal immediately (see ``terminalTapped(_:)``).
     var onTerminalTap: (() -> Void)?
-    /// Mirror of the app-global sticky-hide state applied to this
-    /// surface's terminal through the fork's runtime toggle.
-    private(set) var keyboardHidden = false
+    /// Mirror of the app-global input-surface mode applied to this
+    /// surface's terminal through the fork's runtime toggles.
+    private(set) var inputMode: TerminalInputMode = .keyboard
     /// Debounce state for the tap-to-re-enable: a plain single tap
     /// re-enables after the double-tap window passes; a second tap inside
     /// the window cancels it (selection gesture).
@@ -252,6 +296,17 @@ final class TerminalToolbarHostView: UIView {
         #if DEBUG
         keyboardUILog.notice("app-hosted TerminalAccessory strip created (TerminalToolbarHostView)")
         #endif
+
+        // Fork hunk 17: the strip's function-keys button routes through
+        // the terminal's hook; the mode state stays app-owned (this host
+        // forwards to the scene-wired closure). The hook is a plain
+        // closure (fork-side typing constraint) invoked from a UIControl
+        // action — always the main thread, hence the assumeIsolated hop.
+        terminalView.onToggleAlternateKeyboard = { [weak self] in
+            MainActor.assumeIsolated {
+                self?.onToggleFunctionKeys?()
+            }
+        }
 
         keyboardDismissButton.setImage(
             UIImage(
@@ -331,25 +386,30 @@ final class TerminalToolbarHostView: UIView {
         setNeedsLayout()
     }
 
-    /// Applies the app-global sticky-hide state to this surface's
-    /// terminal (fork hunk 15 runtime toggle): hidden installs the
-    /// blocker and resigns; shown clears the blocker. Refocusing on
-    /// re-enable is the tapping surface's job (``terminalTapped(_:)``) —
-    /// a propagated show must not steal focus from the window the user
-    /// is actually tapping in.
-    func setKeyboardHidden(_ hidden: Bool) {
-        guard hidden != keyboardHidden else { return }
-        keyboardHidden = hidden
-        terminalView.setSoftwareKeyboardInstalled(!hidden)
+    /// Applies the app-global input-surface mode to this surface's
+    /// terminal: `.hidden` installs the hunk-15 blocker and resigns;
+    /// `.functionKeys` installs the panel through the fork's hunk-17 API
+    /// (which focuses the terminal when needed, so summoning is
+    /// deterministic); `.keyboard` returns the system keyboard. The
+    /// blocker application runs FIRST so the two toggles compose in every
+    /// transition order. Refocusing on re-enable is the tapping surface's
+    /// job (``terminalTapped(_:)``) — a propagated show must not steal
+    /// focus from the window the user is actually tapping in.
+    func setInputMode(_ mode: TerminalInputMode) {
+        guard mode != inputMode else { return }
+        inputMode = mode
+        terminalView.setSoftwareKeyboardInstalled(mode != .hidden)
+        terminalView.setAlternateKeyboardActive(mode == .functionKeys)
         refreshStripControls()
+        setNeedsLayout()
     }
 
     private var keyboardDismissControlVisible: Bool {
-        showsAccessory && onDismissKeyboard != nil && !keyboardHidden
+        showsAccessory && onDismissKeyboard != nil && inputMode != .hidden
     }
 
     private var stripPasteControlVisible: Bool {
-        showsAccessory && keyboardHidden
+        showsAccessory && inputMode == .hidden
     }
 
     /// Keyboard-frame tracking (K2): stores the new end frame and reflows
@@ -371,13 +431,45 @@ final class TerminalToolbarHostView: UIView {
     }
 
     /// The Y coordinate the terminal + strip stack must end at: the
-    /// keyboard's top edge in this view's coordinates when a keyboard
-    /// overlaps this host, otherwise the host's own bottom.
+    /// smallest of the host's own bottom, the tracked keyboard's top
+    /// edge, and — while the function-key panel is this surface's input
+    /// view — the panel's deterministic top edge (R1 layout parity: the
+    /// app knows the panel's height; keyboard-frame notifications do not
+    /// fire for custom input views, so the panel inset is computed, not
+    /// observed).
     private func keyboardLayoutBottom() -> CGFloat {
-        guard let keyboardScreenFrame, let window else { return bounds.maxY }
-        let frameInHost = convert(window.convert(keyboardScreenFrame, from: nil), from: window)
-        guard frameInHost.minY < bounds.maxY else { return bounds.maxY }
-        return max(bounds.minY, frameInHost.minY)
+        var bottom = bounds.maxY
+        if let keyboardScreenFrame, let window {
+            let frameInHost = convert(window.convert(keyboardScreenFrame, from: nil), from: window)
+            if frameInHost.minY < bottom {
+                bottom = max(bounds.minY, frameInHost.minY)
+            }
+        }
+        if let panelScreenFrame = functionKeyPanelScreenFrame, let window {
+            let frameInHost = convert(window.convert(panelScreenFrame, from: nil), from: window)
+            if frameInHost.minY < bottom {
+                bottom = max(bounds.minY, frameInHost.minY)
+            }
+        }
+        return bottom
+    }
+
+    /// The function-key panel's screen frame while it is on screen for
+    /// THIS surface (mode `.functionKeys` and the terminal first
+    /// responder — the fork's docked input view). Nil otherwise.
+    private var functionKeyPanelScreenFrame: CGRect? {
+        guard inputMode == .functionKeys,
+              terminalView.isFirstResponder,
+              let window
+        else { return nil }
+        let screen = window.screen
+        let height = terminalView.alternateKeyboardPanelHeight
+        return CGRect(
+            x: screen.bounds.minX,
+            y: screen.bounds.maxY - height,
+            width: screen.bounds.width,
+            height: height
+        )
     }
 
     private func refreshStripControls() {
@@ -387,10 +479,13 @@ final class TerminalToolbarHostView: UIView {
     }
 
     @objc private func keyboardDismissTapped(_ sender: UIButton) {
-        // Gate: with no software keyboard on screen there is nothing to
+        // Gate: with no input surface on screen there is nothing to
         // dismiss, and the sticky-hide resignation would silently drop
-        // hardware-key delivery to a focused terminal.
-        guard softwareKeyboardVisible else { return }
+        // hardware-key delivery to a focused terminal. The function-key
+        // panel counts as the dismissable input surface while it is up
+        // (the keyboard-frame tracker may not have caught the custom
+        // input view's frame yet, so the mode gates too).
+        guard softwareKeyboardVisible || inputMode == .functionKeys else { return }
         onDismissKeyboard?()
     }
 
@@ -402,7 +497,7 @@ final class TerminalToolbarHostView: UIView {
     }
 
     @objc private func terminalTapped(_ gesture: UITapGestureRecognizer) {
-        guard keyboardHidden else { return }
+        guard inputMode == .hidden else { return }
         if let pending = pendingKeyboardReenable {
             // A second tap inside the double-tap window: a selection
             // gesture — cancel the pending re-enable and ignore the rest
@@ -416,13 +511,13 @@ final class TerminalToolbarHostView: UIView {
         let reenable = DispatchWorkItem { [weak self] in
             guard let self else { return }
             self.pendingKeyboardReenable = nil
-            guard self.keyboardHidden else { return }
+            guard self.inputMode == .hidden else { return }
             self.onTerminalTap?()
             // Re-enable THIS surface immediately — the model flip reaches
             // other surfaces through SwiftUI, but the tapped terminal must
             // not wait for it (and must focus even if it was not first
             // responder when the recognizer fired).
-            self.setKeyboardHidden(false)
+            self.setInputMode(.keyboard)
             self.terminalView.becomeFirstResponder()
         }
         pendingKeyboardReenable = reenable

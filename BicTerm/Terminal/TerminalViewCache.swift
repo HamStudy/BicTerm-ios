@@ -488,9 +488,14 @@ struct SessionTerminalRepresentable: UIViewRepresentable {
     /// Whether the accessory toolbar strip participates in the layout below
     /// the terminal (app-global pref from `SessionStore.terminalToolbar`).
     var toolbarVisible: Bool = false
-    /// App-global sticky keyboard-dismiss state (same model): applied to
-    /// this surface's terminal through the fork's runtime toggle.
-    var keyboardHidden: Bool = false
+    /// App-global input-surface mode (same model): applied to this
+    /// surface's terminal through the fork's runtime toggles — the
+    /// blocker first, then the panel selection, so every transition
+    /// order composes.
+    var inputMode: TerminalInputMode = .keyboard
+    /// Function-keys toggle action → app-global model toggle (the strip's
+    /// function-keys button routes here through the fork's hook).
+    var onToggleFunctionKeys: (() -> Void)? = nil
     /// Dismiss-control action → app-global model hide.
     var onDismissKeyboard: (() -> Void)? = nil
     /// Terminal-tap re-enable → app-global model show (the tapped host
@@ -519,8 +524,9 @@ struct SessionTerminalRepresentable: UIViewRepresentable {
         hostView.setAccessoryVisible(toolbarVisible)
         hostView.tracksKeyboardFrame = true
         hostView.onDismissKeyboard = onDismissKeyboard
+        hostView.onToggleFunctionKeys = onToggleFunctionKeys
         hostView.onTerminalTap = onTerminalTap
-        hostView.setKeyboardHidden(keyboardHidden)
+        hostView.setInputMode(inputMode)
         return hostView
     }
 
@@ -528,8 +534,9 @@ struct SessionTerminalRepresentable: UIViewRepresentable {
         uiView.setAccessoryVisible(toolbarVisible)
         uiView.tracksKeyboardFrame = true
         uiView.onDismissKeyboard = onDismissKeyboard
+        uiView.onToggleFunctionKeys = onToggleFunctionKeys
         uiView.onTerminalTap = onTerminalTap
-        uiView.setKeyboardHidden(keyboardHidden)
+        uiView.setInputMode(inputMode)
     }
 
     static func dismantleUIView(_ uiView: TerminalToolbarHostView, coordinator: Coordinator) {
