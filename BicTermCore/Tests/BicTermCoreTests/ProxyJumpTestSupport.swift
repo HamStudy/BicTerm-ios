@@ -25,7 +25,11 @@ final class RecordingKeyProvider: SSHAuthenticationKeyProvider, @unchecked Senda
         lock.withLock { recordedCalls }
     }
 
-    func authenticationPrivateKey(with reference: String, reason: String) async throws -> NIOSSHPrivateKey {
+    func authenticationPrivateKey(
+        with reference: String,
+        reason: String,
+        biometricContext: ConnectScopedBiometricContext? = nil
+    ) async throws -> NIOSSHPrivateKey {
         lock.withLock { recordedCalls.append(Call(reference: reference, reason: reason)) }
         guard let key = keys[reference] else { throw KeyRepositoryError.keyNotFound }
         return key
@@ -47,7 +51,11 @@ final class CountingKeyProvider: SSHAuthenticationKeyProvider, @unchecked Sendab
         self.underlying = underlying
     }
 
-    func authenticationPrivateKey(with reference: String, reason: String) async throws -> NIOSSHPrivateKey {
+    func authenticationPrivateKey(
+        with reference: String,
+        reason: String,
+        biometricContext: ConnectScopedBiometricContext? = nil
+    ) async throws -> NIOSSHPrivateKey {
         lock.withLock { callCounts[reference, default: 0] += 1 }
         return try await underlying.authenticationPrivateKey(with: reference, reason: reason)
     }

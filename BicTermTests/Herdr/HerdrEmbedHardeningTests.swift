@@ -1244,7 +1244,11 @@ enum ProcessProbe {
 struct StaticFixtureKeyProvider: SSHAuthenticationKeyProvider {
     let key: NIOSSHPrivateKey
 
-    func authenticationPrivateKey(with reference: String, reason: String) async throws -> NIOSSHPrivateKey {
+    func authenticationPrivateKey(
+        with reference: String,
+        reason: String,
+        biometricContext: ConnectScopedBiometricContext? = nil
+    ) async throws -> NIOSSHPrivateKey {
         key
     }
 }

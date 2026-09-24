@@ -58,9 +58,15 @@ public final class KeychainKeyRepository: @unchecked Sendable {
             service: keychainService,
             reference: reference
         )
+        let requiresBiometry = metadata.requiresBiometry
+        let reason = requiresBiometry ? "Authenticate to use your SSH key" : nil
+        BiometricAccessLog.log.notice(
+            "agent-sign keychain read begin ref=\(BiometricAccessLog.referenceDigest(reference), privacy: .public) biometry=\(requiresBiometry) reason=\"\(reason ?? "none", privacy: .public)\""
+        )
         var rawKey = try await gatedPrivateKeyData(
             reference: reference,
-            reason: metadata.requiresBiometry ? "Authenticate to use your SSH key" : nil
+            reason: reason,
+            biometricContext: nil
         )
         defer { rawKey.resetBytes(in: rawKey.startIndex..<rawKey.endIndex) }
         let key = try Curve25519.Signing.PrivateKey(rawRepresentation: rawKey)
@@ -69,15 +75,32 @@ public final class KeychainKeyRepository: @unchecked Sendable {
 
     public func authenticationPrivateKey(
         with reference: String,
-        reason: String
+        reason: String,
+        biometricContext: ConnectScopedBiometricContext? = nil
     ) async throws -> NIOSSHPrivateKey {
         let metadata = try KeychainMetadataStore.metadata(
             service: keychainService,
             reference: reference
         )
-        let rawKey = try await gatedPrivateKeyData(
-            reference: reference,
-            reason: metadata.requiresBiometry ? reason : nil
+        let requiresBiometry = metadata.requiresBiometry
+        BiometricAccessLog.log.notice(
+            "ssh-auth keychain read begin ref=\(BiometricAccessLog.referenceDigest(reference), privacy: .public) biometry=\(requiresBiometry) scoped=\(biometricContext != nil) reason=\"\(reason, privacy: .public)\""
+        )
+        let rawKey: Data
+        do {
+            rawKey = try await gatedPrivateKeyData(
+                reference: reference,
+                reason: requiresBiometry ? reason : nil,
+                biometricContext: biometricContext
+            )
+        } catch {
+            BiometricAccessLog.log.error(
+                "ssh-auth keychain read failed ref=\(BiometricAccessLog.referenceDigest(reference), privacy: .public) error=\(String(reflecting: error), privacy: .public)"
+            )
+            throw error
+        }
+        BiometricAccessLog.log.notice(
+            "ssh-auth keychain read ok ref=\(BiometricAccessLog.referenceDigest(reference), privacy: .public)"
         )
         let key = try Curve25519.Signing.PrivateKey(rawRepresentation: rawKey)
         return NIOSSHPrivateKey(ed25519Key: key)
@@ -113,24 +136,46 @@ public final class KeychainKeyRepository: @unchecked Sendable {
     /// `SecItemCopyMatching` on a biometry-protected item is where the
     /// LAContext evaluation happens, so that call — and only that call — is
     /// routed through the gate. A nil reason means the key is not
-    /// biometry-protected and the read must not be serialized.
-    private func gatedPrivateKeyData(reference: String, reason: String?) async throws -> Data {
+    /// biometry-protected and the read must not be serialized. A scoped
+    /// read authorizes the connect action's shared context FIRST (one
+    /// evaluation per connect action); the read then rides the
+    /// authenticated context.
+    private func gatedPrivateKeyData(
+        reference: String,
+        reason: String?,
+        biometricContext: ConnectScopedBiometricContext?
+    ) async throws -> Data {
         guard let reason else {
-            return try privateKeyData(reference: reference, reason: nil)
+            return try privateKeyData(reference: reference, reason: nil, biometricContext: biometricContext)
         }
         return try await gate.enqueue {
-            try self.privateKeyData(reference: reference, reason: reason)
+            try await biometricContext?.authorize(reason: reason)
+            return try self.privateKeyData(reference: reference, reason: reason, biometricContext: biometricContext)
         }
     }
 
-    private func privateKeyData(reference: String, reason: String?) throws -> Data {
+    private func privateKeyData(
+        reference: String,
+        reason: String?,
+        biometricContext: ConnectScopedBiometricContext?
+    ) throws -> Data {
         var query = KeychainMetadataStore.baseQuery(service: keychainService, reference: reference)
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
         if let reason {
-            let context = LAContext()
-            context.localizedReason = reason
-            query[kSecUseAuthenticationContext as String] = context
+            if let biometricContext {
+                // Connect-scoped read: the context was authorized under
+                // the gate, so the query reuses it instead of evaluating
+                // a fresh LAContext.
+                biometricContext.context.localizedReason = reason
+                query[kSecUseAuthenticationContext as String] = biometricContext.context
+            } else {
+                let context = LAContext()
+                context.localizedReason = reason
+                query[kSecUseAuthenticationContext as String] = context
+            }
+        } else if let biometricContext {
+            query[kSecUseAuthenticationContext as String] = biometricContext.context
         }
         var item: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &item)

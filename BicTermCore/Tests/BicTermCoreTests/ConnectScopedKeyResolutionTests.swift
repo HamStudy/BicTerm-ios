@@ -109,6 +109,36 @@ final class ConnectScopedKeyResolutionTests: XCTestCase {
         let references = await underlying.references
         XCTAssertEqual(references.count, 2)
     }
+
+    /// ONE biometric context per scope: resolutions of DIFFERENT
+    /// references receive the SAME shared context — the property that
+    /// collapses N per-key Face ID evaluations of one connect action
+    /// into ONE.
+    func testScopeThreadsOneBiometricContextAcrossReferences() async throws {
+        let underlying = ContextRecordingKeyProvider()
+        let wrapped = ConnectScopedKeyResolution().wrapping(underlying)
+        _ = try await wrapped.authenticationPrivateKey(with: "ref-a", reason: "testing")
+        _ = try await wrapped.authenticationPrivateKey(with: "ref-b", reason: "testing")
+        let identities = await underlying.contextIdentities
+        XCTAssertEqual(identities.count, 2)
+        XCTAssertNotNil(identities[0], "a scoped resolution must receive a shared context")
+        XCTAssertEqual(identities[0], identities[1], "one connect scope = ONE shared biometric context")
+    }
+
+    /// Invalidation drops the shared biometric context with the resolved
+    /// keys: a post-invalidation resolution gets a FRESH context (a
+    /// superseded scope's authentication never carries into it).
+    func testInvalidationDropsTheBiometricContext() async throws {
+        let underlying = ContextRecordingKeyProvider()
+        let cache = ConnectScopedKeyResolution()
+        let wrapped = cache.wrapping(underlying)
+        _ = try await wrapped.authenticationPrivateKey(with: "ref", reason: "testing")
+        await cache.invalidate()
+        _ = try await wrapped.authenticationPrivateKey(with: "ref", reason: "testing")
+        let identities = await underlying.contextIdentities
+        XCTAssertEqual(identities.count, 2)
+        XCTAssertNotEqual(identities[0], identities[1], "invalidation must drop the scope's biometric context")
+    }
 }
 
 // MARK: - Test doubles
@@ -131,7 +161,8 @@ private actor GatedCountingKeyProvider: SSHAuthenticationKeyProvider {
 
     func authenticationPrivateKey(
         with reference: String,
-        reason: String
+        reason: String,
+        biometricContext: ConnectScopedBiometricContext? = nil
     ) async throws -> NIOSSHPrivateKey {
         references.append(reference)
         if !queuedErrors.isEmpty {
@@ -170,5 +201,20 @@ private actor GatedCountingKeyProvider: SSHAuthenticationKeyProvider {
             continuation.resume(returning: key)
         }
         parked.removeAll()
+    }
+}
+
+/// Records the identity of the biometric context each resolution
+/// received, proving the scope threads ONE context across resolutions.
+private actor ContextRecordingKeyProvider: SSHAuthenticationKeyProvider {
+    private(set) var contextIdentities: [ObjectIdentifier?] = []
+
+    func authenticationPrivateKey(
+        with reference: String,
+        reason: String,
+        biometricContext: ConnectScopedBiometricContext?
+    ) async throws -> NIOSSHPrivateKey {
+        contextIdentities.append(biometricContext.map(ObjectIdentifier.init))
+        return NIOSSHPrivateKey(ed25519Key: Curve25519.Signing.PrivateKey())
     }
 }

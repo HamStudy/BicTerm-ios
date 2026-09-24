@@ -22,6 +22,11 @@ public actor ConnectScopedKeyResolution {
     private var resolved: [String: NIOSSHPrivateKey] = [:]
     private var inFlight: [String: Task<NIOSSHPrivateKey, any Error>] = [:]
     private var epoch = 0
+    /// ONE biometric context per connect scope: created lazily on the
+    /// first resolution, shared by every resolution of the scope, and
+    /// dropped by ``invalidate()`` so a superseded scope's
+    /// authentication never carries into later resolutions.
+    private var biometricContext: ConnectScopedBiometricContext?
 
     public init() {}
 
@@ -35,10 +40,12 @@ public actor ConnectScopedKeyResolution {
     /// bumps the epoch so resolutions that started before this call
     /// cannot repopulate the cache when they complete. In-flight
     /// resolutions are NOT cancelled — their awaiters still receive
-    /// their result; only the caching is suppressed.
+    /// their result; only the caching is suppressed. The scope's shared
+    /// biometric context is dropped with them.
     public func invalidate() {
         resolved.removeAll()
         inFlight.removeAll()
+        biometricContext = nil
         epoch += 1
     }
 
@@ -54,8 +61,11 @@ public actor ConnectScopedKeyResolution {
             return try await task.value
         }
         let resolutionEpoch = epoch
+        let biometricContext = contextForResolution()
         let task = Task {
-            try await underlying.authenticationPrivateKey(with: reference, reason: reason)
+            try await underlying.authenticationPrivateKey(
+                with: reference, reason: reason, biometricContext: biometricContext
+            )
         }
         inFlight[reference] = task
         do {
@@ -76,6 +86,15 @@ public actor ConnectScopedKeyResolution {
             throw error
         }
     }
+
+    private func contextForResolution() -> ConnectScopedBiometricContext {
+        if let biometricContext {
+            return biometricContext
+        }
+        let context = ConnectScopedBiometricContext()
+        biometricContext = context
+        return context
+    }
 }
 
 private struct CoalescedKeyProvider: SSHAuthenticationKeyProvider {
@@ -84,8 +103,12 @@ private struct CoalescedKeyProvider: SSHAuthenticationKeyProvider {
 
     func authenticationPrivateKey(
         with reference: String,
-        reason: String
+        reason: String,
+        biometricContext: ConnectScopedBiometricContext?
     ) async throws -> NIOSSHPrivateKey {
+        // The scope's OWN context is authoritative: callers one level up
+        // (the SSH cascade) have no scope to offer, so the injected
+        // context of this scope wins over whatever the caller passed.
         try await cache.key(for: reference, reason: reason, underlying: underlying)
     }
 }

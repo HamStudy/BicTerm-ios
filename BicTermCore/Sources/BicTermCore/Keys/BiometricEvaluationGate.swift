@@ -48,6 +48,7 @@ public actor BiometricEvaluationGate {
         _ operation: @escaping @Sendable () async throws -> T
     ) async throws -> T {
         await waitForTurn()
+        BiometricAccessLog.log.notice("biometric gate: turn granted")
         do {
             let result = try await operation()
             await releaseTurn()
@@ -65,6 +66,9 @@ public actor BiometricEvaluationGate {
         }
         await withCheckedContinuation { continuation in
             waiters.append(continuation)
+            BiometricAccessLog.log.debug(
+                "biometric gate: operation queued (\(self.waiters.count) waiting)"
+            )
         }
     }
 
@@ -76,6 +80,7 @@ public actor BiometricEvaluationGate {
         } else {
             busy = false
         }
+        BiometricAccessLog.log.notice("biometric gate: turn released")
     }
 
     /// Number of operations currently waiting for the turn (test seam).

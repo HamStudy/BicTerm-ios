@@ -1,3 +1,4 @@
+import BicTermCore
 import LocalAuthentication
 
 protocol BiometricGate: Sendable {
@@ -17,12 +18,16 @@ enum BiometricGateFactory {
 /// passcode fallback, matching the plan's security policy.
 struct LABiometricGate: BiometricGate {
     func authorize(reason: String) async -> Bool {
+        BiometricAccessLog.log.notice(
+            "key-management gate evaluation begin reason=\"\(reason, privacy: .public)\""
+        )
         let context = LAContext()
         context.localizedReason = reason
         guard context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: nil) else {
+            BiometricAccessLog.log.error("key-management gate evaluation unavailable")
             return false
         }
-        return await withCheckedContinuation { continuation in
+        let ok = await withCheckedContinuation { continuation in
             context.evaluatePolicy(
                 .deviceOwnerAuthenticationWithBiometrics,
                 localizedReason: reason
@@ -30,6 +35,10 @@ struct LABiometricGate: BiometricGate {
                 continuation.resume(returning: success)
             }
         }
+        BiometricAccessLog.log.notice(
+            "key-management gate evaluation \(ok ? "ok" : "denied", privacy: .public)"
+        )
+        return ok
     }
 }
 

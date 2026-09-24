@@ -36,7 +36,11 @@ actor InMemoryPasswordStore: PasswordStoring {
 /// key material providers (and vice versa that key sessions never fall back
 /// to passwords).
 struct NoKeyProvider: SSHAuthenticationKeyProvider {
-    func authenticationPrivateKey(with reference: String, reason: String) async throws -> NIOSSHPrivateKey {
+    func authenticationPrivateKey(
+        with reference: String,
+        reason: String,
+        biometricContext: ConnectScopedBiometricContext? = nil
+    ) async throws -> NIOSSHPrivateKey {
         throw KeyRepositoryError.keyNotFound
     }
 }
@@ -71,7 +75,11 @@ private actor PoolKeyProvider: SSHAuthenticationKeyProvider {
         self.biometricFailure = biometricFailure
     }
 
-    func authenticationPrivateKey(with reference: String, reason: String) async throws -> NIOSSHPrivateKey {
+    func authenticationPrivateKey(
+        with reference: String,
+        reason: String,
+        biometricContext: ConnectScopedBiometricContext? = nil
+    ) async throws -> NIOSSHPrivateKey {
         references.append(reference)
         reasons.append(reason)
         if biometricFailure { throw KeyRepositoryError.keychain(errSecAuthFailed) }

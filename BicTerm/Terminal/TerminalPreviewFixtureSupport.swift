@@ -37,7 +37,11 @@ enum FixturePaths {
 /// Fixture-file backed authentication: loads the committed ed25519 key
 /// (obviously fake, Fixtures/keys/) via the T3 parser.
 struct FixtureFileKeyProvider: SSHAuthenticationKeyProvider {
-    func authenticationPrivateKey(with reference: String, reason: String) async throws -> NIOSSHPrivateKey {
+    func authenticationPrivateKey(
+        with reference: String,
+        reason: String,
+        biometricContext: ConnectScopedBiometricContext? = nil
+    ) async throws -> NIOSSHPrivateKey {
         let parsed = try await OpenSSHPrivateKeyParser().parse(
             Data(contentsOf: FixturePaths.fixtureEd25519KeyURL)
         )
@@ -56,7 +60,11 @@ struct KeychainLabelKeyProvider: SSHAuthenticationKeyProvider {
     let label: String
     private let repository = KeychainKeyRepository()
 
-    func authenticationPrivateKey(with reference: String, reason: String) async throws -> NIOSSHPrivateKey {
+    func authenticationPrivateKey(
+        with reference: String,
+        reason: String,
+        biometricContext: ConnectScopedBiometricContext? = nil
+    ) async throws -> NIOSSHPrivateKey {
         let imports = try await repository.list()
         guard let match = imports.first(where: { $0.label == label }) else {
             throw KeyRepositoryError.keyNotFound

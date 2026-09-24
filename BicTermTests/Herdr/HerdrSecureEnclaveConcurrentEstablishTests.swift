@@ -505,7 +505,8 @@ private struct SharedResolvedKeyProvider: SSHAuthenticationKeyProvider {
 
     func authenticationPrivateKey(
         with reference: String,
-        reason: String
+        reason: String,
+        biometricContext: ConnectScopedBiometricContext? = nil
     ) async throws -> NIOSSHPrivateKey {
         key
     }

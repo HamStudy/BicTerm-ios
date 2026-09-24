@@ -1146,7 +1146,11 @@ final class HerdrEmbedHerdTests: XCTestCase {
 private struct FixtureHerdKeyProvider: SSHAuthenticationKeyProvider {
     let key: NIOSSHPrivateKey
 
-    func authenticationPrivateKey(with reference: String, reason: String) async throws -> NIOSSHPrivateKey {
+    func authenticationPrivateKey(
+        with reference: String,
+        reason: String,
+        biometricContext: ConnectScopedBiometricContext? = nil
+    ) async throws -> NIOSSHPrivateKey {
         key
     }
 }
@@ -1171,7 +1175,8 @@ private actor SingleEvaluationKeyProvider: SSHAuthenticationKeyProvider {
 
     func authenticationPrivateKey(
         with reference: String,
-        reason: String
+        reason: String,
+        biometricContext: ConnectScopedBiometricContext? = nil
     ) async throws -> NIOSSHPrivateKey {
         if evaluating {
             throw KeyRepositoryError.keychain(errSecInteractionNotAllowed)
