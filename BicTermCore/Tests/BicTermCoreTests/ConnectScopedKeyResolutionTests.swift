@@ -206,14 +206,21 @@ private actor GatedCountingKeyProvider: SSHAuthenticationKeyProvider {
 
 /// Records the identity of the biometric context each resolution
 /// received, proving the scope threads ONE context across resolutions.
+/// Each received context is also RETAINED: once the scope drops it, a
+/// freed instance's address could be reused by the next allocation and
+/// `ObjectIdentifier` equality would then fake "same instance" (the
+/// invalidation test's freshness assertion depends on distinct
+/// addresses).
 private actor ContextRecordingKeyProvider: SSHAuthenticationKeyProvider {
     private(set) var contextIdentities: [ObjectIdentifier?] = []
+    private var retainedContexts: [ConnectScopedBiometricContext?] = []
 
     func authenticationPrivateKey(
         with reference: String,
         reason: String,
         biometricContext: ConnectScopedBiometricContext?
     ) async throws -> NIOSSHPrivateKey {
+        retainedContexts.append(biometricContext)
         contextIdentities.append(biometricContext.map(ObjectIdentifier.init))
         return NIOSSHPrivateKey(ed25519Key: Curve25519.Signing.PrivateKey())
     }

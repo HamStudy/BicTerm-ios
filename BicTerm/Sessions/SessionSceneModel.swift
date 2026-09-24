@@ -642,6 +642,11 @@ final class SessionSceneModel: Identifiable {
         _ = try? await registry.reconnect(sceneID: sceneID)
     }
 
+    /// Background suspends the registry session (snapshot + transport
+    /// teardown); foreground only resumes a ROAMING transport in place —
+    /// a rehandshake session stays reconnect-required until the user taps
+    /// Retry, so returning to the app never evaluates biometrics without
+    /// a user-visible connect action.
     func scenePhaseChanged(_ phase: ScenePhase) async {
         guard !isClosed else { return }
         switch phase {

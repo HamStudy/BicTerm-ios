@@ -325,11 +325,36 @@ public actor SessionRegistry {
         }
     }
 
-    /// Reconnects suspended sessions; failures surface as `.failed` state
-    /// rather than throwing (this is a fire-and-forget lifecycle hook).
+    /// Foreground lifecycle hook: a suspended ROAMING transport resumes in
+    /// place (no re-authentication, no biometric evaluation). Every other
+    /// suspended session STAYS reconnect-required — returning to the app
+    /// must never evaluate biometrics without a user-visible connect
+    /// action, because a foreground reconnect builds a FRESH connect scope
+    /// (fresh `LAContext`) per session and each one prompts (device field
+    /// report: two Face ID prompts on app open with no connection tapped).
+    /// The user's Retry — ``reconnect(sceneID:)`` — is the only path back
+    /// to `.active` for rehandshake transports. Failures surface as
+    /// `.failed` state rather than throwing (fire-and-forget hook).
     public func willEnterForeground(sceneID: String) async {
         guard let record = records[sceneID], record.state == .suspended else { return }
-        try? await reconnect(sceneID: sceneID)
+        guard let existing = record.transport, existing.resumeStrategy == .nativeRoaming else {
+            return
+        }
+        let generation = nextGeneration(record)
+        do {
+            try await existing.resume()
+        } catch {
+            if isCurrent(record, generation: generation) {
+                setState(record, .failed(.transport(error)))
+            }
+            return
+        }
+        guard isCurrent(record, generation: generation) else {
+            await existing.close()
+            return
+        }
+        setState(record, .active)
+        try? await snapshotStore.deleteSnapshot(sceneID: record.sceneID)
     }
 
     /// T10 (spec §14.4, reconnect the right layer): an out-of-band control
