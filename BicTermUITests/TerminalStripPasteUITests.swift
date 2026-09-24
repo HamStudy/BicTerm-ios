@@ -185,21 +185,60 @@ final class TerminalStripPasteUITests: XCTestCase {
         XCTAssertTrue(waitFor(tailElement, contains: "STRIP_PASTE_SINGLE_LINE", timeout: 20))
     }
 
-    /// Touch copy without a keyboard: double-tap selects a word, the edit
-    /// menu's Copy lands the selected text on the system pasteboard.
+    /// Touch copy on the session surface: double-tap selects a word, the
+    /// edit menu's Copy lands the selected text on the system pasteboard,
+    /// and the edit menu's Paste delivers it back through the terminal's
+    /// paste path (single-line: direct delivery, echoed by `cat -v`).
     ///
-    /// NOT RUNNABLE on the session surface: tapping Copy in the edit menu
-    /// hangs XCUI's post-tap idle wait forever (the app itself stays idle
-    /// and the copy completes — verified by screenshot — but XCUI never
-    /// observes quiescence). Pre-existing: reproduced on the commit
-    /// before this campaign's changes; the preview surface (which never
-    /// installs the software keyboard, so no keyboard windows exist)
-    /// runs the identical double-tap → Copy flow green — see
-    /// TerminalUITests.testLocalSelectionCopyAndPaste. The session
-    /// surface's copy mechanics are covered at the view level by
-    /// BicTermTests/TerminalCopyPasteTests. Findings in
-    /// .omo/notepads/ssh-key-pool/issues.md (K3).
-    func testSelectionCopyViaDoubleTapEditMenu() throws {
-        throw XCTSkip("session-surface edit-menu Copy hangs XCUI idle detection (pre-existing); covered by the preview UI test and TerminalCopyPasteTests")
+    /// Regression pin for the session-surface never-idle defect (K3,
+    /// issues.md): tapping Copy in this flow used to hang XCUI's
+    /// post-tap idle wait forever — the app stayed idle and the copy
+    /// completed, but XCUI never observed quiescence. This test runs
+    /// the flow with the software keyboard UP (the terminal focuses on
+    /// attach); if the never-idle regression returns, the Copy tap
+    /// hangs here. The preview surface's twin is
+    /// TerminalUITests.testLocalSelectionCopyAndPaste.
+    ///
+    /// NOT COVERED: the keyboard-FREE variant (keyboard sticky-hidden
+    /// first) is blocked by a separate defect chain — see the 2026-09-24
+    /// entry in .omo/notepads/ssh-key-pool/issues.md: SwiftUI squeezes
+    /// the terminal host by the keyboard inset AT dismissal and the
+    /// recovery pass is unreliable, so the double-tap's re-focus
+    /// triggers a large grid resize that clears the selection
+    /// (upstream processSizeChange) and drops the edit menu.
+    func testSelectionCopyViaDoubleTapEditMenu() {
+        app.launchArguments = [
+            "--uitest-reset", "--uitest-seed-keys", "--uitest-sessions",
+            "--uitest-pretrust-fixtures", "--uitest-open-session", "Alpha",
+            "--uitest-session-command",
+            #"unsetopt nomatch; stty -isig -icanon -echo; printf \\033\\1332J\\033\\133HCOPYME; cat -v"#,
+        ]
+        app.launch()
+        let status = app.staticTexts["scene-status-Alpha"]
+        XCTAssertTrue(status.waitForExistence(timeout: 30))
+        XCTAssertTrue(
+            waitFor(app.staticTexts["scene-tail-Alpha"], contains: "COPYME", timeout: 60),
+            "the session must echo COPYME before selecting it"
+        )
+
+        // The software keyboard is up at launch (the terminal focuses on
+        // attach) — the configuration the never-idle defect was
+        // reproduced in.
+        let terminal = app.descendants(matching: .any)["terminalView"].firstMatch
+        let word = terminal.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 25, dy: 8))
+        word.doubleTap()
+        let copy = app.menuItems["Copy"].firstMatch
+        XCTAssertTrue(copy.waitForExistence(timeout: 5), app.debugDescription)
+
+        copy.tap()
+
+        word.press(forDuration: 1)
+        let paste = app.menuItems["Paste"].firstMatch
+        XCTAssertTrue(paste.waitForExistence(timeout: 5), app.debugDescription)
+        paste.tap()
+        XCTAssertTrue(
+            waitFor(app.staticTexts["scene-tail-Alpha"], contains: "COPYMECOPYME", timeout: 20),
+            "the copied word must paste back and echo through cat -v"
+        )
     }
 }
