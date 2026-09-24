@@ -706,3 +706,40 @@ Reapply hunk 17 with hunks 1-16. The hunk touches
 `Sources/SwiftTerm/iOS/iOSTerminalView.swift`,
 `Sources/SwiftTerm/iOS/iOSKeyboardView.swift`, and
 `Sources/SwiftTerm/iOS/iOSAccessoryView.swift`.
+
+### Hunk 18 — strip F1–F10 optional keys removed (`iOS/iOSAccessoryView.swift`)
+
+`setupUI()` appended up to ten optional F-key buttons
+(`addOptional("F1")` … `addOptional("F10")`) whenever the strip's width
+budget allowed. Two problems:
+
+- **Redundant**: F-key input lives in the alternate function-keys panel
+  (hunk 17) — summonable from the strip's own "function" button and the
+  scene menu — and hardware keyboards deliver F-keys natively.
+- **Unstable budget**: the embedder's trailing dismiss/paste slot
+  (`TerminalToolbarHostView`) shrinks the accessory's width by 44 pt
+  whenever an input surface is on screen, so the optional keys flipped
+  in and out of view as the surface changed (on iPhone widths exactly
+  F1, sometimes F2, ever rendered — a stray, janky key).
+
+The hunk removes the ten `addOptional` calls, the `addOptional` helper,
+the width-budget arithmetic that fed them (`fixedUsedSpace`,
+`usedSpace`, `additionalUsedSpaceToAdd`, `left`), and the
+now-unreferenced `f1`…`f10` `@objc` handlers. Everything else in
+`setupUI()` is untouched: the `~ | / -` float keys, the left/right
+important keys, the `maxFuncKeyWidth` reservation in the important-key
+sizing (it now merely caps important-key growth — remaining-key sizing
+is byte-identical to the old rendering where no optional key fit), and
+the `smallerFloatViews` pass (with the float set fixed at four keys it
+still re-applies the non-important minimum to `/` and `-` in
+`useSmall`). The function-keys PANEL (`iOSKeyboardView.swift`) keeps its
+own F1–F10 row and handlers — that is where F-key input lives.
+
+Tests: `BicTermUITests/TerminalToolbarUITests.swift`
+`testStripHasNoFunctionKeys` — with the strip visible, no "F1"…"F10"
+button exists inside `terminal-accessory`, while core keys (the `~`
+float key and the "Function Keys" toggle) still do, so the assertion
+cannot pass on an empty strip.
+
+Reapply hunk 18 with hunks 1-17. The hunk touches only
+`Sources/SwiftTerm/iOS/iOSAccessoryView.swift`.

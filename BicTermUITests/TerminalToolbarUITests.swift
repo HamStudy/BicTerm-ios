@@ -178,4 +178,41 @@ final class TerminalToolbarUITests: XCTestCase {
             "explicit OFF must survive a relaunch"
         )
     }
+
+    /// The strip carries no F1–F10 keys (fork hunk 18): F-key input lives
+    /// in the function-keys panel, and the strip's optional F-keys used
+    /// to flip in and out of view with the trailing dismiss/paste slot
+    /// width. Core keys must still be present, so the absence assertions
+    /// cannot pass on an empty or broken strip. The esc/ctrl/tab icon
+    /// buttons carry no accessibility labels in `useSmall` (the iPhone
+    /// strip width next to the trailing slot), so the labeled `~` float
+    /// key and the hunk-17 "Function Keys" toggle serve as the canaries.
+    func testStripHasNoFunctionKeys() {
+        launch()
+
+        // Establish a visible toolbar regardless of the heuristic default.
+        if !accessory.exists {
+            tapToolbarToggleInMenu()
+        }
+        XCTAssertTrue(
+            accessory.waitForExistence(timeout: 10),
+            "toolbar must appear before asserting on its keys"
+        )
+
+        XCTAssertTrue(
+            accessory.buttons["~"].exists,
+            "the strip must keep its core float keys"
+        )
+        XCTAssertTrue(
+            accessory.buttons["Function Keys"].exists,
+            "the strip must keep the function-keys toggle"
+        )
+
+        for index in 1...10 {
+            XCTAssertFalse(
+                accessory.buttons["F\(index)"].exists,
+                "F\(index) must not appear in the toolbar strip"
+            )
+        }
+    }
 }

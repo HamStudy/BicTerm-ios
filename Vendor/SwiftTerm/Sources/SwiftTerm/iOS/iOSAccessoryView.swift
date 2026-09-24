@@ -86,16 +86,10 @@ public class TerminalAccessory: UIInputView, UIInputViewAudioFeedback {
     @objc func pipe (_ sender: AnyObject) { clickAndInsertText ("|") }
     @objc func slash (_ sender: AnyObject) { clickAndInsertText ("/") }
     @objc func dash (_ sender: AnyObject) { clickAndInsertText ("-") }
-    @objc func f1 (_ sender: AnyObject) { clickAndSend (EscapeSequences.cmdF[0]) }
-    @objc func f2 (_ sender: AnyObject) { clickAndSend (EscapeSequences.cmdF[1]) }
-    @objc func f3 (_ sender: AnyObject) { clickAndSend (EscapeSequences.cmdF[2]) }
-    @objc func f4 (_ sender: AnyObject) { clickAndSend (EscapeSequences.cmdF[3]) }
-    @objc func f5 (_ sender: AnyObject) { clickAndSend (EscapeSequences.cmdF[4]) }
-    @objc func f6 (_ sender: AnyObject) { clickAndSend (EscapeSequences.cmdF[5]) }
-    @objc func f7 (_ sender: AnyObject) { clickAndSend (EscapeSequences.cmdF[6]) }
-    @objc func f8 (_ sender: AnyObject) { clickAndSend (EscapeSequences.cmdF[7]) }
-    @objc func f9 (_ sender: AnyObject) { clickAndSend (EscapeSequences.cmdF[8]) }
-    @objc func f10 (_ sender: AnyObject) { clickAndSend (EscapeSequences.cmdF[9]) }
+    // BICTERM-PATCH hunk 18: the strip's f1–f10 handlers were removed
+    // together with their optional buttons (see setupUI) — F-key input
+    // lives in the alternate function-keys panel (hunk 17), which keeps
+    // its own handlers in iOSKeyboardView.swift.
     
     @objc
     func ctrl (_ sender: UIButton)
@@ -257,7 +251,6 @@ public class TerminalAccessory: UIInputView, UIInputViewAudioFeedback {
         }
         leftViews.forEach { buttonizeView($0, isImportantKey: true) }
         rightViews.forEach { buttonizeView($0, isImportantKey: true) }
-        let fixedUsedSpace = (leftViews + rightViews).reduce(0) { $0 + $1.frame.width + buttonPad }
 
         if useSmall && false {
             floatViews.append (makeDouble ("~", "|"))
@@ -271,30 +264,15 @@ public class TerminalAccessory: UIInputView, UIInputViewAudioFeedback {
         floatViews.forEach {
             setMinWidth ($0, isImportantKey: true)
         }
-        let usedSpace = (floatViews).reduce(fixedUsedSpace) { $0 + $1.frame.width + buttonPad }
-        var additionalUsedSpaceToAdd = 0.0
-        
-        if UIDevice.current.userInterfaceIdiom == .phone && frame.width > 500 {
-            additionalUsedSpaceToAdd = 50.0
-        }
-        var left = frame.width - usedSpace - additionalUsedSpaceToAdd
-        func addOptional (_ text: String, _ selector: Selector) {
-            left -= minWidth + buttonPad
-            
-            if left > 0 {
-                floatViews.append(makeButton(text, selector))
-            }
-        }
-        addOptional("F1", #selector(f1))
-        addOptional("F2", #selector(f2))
-        addOptional("F3", #selector(f3))
-        addOptional("F4", #selector(f4))
-        addOptional("F5", #selector(f5))
-        addOptional("F6", #selector(f6))
-        addOptional("F7", #selector(f7))
-        addOptional("F8", #selector(f8))
-        addOptional("F9", #selector(f9))
-        addOptional("F10", #selector(f10))
+        // BICTERM-PATCH hunk 18: the optional F1–F10 strip keys are
+        // removed, together with the width-budget arithmetic that fed
+        // them (fixedUsedSpace/usedSpace/additionalUsedSpaceToAdd/left,
+        // the addOptional helper, and its ten calls). F-key input lives
+        // in the alternate function-keys panel (hunk 17), and the
+        // strip's own width changes dynamically with the embedder's
+        // trailing dismiss/paste slot, which made the optional keys
+        // flip in and out of view. Every remaining key and its sizing
+        // is unchanged.
         let smallerFloatViews = useSmall ? floatViews.suffix(floatViews.count - 2) : floatViews.suffix(floatViews.count - 4)
         smallerFloatViews.forEach {
             setMinWidth($0)
