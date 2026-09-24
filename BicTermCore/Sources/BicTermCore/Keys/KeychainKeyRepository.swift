@@ -43,14 +43,21 @@ public final class KeychainKeyRepository: @unchecked Sendable {
     }
 
     public func delete(reference: String) async throws {
-        let status = SecItemDelete(KeychainMetadataStore.baseQuery(
+        let secretStatus = SecItemDelete(KeychainMetadataStore.baseQuery(
             service: keychainService,
             reference: reference
         ) as CFDictionary)
-        guard status == errSecSuccess else {
-            if status == errSecItemNotFound { throw KeyRepositoryError.keyNotFound }
-            throw KeyRepositoryError.keychain(status)
+        let metadataStatus = SecItemDelete(KeychainMetadataStore.baseQuery(
+            service: KeychainMetadataStore.metadataService(keychainService),
+            reference: reference
+        ) as CFDictionary)
+        if secretStatus == errSecSuccess || metadataStatus == errSecSuccess {
+            return
         }
+        if secretStatus == errSecItemNotFound, metadataStatus == errSecItemNotFound {
+            throw KeyRepositoryError.keyNotFound
+        }
+        throw KeyRepositoryError.keychain(secretStatus == errSecItemNotFound ? metadataStatus : secretStatus)
     }
 
     public func sign(data: Data, with reference: String) async throws -> KeySignature {
@@ -186,7 +193,19 @@ public final class KeychainKeyRepository: @unchecked Sendable {
     }
 }
 
-enum KeychainMetadataStore {
+public enum KeychainMetadataStore {
+    /// Metadata lives in its OWN item, in a sibling service with NO access
+    /// control. The legacy layout stored the metadata JSON in
+    /// `kSecAttrGeneric` of the secret's item, which carries the biometric
+    /// access control — and attribute-only reads (key listings,
+    /// `requiresBiometry` checks) of an access-controlled item evaluate
+    /// the ACL on device (device evidence: three silent
+    /// `evaluateAccessControl` evaluations per connect, one per attribute
+    /// read of the combined item). The secret keeps its access control;
+    /// the metadata is not secret and must stay readable without an
+    /// evaluation.
+    public static func metadataService(_ service: String) -> String { "\(service).metadata" }
+
     static func baseQuery(service: String, reference: String? = nil) -> [String: Any] {
         var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -203,10 +222,8 @@ enum KeychainMetadataStore {
         secret: Data,
         requiresBiometry: Bool
     ) throws {
-        var attributes = baseQuery(service: service, reference: metadata.reference)
-        attributes[kSecAttrLabel as String] = metadata.label
-        attributes[kSecAttrGeneric as String] = try JSONEncoder().encode(metadata)
-        attributes[kSecValueData as String] = secret
+        var secretAttributes = baseQuery(service: service, reference: metadata.reference)
+        secretAttributes[kSecValueData as String] = secret
 
         if requiresBiometry {
             var accessError: Unmanaged<CFError>?
@@ -218,21 +235,110 @@ enum KeychainMetadataStore {
             ) else {
                 throw KeyRepositoryError.invalidStoredKey
             }
-            attributes[kSecAttrAccessControl as String] = access
+            secretAttributes[kSecAttrAccessControl as String] = access
         } else {
-            attributes[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+            secretAttributes[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
         }
 
+        let status = SecItemAdd(secretAttributes as CFDictionary, nil)
+        guard status == errSecSuccess else { throw error(status) }
+        // The metadata item is written second; a failure here rolls the
+        // secret item back so no orphan secret outlives the failed add.
+        do {
+            try addMetadataItem(service: service, metadata: metadata)
+        } catch {
+            SecItemDelete(baseQuery(service: service, reference: metadata.reference) as CFDictionary)
+            throw error
+        }
+    }
+
+    /// Writes (or replaces) the metadata-only item. Never carries an
+    /// access control; attribute reads of this item must not evaluate.
+    static func addMetadataItem(service: String, metadata: KeyMetadata) throws {
+        var attributes = baseQuery(service: metadataService(service), reference: metadata.reference)
+        attributes[kSecAttrLabel as String] = metadata.label
+        attributes[kSecAttrGeneric as String] = try JSONEncoder().encode(metadata)
+        attributes[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+        attributes[kSecValueData as String] = Data()
         let status = SecItemAdd(attributes as CFDictionary, nil)
         guard status == errSecSuccess else { throw error(status) }
     }
 
+    /// Marks, in the (no-access-control) metadata service, that the legacy
+    /// layout scan has completed for a service: every legacy item found
+    /// has been migrated. Once set, neither `list(_:)` nor
+    /// `metadata(_:reference:)` reads the secret service's attributes
+    /// again — such reads evaluate the secret's access control on device
+    /// and must happen at most once.
+    private static let legacyScanMarkerAccount = "bicterm.legacy-scan-complete"
+
+    private static func legacyScanCompleted(service: String) -> Bool {
+        var query = baseQuery(
+            service: metadataService(service),
+            reference: legacyScanMarkerAccount
+        )
+        query[kSecReturnData as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
+        var item: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
+        return status == errSecSuccess
+    }
+
+    private static func markLegacyScanComplete(service: String) {
+        let status = SecItemAdd(
+            baseQuery(
+                service: metadataService(service),
+                reference: legacyScanMarkerAccount
+            ) as CFDictionary,
+            nil
+        )
+        // A previous scan already wrote it; a keychain failure leaves the
+        // scan unmarked, so the next scan retries (one more evaluation).
+        if status == errSecDuplicateItem { return }
+    }
+
     static func metadata(service: String, reference: String) throws -> KeyMetadata {
+        if let metadata = try readMetadataItem(service: service, reference: reference) {
+            return metadata
+        }
+        guard !legacyScanCompleted(service: service) else {
+            throw KeyRepositoryError.keyNotFound
+        }
+        // Legacy layout: the metadata JSON lives in `kSecAttrGeneric` of
+        // the secret's item, under the secret's access control, so this
+        // attribute read may trigger one (last) biometric evaluation.
+        // Migrate the metadata to its own item so later reads are
+        // prompt-free. The legacy item itself is left untouched — updates
+        // to an access-controlled item evaluate too.
         var query = baseQuery(service: service, reference: reference)
         query[kSecReturnAttributes as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
         var item: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &item)
+        guard status == errSecSuccess,
+              let attributes = item as? [String: Any],
+              let encoded = attributes[kSecAttrGeneric as String] as? Data,
+              let metadata = try? JSONDecoder().decode(KeyMetadata.self, from: encoded) else {
+            throw status == errSecSuccess ? KeyRepositoryError.invalidStoredKey : error(status)
+        }
+        do {
+            try addMetadataItem(service: service, metadata: metadata)
+        } catch KeyRepositoryError.duplicateReference {
+            // A concurrent resolution migrated the same legacy key first.
+        }
+        return metadata
+    }
+
+    private static func readMetadataItem(
+        service: String,
+        reference: String
+    ) throws -> KeyMetadata? {
+        var query = baseQuery(service: metadataService(service), reference: reference)
+        query[kSecReturnAttributes as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
+        var item: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
+        if status == errSecItemNotFound { return nil }
         guard status == errSecSuccess,
               let attributes = item as? [String: Any],
               let encoded = attributes[kSecAttrGeneric as String] as? Data,
@@ -255,14 +361,57 @@ enum KeychainMetadataStore {
         )
         let attributes = [kSecAttrGeneric as String: try JSONEncoder().encode(updated)]
         let status = SecItemUpdate(
-            baseQuery(service: service, reference: reference) as CFDictionary,
+            baseQuery(service: metadataService(service), reference: reference) as CFDictionary,
             attributes as CFDictionary
         )
+        // The metadata item can be missing when an earlier migration best
+        // effort failed; (re)create it rather than evaluating the legacy
+        // item's access control via a misplaced update.
+        if status == errSecItemNotFound {
+            try addMetadataItem(service: service, metadata: updated)
+            return
+        }
         guard status == errSecSuccess else { throw error(status) }
     }
 
-    static func list(service: String) throws -> [KeyMetadata] {
-        var query = baseQuery(service: service)
+    /// All key metadata of a service, from the prompt-free metadata items.
+    /// Owns the one-time legacy layout scan (see the marker's docs); the
+    /// app layer's key listing delegates here so migration happens in
+    /// exactly one place.
+    public static func list(service: String) throws -> [KeyMetadata] {
+        var result = try readMetadataList(service: service)
+        if !legacyScanCompleted(service: service) {
+            // One-time legacy layout scan: metadata that still lives on
+            // the secret's item surfaces here (reading it may evaluate
+            // once per legacy key) and is migrated on sight. The marker is
+            // written only when every migration succeeded, so a broken
+            // keychain retries the scan instead of silently hiding keys.
+            let have = Set(result.map(\.reference))
+            let legacy = try readLegacyList(service: service)
+                .filter { !have.contains($0.reference) }
+            var migratedAll = true
+            for metadata in legacy {
+                do {
+                    try addMetadataItem(service: service, metadata: metadata)
+                } catch KeyRepositoryError.duplicateReference {
+                    // A concurrent resolution migrated it first.
+                } catch {
+                    migratedAll = false
+                }
+            }
+            result.append(contentsOf: legacy)
+            if migratedAll {
+                markLegacyScanComplete(service: service)
+            }
+        }
+        var seen = Set<String>()
+        return result
+            .filter { seen.insert($0.reference).inserted }
+            .sorted { $0.reference < $1.reference }
+    }
+
+    private static func readMetadataList(service: String) throws -> [KeyMetadata] {
+        var query = baseQuery(service: metadataService(service))
         query[kSecReturnAttributes as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitAll
         var item: CFTypeRef?
@@ -272,13 +421,35 @@ enum KeychainMetadataStore {
             throw error(status)
         }
         return try attributes
+            // The scan marker shares this service (see its docs); it is
+            // not a key's metadata item.
+            .filter { ($0[kSecAttrAccount as String] as? String) != legacyScanMarkerAccount }
             .map { attributes in
                 guard let encoded = attributes[kSecAttrGeneric as String] as? Data else {
                     throw KeyRepositoryError.invalidStoredKey
                 }
                 return try JSONDecoder().decode(KeyMetadata.self, from: encoded)
             }
-            .sorted { $0.reference < $1.reference }
+    }
+
+    private static func readLegacyList(service: String) throws -> [KeyMetadata] {
+        var query = baseQuery(service: service)
+        query[kSecReturnAttributes as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitAll
+        var item: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
+        if status == errSecItemNotFound { return [] }
+        guard status == errSecSuccess, let attributes = item as? [[String: Any]] else {
+            throw error(status)
+        }
+        return try attributes.compactMap { attributes in
+            // Items whose metadata has already been migrated keep only
+            // the secret: no kSecAttrGeneric, nothing to do for them.
+            guard let encoded = attributes[kSecAttrGeneric as String] as? Data else {
+                return nil
+            }
+            return try JSONDecoder().decode(KeyMetadata.self, from: encoded)
+        }
     }
 
     static func error(_ status: OSStatus) -> KeyRepositoryError {
