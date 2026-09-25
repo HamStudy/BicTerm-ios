@@ -367,7 +367,7 @@ final class SessionRegistryTests: XCTestCase {
         await registry.closeSession(sceneID: "s1")
     }
 
-    func testWillEnterForegroundReconnectsSuspendedSession() async throws {
+    func testWillEnterForegroundKeepsSuspendedSessionPausedUntilUserReconnects() async throws {
         let store = InMemorySnapshotStore()
         let factory = FakeSessionTransportFactory()
         let registry = makeRegistry(factory: factory, store: store)
@@ -377,13 +377,25 @@ final class SessionRegistryTests: XCTestCase {
 
         await registry.willEnterForeground(sceneID: "s1")
 
+        // App open must never evaluate biometrics without a user-visible
+        // connect action: a foreground reconnect would build a fresh
+        // connect scope (fresh LAContext) and prompt, so the session
+        // stays paused — no transport, snapshot retained.
         let state = await registry.state(sceneID: "s1")
-        XCTAssertEqual(state, .active)
-        XCTAssertEqual(factory.makeCount, 2)
+        XCTAssertEqual(state, .suspended)
+        XCTAssertEqual(factory.makeCount, 1, "foreground must not build a fresh transport")
         let history = await registry.stateHistory(sceneID: "s1")
-        XCTAssertEqual(history, [.connecting, .active, .suspended, .reconnecting, .active])
+        XCTAssertEqual(history, [.connecting, .active, .suspended])
         let snapshot = try await store.snapshot(sceneID: "s1")
-        XCTAssertNil(snapshot, "successful reconnect clears the stale snapshot")
+        XCTAssertNotNil(snapshot, "the reconnect-required snapshot must survive foregrounding")
+
+        // The user's Retry is the connect action that reconnects.
+        try await registry.reconnect(sceneID: "s1")
+        let reconnected = await registry.state(sceneID: "s1")
+        XCTAssertEqual(reconnected, .active)
+        XCTAssertEqual(factory.makeCount, 2)
+        let cleared = try await store.snapshot(sceneID: "s1")
+        XCTAssertNil(cleared, "successful reconnect clears the stale snapshot")
         await registry.closeSession(sceneID: "s1")
     }
 

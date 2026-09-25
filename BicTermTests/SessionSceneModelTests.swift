@@ -316,6 +316,39 @@ final class SessionSceneModelTests: XCTestCase {
         XCTAssertTrue(remaining.isEmpty, "a successful manual reconnect consumes the snapshot")
     }
 
+    /// App open must never evaluate biometrics without a user-visible
+    /// connect action: a session the user connected earlier in this app
+    /// run stays paused (reconnect-required) across a background→foreground
+    /// cycle — the foreground path builds no transport (no fresh connect
+    /// scope, no biometric evaluation) until the user taps Retry.
+    func testUserConnectedSessionStaysPausedOnForegroundUntilUserReconnects() async throws {
+        let factory = ScriptedSessionTransportFactory(fallback: .succeed)
+        let alpha = try makeConnection(name: "Alpha")
+        let store = makeStore(factory: factory, connections: [alpha])
+
+        let descriptor = store.openSession(for: alpha)
+        let model = try XCTUnwrap(store.sceneModel(for: descriptor.id))
+        await model.start()
+        let active = await waitFor(model) { $0 == .active }
+        XCTAssertTrue(active, "session never became active: \(model.state)")
+        XCTAssertEqual(factory.createdCount, 1)
+
+        await model.scenePhaseChanged(.background)
+        let suspended = await waitFor(model) { $0 == .suspended }
+        XCTAssertTrue(suspended, "background never suspended the session: \(model.state)")
+
+        await model.scenePhaseChanged(.active)
+        try? await Task.sleep(for: .milliseconds(200))
+        XCTAssertEqual(model.state, .suspended, "foreground must not auto-reconnect a user-connected session")
+        XCTAssertEqual(factory.createdCount, 1, "no transport may be created before the user acts")
+        XCTAssertTrue(model.canRetry, "the paused session must offer the manual reconnect affordance")
+
+        await model.reconnect()
+        let reconnected = await waitFor(model) { $0 == .active }
+        XCTAssertTrue(reconnected, "manual reconnect never reached active: \(model.state)")
+        XCTAssertEqual(factory.createdCount, 2)
+    }
+
     /// The restorable list's Reconnect button IS the manual action: the
     /// scene it opens restores AND reconnects (never a bare auto-connect).
     func testRestorableRowReconnectButtonInitiatesManualReconnect() async throws {

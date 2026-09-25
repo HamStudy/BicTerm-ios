@@ -1,4 +1,5 @@
 import Foundation
+import NIOSSH
 import XCTest
 @testable import BicTermCore
 
@@ -370,6 +371,81 @@ final class HerdrEndpointConnectorTests: XCTestCase {
             String(decoding: stderr, as: UTF8.self).contains("session=team-session"),
             "--session must reach the remote argv: \(String(decoding: stderr, as: UTF8.self))"
         )
+    }
+
+    /// One herdr bring-up = ONE key resolution = ONE biometric
+    /// evaluation: the probe's handshake and the bridge's own connection
+    /// both resolve through the SAME connect scope, so the bridge rides
+    /// the probe's resolved key (cache hit — the provider is called
+    /// exactly once) instead of evaluating a second LAContext. Pins the
+    /// "probe and bridge share the herd-open scope" topology the embed
+    /// coordinator (`HerdrEmbedTransportCoordinator.keyResolution`)
+    /// relies on.
+    func testProbeAndBridgeShareOneConnectScope() async throws {
+        let shim = try Self.materializeProbeAndBridgeShim()
+        defer { try? FileManager.default.removeItem(atPath: URL(fileURLWithPath: shim).deletingLastPathComponent().path) }
+        let recorder = BringUpScopeRecordingKeyProvider(
+            key: try await SSHTestFixture.loadFixtureEd25519Key()
+        )
+        let scope = ConnectScopedKeyResolution()
+        let connector = HerdrEndpointConnector(
+            hostKeyVerifier: try await SSHTestFixture.makeVerifier(),
+            authenticationKeyProvider: scope.wrapping(recorder),
+            metadataProvider: FixtureKeyMetadataProvider(),
+            searchPaths: [shim],
+            approveHostKey: { _ in false }
+        )
+
+        let herdr = try await connector.connect(SSHTestFixture.makeConnection())
+        bridge = herdr
+        try await herdr.closeWrite()
+        for try await _ in herdr.inboundBytes() {}
+
+        XCTAssertEqual(
+            recorder.callCount, 1,
+            "the bridge connection must ride the probe's resolved key — one resolution per bring-up"
+        )
+        XCTAssertEqual(
+            recorder.contextIdentities.count, 1,
+            "every resolution of one bring-up must share ONE biometric context"
+        )
+    }
+}
+
+/// Lock-confined provider double: forwards a fixed key while recording how
+/// many resolutions reached it and which ``ConnectScopedBiometricContext``
+/// instances each one carried (identity, not equality — the scope must hand
+/// out the SAME instance).
+final class BringUpScopeRecordingKeyProvider: SSHAuthenticationKeyProvider, @unchecked Sendable {
+    private let key: NIOSSHPrivateKey
+    private let lock = NSLock()
+    private var calls = 0
+    private var contexts: [ObjectIdentifier] = []
+
+    init(key: NIOSSHPrivateKey) {
+        self.key = key
+    }
+
+    var callCount: Int {
+        lock.withLock { calls }
+    }
+
+    var contextIdentities: [ObjectIdentifier] {
+        lock.withLock { contexts }
+    }
+
+    func authenticationPrivateKey(
+        with reference: String,
+        reason: String,
+        biometricContext: ConnectScopedBiometricContext?
+    ) async throws -> NIOSSHPrivateKey {
+        lock.withLock {
+            calls += 1
+            if let biometricContext {
+                contexts.append(ObjectIdentifier(biometricContext))
+            }
+        }
+        return key
     }
 }
 
