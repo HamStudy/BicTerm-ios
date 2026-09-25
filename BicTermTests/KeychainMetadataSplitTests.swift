@@ -61,6 +61,21 @@ final class KeychainMetadataSplitTests: XCTestCase {
         XCTAssertEqual(status, errSecSuccess)
     }
 
+    /// A legacy item whose `kSecAttrGeneric` is not decodable metadata —
+    /// the corruption case the fail-soft scan must survive.
+    private func plantCorruptLegacyItem(service: String, reference: String) throws {
+        let status = SecItemAdd([
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: reference,
+            kSecUseDataProtectionKeychain as String: true,
+            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
+            kSecAttrGeneric as String: Data("definitely-not-metadata-json".utf8),
+            kSecValueData as String: Data("legacy-secret".utf8),
+        ] as CFDictionary, nil)
+        XCTAssertEqual(status, errSecSuccess)
+    }
+
     func testGeneratedKeySplitsSecretAndMetadataItems() async throws {
         let service = "com.bicterm.tests.split.\(UUID().uuidString)"
         defer { deleteServiceTree(service) }
@@ -138,6 +153,47 @@ final class KeychainMetadataSplitTests: XCTestCase {
             // Expected: the completed scan keeps reads off the ACL'd item,
             // so a legacy key that was never migrated does not resolve.
         }
+    }
+
+    func testCorruptLegacyItemDoesNotPinTheScan() async throws {
+        let service = "com.bicterm.tests.split-corrupt.\(UUID().uuidString)"
+        defer { deleteServiceTree(service) }
+        let repository = KeychainKeyRepository(keychainService: service)
+
+        let goodReference = UUID().uuidString
+        try plantLegacyItem(service: service, reference: goodReference, label: "Good legacy")
+        try plantCorruptLegacyItem(service: service, reference: UUID().uuidString)
+
+        // The corrupt item is skipped (fail-soft); the healthy key still
+        // lists alongside it.
+        let listed = try await repository.list()
+        XCTAssertEqual(
+            listed.map(\.reference),
+            [goodReference],
+            "a corrupt legacy item must not hide the other keys"
+        )
+
+        // The marker must be written despite the corrupt item — a pinned
+        // scan would re-read the secret service (and re-prompt) on every
+        // listing forever.
+        let marker = try readAttributes(
+            service: KeychainMetadataStore.metadataService(service),
+            reference: "bicterm.legacy-scan-complete"
+        )
+        XCTAssertNotNil(marker, "a corrupt legacy item must not pin the scan — the marker is still written")
+
+        // A later listing must not re-read the secret service: a legacy
+        // item planted after the scan stays hidden. If the corrupt item
+        // had left the scan unmarked, this listing would re-scan and
+        // surface it.
+        let lateReference = UUID().uuidString
+        try plantLegacyItem(service: service, reference: lateReference, label: "Late legacy")
+        let afterScan = try await repository.list()
+        XCTAssertEqual(
+            afterScan.map(\.reference),
+            [goodReference],
+            "the marker written despite corruption must keep later listings off the secret service"
+        )
     }
 
     func testDeleteRemovesBothItems() async throws {

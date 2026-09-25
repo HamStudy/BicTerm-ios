@@ -51,13 +51,18 @@ public final class KeychainKeyRepository: @unchecked Sendable {
             service: KeychainMetadataStore.metadataService(keychainService),
             reference: reference
         ) as CFDictionary)
-        if secretStatus == errSecSuccess || metadataStatus == errSecSuccess {
-            return
-        }
+        // Both deletes are attempted; a real (non-notFound) failure must
+        // surface even when the other succeeded — reporting success would
+        // orphan the surviving item (the key would keep listing).
         if secretStatus == errSecItemNotFound, metadataStatus == errSecItemNotFound {
             throw KeyRepositoryError.keyNotFound
         }
-        throw KeyRepositoryError.keychain(secretStatus == errSecItemNotFound ? metadataStatus : secretStatus)
+        if secretStatus != errSecSuccess, secretStatus != errSecItemNotFound {
+            throw KeyRepositoryError.keychain(secretStatus)
+        }
+        if metadataStatus != errSecSuccess, metadataStatus != errSecItemNotFound {
+            throw KeyRepositoryError.keychain(metadataStatus)
+        }
     }
 
     public func sign(data: Data, with reference: String) async throws -> KeySignature {
@@ -285,16 +290,26 @@ public enum KeychainMetadataStore {
     }
 
     private static func markLegacyScanComplete(service: String) {
-        let status = SecItemAdd(
-            baseQuery(
-                service: metadataService(service),
-                reference: legacyScanMarkerAccount
-            ) as CFDictionary,
-            nil
+        var attributes = baseQuery(
+            service: metadataService(service),
+            reference: legacyScanMarkerAccount
         )
-        // A previous scan already wrote it; a keychain failure leaves the
-        // scan unmarked, so the next scan retries (one more evaluation).
+        // Same shape as `addMetadataItem`: a generic-password SecItemAdd
+        // without value data may fail (errSecParam on device), leaving
+        // the scan unmarked — every listing would re-scan and re-evaluate
+        // the secret service's access control forever.
+        attributes[kSecValueData as String] = Data()
+        let status = SecItemAdd(attributes as CFDictionary, nil)
+        // A previous scan already wrote it; any other failure leaves the
+        // scan unmarked, so the next scan retries (one more evaluation) —
+        // logged, because a silently-failing marker is otherwise
+        // indistinguishable from "not yet marked".
         if status == errSecDuplicateItem { return }
+        if status != errSecSuccess {
+            BiometricAccessLog.log.error(
+                "legacy-scan marker write failed service=\(service, privacy: .public) status=\(status)"
+            )
+        }
     }
 
     static func metadata(service: String, reference: String) throws -> KeyMetadata {
@@ -385,7 +400,9 @@ public enum KeychainMetadataStore {
             // the secret's item surfaces here (reading it may evaluate
             // once per legacy key) and is migrated on sight. The marker is
             // written only when every migration succeeded, so a broken
-            // keychain retries the scan instead of silently hiding keys.
+            // keychain retries the scan instead of silently hiding keys;
+            // an undecodable (corrupt) legacy item is skipped, not
+            // failed — rescanning it would only re-prompt.
             let have = Set(result.map(\.reference))
             let legacy = try readLegacyList(service: service)
                 .filter { !have.contains($0.reference) }
@@ -420,15 +437,23 @@ public enum KeychainMetadataStore {
         guard status == errSecSuccess, let attributes = item as? [[String: Any]] else {
             throw error(status)
         }
-        return try attributes
+        return attributes
             // The scan marker shares this service (see its docs); it is
             // not a key's metadata item.
             .filter { ($0[kSecAttrAccount as String] as? String) != legacyScanMarkerAccount }
-            .map { attributes in
-                guard let encoded = attributes[kSecAttrGeneric as String] as? Data else {
-                    throw KeyRepositoryError.invalidStoredKey
+            .compactMap { attributes -> KeyMetadata? in
+                guard let encoded = attributes[kSecAttrGeneric as String] as? Data,
+                      let metadata = try? JSONDecoder().decode(KeyMetadata.self, from: encoded) else {
+                    // Fail-soft: one undecodable item must not fail the
+                    // whole listing (an empty key list) nor pin the
+                    // legacy scan.
+                    let account = attributes[kSecAttrAccount as String] as? String ?? "unknown"
+                    BiometricAccessLog.log.error(
+                        "metadata item undecodable, skipping ref=\(BiometricAccessLog.referenceDigest(account), privacy: .public)"
+                    )
+                    return nil
                 }
-                return try JSONDecoder().decode(KeyMetadata.self, from: encoded)
+                return metadata
             }
     }
 
@@ -442,13 +467,26 @@ public enum KeychainMetadataStore {
         guard status == errSecSuccess, let attributes = item as? [[String: Any]] else {
             throw error(status)
         }
-        return try attributes.compactMap { attributes in
-            // Items whose metadata has already been migrated keep only
-            // the secret: no kSecAttrGeneric, nothing to do for them.
+        return attributes.compactMap { attributes -> KeyMetadata? in
+            // Migration deliberately leaves the legacy item untouched
+            // (updating an access-controlled item evaluates its ACL too),
+            // so already-migrated items RETAIN their generic JSON —
+            // `list(_:)` filters those out by reference before migrating.
+            // An item with no kSecAttrGeneric carries no metadata at all.
             guard let encoded = attributes[kSecAttrGeneric as String] as? Data else {
                 return nil
             }
-            return try JSONDecoder().decode(KeyMetadata.self, from: encoded)
+            // Fail-soft: an undecodable item is skipped rather than
+            // thrown, so it cannot pin the scan marker — rescanning a
+            // corrupt item would only re-prompt.
+            guard let metadata = try? JSONDecoder().decode(KeyMetadata.self, from: encoded) else {
+                let account = attributes[kSecAttrAccount as String] as? String ?? "unknown"
+                BiometricAccessLog.log.error(
+                    "legacy item metadata undecodable, skipping ref=\(BiometricAccessLog.referenceDigest(account), privacy: .public)"
+                )
+                return nil
+            }
+            return metadata
         }
     }
 
