@@ -241,4 +241,68 @@ final class TerminalStripPasteUITests: XCTestCase {
             "the copied word must paste back and echo through cat -v"
         )
     }
+
+    /// The keyboard-FREE variant of the double-tap copy flow: dismiss the
+    /// software keyboard first (sticky hide), then double-tap a word and
+    /// copy it through the edit menu. Regression pin for the 2026-09-24
+    /// defect chain (issues.md): SwiftUI squeezes the terminal host by the
+    /// keyboard inset at dismissal and the recovery pass is unreliable, so
+    /// the double-tap's re-focus used to trigger a large grid resize that
+    /// cleared the selection (upstream processSizeChange) and the edit
+    /// menu never appeared.
+    func testSelectionCopyViaDoubleTapEditMenuKeyboardHidden() {
+        app.launchArguments = [
+            "--uitest-reset", "--uitest-seed-keys", "--uitest-sessions",
+            "--uitest-pretrust-fixtures", "--uitest-open-session", "Alpha",
+            "--uitest-session-command",
+            #"unsetopt nomatch; stty -isig -icanon -echo; printf \\033\\1332J\\033\\133HCOPYME; cat -v"#,
+        ]
+        app.launch()
+        let status = app.staticTexts["scene-status-Alpha"]
+        XCTAssertTrue(status.waitForExistence(timeout: 30))
+        XCTAssertTrue(
+            waitFor(app.staticTexts["scene-tail-Alpha"], contains: "COPYME", timeout: 60),
+            "the session must echo COPYME before selecting it"
+        )
+
+        // Sticky-hide the keyboard (the strip's dismiss control), then
+        // give the dismissal transition a moment to settle before the
+        // gesture — the defect fired when the double-tap's re-focus
+        // landed while the host was still squeezed.
+        ensureStripVisible()
+        XCTAssertTrue(
+            dismissButton.waitForExistence(timeout: 10),
+            "dismiss control missing (keyboard never came up at launch?)"
+        )
+        dismissButton.tap()
+        XCTAssertTrue(
+            app.keyboards.firstMatch.waitForNonExistence(timeout: 10),
+            "the dismiss control must hide the software keyboard"
+        )
+        XCTAssertTrue(
+            pasteButton.waitForExistence(timeout: 5),
+            "the paste control must take over the strip slot while the keyboard is sticky-hidden"
+        )
+        Thread.sleep(forTimeInterval: 1.0)
+
+        let terminal = app.descendants(matching: .any)["terminalView"].firstMatch
+        let word = terminal.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 25, dy: 8))
+        word.doubleTap()
+        let copy = app.menuItems["Copy"].firstMatch
+        XCTAssertTrue(
+            copy.waitForExistence(timeout: 5),
+            "double-tap with the keyboard sticky-hidden must select the word and show the edit menu: \(app.debugDescription)"
+        )
+
+        copy.tap()
+
+        word.press(forDuration: 1)
+        let paste = app.menuItems["Paste"].firstMatch
+        XCTAssertTrue(paste.waitForExistence(timeout: 5), app.debugDescription)
+        paste.tap()
+        XCTAssertTrue(
+            waitFor(app.staticTexts["scene-tail-Alpha"], contains: "COPYMECOPYME", timeout: 20),
+            "the copied word must paste back and echo through cat -v"
+        )
+    }
 }

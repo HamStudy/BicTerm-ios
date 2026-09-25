@@ -258,6 +258,38 @@ final class TerminalToolbarHostView: UIView {
     /// embedded client reflows its grid through the winsize path the
     /// resize triggers.
     private var keyboardScreenFrame: CGRect?
+    /// Dismissal-squeeze recovery, part 1 — the layout floor. SwiftUI
+    /// transiently squeezes this host by the keyboard inset when the
+    /// keyboard dismisses (despite the scene's
+    /// `.ignoresSafeArea(.keyboard)` opt-out, which holds only while the
+    /// keyboard is up), and the correcting layout pass is unreliable —
+    /// the host can stay squeezed until the next focus event. While an
+    /// input surface (keyboard or function-key panel) constrains the
+    /// layout, the host sits at its full-height position; that bottom
+    /// edge in WINDOW coordinates is captured here on every constrained
+    /// pass, and while nothing constrains the layout the terminal's
+    /// bottom stays pinned to it — so the squeeze cannot shrink the
+    /// terminal and the later recovery cannot resize it (an in-flight
+    /// selection survives; upstream processSizeChange clears selections
+    /// on grid resizes). Window-anchored so content changes above the
+    /// host self-correct, and only honored while it still fits the
+    /// current window (a real window resize wins).
+    private var constrainedBottomInWindow: CGFloat?
+    /// Dismissal-squeeze recovery, part 2 — the recovery probe. A
+    /// dismissal that leaves the host squeezed schedules this focus
+    /// probe: re-focusing the terminal through the sticky-hide blocker
+    /// posts a keyboard-frame notification that refreshes SwiftUI's
+    /// stale keyboard inset and restores the host's true frame,
+    /// recovering touch delivery below the squeezed SwiftUI slot. The
+    /// floor makes this focus-triggered recovery safe for an in-flight
+    /// selection gesture (no terminal resize on either side of it).
+    /// Main-thread-confined like the keyboard observer below.
+    nonisolated(unsafe) private var squeezeRecoveryProbe: DispatchWorkItem?
+    /// The smallest shrink the floor is honored for: the dismissal
+    /// squeeze is the full keyboard inset (200+ pt); margin changes
+    /// (≤ 20 pt) and banner-driven shrinks (which move the host's origin,
+    /// self-correcting the window-anchored floor) stay below it.
+    private let squeezeFloorMargin: CGFloat = 60
     /// Session scenes and the herdr embed opt in to keyboard-frame layout
     /// tracking.
     var tracksKeyboardFrame = false
@@ -267,6 +299,7 @@ final class TerminalToolbarHostView: UIView {
         if let keyboardFrameObserver {
             NotificationCenter.default.removeObserver(keyboardFrameObserver)
         }
+        squeezeRecoveryProbe?.cancel()
     }
 
     init(terminalView: TerminalContainerView) {
@@ -420,6 +453,7 @@ final class TerminalToolbarHostView: UIView {
     private func applyKeyboardFrame(_ screenFrame: CGRect?, duration: Double, curve: UInt) {
         guard tracksKeyboardFrame, screenFrame != keyboardScreenFrame else { return }
         keyboardScreenFrame = screenFrame
+        scheduleSqueezeRecoveryProbe(dismissed: screenFrame == nil)
         // The keyboard's animation curve arrives as a private
         // UIView.AnimationCurve raw value; AnimationOptions encodes curve
         // bits at << 16.
@@ -430,15 +464,38 @@ final class TerminalToolbarHostView: UIView {
         }
     }
 
+    /// Dismissal-squeeze recovery, part 2: a dismissal schedules a focus
+    /// probe for shortly after the keyboard's slide-away animation; any
+    /// other keyboard-frame change (the keyboard or panel coming back)
+    /// cancels it. See ``squeezeRecoveryProbe`` for the mechanism.
+    private func scheduleSqueezeRecoveryProbe(dismissed: Bool) {
+        squeezeRecoveryProbe?.cancel()
+        squeezeRecoveryProbe = nil
+        guard dismissed else { return }
+        let probe = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            // Only the sticky hide leaves the terminal focusable without
+            // a keyboard; only the foreground scene's squeeze is worth
+            // recovering (a backgrounded scene re-layouts on activation).
+            guard self.inputMode == .hidden,
+                  self.window?.isKeyWindow == true,
+                  self.dismissalRecoveryBottom() > self.bounds.maxY
+            else { return }
+            self.terminalView.becomeFirstResponder()
+        }
+        squeezeRecoveryProbe = probe
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: probe)
+    }
+
     /// The Y coordinate the terminal + strip stack must end at: the
-    /// smallest of the host's own bottom, the tracked keyboard's top
-    /// edge, and — while the function-key panel is this surface's input
-    /// view — the panel's deterministic top edge (R1 layout parity: the
-    /// app knows the panel's height; keyboard-frame notifications do not
-    /// fire for custom input views, so the panel inset is computed, not
-    /// observed).
+    /// smallest of the host's own bottom (or the dismissal-recovery floor
+    /// standing in for it), the tracked keyboard's top edge, and — while
+    /// the function-key panel is this surface's input view — the panel's
+    /// deterministic top edge (R1 layout parity: the app knows the
+    /// panel's height; keyboard-frame notifications do not fire for
+    /// custom input views, so the panel inset is computed, not observed).
     private func keyboardLayoutBottom() -> CGFloat {
-        var bottom = bounds.maxY
+        var bottom = dismissalRecoveryBottom()
         if let keyboardScreenFrame, let window {
             let frameInHost = convert(window.convert(keyboardScreenFrame, from: nil), from: window)
             if frameInHost.minY < bottom {
@@ -452,6 +509,19 @@ final class TerminalToolbarHostView: UIView {
             }
         }
         return bottom
+    }
+
+    /// Dismissal-squeeze recovery, part 1: the host's own bottom edge for
+    /// layout — the raw bounds bottom, or the captured full-height bottom
+    /// while SwiftUI's dismissal squeeze has the host shrunk below it.
+    /// See ``constrainedBottomInWindow`` for the full contract.
+    private func dismissalRecoveryBottom() -> CGFloat {
+        guard let floorBottom = constrainedBottomInWindow, let window else { return bounds.maxY }
+        let floorInHost = floorBottom - convert(CGPoint.zero, to: window).y
+        guard floorInHost > bounds.maxY + squeezeFloorMargin,
+              floorBottom <= window.bounds.maxY + 1
+        else { return bounds.maxY }
+        return floorInHost
     }
 
     /// The function-key panel's screen frame while it is on screen for
@@ -546,6 +616,14 @@ final class TerminalToolbarHostView: UIView {
         // strip AND the keyboard overlap, and the strip sits directly
         // above the keyboard's top edge (never under it).
         let layoutBottom = keyboardLayoutBottom()
+        // Dismissal-squeeze recovery, part 1: while an input surface
+        // constrains the layout the host sits at its full-height
+        // position — capture that bottom edge (window coordinates) as
+        // the floor the layout keeps when the dismissal squeeze later
+        // shrinks the host's own bounds.
+        if layoutBottom < bounds.maxY, let window {
+            constrainedBottomInWindow = convert(bounds, to: window).maxY
+        }
         // Frame assignments are guarded: TerminalAccessory rebuilds its
         // buttons from a `bounds` didSet, and the terminal recomputes its
         // grid in layoutSubviews — neither should churn on a no-op pass.
